@@ -44,6 +44,7 @@ public final class PlanningBudget {
     private final AtomicLong peakBytes = new AtomicLong();
     private final AtomicBoolean cancelRequested = new AtomicBoolean();
     private volatile Phase phase = Phase.QUEUED;
+    private volatile String failureDetail = "";
     private static final ThreadMXBean CPU_CLOCK = ManagementFactory.getThreadMXBean();
     private final AtomicLongArray phaseNanos = new AtomicLongArray(Phase.values().length);
     private final AtomicLongArray phaseCpuNanos = new AtomicLongArray(Phase.values().length);
@@ -87,7 +88,20 @@ public final class PlanningBudget {
 
     public void check() {
         checkpoint();
-        if (nodes.incrementAndGet() > maxNodes) throw new Exhausted(Limit.SEARCH_LIMIT);
+        if (nodes.incrementAndGet() > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + nodes.get() + "/" + maxNodes);
+    }
+
+    public Exhausted exhausted(Limit limit, String detail) {
+        failureDetail = detail;
+        return new Exhausted(limit);
+    }
+
+    public void failureDetail(String detail) {
+        failureDetail = detail;
+    }
+
+    public String failureDetail() {
+        return failureDetail;
     }
 
     /** Cancellation/time check without charging another search state. */

@@ -8,6 +8,7 @@ import net.minecraft.nbt.Tag;
 
 import appeng.api.stacks.AEKey;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.Objects;
 public final class GraphJobCodec {
 
     public static final String NBT_KEY = "gtlcoreGraphJob";
-    private static final int SCHEMA = 4;
+    private static final int SCHEMA = 5;
     private static final int MAX_ENTRIES = 100_000;
 
     private GraphJobCodec() {}
@@ -57,10 +58,10 @@ public final class GraphJobCodec {
         tag.put("expected", amounts(state.expected()));
         tag.put("uncertainInputs", amounts(state.uncertainInputs()));
         CompoundTag accepted = new CompoundTag();
-        state.acceptedRuns().forEach(accepted::putLong);
+        state.acceptedRuns().forEach((id, count) -> exact(accepted, id, count));
         tag.put("acceptedRuns", accepted);
         CompoundTag committed = new CompoundTag();
-        state.committedHistory().forEach(committed::putLong);
+        state.committedHistory().forEach((id, count) -> exact(committed, id, count));
         tag.put("committedHistory", committed);
         ListTag cursor = new ListTag();
         state.cursor().forEach(position -> {
@@ -126,14 +127,14 @@ public final class GraphJobCodec {
                 tag.getBoolean("preserve"), step(tag.getCompound("steps"), 0), recipes,
                 amounts(tag, "initial"), amounts(tag, "seeds"), Map.of(), GraphPlan.Result.FEASIBLE, 0, 0);
         PlanVerifier.verify(plan);
-        Map<String, Long> accepted = new LinkedHashMap<>();
+        Map<String, BigInteger> accepted = new LinkedHashMap<>();
         CompoundTag counts = tag.getCompound("acceptedRuns");
         if (counts.size() > MAX_ENTRIES) throw new IllegalArgumentException("Too many accepted entries");
-        counts.getAllKeys().forEach(id -> accepted.put(id, amount(counts, id)));
-        Map<String, Long> committed = new LinkedHashMap<>();
+        counts.getAllKeys().forEach(id -> accepted.put(id, exact(counts, id)));
+        Map<String, BigInteger> committed = new LinkedHashMap<>();
         CompoundTag history = tag.getCompound("committedHistory");
         if (history.size() > MAX_ENTRIES) throw new IllegalArgumentException("Too much committed history");
-        history.getAllKeys().forEach(id -> committed.put(id, amount(history, id)));
+        history.getAllKeys().forEach(id -> committed.put(id, exact(history, id)));
         List<PlanCursor.Position> cursor = new ArrayList<>();
         for (Tag entry : list(tag, "cursor")) {
             CompoundTag row = (CompoundTag) entry;
@@ -230,6 +231,20 @@ public final class GraphJobCodec {
         ListTag result = tag.getList(name, Tag.TAG_COMPOUND);
         if (result.size() > MAX_ENTRIES) throw new IllegalArgumentException("Graph task too large");
         return result;
+    }
+
+    private static void exact(CompoundTag tag, String name, BigInteger count) {
+        ExactAmounts.of(count);
+        if (count.compareTo(ExactAmounts.LONG_MAX) <= 0) tag.putLong(name, count.longValueExact());
+        else tag.putByteArray(name, count.toByteArray());
+    }
+
+    private static BigInteger exact(CompoundTag tag, String name) {
+        if (tag.contains(name, Tag.TAG_LONG)) return BigInteger.valueOf(amount(tag, name));
+        if (!tag.contains(name, Tag.TAG_BYTE_ARRAY)) throw new IllegalArgumentException("Expected exact integer: " + name);
+        byte[] bytes = tag.getByteArray(name);
+        if (bytes.length == 0 || bytes.length > 4096) throw new IllegalArgumentException("Invalid integer size");
+        return ExactAmounts.of(new BigInteger(bytes));
     }
 
     private static long amount(CompoundTag tag, String name) {

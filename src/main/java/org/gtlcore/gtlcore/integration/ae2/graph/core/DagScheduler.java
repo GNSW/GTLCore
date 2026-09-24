@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph.core;
 
+import java.math.BigInteger;
 import java.util.*;
 
 /** Ready queue for a proven acyclic flat witness; cyclic stages keep their serial barriers. */
@@ -15,14 +16,14 @@ final class DagScheduler<K> {
     private int unfinished;
     private int active = -1;
 
-    private DagScheduler(List<PlanStep.Batch> steps, Map<String, GraphRecipe<K>> recipes, Map<String, Long> accepted) {
+    private DagScheduler(List<PlanStep.Batch> steps, Map<String, GraphRecipe<K>> recipes, Map<String, BigInteger> accepted) {
         this.steps = List.copyOf(steps);
         remaining = new long[steps.size()];
         queued = new boolean[steps.size()];
         generation = new long[steps.size()];
         for (int i = 0; i < steps.size(); i++) {
             PlanStep.Batch step = steps.get(i);
-            remaining[i] = step.runs() - accepted.getOrDefault(step.recipe(), 0L);
+            remaining[i] = step.runs() - accepted.getOrDefault(step.recipe(), BigInteger.ZERO).longValueExact();
             if (remaining[i] < 0) throw new IllegalArgumentException("DAG accepted count exceeds plan");
             if (remaining[i] > 0) {
                 unfinished++;
@@ -32,7 +33,7 @@ final class DagScheduler<K> {
         }
     }
 
-    static <K> DagScheduler<K> create(GraphPlan<K> plan, Map<String, Long> accepted) {
+    static <K> DagScheduler<K> create(GraphPlan<K> plan, Map<String, BigInteger> accepted) {
         if (!(plan.steps() instanceof PlanStep.Sequence sequence) || !plan.seeds().isEmpty()) return null;
         List<PlanStep.Batch> steps = new ArrayList<>();
         Set<String> unique = new HashSet<>();

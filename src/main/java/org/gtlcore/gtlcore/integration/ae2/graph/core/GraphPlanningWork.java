@@ -34,6 +34,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private Bootstrap bootstrap;
     private PlanVerification<K> verifying;
     private AllocationSearch<K> allocating;
+    private MissingStockAnalysis<K> missingAnalysis;
     private boolean allocationAttempted;
     private Iterator<K> alternatives;
     private GraphPlan<K> candidate, best, verified, result;
@@ -99,8 +100,14 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             switch (phase) {
                 case 0 -> {
                     if (pending.isEmpty()) {
-                        result = best == null || !provenMissing(best) ? failure(GraphPlan.Result.UNKNOWN) : best;
-                        return true;
+                        if (best == null || best.missing().isEmpty()) {
+                            result = failure(GraphPlan.Result.UNKNOWN);
+                            return true;
+                        }
+                        missingAnalysis = new MissingStockAnalysis<>(compiler, target, stock, external,
+                                requiredSeeds.keySet(), excluded, forceCraft, budget);
+                        phase = 9;
+                        return false;
                     }
                     choices = pending.removeFirst();
                     if (!seen.add(choices)) return false;
@@ -166,7 +173,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (next < count) {
                         Map<K, Integer> changed = new LinkedHashMap<>(choices);
                         changed.put(key, next);
-                        if (pending.size() >= 4096) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.SEARCH_LIMIT);
+                        if (pending.size() >= 4096) throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "candidate_frontier=4096");
                         budget.reserve(128L + 48L * changed.size());
                         pending.add(Map.copyOf(changed));
                     }
@@ -184,6 +191,27 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         phase = 5;
                     }
                 }
+                case 9 -> {
+                    if (!missingAnalysis.step()) return false;
+                    boolean blocked = missingAnalysis.blocked();
+                    missingAnalysis = null;
+                    if (!blocked && !provenMissing(best)) {
+                        result = failure(GraphPlan.Result.UNKNOWN);
+                        return true;
+                    }
+                    // Prove the proposed missing-material preview really reaches
+                    // the goal when funded. It remains non-executable until its
+                    // exact deficits are supplied and a new request is planned.
+                    verifying = new PlanVerification<>(new GraphPlan<>(best.target(), best.amount(), best.preserveSeeds(),
+                            best.steps(), best.recipes(), best.initialExact(), best.seeds(), Map.of(),
+                            GraphPlan.Result.FEASIBLE, best.searchNodes(), best.planningNanos()), budget);
+                    phase = 10;
+                }
+                case 10 -> {
+                    if (!verifying.step()) return false;
+                    result = best;
+                    phase = 8;
+                }
                 default -> {
                     return true;
                 }
@@ -191,6 +219,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         } catch (PlanningBudget.Exhausted limit) {
             result = limited(limit);
         } catch (ArithmeticException overflow) {
+            budget.failureDetail("arithmetic: " + overflow + " at " + (overflow.getStackTrace().length == 0 ? "unknown" : overflow.getStackTrace()[0]));
             result = failure(GraphPlan.Result.AMOUNT_LIMIT);
         }
         return result != null;
@@ -212,7 +241,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     @Override
     public GraphPlan<K> limited(PlanningBudget.Exhausted limit) {
         if (verified != null) return new GraphPlan<>(verified.target(), verified.amount(), verified.preserveSeeds(), verified.steps(),
-                verified.recipes(), verified.initial(), verified.seeds(), Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL,
+                verified.recipes(), verified.initialExact(), verified.seeds(), Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL,
                 budget.nodes(), System.nanoTime() - started);
         return failure(GraphPlan.Result.valueOf(limit.limit().name()));
     }
@@ -247,6 +276,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private final class Bootstrap {
 
         private final GraphPlan<K> original;
+        private final long searchStarted = budget.nodes();
         private final Iterator<Map.Entry<K, Long>> deficits;
         private final List<PlanStep> prefix = new ArrayList<>();
         private final Map<String, GraphRecipe<K>> recipes;
@@ -266,6 +296,14 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
         private boolean step(PlanningScheduler.Slice slice) {
             budget.check();
+            // A provisional ordering can ask for a large amount of a returned
+            // intermediate as if it were an external seed. Do not spend the
+            // whole request manufacturing that speculative prefix before the
+            // allocator can construct and verify a different execution order.
+            if (budget.nodes() - searchStarted > 32_768L + 128L * graph.recipes().size()) {
+                result = original;
+                return true;
+            }
             if (assembly != null) {
                 if (assembly.step()) result = assembly.result();
                 return result != null;

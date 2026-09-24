@@ -41,6 +41,7 @@ final class AllocationSearch<K> {
     private int phase, index;
     private long hash1, hash2, memory;
     private Candidate checking;
+    private DemandExpansion<K> expansion;
     private GraphPlan<K> result;
 
     AllocationSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
@@ -79,23 +80,43 @@ final class AllocationSearch<K> {
             } else {
                 keyIds.computeIfAbsent(target, ignored -> keyIds.size());
                 for (K key : keyIds.keySet()) {
-                    long available = stock.getOrDefault(key, 0L);
+                    BigInteger available = BigInteger.valueOf(stock.getOrDefault(key, 0L));
                     // A finite, explicitly permitted external requirement for this
                     // candidate. This is not physical stock or a MAX_VALUE sentinel.
-                    if (external.contains(key)) available = Math.max(available, CheckedAmounts.amount(goals.getOrDefault(key, BigInteger.ZERO)));
-                    set(key, BigInteger.valueOf(available), false);
+                    if (external.contains(key)) available = available.max(goals.getOrDefault(key, BigInteger.ZERO));
+                    set(key, available, false);
                 }
                 stack.push(new Frame(0, 0));
                 visit();
-                phase = 2;
+                Map<K, BigInteger> required = new LinkedHashMap<>();
+                BigInteger targetGoal = BigInteger.valueOf(amount).add(BigInteger.valueOf(force ?
+                        Math.max(stock.getOrDefault(target, 0L), requiredSeeds.getOrDefault(target, 0L)) : requiredSeeds.getOrDefault(target, 0L)));
+                required.put(target, targetGoal);
+                requiredSeeds.forEach((key, count) -> required.merge(key, BigInteger.valueOf(count), BigInteger::max));
+                expansion = new DemandExpansion<>(relevant, held, required, budget);
+                phase = 4;
             }
             return false;
         }
         if (phase == 3) return true;
+        if (phase == 4) {
+            if (!expansion.step()) return false;
+            if (expansion.result() != null) checking = new Candidate(expansion.result());
+            else {
+                expansion.close();
+                expansion = null;
+            }
+            phase = 2;
+            return false;
+        }
         if (checking != null) {
             if (!checking.step()) return false;
             result = checking.plan;
             checking = null;
+            if (expansion != null) {
+                expansion.close();
+                expansion = null;
+            }
             if (result != null) {
                 finish();
                 return true;
@@ -152,7 +173,7 @@ final class AllocationSearch<K> {
         }
         path.add(new PlanStep.Batch(recipes.get(recipeIndex).id(), runs));
         reserve(96);
-        if (stack.size() >= 4096) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.SEARCH_LIMIT);
+        if (stack.size() >= 4096) throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "allocation_depth=4096");
         stack.push(new Frame(mark, size));
         return false;
     }
@@ -201,7 +222,7 @@ final class AllocationSearch<K> {
         // A transformation with an identically zero vector cannot help a material
         // objective. A catalyst-returning productive recipe has nonzero other keys.
         if (summary.delta().values().stream().allMatch(value -> value.signum() == 0)) return 0;
-        return CheckedAmounts.amount(bound.min(useful.max(BigInteger.ONE)));
+        return ExactAmounts.capped(bound.min(useful.max(BigInteger.ONE)));
     }
 
     private void set(K key, BigInteger value, boolean record) {
@@ -278,28 +299,48 @@ final class AllocationSearch<K> {
 
     private final class Candidate {
 
-        final PlanStep witness = new PlanStep.Sequence(path);
+        final PlanStep witness;
+        final Deque<PlanStep> collecting = new ArrayDeque<>();
         final Map<String, GraphRecipe<K>> used = new LinkedHashMap<>();
         final Map<K, List<GraphRecipe<K>>> producers = new HashMap<>();
-        final Map<K, Long> seeds = new LinkedHashMap<>(), initial = new LinkedHashMap<>();
+        final Map<K, Long> seeds = new LinkedHashMap<>();
+        final Map<K, BigInteger> initial = new LinkedHashMap<>();
         final Deque<K> todo = new ArrayDeque<>();
         final Set<K> walked = new HashSet<>();
         SummaryComputation<K> computation;
         SequenceSummary<K> summary;
         Iterator<K> keys;
         K checkingKey;
-        int stage, stepIndex;
+        int stage;
         GraphPlan<K> plan;
 
         Candidate() {
+            this(new PlanStep.Sequence(path));
+        }
+
+        Candidate(PlanStep witness) {
+            this.witness = witness;
+            collecting.push(witness);
             seeds.putAll(requiredSeeds);
         }
 
         boolean step() {
             budget.check();
             if (stage == 0) {
-                if (stepIndex < path.size()) {
-                    String id = ((PlanStep.Batch) path.get(stepIndex++)).recipe();
+                if (!collecting.isEmpty()) {
+                    PlanStep step = collecting.pop();
+                    if (step instanceof PlanStep.Repeat repeat) {
+                        if (repeat.times() > 0) collecting.push(repeat.body());
+                        return false;
+                    }
+                    if (step instanceof PlanStep.Sequence sequence) {
+                        for (int i = sequence.children().size() - 1; i >= 0; i--) {
+                            budget.check();
+                            collecting.push(sequence.children().get(i));
+                        }
+                        return false;
+                    }
+                    String id = ((PlanStep.Batch) step).recipe();
                     GraphRecipe<K> recipe = relevant.get(id);
                     if (used.putIfAbsent(id, recipe) == null)
                         for (K key : recipe.outputs().keySet()) producers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(recipe);
@@ -354,9 +395,9 @@ final class AllocationSearch<K> {
                     K key = keys.next();
                     BigInteger goal = BigInteger.valueOf(seeds.getOrDefault(key, 0L));
                     if (key.equals(target)) goal = goal.add(BigInteger.valueOf(amount));
-                    long required = CheckedAmounts.amount(summary.required(key).max(goal.subtract(summary.delta(key))));
-                    if (!external.contains(key) && required > stock.getOrDefault(key, 0L)) return true;
-                    if (required > 0) initial.put(key, required);
+                    BigInteger required = summary.required(key).max(goal.subtract(summary.delta(key)));
+                    if (!external.contains(key) && required.compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) > 0) return true;
+                    if (required.signum() > 0) initial.put(key, required);
                 } else {
                     plan = new GraphPlan<>(target, amount, preserve, witness, used, initial, seeds, Map.of(),
                             GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL, budget.nodes(), System.nanoTime() - started);

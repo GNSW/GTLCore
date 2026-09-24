@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph.core;
 
+import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
@@ -10,10 +11,10 @@ import java.util.Map;
 public final class PlanCountComputation {
 
     private final Deque<Frame> stack = new ArrayDeque<>();
-    private final Map<String, Long> counts = new LinkedHashMap<>();
+    private final Map<String, BigInteger> counts = new LinkedHashMap<>();
 
     public PlanCountComputation(PlanStep step) {
-        stack.push(new Frame(step, 1));
+        stack.push(new Frame(step, BigInteger.ONE));
     }
 
     public boolean step(PlanningBudget budget) {
@@ -26,7 +27,7 @@ public final class PlanCountComputation {
                 stack.pop();
             } else if (frame.step instanceof PlanStep.Repeat repeat) {
                 stack.pop();
-                if (repeat.times() > 0) stack.push(new Frame(repeat.body(), CheckedAmounts.multiply(frame.multiplier, repeat.times())));
+                if (repeat.times() > 0) stack.push(new Frame(repeat.body(), frame.multiplier.multiply(BigInteger.valueOf(repeat.times()))));
             } else {
                 var children = ((PlanStep.Sequence) frame.step).children();
                 if (frame.child == children.size()) stack.pop();
@@ -42,12 +43,12 @@ public final class PlanCountComputation {
         return stack.isEmpty();
     }
 
-    private void add(PlanStep.Batch batch, long multiplier) {
-        long runs = CheckedAmounts.multiply(batch.runs(), multiplier);
-        if (runs > 0) counts.merge(batch.recipe(), runs, CheckedAmounts::add);
+    private void add(PlanStep.Batch batch, BigInteger multiplier) {
+        BigInteger runs = multiplier.multiply(BigInteger.valueOf(batch.runs()));
+        if (runs.signum() > 0) counts.merge(batch.recipe(), runs, BigInteger::add);
     }
 
-    public Map<String, Long> result() {
+    public Map<String, BigInteger> result() {
         if (!stack.isEmpty()) throw new IllegalStateException("Counts incomplete");
         return Collections.unmodifiableMap(counts);
     }
@@ -55,10 +56,10 @@ public final class PlanCountComputation {
     private static final class Frame {
 
         private final PlanStep step;
-        private final long multiplier;
+        private final BigInteger multiplier;
         private int child;
 
-        private Frame(PlanStep step, long multiplier) {
+        private Frame(PlanStep step, BigInteger multiplier) {
             this.step = step;
             this.multiplier = multiplier;
         }

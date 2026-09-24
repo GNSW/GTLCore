@@ -93,10 +93,10 @@ public class ConfigHolder {
     @Configurable.Comment("config.gtlcore.option.ae2CalculationMode.comment")
     public AE2CalculationMode ae2CalculationMode = AE2CalculationMode.MAX_FAST;
     @Configurable
-    @Configurable.Comment("Crafting engine for new jobs: LEGACY or GRAPH. Restart required. ae2CalculationMode only controls LEGACY.")
+    @Configurable.Comment("config.gtlcore.option.ae2CraftingEngine.comment")
     public AECraftingEngine ae2CraftingEngine = AECraftingEngine.LEGACY;
     @Configurable
-    @Configurable.Comment("GRAPH: PRESERVE returns a proven restart seed after completion; ALLOW_CONSUME may consume it after its final use. Both protect working seeds.")
+    @Configurable.Comment("config.gtlcore.option.ae2GraphSeedPolicy.comment")
     public AEGraphSeedPolicy ae2GraphSeedPolicy = AEGraphSeedPolicy.PRESERVE;
     @Configurable
     @Configurable.Range(min = 0, max = 4096)
@@ -104,29 +104,30 @@ public class ConfigHolder {
     public int ae2GraphMaxExtraCatalystCopies = 64;
     @Configurable
     @Configurable.Range(min = 1, max = 600000)
-    @Configurable.Comment("GRAPH: show planning progress after this end-to-end delay. This never stops a calculation.")
+    @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerNoticeAfterMs.comment")
     public int ae2GraphPlannerNoticeAfterMs = 2000;
     @Configurable
     @Configurable.Range(min = 0, max = 86400000)
-    @Configurable.Comment("GRAPH: optional wall-clock timeout from the first actual computation, including later waits. 0 disables it. The unpublished BudgetMs setting is ignored.")
+    @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerTimeoutMs.comment")
     public int ae2GraphPlannerTimeoutMs = 0;
     @Configurable
     @Configurable.Range(min = 1, max = 16)
-    @Configurable.Comment("GRAPH: shared worker limit for orders and parallel graph construction. Restart required.")
+    @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerThreads.comment")
     public int ae2GraphPlannerThreads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 2));
     @Configurable
     @Configurable.Range(min = 1, max = 128)
+    @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxRequests.comment")
     public int ae2GraphPlannerMaxRequests = 16;
     @Configurable
     @Configurable.Range(min = 10000, max = Integer.MAX_VALUE)
-    @Configurable.Comment("GRAPH: cumulative traversal/search/verification work per request, shared by regions and continuations.")
+    @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxSteps.comment")
     public int ae2GraphPlannerMaxSteps = 10000000;
     @Configurable
     @Configurable.Range(min = 16, max = 1024)
     @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMemoryMiB.comment")
     public int ae2GraphPlannerMemoryMiB = 128;
     @Configurable
-    @Configurable.Comment("Log graph planning and aggregated dispatch timings; no per-item logging.")
+    @Configurable.Comment("config.gtlcore.option.ae2GraphDiagnosticLogging.comment")
     public boolean ae2GraphDiagnosticLogging = false;
     @Configurable
     @Configurable.Comment("config.gtlcore.option.enableMachineStartupTickBudget.comment")

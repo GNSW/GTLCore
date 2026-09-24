@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 
-/** Resumable final witness verification, including every prefix and long boundary. */
+/** Resumable final witness verification, including every prefix with exact totals. */
 public final class PlanVerification<K> {
 
     private final GraphPlan<K> plan;
@@ -15,10 +15,10 @@ public final class PlanVerification<K> {
     private final PlanCountComputation counts;
     private SequenceSummary<K> summary;
     private Iterator<K> keys;
-    private Iterator<Map.Entry<String, Long>> patterns;
+    private Iterator<Map.Entry<String, BigInteger>> patterns;
     private Iterator<Map.Entry<K, Long>> outputs;
-    private long runs;
-    private final Map<K, Long> totals = new LinkedHashMap<>();
+    private BigInteger runs;
+    private final Map<K, BigInteger> totals = new LinkedHashMap<>();
     private int phase;
 
     public PlanVerification(GraphPlan<K> plan, PlanningBudget budget) {
@@ -39,7 +39,7 @@ public final class PlanVerification<K> {
                 var all = new LinkedHashSet<>(summary.delta().keySet());
                 all.add(plan.target());
                 all.addAll(plan.seeds().keySet());
-                all.addAll(plan.initial().keySet());
+                all.addAll(plan.initialExact().keySet());
                 keys = all.iterator();
                 phase = 1;
             }
@@ -51,11 +51,9 @@ public final class PlanVerification<K> {
                 K key = keys.next();
                 BigInteger goal = BigInteger.valueOf(plan.seeds().getOrDefault(key, 0L));
                 if (key.equals(plan.target())) goal = goal.add(BigInteger.valueOf(plan.amount()));
-                long required = CheckedAmounts.amount(summary.required(key).max(goal.subtract(summary.delta(key))));
-                BigInteger initial = BigInteger.valueOf(plan.initial().getOrDefault(key, 0L));
-                if (initial.compareTo(BigInteger.valueOf(required)) < 0) throw new IllegalArgumentException("Unfunded prefix: " + key);
-                CheckedAmounts.amount(initial.add(summary.delta(key)));
-                CheckedAmounts.amount(initial.add(summary.peak(key)));
+                BigInteger required = summary.required(key).max(goal.subtract(summary.delta(key)));
+                BigInteger initial = plan.initialExact().getOrDefault(key, BigInteger.ZERO);
+                if (initial.compareTo(required) < 0) throw new IllegalArgumentException("Unfunded prefix: " + key);
             }
             case 2 -> {
                 if (counts.step(budget)) {
@@ -66,7 +64,7 @@ public final class PlanVerification<K> {
             case 3 -> {
                 if (outputs != null && outputs.hasNext()) {
                     var output = outputs.next();
-                    totals.merge(output.getKey(), CheckedAmounts.multiply(output.getValue(), runs), CheckedAmounts::add);
+                    totals.merge(output.getKey(), runs.multiply(BigInteger.valueOf(output.getValue())), BigInteger::add);
                 } else if (patterns.hasNext()) {
                     var pattern = patterns.next();
                     runs = pattern.getValue();

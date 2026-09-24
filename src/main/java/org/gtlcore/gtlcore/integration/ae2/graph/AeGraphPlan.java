@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import org.gtlcore.gtlcore.integration.ae2.graph.core.CheckedAmounts;
+import org.gtlcore.gtlcore.integration.ae2.graph.core.ExactAmounts;
 import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphPlan;
 import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphRecipe;
 import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanNodeCost;
@@ -24,10 +25,11 @@ public final class AeGraphPlan implements ICraftingPlan {
 
     private final GraphPlan<AEKey> graph;
     private final Map<String, IPatternDetails> bindings;
-    private final Map<AEKey, Long> emitted;
+    private final Map<AEKey, BigInteger> emitted;
     private final long bytes;
+    private final BigInteger exactBytes;
     private final UUID id = UUID.randomUUID();
-    private final Map<String, Long> selectedCounts;
+    private final Map<String, BigInteger> selectedCounts;
     private final Map<IPatternDetails, Long> selectedPatterns;
     private volatile GraphRingView display;
     private CompletableFuture<GraphRingView> displayWork;
@@ -36,22 +38,24 @@ public final class AeGraphPlan implements ICraftingPlan {
                        Map<AEKey, Long> stock) {
         this.graph = graph;
         this.bindings = Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
-        selectedCounts = graph.patternTimes();
-        Map<IPatternDetails, Long> selected = new LinkedHashMap<>();
+        selectedCounts = graph.patternTimesExact();
+        Map<IPatternDetails, BigInteger> selected = new LinkedHashMap<>();
         selectedCounts.forEach((recipe, count) -> selected.merge(
                 java.util.Objects.requireNonNull(this.bindings.get(graph.recipes().get(recipe).binding()), "Missing pattern binding"),
-                count, CheckedAmounts::add));
+                count, BigInteger::add));
         // Pattern definitions can have clustered hash codes (large families of
         // NBT recipes). Map.copyOf's linear probing magnifies those collisions.
         // This map is owned exclusively by the immutable plan; retain its hash
         // table instead of rebuilding a second open-addressed one.
-        selectedPatterns = Collections.unmodifiableMap(selected);
-        Map<AEKey, Long> emissions = new LinkedHashMap<>();
-        graph.initial().forEach((key, amount) -> {
-            if (emitable.contains(key) && amount > stock.getOrDefault(key, 0L)) emissions.put(key, amount - stock.getOrDefault(key, 0L));
+        selectedPatterns = ExactAmounts.longView(selected);
+        Map<AEKey, BigInteger> emissions = new LinkedHashMap<>();
+        graph.initialExact().forEach((key, amount) -> {
+            BigInteger deficit = amount.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+            if (emitable.contains(key) && deficit.signum() > 0) emissions.put(key, deficit);
         });
         this.emitted = Map.copyOf(emissions);
-        this.bytes = computeBytes(graph, selectedCounts);
+        this.exactBytes = computeBytes(graph, selectedCounts);
+        this.bytes = ExactAmounts.capped(exactBytes);
     }
 
     public GraphPlan<AEKey> graph() {
@@ -63,13 +67,13 @@ public final class AeGraphPlan implements ICraftingPlan {
     }
 
     public synchronized GraphRingView display() {
-        if (display == null) display = new GraphRingView(id, graph, selectedCounts);
+        if (display == null) display = new GraphRingView(id, graph, ExactAmounts.longView(selectedCounts));
         return display;
     }
 
     public synchronized CompletableFuture<GraphRingView> displayAsync() {
         if (display != null) return CompletableFuture.completedFuture(display);
-        if (displayWork == null) displayWork = CraftingEngineRouter.describe(new GraphRingView.Builder(id, graph, selectedCounts))
+        if (displayWork == null) displayWork = CraftingEngineRouter.describe(new GraphRingView.Builder(id, graph, ExactAmounts.longView(selectedCounts)))
                 .thenApply(view -> {
                     display = view;
                     return view;
@@ -82,7 +86,7 @@ public final class AeGraphPlan implements ICraftingPlan {
     }
 
     public Map<AEKey, Long> emitted() {
-        return emitted;
+        return ExactAmounts.longView(emitted);
     }
 
     /**
@@ -105,6 +109,10 @@ public final class AeGraphPlan implements ICraftingPlan {
         return bytes;
     }
 
+    public BigInteger exactBytes() {
+        return exactBytes;
+    }
+
     @Override
     public boolean simulation() {
         return !graph.feasible();
@@ -117,7 +125,7 @@ public final class AeGraphPlan implements ICraftingPlan {
 
     @Override
     public KeyCounter emittedItems() {
-        return counter(emitted);
+        return counter(emitted());
     }
 
     @Override
@@ -127,12 +135,12 @@ public final class AeGraphPlan implements ICraftingPlan {
 
     @Override
     public KeyCounter usedItems() {
-        Map<AEKey, Long> used = new LinkedHashMap<>(graph.initial());
-        emitted.forEach((key, count) -> used.compute(key, (ignored, amount) -> amount - count));
+        Map<AEKey, BigInteger> used = new LinkedHashMap<>(graph.initialExact());
+        emitted.forEach((key, count) -> used.compute(key, (ignored, amount) -> amount.subtract(count)));
         // AE's summary adds missingItems separately. initial is the complete
         // required inventory, so including its missing portion here double-counts it.
-        graph.missing().forEach((key, count) -> used.compute(key, (ignored, amount) -> amount - count));
-        return counter(used);
+        graph.missingExact().forEach((key, count) -> used.compute(key, (ignored, amount) -> amount.subtract(count)));
+        return counter(ExactAmounts.longView(used));
     }
 
     @Override
@@ -146,7 +154,7 @@ public final class AeGraphPlan implements ICraftingPlan {
         return result;
     }
 
-    private static long computeBytes(GraphPlan<AEKey> graph, Map<String, Long> counts) {
+    private static BigInteger computeBytes(GraphPlan<AEKey> graph, Map<String, BigInteger> counts) {
         // The material charge depends on units per byte, not key identity. Sum
         // equal denominators first instead of doing rational arithmetic once for
         // every resource in a large graph.
@@ -154,7 +162,7 @@ public final class AeGraphPlan implements ICraftingPlan {
         material.put((long) graph.target().getType().getAmountPerByte(), BigInteger.valueOf(graph.amount()));
         BigInteger runs = BigInteger.ZERO;
         for (var count : counts.entrySet()) {
-            BigInteger repetitions = BigInteger.valueOf(count.getValue());
+            BigInteger repetitions = count.getValue();
             runs = runs.add(repetitions);
             GraphRecipe<AEKey> recipe = graph.recipes().get(count.getKey());
             recipe.inputs().forEach((key, amount) -> material.merge((long) key.getType().getAmountPerByte(),
@@ -170,6 +178,8 @@ public final class AeGraphPlan implements ICraftingPlan {
             numerator = numerator.multiply(scale).add(entry.getValue().multiply(BigInteger.valueOf(8)).multiply(denominator.divide(gcd)));
             denominator = denominator.multiply(scale);
         }
-        return CheckedAmounts.amount(CheckedAmounts.ceilDiv(numerator, denominator));
+        // The compatibility view is bounded by ICraftingPlan's long API. Keep
+        // the full cost for CPU admission so saturation cannot discount storage.
+        return CheckedAmounts.ceilDiv(numerator, denominator);
     }
 }

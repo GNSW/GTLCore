@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph.core;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -98,26 +99,30 @@ public final class PlanCursor {
     }
 
     public Map<String, Long> remainingCounts() {
-        Map<String, Long> result = new LinkedHashMap<>();
+        return ExactAmounts.longView(remainingCountsExact());
+    }
+
+    public Map<String, BigInteger> remainingCountsExact() {
+        Map<String, BigInteger> result = new LinkedHashMap<>();
         for (Frame frame : stack) {
             if (frame.step instanceof PlanStep.Batch batch) {
-                if (frame.remaining > 0) result.merge(batch.recipe(), frame.remaining, CheckedAmounts::add);
+                if (frame.remaining > 0) result.merge(batch.recipe(), BigInteger.valueOf(frame.remaining), BigInteger::add);
             } else if (frame.step instanceof PlanStep.Repeat repeat) {
-                count(repeat.body(), frame.remaining, result);
+                count(repeat.body(), BigInteger.valueOf(frame.remaining), result);
             } else {
                 var children = ((PlanStep.Sequence) frame.step).children();
-                for (int i = children.size() - Math.toIntExact(frame.remaining); i < children.size(); i++) count(children.get(i), 1, result);
+                for (int i = children.size() - Math.toIntExact(frame.remaining); i < children.size(); i++) count(children.get(i), BigInteger.ONE, result);
             }
         }
         return result;
     }
 
-    private static void count(PlanStep step, long multiplier, Map<String, Long> counts) {
-        if (multiplier == 0) return;
+    private static void count(PlanStep step, BigInteger multiplier, Map<String, BigInteger> counts) {
+        if (multiplier.signum() == 0) return;
         if (step instanceof PlanStep.Batch batch) {
-            long runs = CheckedAmounts.multiply(batch.runs(), multiplier);
-            if (runs > 0) counts.merge(batch.recipe(), runs, CheckedAmounts::add);
-        } else if (step instanceof PlanStep.Repeat repeat) count(repeat.body(), CheckedAmounts.multiply(repeat.times(), multiplier), counts);
+            BigInteger runs = multiplier.multiply(BigInteger.valueOf(batch.runs()));
+            if (runs.signum() > 0) counts.merge(batch.recipe(), runs, BigInteger::add);
+        } else if (step instanceof PlanStep.Repeat repeat) count(repeat.body(), multiplier.multiply(BigInteger.valueOf(repeat.times())), counts);
         else for (PlanStep child : ((PlanStep.Sequence) step).children()) count(child, multiplier, counts);
     }
 

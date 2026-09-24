@@ -27,6 +27,8 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private final Set<K> seen = new HashSet<>();
     private final Deque<K> pending = new ArrayDeque<>();
     private final Map<String, Integer> ids = new HashMap<>();
+    private final Map<K, List<Integer>> outputIds = new HashMap<>();
+    private final Map<Integer, List<Integer>> resourceHubs = new HashMap<>();
     private final List<GraphRecipe<K>> nodes = new ArrayList<>();
     private final List<Ints> out = new ArrayList<>(), in = new ArrayList<>();
     private final List<GraphCompiler.Region<K>> regions = new ArrayList<>();
@@ -35,12 +37,15 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private K currentKey;
     private int candidateIndex;
     private Iterator<GraphRecipe<K>> registering;
+    private Iterator<Map.Entry<K, List<Integer>>> sharedOutputs;
     private Iterator<K> edgeInputs;
+    private Iterator<Integer> edgeProducers;
     private int phase, cursor, depth, root, finishRoot;
     private int[] stack, nextEdge;
     private byte[] visited;
     private int[][] forward, reverse;
     private List<GraphRecipe<K>> members;
+    private int componentSize;
     private CompletableFuture<List<EdgeBatch>> parallelEdges;
     private List<EdgeBatch> merging;
     private int mergeBatch, mergeNode, mergeEdge;
@@ -59,7 +64,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
         while (slice.next()) {
-            if (phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 && edgeInputs == null && merging == null) {
+            if (phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 && edgeInputs == null && edgeProducers == null && merging == null) {
                 if (parallelEdges == null && cursor < nodes.size()) {
                     List<Supplier<EdgeBatch>> partitions = new ArrayList<>();
                     for (int i = 0; i < slice.parallelism() && cursor < nodes.size(); i++) {
@@ -108,6 +113,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                         Collections.unmodifiableMap(selected), List.copyOf(regions));
                 phase = 7;
             }
+            case 8 -> registerHubs();
             default -> {
                 return true;
             }
@@ -151,6 +157,31 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             nodes.add(recipe);
             out.add(new Ints());
             in.add(new Ints());
+            for (K key : recipe.outputs().keySet()) {
+                budget.check();
+                budget.reserve(48);
+                outputIds.computeIfAbsent(key, ignored -> new ArrayList<>()).add(nodes.size() - 1);
+            }
+        } else {
+            sharedOutputs = outputIds.entrySet().iterator();
+            phase = 8;
+        }
+    }
+
+    private void registerHubs() {
+        if (sharedOutputs.hasNext()) {
+            var output = sharedOutputs.next();
+            if (output.getValue().size() > 1) {
+                // Factor consumer -> producer cross products through one
+                // material node instead of allocating a quadratic set of edges.
+                budget.reserve(160);
+                int id = nodes.size();
+                resourceHubs.put(id, output.getValue());
+                output.setValue(List.of(id));
+                nodes.add(null);
+                out.add(new Ints());
+                in.add(new Ints());
+            }
         } else {
             stack = new int[nodes.size()];
             nextEdge = new int[nodes.size()];
@@ -189,30 +220,53 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             phase = 3;
             return;
         }
+        if (nodes.get(cursor) == null && edgeProducers == null)
+            edgeProducers = resourceHubs.get(cursor).iterator();
+        if (edgeProducers != null) {
+            if (edgeProducers.hasNext()) {
+                int to = edgeProducers.next();
+                budget.reserve(24);
+                out.get(cursor).add(to);
+                in.get(to).add(cursor);
+                return;
+            }
+            edgeProducers = null;
+            if (nodes.get(cursor) == null) {
+                cursor++;
+                return;
+            }
+        }
         if (edgeInputs == null) edgeInputs = nodes.get(cursor).inputs().keySet().iterator();
         if (!edgeInputs.hasNext()) {
             edgeInputs = null;
             cursor++;
             return;
         }
-        GraphRecipe<K> producer = selected.get(edgeInputs.next());
-        if (producer == null) return;
-        int to = ids.get(producer.id());
-        budget.reserve(24);
-        out.get(cursor).add(to);
-        in.get(to).add(cursor);
+        // Selection chooses which recipes to include, not which of their
+        // physical outputs exist. Shared catalyst returns from another selected
+        // recipe must join the same SCC as every consumer of that catalyst.
+        edgeProducers = outputIds.getOrDefault(edgeInputs.next(), List.of()).iterator();
     }
 
     private EdgeBatch collectEdges(int start, int end) {
         int[][] edges = new int[end - start][];
         for (int index = start; index < end; index++) {
             Ints targets = new Ints();
+            if (nodes.get(index) == null) {
+                for (int producer : resourceHubs.get(index)) {
+                    budget.check();
+                    budget.reserve(24);
+                    targets.add(producer);
+                }
+                edges[index - start] = targets.array();
+                continue;
+            }
             for (K input : nodes.get(index).inputs().keySet()) {
                 budget.check();
-                GraphRecipe<K> producer = selected.get(input);
-                if (producer != null) {
+                for (int producer : outputIds.getOrDefault(input, List.of())) {
+                    budget.check();
                     budget.reserve(24);
-                    targets.add(ids.get(producer.id()));
+                    targets.add(producer);
                 }
             }
             edges[index - start] = targets.array();
@@ -263,13 +317,17 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private void components() {
         if (depth == 0) {
             if (members != null) {
+                if (members.isEmpty()) {
+                    members = null;
+                    return;
+                }
                 int member = ids.get(members.get(0).id());
                 boolean self = false;
                 for (int to : forward[member]) if (member == to) {
                     self = true;
                     break;
                 }
-                regions.add(new GraphCompiler.Region<>(List.copyOf(members), members.size() > 1 || self));
+                regions.add(new GraphCompiler.Region<>(List.copyOf(members), componentSize > 1 || self));
                 members = null;
                 return;
             }
@@ -280,6 +338,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             int id = finish.data[finishRoot--];
             if (visited[id] == 2) return;
             members = new ArrayList<>();
+            componentSize = 0;
             visitReverse(id);
             return;
         }
@@ -296,7 +355,8 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         visited[id] = 2;
         nextEdge[id] = 0;
         stack[depth++] = id;
-        members.add(nodes.get(id));
+        componentSize++;
+        if (nodes.get(id) != null) members.add(nodes.get(id));
     }
 
     private record EdgeBatch(int start, int[][] edges) {}

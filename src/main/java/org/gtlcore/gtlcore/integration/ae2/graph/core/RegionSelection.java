@@ -13,7 +13,7 @@ import java.util.Set;
 /** Resumable local sequence/ratio search; feasibility is checked by a separate witness verifier. */
 public final class RegionSelection<K> {
 
-    public record Choice<K>(PlanStep body, SequenceSummary<K> summary, long runs, Map<K, Long> seeds) {}
+    public record Choice<K>(PlanStep body, SequenceSummary<K> summary, BigInteger runs, Map<K, Long> seeds) {}
 
     private final GraphCompiler.Region<K> region;
     private final Map<K, BigInteger> demand;
@@ -31,7 +31,7 @@ public final class RegionSelection<K> {
     private int missing, bestMissing = Integer.MAX_VALUE;
     private int absentSeedTypes, bestAbsentSeedTypes;
     private BigInteger missingAmount, bestMissingAmount;
-    private long runs;
+    private BigInteger runs;
     private List<PlanStep> children;
     private PlanStep body;
     private SummaryComputation<K> computation;
@@ -45,6 +45,9 @@ public final class RegionSelection<K> {
     private CatalystPolicy catalystPolicy = CatalystPolicy.MINIMAL;
     private boolean scaled;
     private int workingCopies = 1;
+    private RegionOrder<K> ordering;
+    private List<GraphRecipe<K>> preferredOrder;
+    private final long searchStarted;
 
     public RegionSelection(GraphCompiler.Region<K> region, Map<K, BigInteger> demand, Map<K, Long> stock,
                            K target, long amount, boolean preserve, boolean forceTarget, Set<K> external, PlanningBudget budget, CatalystPolicy policy, Map<K, Long> catalystStock) {
@@ -70,12 +73,25 @@ public final class RegionSelection<K> {
         this.forceTarget = forceTarget;
         this.budget = budget;
         this.external = external;
+        searchStarted = budget.nodes();
     }
 
     public boolean step() {
         budget.check();
         budget.phase(PlanningBudget.Phase.SOLVE);
         List<GraphRecipe<K>> recipes = region.recipes();
+        // A speculative local ordering must leave budget for allocation search.
+        // Keep a concrete candidate even when this local search is cut short.
+        // Its deficits do not prove that stock is missing: the caller must still
+        // try other allocations or independently prove that no plan can start.
+        if (phase != 8 && region.cyclic() && budget.nodes() - searchStarted > 32_768L + 128L * recipes.size()) {
+            if (ordering != null) {
+                ordering.close();
+                ordering = null;
+            }
+            phase = 8;
+            return true;
+        }
         switch (phase) {
             case 0 -> {
                 if (index < recipes.size()) {
@@ -84,7 +100,10 @@ public final class RegionSelection<K> {
                     produced.addAll(recipe.outputs().keySet());
                 } else {
                     if (recipes.size() > 2 && recipes.size() <= 6) permutations(new ArrayList<>(recipes), 0);
-                    phase = 1;
+                    if (region.cyclic() && recipes.size() > 2) {
+                        ordering = new RegionOrder<>(recipes, produced, stock, external, budget);
+                        phase = 9;
+                    } else phase = 1;
                 }
             }
             case 1 -> {
@@ -96,8 +115,9 @@ public final class RegionSelection<K> {
             }
             case 2 -> {
                 if (index < recipes.size()) {
-                    GraphRecipe<K> recipe = order < recipes.size() ?
-                            recipes.get((index - order + recipes.size()) % recipes.size()) : permutations.get(order - recipes.size()).get(index);
+                    int trial = order - (preferredOrder == null ? 0 : 1);
+                    GraphRecipe<K> recipe = trial < 0 ? preferredOrder.get(index) : trial < recipes.size() ?
+                            recipes.get((index - trial + recipes.size()) % recipes.size()) : permutations.get(trial - recipes.size()).get(index);
                     long coefficient = recipes.size() <= 6 ? 1 + ((variant >>> (2 * index)) & 3) : 1;
                     children.add(new PlanStep.Batch(recipe.id(), coefficient));
                     index++;
@@ -173,19 +193,20 @@ public final class RegionSelection<K> {
                         }
                     }
                 } else {
-                    runs = CheckedAmounts.amount(count);
+                    runs = count;
                     if (recipes.size() > 1 && workingCopies > 1) {
-                        long full = runs / workingCopies, tail = runs % workingCopies;
+                        BigInteger full = runs.divide(BigInteger.valueOf(workingCopies));
+                        long tail = runs.remainder(BigInteger.valueOf(workingCopies)).longValueExact();
                         if (tail != 0) {
                             // Parallelism changes grouping, never the required number
                             // of cycles. A partial last wave must not charge a full
                             // wave's raw materials or force an allocation search.
                             List<PlanStep> waves = new ArrayList<>();
-                            if (full > 0) waves.add(new PlanStep.Repeat(body, full));
+                            if (full.signum() > 0) waves.add(PlanStep.repeat(body, full));
                             waves.add(parallelBody(tail));
                             body = new PlanStep.Sequence(waves);
                             computation = new SummaryComputation<>(body, byId, budget);
-                            runs = 1;
+                            runs = BigInteger.ONE;
                             phase = 7;
                             return false;
                         }
@@ -197,8 +218,8 @@ public final class RegionSelection<K> {
             case 6 -> {
                 if (keys.hasNext()) {
                     K key = keys.next();
-                    BigInteger required = runs == 0 ? BigInteger.ZERO : summary.required(key)
-                            .add(summary.delta(key).negate().max(BigInteger.ZERO).multiply(BigInteger.valueOf(runs - 1)));
+                    BigInteger required = runs.signum() == 0 ? BigInteger.ZERO : summary.required(key)
+                            .add(summary.delta(key).negate().max(BigInteger.ZERO).multiply(runs.subtract(BigInteger.ONE)));
                     BigInteger deficit = required.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
                     if (!external.contains(key) && deficit.signum() > 0) {
                         missing++;
@@ -221,6 +242,14 @@ public final class RegionSelection<K> {
                 if (computation.step()) {
                     summary = computation.result();
                     beginValidation();
+                }
+            }
+            case 9 -> {
+                if (ordering.step()) {
+                    preferredOrder = ordering.result();
+                    ordering.close();
+                    ordering = null;
+                    phase = 1;
                 }
             }
             default -> {
@@ -248,7 +277,7 @@ public final class RegionSelection<K> {
     }
 
     private void nextTrial() {
-        if (++order == region.recipes().size() + permutations.size()) {
+        if (++order == region.recipes().size() + permutations.size() + (preferredOrder == null ? 0 : 1)) {
             order = 0;
             variant++;
         }

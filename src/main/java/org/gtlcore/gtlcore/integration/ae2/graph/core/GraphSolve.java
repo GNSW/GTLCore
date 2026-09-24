@@ -78,7 +78,7 @@ final class GraphSolve<K> {
         if (applying != null) {
             if (applying.hasNext()) {
                 K key = applying.next();
-                BigInteger runs = BigInteger.valueOf(selected.runs());
+                BigInteger runs = selected.runs();
                 BigInteger change = selected.summary().delta(key);
                 BigInteger required = selected.summary().required(key).add(change.negate().max(BigInteger.ZERO).multiply(runs.subtract(BigInteger.ONE)));
                 long additionalSeed = Math.max(0, selected.seeds().getOrDefault(key, 0L) - requiredSeeds.getOrDefault(key, 0L));
@@ -86,8 +86,8 @@ final class GraphSolve<K> {
                 demand.put(key, required.max(goal.subtract(change.multiply(runs))).max(BigInteger.ZERO));
                 return false;
             }
-            if (selected.body() instanceof PlanStep.Batch batch) reversed.add(new PlanStep.Batch(batch.recipe(), CheckedAmounts.multiply(batch.runs(), selected.runs())));
-            else reversed.add(new PlanStep.Repeat(selected.body(), selected.runs()));
+            if (selected.body() instanceof PlanStep.Batch batch) reversed.add(PlanStep.batch(batch.recipe(), selected.runs().multiply(BigInteger.valueOf(batch.runs()))));
+            else reversed.add(PlanStep.repeat(selected.body(), selected.runs()));
             applying = null;
             selected = null;
             return false;
@@ -100,7 +100,7 @@ final class GraphSolve<K> {
                 result = failure(GraphPlan.Result.UNKNOWN);
                 return true;
             }
-            if (selected.runs() == 0) {
+            if (selected.runs().signum() == 0) {
                 selected = null;
                 return false;
             }
@@ -145,7 +145,6 @@ final class GraphSolve<K> {
             return;
         }
         if (ordinaryPhase == 0) {
-            CheckedAmounts.amount(ordinaryCount);
             if (ordinaryCount.signum() == 0) {
                 ordinary = null;
                 return;
@@ -157,7 +156,7 @@ final class GraphSolve<K> {
             ordinaryPhase = 2;
         } else {
             if (ordinary.outputs().containsKey(target)) targetProduced = true;
-            reversed.add(new PlanStep.Batch(ordinary.id(), CheckedAmounts.amount(ordinaryCount)));
+            reversed.add(PlanStep.batch(ordinary.id(), ordinaryCount));
             ordinary = null;
         }
     }

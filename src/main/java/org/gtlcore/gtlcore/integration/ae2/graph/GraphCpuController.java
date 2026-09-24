@@ -74,13 +74,20 @@ public final class GraphCpuController {
         if (host.cpu().getAvailableStorage() < supplied.bytes()) return CraftingSubmitResult.CPU_TOO_SMALL;
         boolean allowMissing = supplied instanceof MissingCraftingPlan;
         AeGraphPlan view = (AeGraphPlan) (allowMissing ? ((MissingCraftingPlan) supplied).delegate() : supplied);
+        if (view.exactBytes().compareTo(java.math.BigInteger.valueOf(host.cpu().getAvailableStorage())) > 0)
+            return CraftingSubmitResult.CPU_TOO_SMALL;
         GraphPlan<AEKey> plan = view.graph();
         if (!plan.feasible()) {
             if (!allowMissing || (plan.result() != GraphPlan.Result.MISSING_INPUT && plan.result() != GraphPlan.Result.MISSING_SEED)) return CraftingSubmitResult.INCOMPLETE_PLAN;
             plan = new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), plan.steps(), plan.recipes(),
-                    plan.initial(), plan.seeds(), Map.of(), GraphPlan.Result.FEASIBLE, plan.searchNodes(), plan.planningNanos());
+                    plan.initialExact(), plan.seeds(), Map.of(), GraphPlan.Result.FEASIBLE, plan.searchNodes(), plan.planningNanos());
         }
-        PlanVerifier.verify(plan);
+        try {
+            PlanVerifier.verifyRuntimeInventory(plan);
+        } catch (ArithmeticException e) {
+            GTLCore.LOGGER.warn("[Graph Crafting] submit rejected target={} amount={} reason=CPU_INVENTORY_AMOUNT_LIMIT", plan.target(), plan.amount());
+            return CraftingSubmitResult.INCOMPLETE_PLAN;
+        }
         UUID id = UUID.randomUUID();
         CraftingLink cpuLink = new CraftingLink(CraftingCpuHelper.generateLinkData(id, requester == null, false), host.cpu());
         GtlExecutionAdapter preparedAdapter = new GtlExecutionAdapter(host, cpuLink);
@@ -150,7 +157,7 @@ public final class GraphCpuController {
         tracker = new ElapsedTimeTracker();
         var time = (ElapsedTimeTrackerAccessor) tracker;
         waiting.forEach((key, count) -> time.invokeAddMaxItems(count, key.getType()));
-        plan.patternTimes().forEach((recipe, count) -> runtime.plan().recipes().get(recipe).outputs().forEach((key, amount) -> time.invokeAddMaxItems(CheckedAmounts.multiply(amount, count), key.getType())));
+        plan.patternTimesExact().forEach((recipe, count) -> runtime.plan().recipes().get(recipe).outputs().forEach((key, amount) -> time.invokeAddMaxItems(ExactAmounts.capped(count.multiply(java.math.BigInteger.valueOf(amount))), key.getType())));
         publish(true);
         notifyOwner(CraftingJobStatusPacket.Status.STARTED);
         if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
@@ -490,6 +497,11 @@ public final class GraphCpuController {
 
     private boolean installReplan(AeGraphPlan selected) {
         GraphPlan<AEKey> replacement = selected.graph();
+        try {
+            PlanVerifier.verifyRuntimeInventory(replacement);
+        } catch (ArithmeticException e) {
+            return false;
+        }
         for (String id : replacement.patternTimes().keySet()) if (adapter.resolve(replacement.recipes().get(id)) == null) return false;
         Map<AEKey, Long> forecast = runtime.forecastInventory();
         Map<AEKey, Long> needed = new LinkedHashMap<>(), emitted = new LinkedHashMap<>();

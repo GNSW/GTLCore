@@ -144,9 +144,9 @@ final class PipelineScheduler<K> {
         return window.stream().map(entry -> new PlanStep.Batch(entry.recipe, entry.remaining)).toList();
     }
 
-    Map<String, Long> remainingCounts() {
-        Map<String, Long> result = new LinkedHashMap<>(cursor.remainingCounts());
-        for (Entry entry : window) result.merge(entry.recipe, entry.remaining, CheckedAmounts::add);
+    Map<String, BigInteger> remainingCounts() {
+        Map<String, BigInteger> result = new LinkedHashMap<>(cursor.remainingCountsExact());
+        for (Entry entry : window) result.merge(entry.recipe, BigInteger.valueOf(entry.remaining), BigInteger::add);
         return result;
     }
 

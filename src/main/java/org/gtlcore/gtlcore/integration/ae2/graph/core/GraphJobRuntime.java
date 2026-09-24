@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph.core;
 
+import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -51,12 +52,12 @@ public final class GraphJobRuntime<K> {
     private final OutputObligations<K> obligations;
     private final String recoveryOwner;
     private long recoveryStage;
-    private final Map<String, Long> acceptedRuns = new LinkedHashMap<>();
-    private final Map<String, Long> committedHistory = new LinkedHashMap<>();
+    private final Map<String, BigInteger> acceptedRuns = new LinkedHashMap<>();
+    private final Map<String, BigInteger> committedHistory = new LinkedHashMap<>();
     private boolean replanning;
     private long replanEpoch;
-    private final Map<String, Long> pendingRuns = new LinkedHashMap<>();
-    private final Map<K, Long> pendingOutputs = new LinkedHashMap<>();
+    private final Map<String, BigInteger> pendingRuns = new LinkedHashMap<>();
+    private final Map<K, BigInteger> pendingOutputs = new LinkedHashMap<>();
     private final Set<K> changedKeys = new LinkedHashSet<>();
     private Map<K, Long> uncertainInputs = Map.of();
     private Map<K, Long> preparedOutputs;
@@ -76,7 +77,7 @@ public final class GraphJobRuntime<K> {
     private long version;
 
     public GraphJobRuntime(GraphPlan<K> plan, Map<K, Long> initial, Map<K, Long> emitted) {
-        PlanVerifier.verify(plan);
+        PlanVerifier.verifyRuntimeInventory(plan);
         this.plan = plan;
         this.owned = new ResourceLedger<>(initial);
         this.cursor = new PlanCursor(plan.steps());
@@ -95,7 +96,7 @@ public final class GraphJobRuntime<K> {
 
     public GraphJobRuntime(Snapshot<K> saved) {
         this.plan = saved.plan();
-        PlanVerifier.verify(plan);
+        PlanVerifier.verifyRuntimeInventory(plan);
         this.owned = new ResourceLedger<>(saved.owned());
         this.cursor = new PlanCursor(plan.steps(), saved.cursor());
         expected.putAll(GraphRecipe.amounts(saved.expected()));
@@ -106,14 +107,14 @@ public final class GraphJobRuntime<K> {
         committedHistory.putAll(saved.committedHistory());
         if (!saved.recovery().seeds().equals(plan.seeds())) throw new IllegalArgumentException("Recovery contract changed");
         uncertainInputs = GraphRecipe.amounts(saved.uncertainInputs());
-        Map<String, Long> plannedRuns = plan.patternTimes();
+        Map<String, BigInteger> plannedRuns = plan.patternTimesExact();
         saved.acceptedRuns().forEach((id, count) -> {
-            if (count < 0 || count > plannedRuns.getOrDefault(id, 0L)) throw new IllegalArgumentException("Invalid accepted count");
+            if (count.signum() < 0 || count.compareTo(plannedRuns.getOrDefault(id, BigInteger.ZERO)) > 0) throw new IllegalArgumentException("Invalid accepted count");
             acceptedRuns.put(id, count);
         });
-        Map<String, Long> remainingCounts = new LinkedHashMap<>(plannedRuns);
-        acceptedRuns.forEach((id, count) -> remainingCounts.compute(id, (key, amount) -> amount - count));
-        remainingCounts.values().removeIf(value -> value == 0);
+        Map<String, BigInteger> remainingCounts = new LinkedHashMap<>(plannedRuns);
+        acceptedRuns.forEach((id, count) -> remainingCounts.compute(id, (key, amount) -> amount.subtract(count)));
+        remainingCounts.values().removeIf(value -> value.signum() == 0);
         this.dag = DagScheduler.create(plan, acceptedRuns);
         this.pipeline = dag == null ? new PipelineScheduler<>(cursor, plan.recipes(), saved.pipeline()) : null;
         if (dag == null && !remainingCounts.equals(pipeline.remainingCounts())) throw new IllegalArgumentException("Cursor and accepted batch counts disagree");
@@ -132,12 +133,12 @@ public final class GraphJobRuntime<K> {
 
     private void initializePending() {
         if (state == State.CANCELLING || finished()) return;
-        plan.patternTimes().forEach((id, count) -> {
-            long remaining = count - acceptedRuns.getOrDefault(id, 0L);
-            if (remaining == 0) return;
+        plan.patternTimesExact().forEach((id, count) -> {
+            BigInteger remaining = count.subtract(acceptedRuns.getOrDefault(id, BigInteger.ZERO));
+            if (remaining.signum() == 0) return;
             pendingRuns.put(id, remaining);
             plan.recipes().get(id).outputs().forEach((key, amount) -> pendingOutputs.merge(key,
-                    CheckedAmounts.multiply(amount, remaining), CheckedAmounts::add));
+                    remaining.multiply(BigInteger.valueOf(amount)), BigInteger::add));
         });
         changedKeys.addAll(owned.snapshot().keySet());
         changedKeys.addAll(expected.keySet());
@@ -258,13 +259,13 @@ public final class GraphJobRuntime<K> {
                 recoveryStage = CheckedAmounts.add(recoveryStage, 1);
                 if (dag == null) pipeline.accepted(batch);
                 else dag.accepted(batch);
-                acceptedRuns.merge(recipe.id(), batch, CheckedAmounts::add);
-                long undispatched = pendingRuns.get(recipe.id()) - batch;
-                if (undispatched == 0) pendingRuns.remove(recipe.id());
+                acceptedRuns.merge(recipe.id(), BigInteger.valueOf(batch), BigInteger::add);
+                BigInteger undispatched = pendingRuns.get(recipe.id()).subtract(BigInteger.valueOf(batch));
+                if (undispatched.signum() == 0) pendingRuns.remove(recipe.id());
                 else pendingRuns.put(recipe.id(), undispatched);
                 for (var output : recipe.outputs().entrySet()) {
-                    long remaining = pendingOutputs.get(output.getKey()) - CheckedAmounts.multiply(output.getValue(), batch);
-                    if (remaining == 0) pendingOutputs.remove(output.getKey());
+                    BigInteger remaining = pendingOutputs.get(output.getKey()).subtract(BigInteger.valueOf(output.getValue()).multiply(BigInteger.valueOf(batch)));
+                    if (remaining.signum() == 0) pendingOutputs.remove(output.getKey());
                     else pendingOutputs.put(output.getKey(), remaining);
                 }
                 expected.clear();
@@ -465,7 +466,7 @@ public final class GraphJobRuntime<K> {
             throw new IllegalArgumentException("Replan changed the order target");
         for (var seed : plan.seeds().entrySet())
             if (replacement.seeds().getOrDefault(seed.getKey(), 0L) < seed.getValue()) throw new IllegalArgumentException("Replan dropped recovery ownership");
-        PlanVerifier.verify(replacement);
+        PlanVerifier.verifyRuntimeInventory(replacement);
         Map<K, Long> projected = new LinkedHashMap<>(forecastInventory());
         extraHeld.forEach((key, count) -> projected.merge(key, CheckedAmounts.nonNegative(count), CheckedAmounts::add));
         extraExternal.forEach((key, count) -> projected.merge(key, CheckedAmounts.nonNegative(count), CheckedAmounts::add));
@@ -473,10 +474,10 @@ public final class GraphJobRuntime<K> {
             if (projected.getOrDefault(required.getKey(), 0L) < required.getValue()) throw new IllegalArgumentException("Unfunded replacement suffix");
         // Include surplus from the old prefix in the long/peak check, even if the
         // replacement no longer consumes it. It remains physically owned until refund.
-        PlanVerifier.verify(new GraphPlan<>(replacement.target(), replacement.amount(), replacement.preserveSeeds(), replacement.steps(),
+        PlanVerifier.verifyRuntimeInventory(new GraphPlan<>(replacement.target(), replacement.amount(), replacement.preserveSeeds(), replacement.steps(),
                 replacement.recipes(), projected, replacement.seeds(), Map.of(), GraphPlan.Result.FEASIBLE, 0, 0));
-        Map<String, Long> history = new LinkedHashMap<>(committedHistory);
-        acceptedRuns.forEach((id, count) -> history.merge(id, count, CheckedAmounts::add));
+        Map<String, BigInteger> history = new LinkedHashMap<>(committedHistory);
+        acceptedRuns.forEach((id, count) -> history.merge(id, count, BigInteger::add));
         var newCursor = new PlanCursor(replacement.steps());
         var newDag = DagScheduler.create(replacement, Map.of());
         var newPipeline = newDag == null ? new PipelineScheduler<>(newCursor, replacement.recipes(), List.of()) : null;
@@ -501,9 +502,9 @@ public final class GraphJobRuntime<K> {
     }
 
     public Map<String, Long> committedRuns() {
-        Map<String, Long> all = new LinkedHashMap<>(committedHistory);
-        acceptedRuns.forEach((id, count) -> all.merge(id, count, CheckedAmounts::add));
-        return Map.copyOf(all);
+        Map<String, BigInteger> all = new LinkedHashMap<>(committedHistory);
+        acceptedRuns.forEach((id, count) -> all.merge(id, count, BigInteger::add));
+        return ExactAmounts.longView(all);
     }
 
     public record ReplanCheckpoint<K>(long epoch, K target, long remaining, Map<K, Long> recoverySeeds, Map<K, Long> forecast) {}
@@ -586,7 +587,7 @@ public final class GraphJobRuntime<K> {
     }
 
     public long pendingOutput(K key) {
-        return pendingOutputs.getOrDefault(key, 0L);
+        return ExactAmounts.capped(pendingOutputs.getOrDefault(key, BigInteger.ZERO));
     }
 
     public Set<K> pendingKeys() {
@@ -615,7 +616,7 @@ public final class GraphJobRuntime<K> {
 
     public Map<String, Long> pendingRuns() {
         if (state == State.CANCELLING || finished()) return Map.of();
-        return Map.copyOf(pendingRuns);
+        return ExactAmounts.longView(pendingRuns);
     }
 
     private void changed() {
@@ -647,8 +648,8 @@ public final class GraphJobRuntime<K> {
     }
 
     public record Snapshot<K>(GraphPlan<K> plan, Map<K, Long> owned, Map<K, Long> expected,
-                              Map<K, Long> uncertainInputs, Map<String, Long> acceptedRuns,
+                              Map<K, Long> uncertainInputs, Map<String, BigInteger> acceptedRuns,
                               List<PlanCursor.Position> cursor, List<PlanStep.Batch> pipeline, long remainingDelivery, State state,
                               boolean suspended, String reason, OutputObligations.Snapshot<K> obligations,
-                              RecoveryObligation<K> recovery, Map<String, Long> committedHistory) {}
+                              RecoveryObligation<K> recovery, Map<String, BigInteger> committedHistory) {}
 }

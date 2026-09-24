@@ -21,11 +21,12 @@ final class PlanAssembly<K> {
     private final PlanningBudget budget;
     private final SummaryComputation<K> computation;
     private final PlanCountComputation counting;
-    private final Map<K, Long> initial = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
+    private final Map<K, BigInteger> initial = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
     private SequenceSummary<K> summary;
     private Iterator<K> keys;
     private Iterator<Map.Entry<K, Long>> amounts;
-    private Map<String, Long> times;
+    private Map<String, BigInteger> times;
+    private Iterator<Map.Entry<K, BigInteger>> requiredAmounts;
     private GraphRecipe<K> current;
     private int phase, regionIndex, recipeIndex;
     private boolean missingSeed;
@@ -70,8 +71,8 @@ final class PlanAssembly<K> {
                 K key = keys.next();
                 BigInteger goal = BigInteger.valueOf(seeds.getOrDefault(key, 0L));
                 if (key.equals(target)) goal = goal.add(BigInteger.valueOf(amount));
-                long required = CheckedAmounts.amount(summary.required(key).max(goal.subtract(summary.delta(key))));
-                if (required != 0) initial.put(key, required);
+                BigInteger required = summary.required(key).max(goal.subtract(summary.delta(key)));
+                if (required.signum() != 0) initial.put(key, required);
             }
             case 2 -> {
                 if (counting.step(budget)) {
@@ -84,11 +85,11 @@ final class PlanAssembly<K> {
                     var input = amounts.next();
                     if (current.outputs().getOrDefault(input.getKey(), 0L) >= input.getValue()) {
                         long working = Math.min(stock.getOrDefault(input.getKey(), 0L),
-                                CheckedAmounts.multiply(input.getValue(), Math.min(catalystPolicy.parallelism(), times.getOrDefault(current.id(), 0L))));
-                        // Growth loops can use multiple existing seeds too. Keep
-                        // headroom for the verified peak before adding working stock.
-                        working = Math.min(working, CheckedAmounts.amount(BigInteger.valueOf(Long.MAX_VALUE).subtract(summary.peak(input.getKey()))));
-                        if (working != 0) initial.merge(input.getKey(), working, Math::max);
+                                ExactAmounts.capped(BigInteger.valueOf(input.getValue()).multiply(times.getOrDefault(current.id(), BigInteger.ZERO).min(BigInteger.valueOf(catalystPolicy.parallelism())))));
+                        // Optional working stock must not add avoidable pressure
+                        // to the current CPU's physical inventory representation.
+                        working = Math.min(working, ExactAmounts.capped(ExactAmounts.LONG_MAX.subtract(summary.peak(input.getKey())).max(BigInteger.ZERO)));
+                        if (working != 0) initial.merge(input.getKey(), BigInteger.valueOf(working), BigInteger::max);
                     }
                 } else if (regionIndex < graph.regions().size()) {
                     var region = graph.regions().get(regionIndex++);
@@ -97,15 +98,15 @@ final class PlanAssembly<K> {
                         amounts = current.inputs().entrySet().iterator();
                     }
                 } else {
-                    amounts = initial.entrySet().iterator();
+                    requiredAmounts = initial.entrySet().iterator();
                     phase = 4;
                 }
             }
             case 4 -> {
-                if (amounts.hasNext()) {
-                    var entry = amounts.next();
-                    long available = stock.getOrDefault(entry.getKey(), 0L);
-                    if (!external.contains(entry.getKey()) && entry.getValue() > available) missing.put(entry.getKey(), entry.getValue() - available);
+                if (requiredAmounts.hasNext()) {
+                    var entry = requiredAmounts.next();
+                    BigInteger deficit = entry.getValue().subtract(BigInteger.valueOf(stock.getOrDefault(entry.getKey(), 0L)));
+                    if (!external.contains(entry.getKey()) && deficit.signum() > 0) missing.put(entry.getKey(), deficit);
                 } else {
                     regionIndex = recipeIndex = 0;
                     keys = null;

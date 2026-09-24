@@ -99,8 +99,10 @@ public final class CraftingEngineRouter {
         var worker = scheduler().submit(work, budget);
         result.attach(worker);
         worker.whenComplete((plan, error) -> {
-            if (error != null) result.completeExceptionally(error);
-            else result.complete(plan);
+            if (error != null) {
+                work.logFailure(error);
+                result.completeExceptionally(error);
+            } else result.complete(plan);
         });
         result.whenComplete((plan, error) -> { if (error != null) snapshot.cancel(false); });
         Runnable capture = () -> {
@@ -231,6 +233,16 @@ public final class CraftingEngineRouter {
             };
         }
 
+        private void logFailure(Throwable error) {
+            Throwable cause = error;
+            while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
+            if (cause instanceof java.util.concurrent.CancellationException) return;
+            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
+                    "[Graph Crafting] plan failed target={} amount={} phase={} nodes={} reserved_bytes={} elapsed_ms={} detail={} error={}",
+                    target, amount, budget.phase(), budget.nodes(), budget.peakBytes(), budget.elapsedNanos() / 1_000_000.0,
+                    budget.failureDetail(), cause.toString(), error);
+        }
+
         private boolean finish() {
             if (!selected.feasible() && selected.missing().isEmpty()) throw limitOrUnknown(selected);
             if (!selected.feasible() && snapshot.structure().boundedAlternatives())
@@ -273,7 +285,7 @@ public final class CraftingEngineRouter {
             }
             if (selected == null || !selected.feasible()) throw limit;
             selected = new GraphPlan<>(selected.target(), selected.amount(), selected.preserveSeeds(), selected.steps(),
-                    selected.recipes(), selected.initial(), selected.seeds(), Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL,
+                    selected.recipes(), selected.initialExact(), selected.seeds(), Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL,
                     budget.nodes(), selected.planningNanos());
             finish();
             return result;

@@ -69,7 +69,7 @@ public class MEExtendedAsyncOutputPartMachine extends MEExtendedOutputPartMachin
 
     @Override
     public void onMachineRemoved() {
-        accumulator.clear();
+        flushAsyncQueue();
         super.onMachineRemoved();
     }
 
@@ -107,6 +107,8 @@ public class MEExtendedAsyncOutputPartMachine extends MEExtendedOutputPartMachin
             public List<Ingredient> meHandleRecipeOutputInner(List<Ingredient> left, boolean simulate) {
                 if (simulate) return List.of();
                 AEWriteService.INSTANCE.submitIngredientLeft(accRef, left);
+                getMachine().markDirty();
+                getMETrait().notifySelfIO();
                 return List.of();
             }
         };
@@ -124,6 +126,8 @@ public class MEExtendedAsyncOutputPartMachine extends MEExtendedOutputPartMachin
             public List<FluidIngredient> meHandleRecipeOutputInner(List<FluidIngredient> left, boolean simulate) {
                 if (simulate) return List.of();
                 AEWriteService.INSTANCE.submitFluidIngredientLeft(accRef, left);
+                getMachine().markDirty();
+                getMETrait().notifySelfIO();
                 return List.of();
             }
         };
@@ -155,6 +159,7 @@ public class MEExtendedAsyncOutputPartMachine extends MEExtendedOutputPartMachin
         public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
             final boolean isActive = getMainNode().isActive();
             final boolean dataMerged = mergeFromPendingData();
+            if (dataMerged) markDirty();
             final boolean hasPendingWork = !pendingQueue.isEmpty() || !accumulator.isEmpty();
 
             if (hasPendingWork) {
@@ -181,7 +186,9 @@ public class MEExtendedAsyncOutputPartMachine extends MEExtendedOutputPartMachin
                     return TickRateModulation.SLEEP;
                 } else return TickRateModulation.SLOWER;
             } else {
-                if (AEUtils.reFunds(buffer, getMainNode().getGrid(), actionSource) || dataMerged) {
+                boolean inserted = AEUtils.reFunds(buffer, getMainNode().getGrid(), actionSource);
+                if (inserted) markDirty();
+                if (inserted || dataMerged) {
                     return TickRateModulation.URGENT;
                 } else {
                     return TickRateModulation.SLOWER;

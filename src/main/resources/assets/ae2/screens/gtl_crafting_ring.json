@@ -1,0 +1,60 @@
+{
+  "$schema": "schema.json",
+  "includes": [
+    "common/common.json"
+  ],
+  "generatedBackground": {
+    "width": 360,
+    "height": 264
+  },
+  "widgets": {
+    "back": {
+      "left": 292,
+      "top": 7,
+      "width": 56,
+      "height": 18
+    },
+    "overview": {
+      "left": 12,
+      "top": 30,
+      "width": 80,
+      "height": 18
+    },
+    "rings": {
+      "left": 97,
+      "top": 30,
+      "width": 80,
+      "height": 18
+    },
+    "recipes": {
+      "left": 182,
+      "top": 30,
+      "width": 80,
+      "height": 18
+    },
+    "steps": {
+      "left": 267,
+      "top": 30,
+      "width": 80,
+      "height": 18
+    },
+    "previous": {
+      "left": 12,
+      "top": 238,
+      "width": 30,
+      "height": 18
+    },
+    "next": {
+      "left": 318,
+      "top": 238,
+      "width": 30,
+      "height": 18
+    },
+    "reset": {
+      "left": 280,
+      "top": 52,
+      "width": 68,
+      "height": 17
+    }
+  }
+}

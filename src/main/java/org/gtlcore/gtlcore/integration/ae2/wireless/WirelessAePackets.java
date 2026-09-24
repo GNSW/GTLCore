@@ -47,7 +47,7 @@ import java.util.function.Supplier;
 
 public final class WirelessAePackets {
 
-    private static final String PROTOCOL_VERSION = "25";
+    private static final String PROTOCOL_VERSION = "26";
     private static final MeInventoryRequestLimiter<ServerPlayer> TARGET_REQUEST_LIMITER = new MeInventoryRequestLimiter<>(8, 20);
     private static int nextPacketId;
 
@@ -129,6 +129,7 @@ public final class WirelessAePackets {
                 SyncMEChamberSnapshotPacket::decode, SyncMEChamberSnapshotPacket::handle, NetworkDirection.PLAY_TO_CLIENT);
         MeInventoryAmountPackets.register(CHANNEL, () -> nextPacketId++);
         FastCellDisplayPackets.register(CHANNEL, () -> nextPacketId++);
+        org.gtlcore.gtlcore.integration.ae2.graph.GraphRingPackets.register(CHANNEL, () -> nextPacketId++);
         JeiWirelessTerminalOrderPackets.register(CHANNEL, () -> nextPacketId++);
         JeiPatternQuery.register(CHANNEL, () -> nextPacketId++);
     }

@@ -1,6 +1,9 @@
 package org.gtlcore.gtlcore.mixin.ae2.gui;
 
+import org.gtlcore.gtlcore.client.ae2.graph.CraftingRingButton;
+import org.gtlcore.gtlcore.client.ae2.graph.CraftingRingScreen;
 import org.gtlcore.gtlcore.integration.ae2.common.IConfirmStartMenu;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphPlanSummaryView;
 import org.gtlcore.gtlcore.integration.jei.JeiMissingIngredientBookmarks;
 
 import com.lowdragmc.lowdraglib.LDLib;
@@ -42,6 +45,8 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
 
     @Unique
     private Button gtlcore$favoriteMissing;
+    @Unique
+    private Button gtlcore$craftingRing;
 
     protected CraftConfirmScreenMixin(CraftConfirmMenu menu, Inventory playerInventory,
                                       Component title, ScreenStyle style) {
@@ -51,6 +56,8 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
     @Inject(method = "<init>", at = @At("TAIL"), remap = false)
     private void gtlcore$addFavoriteMissingButton(CraftConfirmMenu menu, Inventory playerInventory,
                                                   Component title, ScreenStyle style, CallbackInfo ci) {
+        gtlcore$craftingRing = addToLeftToolbar(new CraftingRingButton(() -> switchToScreen(new CraftingRingScreen((CraftConfirmScreen) (Object) this))));
+        gtlcore$craftingRing.active = false;
         if (LDLib.isJeiLoaded()) {
             this.gtlcore$favoriteMissing = this.widgets.addButton(
                     GTLCORE$FAVORITE_MISSING_WIDGET_ID,
@@ -63,6 +70,7 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
     @Inject(method = "updateBeforeRender", at = @At("TAIL"), remap = false)
     private void gtlcore$updateFavoriteMissingButton(CallbackInfo ci) {
         var plan = this.menu.getPlan();
+        gtlcore$craftingRing.active = plan instanceof GraphPlanSummaryView view && view.gtlcore$graphPlanId() != null;
         boolean missingCraft = plan != null && plan.isSimulation() &&
                 ((IConfirmStartMenu) this.menu).gtlcore$isMissingCraftAvailable();
         if (plan != null && plan.isSimulation() && !this.menu.hasNoCPU()) {

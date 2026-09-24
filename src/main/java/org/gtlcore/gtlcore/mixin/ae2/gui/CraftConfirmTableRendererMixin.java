@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Mixin(CraftConfirmTableRenderer.class)
@@ -27,7 +28,7 @@ public abstract class CraftConfirmTableRendererMixin extends AbstractTableRender
 
     @Inject(method = "getEntryDescription(Lappeng/menu/me/crafting/CraftingPlanSummaryEntry;)Ljava/util/List;", at = @At("TAIL"), cancellable = true, remap = false)
     private void getEntryDescription(CraftingPlanSummaryEntry entry, CallbackInfoReturnable<List<Component>> cir) {
-        var lines = cir.getReturnValue();
+        var lines = new ArrayList<>(cir.getReturnValue());
 
         var craftTimes = ((ICraftingPlanSummaryEntry) entry).gtlcore$getCraftTimes();
         if (craftTimes > 1) {
@@ -57,6 +58,23 @@ public abstract class CraftConfirmTableRendererMixin extends AbstractTableRender
             }
         }
 
+        cir.setReturnValue(lines);
+    }
+
+    @Inject(method = "getEntryTooltip(Lappeng/menu/me/crafting/CraftingPlanSummaryEntry;)Ljava/util/List;",
+            at = @At("RETURN"),
+            cancellable = true,
+            remap = false)
+    private void gtlcore$seedTooltip(CraftingPlanSummaryEntry entry, CallbackInfoReturnable<List<Component>> cir) {
+        // AE cells are only 22px high: four half-scale lines already take 21px.
+        // Recovery details belong in the unconstrained tooltip, not in another cell row.
+        var graphEntry = (ICraftingPlanSummaryEntry) entry;
+        if (graphEntry.gtlcore$getGraphSeed() <= 0 && !graphEntry.gtlcore$isMissingGraphSeed()) return;
+        var lines = new ArrayList<>(cir.getReturnValue());
+        if (graphEntry.gtlcore$getGraphSeed() > 0)
+            lines.add(Component.translatable("gtlcore.ae.graph.preserved_seed", graphEntry.gtlcore$getGraphSeed()).withStyle(ChatFormatting.AQUA));
+        if (graphEntry.gtlcore$isMissingGraphSeed())
+            lines.add(Component.translatable("gtlcore.ae.graph.missing_seed").withStyle(ChatFormatting.RED));
         cir.setReturnValue(lines);
     }
 

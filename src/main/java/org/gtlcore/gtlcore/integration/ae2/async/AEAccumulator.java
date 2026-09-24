@@ -12,7 +12,7 @@ public final class AEAccumulator {
     @Getter
     private final ConcurrentHashMap<AEKey, LongAdder> acc = new ConcurrentHashMap<>();
 
-    public void add(AEKey key, long delta) {
+    public synchronized void add(AEKey key, long delta) {
         if (key == null || delta == 0) return;
         acc.compute(key, (k, adder) -> {
             if (adder == null) adder = new LongAdder();
@@ -21,7 +21,7 @@ public final class AEAccumulator {
         });
     }
 
-    public void drainTo(Object2LongOpenHashMap<AEKey> buffer) {
+    public synchronized void drainTo(Object2LongOpenHashMap<AEKey> buffer) {
         for (AEKey key : acc.keySet()) {
             LongAdder adder = acc.get(key);
             if (adder == null) continue;
@@ -32,11 +32,11 @@ public final class AEAccumulator {
         }
     }
 
-    public void clear() {
+    public synchronized void clear() {
         acc.clear();
     }
 
-    public boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return acc.isEmpty();
     }
 }

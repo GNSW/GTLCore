@@ -7,6 +7,9 @@ import org.gtlcore.gtlcore.integration.ae2.crafting.CraftingPatternAutoExpand;
 import org.gtlcore.gtlcore.integration.ae2.crafting.CraftingPatternPower;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingDispatchReasonProvider;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingJobSuspension;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphCpuController;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphCpuHost;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphJobCodec;
 import org.gtlcore.gtlcore.mixin.ae2.logic.ElapsedTimeTrackerAccessor;
 import org.gtlcore.gtlcore.utils.NumberUtils;
 
@@ -20,6 +23,7 @@ import appeng.api.config.PowerMultiplier;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.features.IPlayerRegistry;
 import appeng.api.networking.IGrid;
+import appeng.api.networking.crafting.ICraftingCPU;
 import appeng.api.networking.crafting.ICraftingLink;
 import appeng.api.networking.crafting.ICraftingPlan;
 import appeng.api.networking.crafting.ICraftingRequester;
@@ -52,7 +56,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, ICraftingDispatchReasonProvider {
+public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, ICraftingDispatchReasonProvider,
+                                            GraphCpuHost {
 
     private static final int DISPATCH_HISTORY_LENGTH = 3;
     private static final int STORE_BATCH_SIZE = 64;
@@ -61,6 +66,7 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     private static final ElapsedTimeTracker EMPTY_TIME_TRACKER = new ElapsedTimeTracker();
 
     private final TransfiniteCraftingCPU cpu;
+    private final GraphCpuController graph;
     private final ListCraftingInventory inventory = new ListCraftingInventory(this::postChange);
     private final long[] usedDispatches = new long[DISPATCH_HISTORY_LENGTH];
     private final Set<Consumer<AEKey>> listeners = new ObjectOpenHashSet<>();
@@ -76,10 +82,15 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
 
     TransfiniteCraftingLogic(TransfiniteCraftingCPU cpu) {
         this.cpu = cpu;
+        this.graph = new GraphCpuController(this);
     }
 
     public ICraftingSubmitResult trySubmitJob(IGrid grid, ICraftingPlan plan, IActionSource source,
                                               @Nullable ICraftingRequester requester) {
+        if (this.graph.ownsTask()) return CraftingSubmitResult.CPU_BUSY;
+        if (GraphCpuController.isGraphPlan(plan)) {
+            return this.job == null ? this.graph.submit(grid, plan, source, requester) : CraftingSubmitResult.CPU_BUSY;
+        }
         if (this.job != null) {
             return CraftingSubmitResult.CPU_BUSY;
         }
@@ -146,6 +157,10 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public void tickCraftingLogic(IEnergyService energyService, CraftingService craftingService) {
+        if (this.graph.ownsTask()) {
+            this.graph.tick(energyService, craftingService);
+            return;
+        }
         this.batchingChanges = true;
         try {
             tickCraftingLogicInternal(energyService, craftingService);
@@ -222,6 +237,7 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public long executeCrafting(long maxDispatches, CraftingService craftingService, IEnergyService energyService, Level level) {
+        if (this.graph.ownsTask()) return 0;
         TransfiniteCraftingJob currentJob = this.job;
         if (currentJob == null || maxDispatches <= 0) {
             return 0;
@@ -331,6 +347,7 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public long insert(AEKey what, long amount, Actionable mode) {
+        if (this.graph.ownsTask()) return this.graph.insert(what, amount, mode);
         TransfiniteCraftingJob currentJob = this.job;
         if (what == null || currentJob == null || amount <= 0) {
             return 0;
@@ -367,6 +384,10 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public void cancel() {
+        if (this.graph.ownsTask()) {
+            this.graph.cancel();
+            return;
+        }
         if (this.job != null) {
             finishJob(false);
         }
@@ -401,6 +422,7 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public void storeItems() {
+        if (this.graph.ownsTask()) return;
         Preconditions.checkState(this.job == null,
                 "CPU should not have a job while returning its inventory");
         if (this.inventory.list.isEmpty()) {
@@ -439,6 +461,11 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
 
     public void readFromNbt(CompoundTag data) {
         this.inventory.readFromNBT(data.getList("inventory", CompoundTag.TAG_COMPOUND));
+        if (data.contains(GraphJobCodec.NBT_KEY, CompoundTag.TAG_COMPOUND)) {
+            this.job = null;
+            this.graph.read(data);
+            return;
+        }
         if (data.contains("job", CompoundTag.TAG_COMPOUND)) {
             this.job = new TransfiniteCraftingJob(data.getCompound("job"), this);
             if (this.job.getFinalOutput() == null) {
@@ -451,33 +478,43 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
 
     public void writeToNbt(CompoundTag data) {
         data.put("inventory", this.inventory.writeToNBT());
+        if (this.graph.ownsTask()) {
+            this.graph.write(data);
+            return;
+        }
+        data.remove(GraphJobCodec.NBT_KEY);
         if (this.job != null) {
             data.put("job", this.job.writeToNbt());
         }
     }
 
     public boolean hasJob() {
+        if (this.graph.ownsTask()) return true;
         return this.job != null;
     }
 
     public boolean canBeRemoved() {
+        if (this.graph.ownsTask()) return false;
         return this.job == null && this.inventory.list.isEmpty();
     }
 
     public @Nullable GenericStack getFinalJobOutput() {
+        if (this.graph.ownsTask()) return this.graph.finalOutput();
         return this.job == null ? null : this.job.getFinalOutput();
     }
 
     public ElapsedTimeTracker getElapsedTimeTracker() {
+        if (this.graph.ownsTask()) return this.graph.tracker();
         return this.job == null ? EMPTY_TIME_TRACKER : this.job.getTimeTracker();
     }
 
     public @Nullable ICraftingLink getLastLink() {
+        if (this.graph.ownsTask()) return this.graph.link();
         return this.job == null ? null : this.job.getLink();
     }
 
     public long getLastModifiedOnTick() {
-        return this.lastModifiedOnTick;
+        return Math.max(this.lastModifiedOnTick, this.graph.modifiedTick());
     }
 
     public void addListener(Consumer<AEKey> listener) {
@@ -489,15 +526,18 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public long getStored(AEKey key) {
+        if (this.graph.ownsTask()) return this.graph.stored(key);
         return this.inventory.extract(key, Long.MAX_VALUE, Actionable.SIMULATE);
     }
 
     public long getWaitingFor(AEKey key) {
+        if (this.graph.ownsTask()) return this.graph.waiting(key);
         return this.job == null ? 0 :
                 this.job.getWaitingFor().extract(key, Long.MAX_VALUE, Actionable.SIMULATE);
     }
 
     public boolean isRequesting(AEKey key) {
+        if (this.graph.ownsTask()) return this.graph.waiting(key) > 0;
         if (this.job == null) {
             return false;
         }
@@ -506,10 +546,12 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public boolean isRequestingAny() {
+        if (this.graph.ownsTask()) return true;
         return this.job != null;
     }
 
     public long getPendingOutputs(AEKey key) {
+        if (this.graph.ownsTask()) return this.graph.pending(key);
         long count = 0;
         if (this.job != null) {
             for (var task : this.job.getTasks().object2LongEntrySet()) {
@@ -525,6 +567,10 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public void getAllItems(KeyCounter output) {
+        if (this.graph.ownsTask()) {
+            this.graph.allItems(output);
+            return;
+        }
         output.addAll(this.inventory.list);
         if (this.job == null) {
             return;
@@ -539,6 +585,7 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     public boolean isCantStoreItems() {
+        if (this.graph.ownsTask()) return this.graph.cantStore();
         return this.cantStoreItems;
     }
 
@@ -608,11 +655,16 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
 
     @Override
     public boolean gtlcore$isJobSuspended() {
+        if (this.graph.ownsTask()) return this.graph.suspended();
         return this.job != null && this.job.isSuspended();
     }
 
     @Override
     public void gtlcore$setJobSuspended(boolean suspended) {
+        if (this.graph.ownsTask()) {
+            this.graph.suspend(suspended);
+            return;
+        }
         if (this.job != null && this.job.isSuspended() != suspended) {
             this.job.setSuspended(suspended);
             markChanged();
@@ -621,6 +673,7 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
 
     @Override
     public int gtlcore$getDispatchReasonMask(AEKey key) {
+        if (this.graph.ownsTask()) return this.graph.reasonMask(key);
         return this.publishedDispatchReasons.getOrDefault(key, 0);
     }
 
@@ -633,6 +686,61 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
         } else {
             this.workingDispatchReasons.put(details, reasonMask);
         }
+    }
+
+    @Override
+    public ICraftingCPU cpu() {
+        return this.cpu;
+    }
+
+    @Override
+    public IGrid grid() {
+        return this.cpu.getGrid();
+    }
+
+    @Override
+    public Level level() {
+        return this.cpu.getLevel();
+    }
+
+    @Override
+    public IActionSource source() {
+        return this.cpu.getActionSource();
+    }
+
+    @Override
+    public boolean active() {
+        return this.cpu.isActive();
+    }
+
+    @Override
+    public long dispatchCapacity() {
+        return this.cpu.getParallelism();
+    }
+
+    @Override
+    public ListCraftingInventory orphanInventory() {
+        return this.inventory;
+    }
+
+    @Override
+    public void dirty() {
+        markChanged();
+    }
+
+    @Override
+    public void changed(AEKey key) {
+        postChange(key);
+    }
+
+    @Override
+    public void output(GenericStack stack) {
+        markChanged();
+    }
+
+    @Override
+    public void requesting(AEKey key, boolean requested) {
+        this.cpu.getHost().updateWaitingIndex(this.cpu, key, requested);
     }
 
     private void markAllRemaining(CraftingDispatchReason reason) {

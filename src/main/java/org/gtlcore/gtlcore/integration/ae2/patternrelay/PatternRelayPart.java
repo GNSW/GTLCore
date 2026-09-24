@@ -5,6 +5,8 @@ import org.gtlcore.gtlcore.api.machine.trait.AECraft.IMECraftIOPart;
 import org.gtlcore.gtlcore.api.machine.trait.MEPart.IMEPatternPartMachine;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
 import org.gtlcore.gtlcore.integration.ae2.crafting.IPatternProviderAutoExpand;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphDispatchContext;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphDispatchPreflight;
 import org.gtlcore.gtlcore.utils.NumberUtils;
 
 import net.minecraft.core.BlockPos;
@@ -59,7 +61,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public final class PatternRelayPart extends AEBasePart implements ICraftingProvider, IGridTickable, IPatternProviderAutoExpand {
+public final class PatternRelayPart extends AEBasePart implements ICraftingProvider, IGridTickable, IPatternProviderAutoExpand,
+                                    GraphDispatchPreflight {
 
     private static final String TAG_MODE = "mode";
     private static final String TAG_PENDING_OUTPUTS = "pendingOutputs";
@@ -253,8 +256,11 @@ public final class PatternRelayPart extends AEBasePart implements ICraftingProvi
         List<ICraftingProvider> ordered = new ArrayList<>(providers);
         ordered.sort((a, b) -> Integer.compare(pushPriority(b), pushPriority(a)));
         for (ICraftingProvider provider : ordered) {
-            if (!provider.isBusy() && provider.pushPattern(pattern, inputHolder)) {
-                trackOutputs(pattern, outputBaselines, deriveMultiplier(pattern, inputHolder));
+            if (!provider.isBusy() && GraphDispatchContext.allowed(provider, pattern) && GraphDispatchContext.capacity(provider, pattern,
+                    GraphDispatchContext.operations()) >=
+                    GraphDispatchContext.operations() && provider.pushPattern(pattern, inputHolder)) {
+                trackOutputs(pattern, outputBaselines, GraphDispatchContext.active() ?
+                        GraphDispatchContext.operations() : deriveMultiplier(pattern, inputHolder));
                 return true;
             }
         }
@@ -296,17 +302,37 @@ public final class PatternRelayPart extends AEBasePart implements ICraftingProvi
         }
         long max = 1;
         for (ICraftingProvider provider : providers) {
-            if (provider.isBusy()) {
+            if (provider.isBusy() || !GraphDispatchContext.allowed(provider, pattern)) {
                 continue;
             }
             if (provider instanceof IMEPatternPartMachine || provider instanceof IMECraftIOPart) {
-                return requestedOperations;
+                long capacity = GraphDispatchContext.capacity(provider, pattern, requestedOperations);
+                if (capacity == requestedOperations) return capacity;
+                max = Math.max(max, capacity);
+                continue;
             }
             if (provider instanceof IPatternProviderAutoExpand expandable) {
                 max = Math.max(max, expandable.gtlcore$getMaxPatternOperations(pattern, requestedOperations));
             }
         }
         return Math.max(1, max);
+    }
+
+    @Override
+    public boolean gtlcore$canProduceGraphPattern(IPatternDetails pattern) {
+        Set<ICraftingProvider> providers = routeSnapshot.routes().get(pattern);
+        return mode == Mode.ACCESS && getMainNode().isActive() && providers != null && !providers.isEmpty();
+    }
+
+    @Override
+    public long gtlcore$graphCapacity(IPatternDetails pattern, Map<AEKey, Long> inputPerRun, long requested) {
+        if (!gtlcore$canProduceGraphPattern(pattern)) return 0;
+        for (GenericStack output : pattern.getOutputs()) {
+            long pending = pendingOutputs.get(output.what());
+            if (pending < 0 || output.amount() <= 0) return 0;
+            requested = Math.min(requested, (Long.MAX_VALUE - pending) / output.amount());
+        }
+        return requested;
     }
 
     /**
@@ -507,7 +533,10 @@ public final class PatternRelayPart extends AEBasePart implements ICraftingProvi
                 if (baseline != null && pendingOutputs.get(output.what()) <= 0) {
                     observedSupplierStock.set(output.what(), baseline);
                 }
-                pendingOutputs.add(output.what(), NumberUtils.saturatedMultiply(output.amount(), multiplier));
+                if (GraphDispatchContext.active()) {
+                    long amount = Math.multiplyExact(output.amount(), multiplier);
+                    pendingOutputs.set(output.what(), Math.addExact(pendingOutputs.get(output.what()), amount));
+                } else pendingOutputs.add(output.what(), NumberUtils.saturatedMultiply(output.amount(), multiplier));
             }
         }
         getHost().markForSave();

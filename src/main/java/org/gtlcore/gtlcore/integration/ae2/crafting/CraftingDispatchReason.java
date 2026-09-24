@@ -13,7 +13,13 @@ public enum CraftingDispatchReason {
     PROVIDERS_BUSY(16, "gtlcore.ae2.crafting.dispatch_reason.providers_busy"),
     WAITING_FOR_INPUTS(32, "gtlcore.ae2.crafting.dispatch_reason.waiting_for_inputs"),
     INSUFFICIENT_POWER(64, "gtlcore.ae2.crafting.dispatch_reason.insufficient_power"),
-    PROVIDER_REJECTED(128, "gtlcore.ae2.crafting.dispatch_reason.provider_rejected");
+    PROVIDER_REJECTED(128, "gtlcore.ae2.crafting.dispatch_reason.provider_rejected"),
+    MISSING_TOOL(256, "gtlcore.ae2.crafting.dispatch_reason.missing_tool"),
+    PLAN_STALE(512, "gtlcore.ae2.crafting.dispatch_reason.plan_stale"),
+    DISPATCH_IN_DOUBT(1024, "gtlcore.ae2.crafting.dispatch_reason.dispatch_in_doubt"),
+    WAITING_FOR_OUTPUTS(2048, "gtlcore.ae2.crafting.dispatch_reason.waiting_for_outputs"),
+    WAITING_FOR_EXTERNAL(4096, "gtlcore.ae2.crafting.dispatch_reason.waiting_for_external"),
+    RECOVERY_PENDING(8192, "gtlcore.ae2.crafting.dispatch_reason.recovery_pending");
 
     public static final String HEADING_TRANSLATION_KEY = "gtlcore.ae2.crafting.dispatch_reason.heading";
     public static final String NOT_CHECKED_TRANSLATION_KEY = "gtlcore.ae2.crafting.dispatch_reason.not_checked";

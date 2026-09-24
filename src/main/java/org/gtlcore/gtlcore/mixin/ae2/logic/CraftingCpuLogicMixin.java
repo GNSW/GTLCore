@@ -7,6 +7,7 @@ import org.gtlcore.gtlcore.integration.ae2.crafting.CraftingPatternAutoExpand;
 import org.gtlcore.gtlcore.integration.ae2.crafting.CraftingPatternPower;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingDispatchReasonProvider;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingJobSuspension;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphCpuAccess;
 
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -103,6 +104,11 @@ public abstract class CraftingCpuLogicMixin implements ICraftingJobSuspension, I
      */
     @Overwrite(remap = false)
     public void tickCraftingLogic(IEnergyService eg, CraftingService cc) {
+        var graph = ((GraphCpuAccess) this).gtlcore$graphController();
+        if (graph.ownsTask()) {
+            graph.tick(eg, cc);
+            return;
+        }
         gtlcore$tickCraftingLogic(eg, cc);
     }
 
@@ -169,6 +175,7 @@ public abstract class CraftingCpuLogicMixin implements ICraftingJobSuspension, I
     @Overwrite(remap = false)
     public int executeCrafting(int maxPatterns, CraftingService craftingService, IEnergyService energyService,
                                Level level) {
+        if (((GraphCpuAccess) this).gtlcore$graphController().ownsTask()) return 0;
         var job = (ExecutingCraftingJobAccessor) (this.job);
         if (job == null) return 0;
 
@@ -285,12 +292,19 @@ public abstract class CraftingCpuLogicMixin implements ICraftingJobSuspension, I
     @Override
     @Unique
     public boolean gtlcore$isJobSuspended() {
+        var graph = ((GraphCpuAccess) this).gtlcore$graphController();
+        if (graph.ownsTask()) return graph.suspended();
         return this.job != null && ((ICraftingJobSuspension) this.job).gtlcore$isJobSuspended();
     }
 
     @Override
     @Unique
     public void gtlcore$setJobSuspended(boolean suspended) {
+        var graph = ((GraphCpuAccess) this).gtlcore$graphController();
+        if (graph.ownsTask()) {
+            graph.suspend(suspended);
+            return;
+        }
         if (this.job != null) {
             ((ICraftingJobSuspension) this.job).gtlcore$setJobSuspended(suspended);
         }
@@ -299,6 +313,8 @@ public abstract class CraftingCpuLogicMixin implements ICraftingJobSuspension, I
     @Override
     @Unique
     public int gtlcore$getDispatchReasonMask(AEKey key) {
+        var graph = ((GraphCpuAccess) this).gtlcore$graphController();
+        if (graph.ownsTask()) return graph.reasonMask(key);
         return this.gtlcore$publishedDispatchReasons.getOrDefault(key, 0);
     }
 

@@ -8,6 +8,7 @@ import org.gtlcore.gtlcore.api.machine.trait.NotifiableCircuitItemStackHandler;
 import org.gtlcore.gtlcore.common.data.GTLItems;
 import org.gtlcore.gtlcore.common.item.VirtualIngredientBehavior;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphDispatchPreflight;
 import org.gtlcore.gtlcore.integration.ae2.handler.MEBufferPatternHelper;
 import org.gtlcore.gtlcore.integration.ae2.handler.SlotCacheManager;
 
@@ -77,13 +78,15 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * Shared implementation for pattern buffer variants.
  */
 public abstract class MEPatternBufferPartMachineBase extends MEIOPartMachine
-                                                     implements ICraftingProvider, PatternContainer, IMEPatternPartMachine, IInteractedMachine {
+                                                     implements ICraftingProvider, PatternContainer, IMEPatternPartMachine, IInteractedMachine,
+                                                     GraphDispatchPreflight {
 
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(
             MEPatternBufferPartMachineBase.class, MEIOPartMachine.MANAGED_FIELD_HOLDER);
@@ -463,6 +466,27 @@ public abstract class MEPatternBufferPartMachineBase extends MEIOPartMachine
             return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean gtlcore$canProduceGraphPattern(IPatternDetails pattern) {
+        Integer slot = getSlotIndexForPattern(pattern);
+        return getMainNode().isActive() && slot != null && slot >= 0 && slot < getInternalSlotCount();
+    }
+
+    @Override
+    public long gtlcore$graphCapacity(IPatternDetails pattern, Map<AEKey, Long> inputPerRun, long requested) {
+        if (!gtlcore$canProduceGraphPattern(pattern)) return 0;
+        InternalSlot slot = getInternalSlot(getSlotIndexForPattern(pattern));
+        for (var input : inputPerRun.entrySet()) {
+            long held;
+            if (input.getKey() instanceof AEItemKey item) held = slot.getItemInventory().getLong(item);
+            else if (input.getKey() instanceof AEFluidKey fluid) held = slot.getFluidInventory().getLong(fluid);
+            else return 0;
+            if (held < 0) return 0;
+            requested = Math.min(requested, (Long.MAX_VALUE - held) / input.getValue());
+        }
+        return requested;
     }
 
     @Override

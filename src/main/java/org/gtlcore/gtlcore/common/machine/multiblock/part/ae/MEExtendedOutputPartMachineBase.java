@@ -188,7 +188,7 @@ public abstract class MEExtendedOutputPartMachineBase extends MEIOPartMachine im
 
     @Override
     public void saveCustomPersistedData(@NotNull CompoundTag tag, boolean forDrop) {
-        if (!forDrop) flushAsyncQueue();
+        flushAsyncQueue();
         super.saveCustomPersistedData(tag, forDrop);
         if (buffer.isEmpty()) return;
         ListTag listTag = AEUtils.createListTag(AEKey::toTagGeneric, buffer);

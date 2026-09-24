@@ -6,6 +6,7 @@ import org.gtlcore.gtlcore.api.machine.trait.AECraft.IMECraftPatternContainer;
 import org.gtlcore.gtlcore.common.data.GTLMachines;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.PaginationUIManager;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphDispatchPreflight;
 import org.gtlcore.gtlcore.integration.lowdragmc.misc.MutableItemTransferList;
 
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
@@ -70,10 +71,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.Map;
 
 import static org.gtlcore.gtlcore.integration.ae2.AEUtils.*;
 
-public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implements PatternContainer, IMECraftIOPart {
+public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implements PatternContainer, IMECraftIOPart,
+                                               GraphDispatchPreflight {
 
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(MEMolecularAssemblerIOPartMachine.class, MEIOPartMachine.MANAGED_FIELD_HOLDER);
 
@@ -211,6 +214,28 @@ public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implement
         outputItems.addTo(output, multiplier);
         maHandler.notifyListeners();
         return true;
+    }
+
+    @Override
+    public boolean gtlcore$canProduceGraphPattern(IPatternDetails pattern) {
+        if (!getMainNode().isActive() || !(pattern instanceof AEProcessingPattern) || !patternSlotMap.containsKey(pattern)) return false;
+        var required = toolsSlotMap.get(patternSlotMap.get(pattern));
+        if (required == null || required.isEmpty()) return true;
+        var missing = new ObjectOpenHashSet<>(required);
+        for (int i = 0; i < sharedToolsInventory.getSlots(); i++) {
+            var stack = sharedToolsInventory.getStackInSlot(i);
+            if (!stack.isDamageableItem()) missing.remove(stack.getItem());
+        }
+        return missing.isEmpty();
+    }
+
+    @Override
+    public long gtlcore$graphCapacity(IPatternDetails pattern, Map<AEKey, Long> inputPerRun, long requested) {
+        if (!gtlcore$canProduceGraphPattern(pattern)) return 0;
+        GenericStack output = pattern.getOutputs()[0];
+        long queued = outputItems.getLong(output);
+        if (queued < 0 || output.amount() <= 0) return 0;
+        return Math.max(0, Math.min(requested, Long.MAX_VALUE / output.amount() - queued));
     }
 
     @Override

@@ -5,16 +5,23 @@ import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MECraftingCPUInterf
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.crafting.IMaxFastCraftingProviderVersion;
 import org.gtlcore.gtlcore.integration.ae2.crafting.transfinite.TransfiniteCraftingCPU;
+import org.gtlcore.gtlcore.integration.ae2.graph.CraftingEngineRouter;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderVersion;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphRequestTracker;
+import org.gtlcore.gtlcore.integration.ae2.graph.GtlPatternCatalog;
 import org.gtlcore.gtlcore.utils.NumberUtils;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.Level;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
+import appeng.api.networking.crafting.CalculationStrategy;
 import appeng.api.networking.crafting.ICraftingCPU;
 import appeng.api.networking.crafting.ICraftingPlan;
 import appeng.api.networking.crafting.ICraftingRequester;
+import appeng.api.networking.crafting.ICraftingSimulationRequester;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
 import appeng.api.networking.crafting.UnsuitableCpus;
 import appeng.api.networking.energy.IEnergyService;
@@ -40,13 +47,47 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Future;
 
 @Mixin(CraftingService.class)
-public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVersion {
+public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVersion,
+                                           GraphRequestTracker {
+
+    @Override
+    public void gtlcore$expectGraphOutput(AEKey key) {
+        this.currentlyCrafting.add(key);
+        this.lastProcessedCraftingLogicChangeTick = -1;
+    }
+
+    @Unique
+    private GtlPatternCatalog gtlcore$graphCatalog;
+
+    @Override
+    public void gtlcore$invalidateGraphBinding(String binding) {
+        if (this.gtlcore$graphCatalog != null) this.gtlcore$graphCatalog.invalidateBinding(binding);
+    }
+
+    @Override
+    public long gtlcore$graphProviderGeneration() {
+        return ((GraphProviderVersion) this.craftingProviders).gtlcore$providerGeneration();
+    }
+
+    @Inject(method = "beginCraftingCalculation", at = @At("HEAD"), cancellable = true, remap = false)
+    private void gtlcore$beginGraphCalculation(Level level,
+                                               ICraftingSimulationRequester requester, AEKey what, long amount,
+                                               CalculationStrategy strategy,
+                                               CallbackInfoReturnable<Future<ICraftingPlan>> cir) {
+        if (!CraftingEngineRouter.useGraph()) return;
+        if (this.gtlcore$graphCatalog == null) this.gtlcore$graphCatalog = new GtlPatternCatalog();
+        cir.setReturnValue(CraftingEngineRouter.begin(
+                this.gtlcore$graphCatalog, this.grid, (CraftingService) (Object) this,
+                level, requester, what, amount, strategy));
+    }
 
     @Unique
     private static final int CRAFT_MASK = NumberUtils.nearestPow2Lookup(
@@ -78,6 +119,10 @@ public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVe
     @Shadow(remap = false)
     @Final
     private Set<AEKey> currentlyCrafting;
+
+    @Shadow(remap = false)
+    @Final
+    private Set<CraftingCPUCluster> craftingCPUClusters;
 
     @Shadow(remap = false)
     private long lastProcessedCraftingLogicChangeTick;
@@ -274,11 +319,16 @@ public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVe
 
     @Inject(method = "getRequestedAmount", at = @At("RETURN"), cancellable = true, remap = false)
     private void gtlcore$getTransfiniteRequestedAmount(AEKey what, CallbackInfoReturnable<Long> cir) {
-        long requested = cir.getReturnValue();
-        for (TransfiniteComputationArrayMachine controller : this.gtlcore$transfiniteControllers) {
-            requested = NumberUtils.saturatedAdd(requested, controller.getRequestedAmount(what));
+        BigInteger total = BigInteger.ZERO;
+        for (CraftingCPUCluster cpu : this.craftingCPUClusters) {
+            total = total.add(BigInteger.valueOf(cpu.craftingLogic.getWaitingFor(what)));
         }
-        cir.setReturnValue(requested);
+        for (TransfiniteComputationArrayMachine controller : this.gtlcore$transfiniteControllers) {
+            total = total.add(BigInteger.valueOf(controller.getRequestedAmount(what)));
+        }
+        // The service API can advertise at most one long-sized transfer. Job
+        // ledgers retain their independent exact obligations beyond this bound.
+        cir.setReturnValue(total.min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact());
     }
 
     @Inject(method = "isRequesting", at = @At("RETURN"), cancellable = true, remap = false)

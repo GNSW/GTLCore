@@ -9,6 +9,7 @@ import org.gtlcore.gtlcore.mixin.ae2.logic.ElapsedTimeTrackerAccessor;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
 
 import appeng.api.config.Actionable;
 import appeng.api.features.IPlayerRegistry;
@@ -16,6 +17,7 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.crafting.*;
 import appeng.api.networking.energy.IEnergyService;
 import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
@@ -182,6 +184,11 @@ public final class GraphCpuController {
         int budget = (int) Math.min(4096, remaining);
         if (runtime.state() == GraphJobRuntime.State.SETTLING || runtime.state() == GraphJobRuntime.State.CANCELLING) budget = 64;
         int dispatched = runtime.tick(adapter, TickHandler.instance().getCurrentTick(), budget);
+        // Match the existing GTL named-book completion convention without
+        // inventing the marker as physical output or dropping other returns.
+        if (runtime.plan().target() instanceof AEItemKey item && item.getItem() == Items.WRITTEN_BOOK &&
+                item.hasTag() && item.getTag().contains("display"))
+            runtime.completePlaceholder();
         usedOps[2] = usedOps[1];
         usedOps[1] = usedOps[0];
         usedOps[0] = dispatched;

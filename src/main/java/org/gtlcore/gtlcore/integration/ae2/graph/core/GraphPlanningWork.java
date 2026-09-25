@@ -35,7 +35,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private PlanVerification<K> verifying;
     private AllocationSearch<K> allocating;
     private MissingStockAnalysis<K> missingAnalysis;
-    private boolean allocationAttempted;
+    private QuantityAnalysis<K> quantities;
+    private Boolean quantityBlocked;
+    private Boolean stockBlocked;
+    private boolean allocationAttempted, frontierTruncated;
     private Iterator<K> alternatives;
     private GraphPlan<K> candidate, best, verified, result;
     private int phase;
@@ -99,12 +102,24 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             budget.check();
             switch (phase) {
                 case 0 -> {
+                    // Give alternate compiled source graphs a small head start.
+                    // One bad source must not send a large DAG straight into
+                    // per-batch allocation search. Mixed sources still get their
+                    // own attempt before enumerating the remaining combinations.
+                    if (!allocationAttempted && best != null &&
+                            (pending.isEmpty() || seen.size() >= 8) && !provenMissing(best)) {
+                        allocationAttempted = true;
+                        allocating = new AllocationSearch<>(compiler, target, amount, stock, external, requiredSeeds,
+                                preserve, forceCraft, excluded, budget, started);
+                        phase = 6;
+                        return false;
+                    }
                     if (pending.isEmpty()) {
                         if (best == null || best.missing().isEmpty()) {
                             result = failure(GraphPlan.Result.UNKNOWN);
                             return true;
                         }
-                        missingAnalysis = new MissingStockAnalysis<>(compiler, target, stock, external,
+                        if (stockBlocked == null) missingAnalysis = new MissingStockAnalysis<>(compiler, target, stock, external,
                                 requiredSeeds.keySet(), excluded, forceCraft, budget);
                         phase = 9;
                         return false;
@@ -129,8 +144,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (!solving.step()) return false;
                     candidate = solving.result();
                     solving = null;
-                    if (!candidate.feasible() && !candidate.missing().isEmpty()) bootstrap = new Bootstrap(candidate);
-                    phase = 3;
+                    afterSolve();
                 }
                 case 3 -> {
                     if (bootstrap != null) {
@@ -145,12 +159,6 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         if (best == null || (!candidate.missing().isEmpty() &&
                                 (best.missing().isEmpty() || candidate.missing().size() < best.missing().size())))
                             best = candidate;
-                        if (!allocationAttempted && !provenMissing(candidate)) {
-                            allocationAttempted = true;
-                            allocating = new AllocationSearch<>(compiler, target, amount, stock, external, requiredSeeds, preserve, forceCraft, excluded, budget, started);
-                            phase = 6;
-                            return false;
-                        }
                         alternatives = graph.selected().keySet().iterator();
                         phase = 5;
                     }
@@ -173,7 +181,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (next < count) {
                         Map<K, Integer> changed = new LinkedHashMap<>(choices);
                         changed.put(key, next);
-                        if (pending.size() >= 4096) throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "candidate_frontier=4096");
+                        if (pending.size() >= 4096) {
+                            frontierTruncated = true;
+                            return false;
+                        }
                         budget.reserve(128L + 48L * changed.size());
                         pending.add(Map.copyOf(changed));
                     }
@@ -186,31 +197,52 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         candidate = allocated;
                         verifying = new PlanVerification<>(candidate, budget);
                         phase = 4;
-                    } else {
-                        alternatives = graph.selected().keySet().iterator();
-                        phase = 5;
-                    }
+                    } else phase = 0;
                 }
                 case 9 -> {
-                    if (!missingAnalysis.step()) return false;
-                    boolean blocked = missingAnalysis.blocked();
-                    missingAnalysis = null;
-                    if (!blocked && !provenMissing(best)) {
+                    if (stockBlocked == null) {
+                        if (!missingAnalysis.step()) return false;
+                        stockBlocked = missingAnalysis.blocked();
+                        missingAnalysis = null;
+                    }
+                    if (!stockBlocked && !provenMissing(best)) {
                         result = failure(GraphPlan.Result.UNKNOWN);
                         return true;
                     }
                     // Prove the proposed missing-material preview really reaches
                     // the goal when funded. It remains non-executable until its
                     // exact deficits are supplied and a new request is planned.
-                    verifying = new PlanVerification<>(new GraphPlan<>(best.target(), best.amount(), best.preserveSeeds(),
-                            best.steps(), best.recipes(), best.initialExact(), best.seeds(), Map.of(),
-                            GraphPlan.Result.FEASIBLE, best.searchNodes(), best.planningNanos()), budget);
-                    phase = 10;
+                    verifyMissing();
                 }
                 case 10 -> {
                     if (!verifying.step()) return false;
                     result = best;
                     phase = 8;
+                }
+                case 11 -> {
+                    if (!missingAnalysis.step()) return false;
+                    stockBlocked = missingAnalysis.blocked();
+                    missingAnalysis = null;
+                    afterSolve();
+                }
+                case 12 -> {
+                    if (!quantities.step()) return false;
+                    quantityBlocked = quantities.blocked();
+                    quantities = null;
+                    if (quantityBlocked) {
+                        allocating = new AllocationSearch<>(compiler, target, amount, stock, external, requiredSeeds,
+                                preserve, forceCraft, excluded, budget, started, true);
+                        phase = 13;
+                    } else afterSolve();
+                }
+                case 13 -> {
+                    if (!allocating.step()) return false;
+                    GraphPlan<K> preview = allocating.result();
+                    allocating = null;
+                    if (preview != null && !preview.missing().isEmpty()) best = preview;
+                    else if (!candidate.missing().isEmpty()) best = candidate;
+                    if (best != null && !best.missing().isEmpty()) verifyMissing();
+                    else result = failure(GraphPlan.Result.UNKNOWN);
                 }
                 default -> {
                     return true;
@@ -223,6 +255,42 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             result = failure(GraphPlan.Result.AMOUNT_LIMIT);
         }
         return result != null;
+    }
+
+    private void afterSolve() {
+        if (!candidate.feasible() && quantityBlocked == null) {
+            quantities = new QuantityAnalysis<>(compiler, target, amount, stock, external, requiredSeeds, excluded, budget);
+            phase = 12;
+            return;
+        }
+        if (!candidate.feasible() && !candidate.missing().isEmpty()) {
+            if (stockBlocked == null) {
+                // Check every allowed source before spending search on seed
+                // bootstrapping. Failure in this optimistic model is a proof;
+                // an arbitrary failed ordering or exhausted budget is not.
+                missingAnalysis = new MissingStockAnalysis<>(compiler, target, stock, external,
+                        requiredSeeds.keySet(), excluded, forceCraft, budget);
+                phase = 11;
+                return;
+            }
+            if (stockBlocked) {
+                best = candidate;
+                verifyMissing();
+                return;
+            }
+            // Ordinary DAG propagation already accounts for every selected
+            // input. Recursively crafting its missing leaves cannot improve
+            // that source selection; compile the alternatives instead.
+            if (graph.regions().stream().anyMatch(GraphCompiler.Region::cyclic)) bootstrap = new Bootstrap(candidate);
+        }
+        phase = 3;
+    }
+
+    private void verifyMissing() {
+        verifying = new PlanVerification<>(new GraphPlan<>(best.target(), best.amount(), best.preserveSeeds(),
+                best.steps(), best.recipes(), best.initialExact(), best.seeds(), Map.of(),
+                GraphPlan.Result.FEASIBLE, best.searchNodes(), best.planningNanos()), budget);
+        phase = 10;
     }
 
     @Override
@@ -247,6 +315,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     }
 
     private GraphPlan<K> failure(GraphPlan.Result reason) {
+        if (reason == GraphPlan.Result.UNKNOWN && frontierTruncated) {
+            budget.failureDetail("candidate_frontier=4096; remaining strategies exhausted");
+            reason = GraphPlan.Result.SEARCH_LIMIT;
+        }
         return new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()), Map.of(), Map.of(), Map.of(), Map.of(),
                 reason, budget.nodes(), System.nanoTime() - started);
     }
@@ -304,6 +376,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 result = original;
                 return true;
             }
+            if (nesting >= 64) {
+                result = original;
+                return true;
+            }
             if (assembly != null) {
                 if (assembly.step()) result = assembly.result();
                 return result != null;
@@ -342,10 +418,16 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         if (external.contains(key)) available.merge(key, count, Math::max);
                     });
                     summary = new SummaryComputation<>(seed.steps(), seed.recipes(), budget);
-                } else if (seed.result() == GraphPlan.Result.TIMEOUT || seed.result() == GraphPlan.Result.SEARCH_LIMIT ||
-                        seed.result() == GraphPlan.Result.MEMORY_LIMIT || seed.result() == GraphPlan.Result.GRAPH_LIMIT) {
-                            throw new PlanningBudget.Exhausted(PlanningBudget.Limit.valueOf(seed.result().name()));
-                        }
+                } else if (seed.result() == GraphPlan.Result.SEARCH_LIMIT || seed.result() == GraphPlan.Result.GRAPH_LIMIT) {
+                    // A seed subproblem's local source frontier is not the
+                    // order's budget. This check still propagates a genuinely
+                    // exhausted cumulative budget before another strategy runs.
+                    budget.check();
+                    result = original;
+                    return true;
+                } else if (seed.result() == GraphPlan.Result.TIMEOUT || seed.result() == GraphPlan.Result.MEMORY_LIMIT) {
+                    throw new PlanningBudget.Exhausted(PlanningBudget.Limit.valueOf(seed.result().name()));
+                }
                 return false;
             }
             if (!deficits.hasNext()) {

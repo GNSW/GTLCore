@@ -13,12 +13,20 @@ public final class SummaryComputation<K> {
 
     private final Map<String, GraphRecipe<K>> recipes;
     private final PlanningBudget budget;
+    private final Map<PlanStep, SequenceSummary<K>> known;
     private final Deque<Frame> stack = new ArrayDeque<>();
     private SequenceSummary<K> result;
 
     public SummaryComputation(PlanStep step, Map<String, GraphRecipe<K>> recipes, PlanningBudget budget) {
+        this(step, recipes, budget, Map.of());
+    }
+
+    /** Known summaries belong to these immutable recipes and this planning pass. */
+    SummaryComputation(PlanStep step, Map<String, GraphRecipe<K>> recipes, PlanningBudget budget,
+                       Map<PlanStep, SequenceSummary<K>> known) {
         this.recipes = recipes;
         this.budget = budget;
+        this.known = known;
         stack.push(new Frame(step));
     }
 
@@ -26,6 +34,10 @@ public final class SummaryComputation<K> {
         budget.check();
         if (result != null) return true;
         Frame frame = stack.peek();
+        if (frame.cached != null) {
+            complete(frame.cached);
+            return result != null;
+        }
         if (frame.ordinary != null) {
             for (int operation = 0; operation < 32; operation++) {
                 budget.check();
@@ -36,13 +48,13 @@ public final class SummaryComputation<K> {
                             BigInteger.valueOf(entry.getValue()).multiply(frame.ordinaryRuns);
                     BigInteger change = frame.change.getOrDefault(key, BigInteger.ZERO);
                     if (frame.ordinaryInputs) {
-                        frame.need.merge(key, quantity.subtract(change).max(BigInteger.ZERO), BigInteger::max);
-                        frame.peak.merge(key, change, BigInteger::max);
+                        require(frame.need, key, quantity.subtract(change));
+                        require(frame.peak, key, change);
                         frame.change.put(key, change.subtract(quantity));
                     } else {
                         BigInteger after = change.add(quantity);
-                        frame.need.merge(key, change.negate().max(BigInteger.ZERO), BigInteger::max);
-                        frame.peak.merge(key, after, BigInteger::max);
+                        require(frame.need, key, change.negate());
+                        require(frame.peak, key, after);
                         frame.change.put(key, after);
                     }
                     continue;
@@ -61,8 +73,8 @@ public final class SummaryComputation<K> {
             if (frame.keys.hasNext()) {
                 K key = frame.keys.next();
                 BigInteger change = frame.change.getOrDefault(key, BigInteger.ZERO);
-                frame.need.merge(key, frame.pending.required(key).subtract(change).max(BigInteger.ZERO), BigInteger::max);
-                frame.peak.merge(key, change.add(frame.pending.peak(key)), BigInteger::max);
+                require(frame.need, key, frame.pending.required(key).subtract(change));
+                require(frame.peak, key, change.add(frame.pending.peak(key)));
                 frame.change.put(key, change.add(frame.pending.delta(key)));
                 return false;
             }
@@ -135,14 +147,19 @@ public final class SummaryComputation<K> {
                 frame.peak.put(key, BigInteger.ZERO);
             } else {
                 BigInteger peak = frame.step instanceof PlanStep.Batch ? delta.max(BigInteger.ZERO) : frame.peak.getOrDefault(key, BigInteger.ZERO);
-                frame.need.put(key, frame.need.getOrDefault(key, BigInteger.ZERO)
+                require(frame.need, key, frame.need.getOrDefault(key, BigInteger.ZERO)
                         .add(delta.negate().max(BigInteger.ZERO).multiply(n.subtract(BigInteger.ONE))));
                 frame.change.put(key, delta.multiply(n));
-                frame.peak.put(key, peak.add(delta.max(BigInteger.ZERO).multiply(n.subtract(BigInteger.ONE))));
+                require(frame.peak, key, peak.add(delta.max(BigInteger.ZERO).multiply(n.subtract(BigInteger.ONE))));
             }
             return false;
         }
         SequenceSummary<K> complete = new SequenceSummary<>(frame.need, frame.change, frame.peak);
+        complete(complete);
+        return result != null;
+    }
+
+    private void complete(SequenceSummary<K> complete) {
         stack.pop();
         if (stack.isEmpty()) result = complete;
         else {
@@ -150,7 +167,13 @@ public final class SummaryComputation<K> {
             parent.pending = complete;
             parent.keys = complete.delta().keySet().iterator();
         }
-        return result != null;
+    }
+
+    private static <K> void require(Map<K, BigInteger> values, K key, BigInteger amount) {
+        // A DAG can have thousands of intermediates but only a few initial
+        // inputs. Zero requirements are implicit; keep all keys in the delta
+        // vector so catalyst and transient-resource traversal stays complete.
+        if (amount.signum() > 0) values.merge(key, amount, BigInteger::max);
     }
 
     public SequenceSummary<K> result() {
@@ -161,6 +184,7 @@ public final class SummaryComputation<K> {
     private final class Frame {
 
         private final PlanStep step;
+        private final SequenceSummary<K> cached;
         private final Map<K, BigInteger> need = new LinkedHashMap<>(), change = new LinkedHashMap<>(), peak = new LinkedHashMap<>();
         private Iterator<Map.Entry<K, Long>> entries;
         private Iterator<K> keys;
@@ -174,6 +198,7 @@ public final class SummaryComputation<K> {
 
         private Frame(PlanStep step) {
             this.step = step;
+            cached = known.get(step);
         }
     }
 }

@@ -325,6 +325,27 @@ public final class GraphJobRuntime<K> {
         return accepted;
     }
 
+    /**
+     * Named-book orders use their target as a completion marker. Retire only
+     * that marker after all work and all other physical returns are settled;
+     * never fabricate a book, waive missing inputs, or discard real byproducts.
+     */
+    public boolean completePlaceholder() {
+        if (state != State.RUNNING || suspended || replanning || preparedOutputs != null ||
+                settlementEscrow != null || !pendingRuns.isEmpty() || !uncertainInputs.isEmpty() ||
+                obligations.ambiguous() || !obligations.external().isEmpty() || !seedsHeld())
+            return false;
+        if (expected.keySet().stream().anyMatch(key -> !key.equals(plan.target()))) return false;
+        expected.clear();
+        obligations.clear();
+        remainingDelivery = 0;
+        state = State.SETTLING;
+        reason = "PLACEHOLDER_COMPLETION";
+        changedKeys.add(plan.target());
+        changed();
+        return true;
+    }
+
     private void settle(Adapter<K> adapter, int budget) {
         if (budget <= 0) return;
         if (state == State.SETTLING && remainingDelivery > 0) {

@@ -12,6 +12,7 @@ final class RegionOrder<K> {
     private final PlanningBudget budget;
     private final Map<K, BigInteger> available = new HashMap<>();
     private final Map<K, List<Integer>> consumers = new HashMap<>();
+    private final Map<K, Integer> sleeping = new HashMap<>();
     private final Deque<Integer> ready = new ArrayDeque<>();
     private final List<GraphRecipe<K>> ordered = new ArrayList<>();
     private final boolean[] queued, done;
@@ -36,8 +37,9 @@ final class RegionOrder<K> {
             for (K key : recipe.inputs().keySet()) if (internal.contains(key) && !external.contains(key)) {
                 budget.check();
                 consumers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(index);
+                sleeping.merge(key, 1, Integer::sum);
                 available.putIfAbsent(key, BigInteger.valueOf(stock.getOrDefault(key, 0L)));
-                reserve(96);
+                reserve(128);
             }
             if (enabled(recipe)) enqueue(index);
             index++;
@@ -47,7 +49,11 @@ final class RegionOrder<K> {
         int id = ready.removeFirst();
         queued[id] = false;
         var recipe = recipes.get(id);
-        if (done[id] || !enabled(recipe)) return false;
+        if (done[id]) return false;
+        if (!enabled(recipe)) {
+            watch(id, 1);
+            return false;
+        }
         done[id] = true;
         ordered.add(recipe);
         for (var input : recipe.inputs().entrySet()) if (internal.contains(input.getKey()) && !external.contains(input.getKey())) {
@@ -59,6 +65,9 @@ final class RegionOrder<K> {
             K key = output.getKey();
             if (external.contains(key)) continue;
             available.merge(key, BigInteger.valueOf(output.getValue()), BigInteger::add);
+            // A shared catalyst may have thousands of already queued consumers.
+            // Returning it must not rescan that whole list after every recipe.
+            if (sleeping.getOrDefault(key, 0) == 0) continue;
             for (int consumer : consumers.getOrDefault(key, List.of())) {
                 budget.check();
                 if (!done[consumer]) enqueue(consumer);
@@ -80,7 +89,17 @@ final class RegionOrder<K> {
     private void enqueue(int id) {
         if (!queued[id]) {
             queued[id] = true;
-            ready.addLast(id);
+            watch(id, -1);
+            // Prefer the newly enabled return before consuming another copy of
+            // its shared catalyst. Failed choices still go back to sleep.
+            ready.addFirst(id);
+        }
+    }
+
+    private void watch(int id, int change) {
+        for (K key : recipes.get(id).inputs().keySet()) if (internal.contains(key) && !external.contains(key)) {
+            budget.check();
+            sleeping.merge(key, change, Integer::sum);
         }
     }
 

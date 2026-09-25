@@ -12,6 +12,7 @@ public final class PlanCursor {
 
     private final List<PlanStep> nodes = new ArrayList<>();
     private final Map<PlanStep, Integer> ids = new IdentityHashMap<>();
+    private final Map<PlanStep, Homogeneous> homogeneous = new IdentityHashMap<>();
     private final List<Frame> stack = new ArrayList<>();
 
     public PlanCursor(PlanStep root) {
@@ -52,6 +53,24 @@ public final class PlanCursor {
         nodes.add(step);
         if (step instanceof PlanStep.Sequence sequence) for (PlanStep child : sequence.children()) index(child);
         else if (step instanceof PlanStep.Repeat repeat) index(repeat.body());
+        if (step instanceof PlanStep.Batch batch) {
+            homogeneous.put(step, new Homogeneous(batch.recipe(), BigInteger.valueOf(batch.runs())));
+        } else if (step instanceof PlanStep.Repeat repeat) {
+            Homogeneous body = homogeneous.get(repeat.body());
+            if (body != null) homogeneous.put(step, new Homogeneous(body.recipe, body.runs.multiply(BigInteger.valueOf(repeat.times()))));
+        } else {
+            String recipe = null;
+            BigInteger runs = BigInteger.ZERO;
+            for (PlanStep child : ((PlanStep.Sequence) step).children()) {
+                Homogeneous part = homogeneous.get(child);
+                if (part == null) return;
+                if (part.runs.signum() == 0) continue;
+                if (recipe != null && !recipe.equals(part.recipe)) return;
+                recipe = part.recipe;
+                runs = runs.add(part.runs);
+            }
+            homogeneous.put(step, new Homogeneous(recipe, runs));
+        }
     }
 
     private void push(PlanStep step) {
@@ -75,6 +94,14 @@ public final class PlanCursor {
                 continue;
             }
             if (frame.step instanceof PlanStep.Batch batch) return new PlanStep.Batch(batch.recipe(), frame.remaining);
+            // Repeated occurrences of the same recipe have no intervening
+            // dependency. Expose a large batch even for previously saved
+            // Repeat(Batch(1), n) programs, retaining the existing cursor format.
+            if (frame.step instanceof PlanStep.Repeat repeat) {
+                Homogeneous body = homogeneous.get(repeat.body());
+                if (body != null && body.runs.signum() > 0)
+                    return new PlanStep.Batch(body.recipe, ExactAmounts.capped(body.runs.multiply(BigInteger.valueOf(frame.remaining))));
+            }
             if (frame.step instanceof PlanStep.Sequence sequence) {
                 PlanStep child = sequence.children().get(sequence.children().size() - Math.toIntExact(frame.remaining));
                 frame.remaining--;
@@ -88,10 +115,37 @@ public final class PlanCursor {
     }
 
     public void dispatched(long runs) {
-        if (stack.isEmpty()) throw new IllegalStateException("No active step");
-        Frame frame = stack.get(stack.size() - 1);
-        if (!(frame.step instanceof PlanStep.Batch) || runs <= 0 || runs > frame.remaining) throw new IllegalArgumentException("Invalid accepted batch");
-        frame.remaining -= runs;
+        PlanStep.Batch batch = current();
+        if (batch == null || runs <= 0 || runs > batch.runs()) throw new IllegalArgumentException("Invalid accepted batch");
+        BigInteger left = BigInteger.valueOf(runs);
+        while (left.signum() > 0) {
+            Frame frame = stack.get(stack.size() - 1);
+            if (frame.remaining == 0) {
+                stack.remove(stack.size() - 1);
+            } else if (frame.step instanceof PlanStep.Batch) {
+                long used = Math.min(frame.remaining, left.longValueExact());
+                frame.remaining -= used;
+                left = left.subtract(BigInteger.valueOf(used));
+            } else if (frame.step instanceof PlanStep.Repeat repeat) {
+                BigInteger perIteration = homogeneous.get(repeat.body()).runs;
+                if (perIteration.signum() == 0) {
+                    frame.remaining = 0;
+                    continue;
+                }
+                long whole = left.divide(perIteration).min(BigInteger.valueOf(frame.remaining)).longValueExact();
+                frame.remaining -= whole;
+                left = left.subtract(perIteration.multiply(BigInteger.valueOf(whole)));
+                if (left.signum() > 0 && frame.remaining > 0) {
+                    frame.remaining--;
+                    push(repeat.body());
+                }
+            } else {
+                var sequence = (PlanStep.Sequence) frame.step;
+                PlanStep child = sequence.children().get(sequence.children().size() - Math.toIntExact(frame.remaining));
+                frame.remaining--;
+                push(child);
+            }
+        }
     }
 
     public List<Position> snapshot() {
@@ -127,6 +181,8 @@ public final class PlanCursor {
     }
 
     public record Position(int node, long remaining) {}
+
+    private record Homogeneous(String recipe, BigInteger runs) {}
 
     private static final class Frame {
 

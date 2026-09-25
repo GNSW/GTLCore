@@ -26,6 +26,7 @@ final class AllocationSearch<K> {
     private final Map<String, GraphRecipe<K>> relevant = new LinkedHashMap<>();
     private final List<GraphRecipe<K>> recipes = new ArrayList<>();
     private final List<SequenceSummary<K>> summaries = new ArrayList<>();
+    private final Set<K> producedKeys = new HashSet<>();
     // This search models the available network plus hypothetical recipe deltas,
     // not the CPU's physical inventory. Stock at Long.MAX_VALUE must not forbid
     // a recipe with a positive byproduct: the final witness borrows only its
@@ -42,10 +43,18 @@ final class AllocationSearch<K> {
     private long hash1, hash2, memory;
     private Candidate checking;
     private DemandExpansion<K> expansion;
+    private LinearMacroCompilation<K> macros;
     private GraphPlan<K> result;
+    private final boolean preview;
+    private long allocationStarted;
 
     AllocationSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
                      boolean preserve, boolean force, Set<String> excluded, PlanningBudget budget, long started) {
+        this(compiler, target, amount, stock, external, requiredSeeds, preserve, force, excluded, budget, started, false);
+    }
+
+    AllocationSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
+                     boolean preserve, boolean force, Set<String> excluded, PlanningBudget budget, long started, boolean preview) {
         this.compiler = compiler;
         this.target = target;
         this.amount = amount;
@@ -57,6 +66,7 @@ final class AllocationSearch<K> {
         this.excluded = excluded;
         this.budget = budget;
         this.started = started;
+        this.preview = preview;
         goals.put(target, BigInteger.valueOf(amount));
         pending.add(target);
         requiredSeeds.forEach((key, count) -> goals.merge(key, BigInteger.valueOf(count), BigInteger::add));
@@ -74,13 +84,28 @@ final class AllocationSearch<K> {
             if (index < recipes.size()) {
                 var recipe = recipes.get(index++);
                 summaries.add(SequenceSummary.recipe(recipe));
+                producedKeys.addAll(recipe.outputs().keySet());
                 for (K key : recipe.inputs().keySet()) keyIds.computeIfAbsent(key, ignored -> keyIds.size());
                 for (K key : recipe.outputs().keySet()) keyIds.computeIfAbsent(key, ignored -> keyIds.size());
                 reserve(256L + 128L * (recipe.inputs().size() + recipe.outputs().size()));
             } else {
                 keyIds.computeIfAbsent(target, ignored -> keyIds.size());
+                K refill = null;
+                BigInteger refillGap = null;
+                if (preview) for (K key : keyIds.keySet()) if (!producedKeys.contains(key) && !external.contains(key)) {
+                    BigInteger gap = goals.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    if (refillGap == null || gap.compareTo(refillGap) > 0) {
+                        refill = key;
+                        refillGap = gap;
+                    }
+                }
                 for (K key : keyIds.keySet()) {
                     BigInteger available = BigInteger.valueOf(stock.getOrDefault(key, 0L));
+                    // A one-unit diagnostic refill avoids fragmenting a large
+                    // compressed loop at its very last missing raw input. This
+                    // is hypothetical only: Candidate derives every borrowed
+                    // unit again from the independently summarized program.
+                    if (preview && key.equals(refill)) available = available.add(BigInteger.ONE);
                     // A finite, explicitly permitted external requirement for this
                     // candidate. This is not physical stock or a MAX_VALUE sentinel.
                     if (external.contains(key)) available = available.max(goals.getOrDefault(key, BigInteger.ZERO));
@@ -93,9 +118,17 @@ final class AllocationSearch<K> {
                         Math.max(stock.getOrDefault(target, 0L), requiredSeeds.getOrDefault(target, 0L)) : requiredSeeds.getOrDefault(target, 0L)));
                 required.put(target, targetGoal);
                 requiredSeeds.forEach((key, count) -> required.merge(key, BigInteger.valueOf(count), BigInteger::max));
-                expansion = new DemandExpansion<>(relevant, held, required, budget);
+                expansion = new DemandExpansion<>(relevant, held, required, budget, preview);
                 phase = 4;
             }
+            return false;
+        }
+        if (phase == 5) {
+            if (!macros.step()) return false;
+            relevant.clear();
+            relevant.putAll(macros.recipes());
+            recipes.addAll(relevant.values());
+            phase = 1;
             return false;
         }
         if (phase == 3) return true;
@@ -107,6 +140,7 @@ final class AllocationSearch<K> {
                 expansion = null;
             }
             phase = 2;
+            allocationStarted = budget.nodes();
             return false;
         }
         if (checking != null) {
@@ -121,6 +155,10 @@ final class AllocationSearch<K> {
                 finish();
                 return true;
             }
+        }
+        if (preview && budget.nodes() - allocationStarted > 32_768L + 512L * recipes.size()) {
+            finish();
+            return true;
         }
         if (stack.isEmpty()) {
             finish();
@@ -173,7 +211,13 @@ final class AllocationSearch<K> {
         }
         path.add(new PlanStep.Batch(recipes.get(recipeIndex).id(), runs));
         reserve(96);
-        if (stack.size() >= 4096) throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "allocation_depth=4096");
+        if (stack.size() >= 4096) {
+            // This bounded strategy has not proved failure. Let the owning
+            // planner try other source selections instead of aborting the order
+            // long before its cumulative work/time/memory budget is exhausted.
+            finish();
+            return true;
+        }
         stack.push(new Frame(mark, size));
         return false;
     }
@@ -196,8 +240,13 @@ final class AllocationSearch<K> {
             return;
         }
         if (pending.isEmpty()) {
-            recipes.addAll(relevant.values());
-            phase = 1;
+            if (relevant.size() >= 32) {
+                macros = new LinearMacroCompilation<>(relevant, target, requiredSeeds.keySet(), budget);
+                phase = 5;
+            } else {
+                recipes.addAll(relevant.values());
+                phase = 1;
+            }
             return;
         }
         discoveringKey = pending.removeFirst();
@@ -305,6 +354,7 @@ final class AllocationSearch<K> {
         final Map<K, List<GraphRecipe<K>>> producers = new HashMap<>();
         final Map<K, Long> seeds = new LinkedHashMap<>();
         final Map<K, BigInteger> initial = new LinkedHashMap<>();
+        final Map<K, BigInteger> missing = new LinkedHashMap<>();
         final Deque<K> todo = new ArrayDeque<>();
         final Set<K> walked = new HashSet<>();
         SummaryComputation<K> computation;
@@ -319,8 +369,8 @@ final class AllocationSearch<K> {
         }
 
         Candidate(PlanStep witness) {
-            this.witness = witness;
-            collecting.push(witness);
+            this.witness = macros == null ? witness : macros.expand(witness);
+            collecting.push(this.witness);
             seeds.putAll(requiredSeeds);
         }
 
@@ -396,11 +446,15 @@ final class AllocationSearch<K> {
                     BigInteger goal = BigInteger.valueOf(seeds.getOrDefault(key, 0L));
                     if (key.equals(target)) goal = goal.add(BigInteger.valueOf(amount));
                     BigInteger required = summary.required(key).max(goal.subtract(summary.delta(key)));
-                    if (!external.contains(key) && required.compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) > 0) return true;
+                    if (!external.contains(key) && required.compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) > 0) {
+                        if (!preview) return true;
+                        missing.put(key, required.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L))));
+                    }
                     if (required.signum() > 0) initial.put(key, required);
                 } else {
-                    plan = new GraphPlan<>(target, amount, preserve, witness, used, initial, seeds, Map.of(),
-                            GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL, budget.nodes(), System.nanoTime() - started);
+                    plan = new GraphPlan<>(target, amount, preserve, witness, used, initial, seeds, missing,
+                            missing.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : GraphPlan.Result.MISSING_INPUT,
+                            budget.nodes(), System.nanoTime() - started);
                     return true;
                 }
             }

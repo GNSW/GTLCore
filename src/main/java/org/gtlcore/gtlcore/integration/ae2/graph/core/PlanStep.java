@@ -10,11 +10,20 @@ public sealed interface PlanStep permits PlanStep.Batch, PlanStep.Sequence, Plan
     static PlanStep batch(String recipe, BigInteger count) {
         ExactAmounts.of(count);
         if (count.compareTo(ExactAmounts.LONG_MAX) <= 0) return new Batch(recipe, count.longValueExact());
-        return repeat(new Batch(recipe, 1), count);
+        // Keep each dispatchable leaf large. Repeat(Batch(1), count) retains
+        // the mathematical count but makes the executor send one unit per call.
+        BigInteger[] division = count.divideAndRemainder(ExactAmounts.LONG_MAX);
+        PlanStep full = repeat(new Batch(recipe, Long.MAX_VALUE), division[0]);
+        return division[1].signum() == 0 ? full :
+                new Sequence(List.of(full, new Batch(recipe, division[1].longValueExact())));
     }
 
     static PlanStep repeat(PlanStep body, BigInteger count) {
         ExactAmounts.of(count);
+        if (body instanceof Batch batch) {
+            BigInteger runs = BigInteger.valueOf(batch.runs()).multiply(count);
+            if (runs.compareTo(ExactAmounts.LONG_MAX) <= 0) return new Batch(batch.recipe(), runs.longValueExact());
+        }
         if (count.compareTo(ExactAmounts.LONG_MAX) <= 0) return new Repeat(body, count.longValueExact());
         BigInteger[] division = count.divideAndRemainder(ExactAmounts.LONG_MAX);
         PlanStep full = repeat(new Repeat(body, Long.MAX_VALUE), division[0]);

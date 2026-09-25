@@ -21,6 +21,11 @@ public interface GraphCpuHost {
 
     boolean active();
 
+    /** Logical job-storage policy; physical material accounts still use checked longs. */
+    default boolean unboundedJobStorage() {
+        return false;
+    }
+
     long dispatchCapacity();
 
     ListCraftingInventory orphanInventory();
@@ -31,5 +36,6 @@ public interface GraphCpuHost {
 
     void output(GenericStack stack);
 
+    /** In-memory return routing only: also called during chunk loading. */
     default void requesting(AEKey key, boolean requested) {}
 }

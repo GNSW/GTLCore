@@ -26,6 +26,7 @@ final class PlanAssembly<K> {
     private Iterator<K> keys;
     private Iterator<Map.Entry<K, Long>> amounts;
     private Map<String, BigInteger> times;
+    private Iterator<GraphRecipe<K>> workingRecipes;
     private Iterator<Map.Entry<K, BigInteger>> requiredAmounts;
     private GraphRecipe<K> current;
     private int phase, regionIndex, recipeIndex;
@@ -77,13 +78,15 @@ final class PlanAssembly<K> {
             case 2 -> {
                 if (counting.step(budget)) {
                     times = counting.result();
+                    workingRecipes = recipes.values().iterator();
                     phase = 3;
                 }
             }
             case 3 -> {
                 if (amounts != null && amounts.hasNext()) {
                     var input = amounts.next();
-                    if (current.outputs().getOrDefault(input.getKey(), 0L) >= input.getValue()) {
+                    if (!current.configurationInputs().containsKey(input.getKey()) &&
+                            current.outputs().getOrDefault(input.getKey(), 0L) >= input.getValue()) {
                         long working = Math.min(stock.getOrDefault(input.getKey(), 0L),
                                 ExactAmounts.capped(BigInteger.valueOf(input.getValue()).multiply(times.getOrDefault(current.id(), BigInteger.ZERO).min(BigInteger.valueOf(catalystPolicy.parallelism())))));
                         // Optional working stock must not add avoidable pressure
@@ -91,10 +94,12 @@ final class PlanAssembly<K> {
                         working = Math.min(working, ExactAmounts.capped(ExactAmounts.LONG_MAX.subtract(summary.peak(input.getKey())).max(BigInteger.ZERO)));
                         if (working != 0) initial.merge(input.getKey(), BigInteger.valueOf(working), BigInteger::max);
                     }
-                } else if (regionIndex < graph.regions().size()) {
-                    var region = graph.regions().get(regionIndex++);
-                    if (region.cyclic() && region.recipes().size() == 1) {
-                        current = region.recipes().get(0);
+                } else if (workingRecipes.hasNext()) {
+                    // Shared returned tools can join several recipes into one
+                    // region. Their verified count program still benefits from
+                    // working stock even when it only needs one startup seed.
+                    current = workingRecipes.next();
+                    if (times.containsKey(current.id())) {
                         amounts = current.inputs().entrySet().iterator();
                     }
                 } else {

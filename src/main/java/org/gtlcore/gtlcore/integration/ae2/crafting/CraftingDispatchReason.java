@@ -19,7 +19,8 @@ public enum CraftingDispatchReason {
     DISPATCH_IN_DOUBT(1024, "gtlcore.ae2.crafting.dispatch_reason.dispatch_in_doubt"),
     WAITING_FOR_OUTPUTS(2048, "gtlcore.ae2.crafting.dispatch_reason.waiting_for_outputs"),
     WAITING_FOR_EXTERNAL(4096, "gtlcore.ae2.crafting.dispatch_reason.waiting_for_external"),
-    RECOVERY_PENDING(8192, "gtlcore.ae2.crafting.dispatch_reason.recovery_pending");
+    RECOVERY_PENDING(8192, "gtlcore.ae2.crafting.dispatch_reason.recovery_pending"),
+    WAITING_FOR_CAPACITY(16384, "gtlcore.ae2.crafting.dispatch_reason.waiting_for_capacity");
 
     public static final String HEADING_TRANSLATION_KEY = "gtlcore.ae2.crafting.dispatch_reason.heading";
     public static final String NOT_CHECKED_TRANSLATION_KEY = "gtlcore.ae2.crafting.dispatch_reason.not_checked";

@@ -3,6 +3,7 @@ package org.gtlcore.gtlcore.integration.ae2.graph;
 import org.gtlcore.gtlcore.api.crafting.IAutoExpandSettings;
 import org.gtlcore.gtlcore.api.machine.trait.AECraft.IMECraftIOPart;
 import org.gtlcore.gtlcore.api.machine.trait.MEPart.IMEPatternPartMachine;
+import org.gtlcore.gtlcore.common.item.VirtualIngredientBehavior;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
 import org.gtlcore.gtlcore.integration.ae2.crafting.IPatternProviderAutoExpand;
@@ -22,10 +23,16 @@ final class GtlDispatchPolicy {
     private GtlDispatchPolicy() {}
 
     static boolean configuration(AEKey key) {
+        if (reusable(key)) return true;
         // Non-GT keys cannot be its programmed circuit. Do not initialize GT's
         // registry holders merely to classify vanilla inputs or fluid templates.
         return key instanceof AEItemKey item && BuiltInRegistries.ITEM.getKey(item.getItem()).getNamespace().equals("gtceu") &&
                 AEUtils.isIntegratedCircuit(key);
+    }
+
+    static boolean reusable(AEKey key) {
+        return key instanceof AEItemKey item && BuiltInRegistries.ITEM.getKey(item.getItem()).toString().equals("gtlcore:virtual_ingredient") &&
+                VirtualIngredientBehavior.isMarked(item.getReadOnlyStack()) && !VirtualIngredientBehavior.canonicalStack(item.getReadOnlyStack()).isEmpty();
     }
 
     static boolean expanded(IPatternDetails pattern, ICraftingProvider provider) {

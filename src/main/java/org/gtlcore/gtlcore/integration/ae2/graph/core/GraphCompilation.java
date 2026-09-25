@@ -157,7 +157,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             nodes.add(recipe);
             out.add(new Ints());
             in.add(new Ints());
-            for (K key : recipe.outputs().keySet()) {
+            for (K key : recipe.executionOutputs().keySet()) {
                 budget.check();
                 budget.reserve(48);
                 outputIds.computeIfAbsent(key, ignored -> new ArrayList<>()).add(nodes.size() - 1);

@@ -19,7 +19,7 @@ public final class CatalogIndex<K> {
         budget.check();
         if (cursor < catalog.size()) {
             GraphRecipe<K> recipe = catalog.get(cursor++);
-            for (K output : recipe.outputs().keySet()) producers.computeIfAbsent(output, ignored -> new ArrayList<>()).add(recipe);
+            for (K output : recipe.executionOutputs().keySet()) producers.computeIfAbsent(output, ignored -> new ArrayList<>()).add(recipe);
         } else {
             if (freezing == null) freezing = producers.entrySet().iterator();
             if (freezing.hasNext()) {

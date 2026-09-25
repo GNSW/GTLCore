@@ -27,6 +27,7 @@
   "gtlcore.ae2.crafting.dispatch_reason.waiting_for_outputs": "等待已接单机器回料；机器内部状态不可见，无法确认死锁",
   "gtlcore.ae2.crafting.dispatch_reason.waiting_for_external": "等待外部供料或手动补齐缺项",
   "gtlcore.ae2.crafting.dispatch_reason.recovery_pending": "种子恢复义务尚未完成；未来回收量不计作现货",
+  "gtlcore.ae2.crafting.dispatch_reason.waiting_for_capacity": "等待中间产物被消耗或交付，以腾出 CPU 库存空间",
   "gtlcore.ae2.crafting.dispatch_reason.missing_tool": "缺少所需的共享工具",
   "gtlcore.ae2.crafting.dispatch_reason.plan_stale": "计划中的样板已变化，或对应供应器已离线",
   "gtlcore.ae2.crafting.dispatch_reason.dispatch_in_doubt": "无法确认输入是否已交接，已暂停自动重发；请查看图合成任务日志",

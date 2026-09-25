@@ -15,6 +15,8 @@ public final class GraphRecipe<K> {
     private final Map<K, Long> outputs;
     private final Map<K, Long> inputs;
     private final Map<K, Long> configurationInputs;
+    private final Map<K, Long> reusableInputs;
+    private final Map<K, Long> executionOutputs;
 
     public GraphRecipe(String id, String binding, List<Slot<K>> slots, Map<K, Long> outputs) {
         this.id = Objects.requireNonNull(id);
@@ -24,10 +26,25 @@ public final class GraphRecipe<K> {
         if (this.outputs.isEmpty()) throw new IllegalArgumentException("Pattern without outputs");
         Map<K, Long> aggregated = new LinkedHashMap<>();
         Map<K, Long> configuration = new LinkedHashMap<>();
+        Map<K, Long> reusable = new LinkedHashMap<>();
         for (Slot<K> slot : this.slots) aggregated.merge(slot.key(), slot.amount(), CheckedAmounts::add);
         for (Slot<K> slot : this.slots) if (slot.configuration()) configuration.merge(slot.key(), slot.amount(), CheckedAmounts::add);
+        for (Slot<K> slot : this.slots) if (slot.reusable()) reusable.merge(slot.key(), slot.amount(), CheckedAmounts::add);
         this.inputs = Collections.unmodifiableMap(aggregated);
         this.configurationInputs = Collections.unmodifiableMap(configuration);
+        this.reusableInputs = reusable.isEmpty() ? Map.of() : Collections.unmodifiableMap(reusable);
+        if (reusable.isEmpty()) this.executionOutputs = this.outputs;
+        else {
+            Map<K, Long> actual = new LinkedHashMap<>(this.outputs);
+            reusable.forEach((key, amount) -> {
+                long returned = actual.getOrDefault(key, 0L);
+                if (returned < amount) throw new IllegalArgumentException("Missing reusable input balance");
+                if (returned == amount) actual.remove(key);
+                else actual.put(key, returned - amount);
+            });
+            if (actual.isEmpty()) throw new IllegalArgumentException("Pattern without physical outputs");
+            this.executionOutputs = Collections.unmodifiableMap(actual);
+        }
     }
 
     public String id() {
@@ -46,7 +63,11 @@ public final class GraphRecipe<K> {
         return outputs;
     }
 
-    public record Slot<K>(K key, long amount, int inputSlot, boolean configuration) {
+    public record Slot<K>(K key, long amount, int inputSlot, boolean configuration, boolean reusable) {
+
+        public Slot(K key, long amount, int inputSlot, boolean configuration) {
+            this(key, amount, inputSlot, configuration, false);
+        }
 
         public Slot(K key, long amount, int inputSlot) {
             this(key, amount, inputSlot, false);
@@ -60,6 +81,7 @@ public final class GraphRecipe<K> {
             Objects.requireNonNull(key);
             if (amount <= 0) throw new IllegalArgumentException("Non-positive input");
             if (inputSlot < -1) throw new IllegalArgumentException("Invalid input slot");
+            if (reusable && !configuration) throw new IllegalArgumentException("Reusable input must be configuration");
         }
     }
 
@@ -71,10 +93,20 @@ public final class GraphRecipe<K> {
         return configurationInputs;
     }
 
+    /** Sealed virtual supply tokens remain owned by the CPU and can configure every push. */
+    public Map<K, Long> reusableInputs() {
+        return reusableInputs;
+    }
+
+    /** Real machine returns; excludes the logical self-return of virtual supply tokens. */
+    public Map<K, Long> executionOutputs() {
+        return executionOutputs;
+    }
+
     /** Logical planning reserves a safe upper bound; each real push consumes one configuration. */
     public Map<K, Long> dispatchInputs(long batch) {
         Map<K, Long> result = new LinkedHashMap<>();
-        for (Slot<K> slot : slots) result.merge(slot.key(), CheckedAmounts.multiply(slot.amount(), slot.configuration() ? 1 : batch), CheckedAmounts::add);
+        for (Slot<K> slot : slots) if (!slot.reusable()) result.merge(slot.key(), CheckedAmounts.multiply(slot.amount(), slot.configuration() ? 1 : batch), CheckedAmounts::add);
         return amounts(result);
     }
 

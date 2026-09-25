@@ -111,4 +111,11 @@ final class MissingStockAnalysis<K> {
         if (!complete) throw new IllegalStateException("Missing stock analysis is incomplete");
         return blocked;
     }
+
+    Set<String> unreachableRecipes() {
+        if (!complete) throw new IllegalStateException("Missing stock analysis is incomplete");
+        Set<String> result = new HashSet<>();
+        for (int i = 0; i < recipes.size(); i++) if (waiting.get(i) > 0) result.add(recipes.get(i).id());
+        return Set.copyOf(result);
+    }
 }

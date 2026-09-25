@@ -6,6 +6,8 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /** O(plan depth) live state even for trillions of repeated operations. */
 public final class PlanCursor {
@@ -13,6 +15,7 @@ public final class PlanCursor {
     private final List<PlanStep> nodes = new ArrayList<>();
     private final Map<PlanStep, Integer> ids = new IdentityHashMap<>();
     private final Map<PlanStep, Homogeneous> homogeneous = new IdentityHashMap<>();
+    private final Map<PlanStep, Map<String, BigInteger>> loopCounts = new IdentityHashMap<>();
     private final List<Frame> stack = new ArrayList<>();
 
     public PlanCursor(PlanStep root) {
@@ -110,6 +113,35 @@ public final class PlanCursor {
                 frame.remaining--;
                 push(((PlanStep.Repeat) frame.step).body());
             }
+        }
+        return null;
+    }
+
+    /** Null keeps the original witness; an empty list asks the pipeline to make room. */
+    <K> List<PlanStep.Batch> takeLoopBatch(Map<String, GraphRecipe<K>> recipes, int room,
+                                           Supplier<Function<K, BigInteger>> stock) {
+        while (!stack.isEmpty()) {
+            Frame frame = stack.get(stack.size() - 1);
+            if (frame.remaining == 0) {
+                stack.remove(stack.size() - 1);
+            } else if (frame.step instanceof PlanStep.Sequence sequence) {
+                PlanStep child = sequence.children().get(sequence.children().size() - Math.toIntExact(frame.remaining));
+                frame.remaining--;
+                push(child);
+            } else if (frame.step instanceof PlanStep.Repeat repeat && frame.remaining > 1) {
+                Map<String, BigInteger> counts = loopCounts.computeIfAbsent(repeat.body(), LoopBatching::counts);
+                if (counts.size() < 2) return null;
+                Function<K, BigInteger> available = stock.get();
+                if (available == null) return null;
+                long iterations = LoopBatching.iterations(counts, frame.remaining, recipes, available);
+                if (iterations <= 1) return null;
+                if (counts.size() > room) return List.of();
+                var batches = new ArrayList<PlanStep.Batch>(counts.size());
+                counts.forEach((recipe, count) -> batches.add(new PlanStep.Batch(recipe,
+                        count.multiply(BigInteger.valueOf(iterations)).longValueExact())));
+                frame.remaining -= iterations;
+                return batches;
+            } else return null;
         }
         return null;
     }

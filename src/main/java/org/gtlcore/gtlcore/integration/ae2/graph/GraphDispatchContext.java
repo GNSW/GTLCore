@@ -3,6 +3,7 @@ package org.gtlcore.gtlcore.integration.ae2.graph;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.crafting.ICraftingProvider;
 import appeng.api.stacks.AEKey;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 import java.util.function.Supplier;
@@ -25,6 +26,12 @@ public final class GraphDispatchContext {
 
     public static long operations() {
         return BATCH.get() == null ? 1 : BATCH.get().operations();
+    }
+
+    /** Exact selected quantities for one operation, also carried through relays. */
+    public static @Nullable Map<AEKey, Long> selectedInputs() {
+        Batch batch = BATCH.get();
+        return ACTIVE.get() && batch != null ? batch.inputs() : null;
     }
 
     public static long capacity(ICraftingProvider provider, IPatternDetails pattern, long requested) {

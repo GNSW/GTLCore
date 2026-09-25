@@ -27,6 +27,7 @@
   "gtlcore.ae2.crafting.dispatch_reason.waiting_for_outputs": "Waiting for accepted machine outputs; internal state is not visible, so deadlock cannot be confirmed",
   "gtlcore.ae2.crafting.dispatch_reason.waiting_for_external": "Waiting for external supply or manually supplied missing inputs",
   "gtlcore.ae2.crafting.dispatch_reason.recovery_pending": "Seed recovery is still required; future returns are not held inventory",
+  "gtlcore.ae2.crafting.dispatch_reason.waiting_for_capacity": "Waiting for intermediate items to be consumed or delivered to free CPU inventory space",
   "gtlcore.ae2.crafting.dispatch_reason.missing_tool": "A required shared tool is missing",
   "gtlcore.ae2.crafting.dispatch_reason.plan_stale": "The planned pattern changed or its provider is offline",
   "gtlcore.ae2.crafting.dispatch_reason.dispatch_in_doubt": "Input handoff is uncertain; automatic redispatch is paused. See the graph job log.",

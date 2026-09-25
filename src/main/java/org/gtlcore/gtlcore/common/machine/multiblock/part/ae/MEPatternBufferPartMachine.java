@@ -766,6 +766,29 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
         return patternSlotMap.keySet().stream().toList();
     }
 
+    /** Bounded, read-only context for orders waiting for machine output. */
+    public String gtlcore$graphDiagnostic(IPatternDetails pattern) {
+        Integer slot = getSlotIndexForPattern(pattern);
+        var controllers = new java.util.LinkedHashSet<>(getControllers());
+        for (var proxy : getProxies()) {
+            controllers.addAll(proxy.getControllers());
+            if (controllers.size() >= 8) break;
+        }
+        String state = controllers.isEmpty() ? "NO_FORMED_CONTROLLER" : controllers.stream().limit(8).map(controller -> {
+            var machine = controller.self();
+            return machine.getDefinition().getId() + "@" + machine.getPos() + ":" +
+                    (machine instanceof com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine working ?
+                            working.getRecipeLogic().getStatus() : "connected");
+        }).toList().toString();
+        String inputs = "";
+        if (slot != null && slot >= 0 && slot < internalInventory.length) {
+            InternalSlot buffer = internalInventory[slot];
+            inputs = "; items=" + buffer.getItemInventory().object2LongEntrySet().stream().limit(4).toList() +
+                    "; fluids=" + buffer.getFluidInventory().object2LongEntrySet().stream().limit(4).toList();
+        }
+        return "buffer=" + getPos() + "; online=" + getMainNode().isActive() + "; slot=" + slot + "; controllers=" + state + inputs;
+    }
+
     // ========================================
     // PATTERN CONTAINER IMPLEMENTATION
     // ========================================

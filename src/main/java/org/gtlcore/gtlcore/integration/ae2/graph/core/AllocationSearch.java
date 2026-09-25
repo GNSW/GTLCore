@@ -41,11 +41,12 @@ final class AllocationSearch<K> {
     private K discoveringKey;
     private int phase, index;
     private long hash1, hash2, memory;
-    private Candidate checking;
+    private Candidate<K> checking;
     private DemandExpansion<K> expansion;
     private LinearMacroCompilation<K> macros;
     private GraphPlan<K> result;
     private final boolean preview;
+    private final List<GraphCompiler.QuantityCertificate<K>> certificates;
     private long allocationStarted;
 
     AllocationSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
@@ -67,6 +68,7 @@ final class AllocationSearch<K> {
         this.budget = budget;
         this.started = started;
         this.preview = preview;
+        certificates = preview ? List.of() : compiler.quantityCertificates(excluded);
         goals.put(target, BigInteger.valueOf(amount));
         pending.add(target);
         requiredSeeds.forEach((key, count) -> goals.merge(key, BigInteger.valueOf(count), BigInteger::add));
@@ -84,7 +86,7 @@ final class AllocationSearch<K> {
             if (index < recipes.size()) {
                 var recipe = recipes.get(index++);
                 summaries.add(SequenceSummary.recipe(recipe));
-                producedKeys.addAll(recipe.outputs().keySet());
+                producedKeys.addAll(recipe.executionOutputs().keySet());
                 for (K key : recipe.inputs().keySet()) keyIds.computeIfAbsent(key, ignored -> keyIds.size());
                 for (K key : recipe.outputs().keySet()) keyIds.computeIfAbsent(key, ignored -> keyIds.size());
                 reserve(256L + 128L * (recipe.inputs().size() + recipe.outputs().size()));
@@ -134,7 +136,7 @@ final class AllocationSearch<K> {
         if (phase == 3) return true;
         if (phase == 4) {
             if (!expansion.step()) return false;
-            if (expansion.result() != null) checking = new Candidate(expansion.result());
+            if (expansion.result() != null) checking = candidate(expansion.result());
             else {
                 expansion.close();
                 expansion = null;
@@ -167,10 +169,11 @@ final class AllocationSearch<K> {
         Frame frame = stack.peek();
         if (!frame.checkedGoal) {
             frame.checkedGoal = true;
+            if (provenResourceConflict()) frame.recipe = recipes.size();
             BigInteger goal = BigInteger.valueOf(amount);
             if (force) goal = goal.add(BigInteger.valueOf(stock.getOrDefault(target, 0L)));
             if (held.getOrDefault(target, BigInteger.ZERO).compareTo(goal) >= 0) {
-                checking = new Candidate();
+                checking = candidate(new PlanStep.Sequence(path));
                 return false;
             }
         }
@@ -324,6 +327,16 @@ final class AllocationSearch<K> {
         memory = 0;
     }
 
+    /** Retain the compiled frontier while another bounded strategy tries its counts. */
+    boolean readyForCountSearch() {
+        return phase == 2 && checking == null && expansion == null;
+    }
+
+    void discard() {
+        if (expansion != null) expansion.close();
+        finish();
+    }
+
     GraphPlan<K> result() {
         if (phase != 3) throw new IllegalStateException("Allocation search incomplete");
         return result;
@@ -346,7 +359,45 @@ final class AllocationSearch<K> {
         }
     }
 
-    private final class Candidate {
+    private Candidate<K> candidate(PlanStep witness) {
+        return new Candidate<>(macros == null ? witness : macros.expand(witness), relevant, target, amount, stock,
+                requiredSeeds, external, preserve, force, preview, budget, started);
+    }
+
+    private boolean provenResourceConflict() {
+        for (var certificate : certificates) {
+            BigInteger available = BigInteger.ZERO, required = BigInteger.ZERO;
+            boolean applicable = true;
+            for (var entry : certificate.weights().entrySet()) {
+                budget.check();
+                K key = entry.getKey();
+                if (external.contains(key) && entry.getValue().signum() != 0) {
+                    applicable = false;
+                    break;
+                }
+                BigInteger goal = BigInteger.valueOf(requiredSeeds.getOrDefault(key, 0L));
+                if (key.equals(target)) {
+                    if (force) goal = goal.max(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    goal = goal.add(BigInteger.valueOf(amount));
+                }
+                required = required.add(entry.getValue().multiply(goal));
+                available = available.add(entry.getValue().multiply(held.getOrDefault(key, BigInteger.ZERO)));
+            }
+            if (applicable && available.compareTo(required) < 0) return true;
+        }
+        return false;
+    }
+
+    /** Shared material/seed assembly for every native executable witness. */
+    static final class Candidate<K> {
+
+        final Map<String, GraphRecipe<K>> relevant;
+        final K target;
+        final long amount, started;
+        final Map<K, Long> stock;
+        final Set<K> external;
+        final boolean preserve, force, preview;
+        final PlanningBudget budget;
 
         final PlanStep witness;
         final Deque<PlanStep> collecting = new ArrayDeque<>();
@@ -364,12 +415,20 @@ final class AllocationSearch<K> {
         int stage;
         GraphPlan<K> plan;
 
-        Candidate() {
-            this(new PlanStep.Sequence(path));
-        }
-
-        Candidate(PlanStep witness) {
-            this.witness = macros == null ? witness : macros.expand(witness);
+        Candidate(PlanStep witness, Map<String, GraphRecipe<K>> relevant, K target, long amount, Map<K, Long> stock,
+                  Map<K, Long> requiredSeeds, Set<K> external, boolean preserve, boolean force, boolean preview,
+                  PlanningBudget budget, long started) {
+            this.witness = witness;
+            this.relevant = relevant;
+            this.target = target;
+            this.amount = amount;
+            this.stock = stock;
+            this.external = external;
+            this.preserve = preserve;
+            this.force = force;
+            this.preview = preview;
+            this.budget = budget;
+            this.started = started;
             collecting.push(this.witness);
             seeds.putAll(requiredSeeds);
         }
@@ -393,7 +452,7 @@ final class AllocationSearch<K> {
                     String id = ((PlanStep.Batch) step).recipe();
                     GraphRecipe<K> recipe = relevant.get(id);
                     if (used.putIfAbsent(id, recipe) == null)
-                        for (K key : recipe.outputs().keySet()) producers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(recipe);
+                        for (K key : recipe.executionOutputs().keySet()) producers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(recipe);
                 } else {
                     computation = new SummaryComputation<>(witness, used, budget);
                     stage = 1;

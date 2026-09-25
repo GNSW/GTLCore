@@ -97,6 +97,9 @@ final class GraphSolve<K> {
             selected = selection.result();
             selection = null;
             if (selected == null) {
+                var region = graph.regions().get(regionIndex - 1);
+                budget.note("region", "no_witness; index=" + (regionIndex - 1) + "; recipes=" + region.recipes().size() +
+                        "; cyclic=" + region.cyclic() + "; ids=" + region.recipes().stream().limit(6).map(GraphRecipe::id).toList());
                 result = failure(GraphPlan.Result.UNKNOWN);
                 return true;
             }
@@ -120,6 +123,7 @@ final class GraphSolve<K> {
             } else selection = new RegionSelection<>(region, demand, stock, target, amount,
                     preserve, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock);
         } else if (!targetProduced) {
+            budget.note("selected_graph", "target_not_produced; target=" + target + "; recipes=" + graph.recipes().size() + "; force_craft=" + forceCraft);
             result = failure(GraphPlan.Result.UNKNOWN);
         } else {
             Collections.reverse(reversed);

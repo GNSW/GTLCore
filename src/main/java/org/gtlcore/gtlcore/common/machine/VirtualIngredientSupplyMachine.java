@@ -107,11 +107,11 @@ public class VirtualIngredientSupplyMachine extends MetaMachine
                 if (!VirtualIngredientBehavior.isBound(stack)) continue;
                 // Sealed in place: an editable wrapper here would turn one locked copy into unlimited real material.
                 VirtualIngredientBehavior.mark(stack);
-                wrapper = stack.copyWithCount(1);
+                wrapper = VirtualIngredientBehavior.canonicalStack(stack);
             } else {
                 wrapper = VirtualIngredientBehavior.wrap(stack);
             }
-            published.put(AEItemKey.of(wrapper), PUBLISHED_AMOUNT);
+            if (!wrapper.isEmpty()) published.put(AEItemKey.of(wrapper), PUBLISHED_AMOUNT);
         }
         dirty = true;
         if (cachedStacks != null) cachedStacks.clear();
@@ -144,7 +144,13 @@ public class VirtualIngredientSupplyMachine extends MetaMachine
     @Override
     public long extract(AEKey what, long amount, Actionable mode, IActionSource source) {
         // Never decrements: wrappers are tokens, and the payload is not reachable from here.
-        return amount > 0 && published.containsKey(what) ? amount : 0;
+        if (amount <= 0 || !(what instanceof AEItemKey itemKey) || !isOwnWrapper(itemKey)) return 0;
+        if (published.containsKey(what)) return amount;
+        // Old patterns or manually configured wrappers can retain empty item/fluid
+        // UI tags and different payload counts. Accept the same sealed payload;
+        // preserve the payload's own NBT, and never supply an editable wrapper.
+        ItemStack canonical = VirtualIngredientBehavior.canonicalStack(itemKey.getReadOnlyStack());
+        return !canonical.isEmpty() && published.containsKey(AEItemKey.of(canonical)) ? amount : 0;
     }
 
     @Override

@@ -35,6 +35,7 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
 
     private boolean consume() {
         GraphPlan<K> candidate = current.result();
+        budget.note("catalysts", "attempt=" + attempts + "; extra=" + extra + "; minimum=" + minimum + "; result=" + candidate.result());
         if (switch (candidate.result()) {
             case TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT, QUEUE_LIMIT -> true;
             default -> false;
@@ -70,12 +71,14 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
     }
 
     private void next(int limit) {
+        current.close();
         extra = limit;
         attempts++;
         current = factory.apply(new CatalystPolicy(policy.parallelism(), limit));
     }
 
     private void minimum() {
+        current.close();
         minimum = true;
         attempts++;
         current = factory.apply(CatalystPolicy.MINIMAL);
@@ -100,6 +103,11 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
     @Override
     public CompletableFuture<?> waitingFor() {
         return result == null ? current.waitingFor() : null;
+    }
+
+    @Override
+    public void close() {
+        current.close();
     }
 
     @Override

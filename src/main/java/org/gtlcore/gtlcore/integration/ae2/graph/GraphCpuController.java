@@ -49,6 +49,7 @@ public final class GraphCpuController {
     private long tickNanos;
     private long tickCalls;
     private String lastDiagnostic = "";
+    private long progressVersion = -1, progressNanos, waitingLogNanos;
     private final GtlPatternCatalog replanCatalog = new GtlPatternCatalog();
     private GraphPlanningRequest replanRequest;
     private GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint;
@@ -76,7 +77,7 @@ public final class GraphCpuController {
         if (host.cpu().getAvailableStorage() < supplied.bytes()) return CraftingSubmitResult.CPU_TOO_SMALL;
         boolean allowMissing = supplied instanceof MissingCraftingPlan;
         AeGraphPlan view = (AeGraphPlan) (allowMissing ? ((MissingCraftingPlan) supplied).delegate() : supplied);
-        if (view.exactBytes().compareTo(java.math.BigInteger.valueOf(host.cpu().getAvailableStorage())) > 0)
+        if (!host.unboundedJobStorage() && view.exactBytes().compareTo(java.math.BigInteger.valueOf(host.cpu().getAvailableStorage())) > 0)
             return CraftingSubmitResult.CPU_TOO_SMALL;
         GraphPlan<AEKey> plan = view.graph();
         if (!plan.feasible()) {
@@ -153,13 +154,14 @@ public final class GraphCpuController {
         tickCalls = 0;
         Arrays.fill(usedOps, 0);
         lastDiagnostic = "";
+        progressVersion = -1;
         providerGeneration = Long.MIN_VALUE;
         observedVersion = -1;
         playerId = source.player().map(player -> player instanceof ServerPlayer serverPlayer ? IPlayerRegistry.getPlayerId(serverPlayer) : null).orElse(null);
         tracker = new ElapsedTimeTracker();
         var time = (ElapsedTimeTrackerAccessor) tracker;
         waiting.forEach((key, count) -> time.invokeAddMaxItems(count, key.getType()));
-        plan.patternTimesExact().forEach((recipe, count) -> runtime.plan().recipes().get(recipe).outputs().forEach((key, amount) -> time.invokeAddMaxItems(ExactAmounts.capped(count.multiply(java.math.BigInteger.valueOf(amount))), key.getType())));
+        plan.patternTimesExact().forEach((recipe, count) -> runtime.plan().recipes().get(recipe).executionOutputs().forEach((key, amount) -> time.invokeAddMaxItems(ExactAmounts.capped(count.multiply(java.math.BigInteger.valueOf(amount))), key.getType())));
         publish(true);
         notifyOwner(CraftingJobStatusPacket.Status.STARTED);
         if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
@@ -198,8 +200,30 @@ public final class GraphCpuController {
             lastDiagnostic = runtime.reason();
             GTLCore.LOGGER.error("[Graph Crafting] job={} paused: {}; no automatic redispatch or input refund", link.getCraftingID(), lastDiagnostic);
         }
+        logWaiting();
         publish(false);
         if (runtime.finished()) finish();
+    }
+
+    private void logWaiting() {
+        if (!ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) return;
+        long now = System.nanoTime();
+        if (progressVersion != runtime.version()) {
+            progressVersion = runtime.version();
+            progressNanos = waitingLogNanos = now;
+            return;
+        }
+        if (runtime.finished() || runtime.suspended() || runtime.expected().isEmpty() ||
+                now - progressNanos < 30_000_000_000L || now - waitingLogNanos < 30_000_000_000L)
+            return;
+        waitingLogNanos = now;
+        try {
+            GTLCore.LOGGER.info("[Graph Crafting] job={} target={} waiting={} no_progress_s={} expected={} registered_providers={}",
+                    link.getCraftingID(), runtime.plan().target(), runtime.reason(), (now - progressNanos) / 1_000_000_000L,
+                    runtime.expected().entrySet().stream().limit(4).toList(), adapter.waitingDetails(runtime.plan(), runtime.expected()));
+        } catch (RuntimeException diagnosticFailure) {
+            GTLCore.LOGGER.debug("Graph waiting diagnostic unavailable", diagnosticFailure);
+        }
     }
 
     public long insert(AEKey key, long amount, Actionable mode) {
@@ -281,7 +305,16 @@ public final class GraphCpuController {
             tracker = new ElapsedTimeTracker(tag.getCompound("time"));
             playerId = tag.contains("playerId") ? tag.getInt("playerId") : null;
             for (int i = 0; i < usedOps.length; i++) usedOps[i] = Math.max(0, Math.min(4096, tag.getLong("ops" + i)));
-            publish(true);
+            // Chunk loading is not a live tick. Publishing output/dirty state
+            // here can ask GT's holder to synchronously load the same chunk,
+            // deadlocking its onLoad callback. Restore only the in-memory
+            // return index now; the first live tick publishes the UI and save.
+            Set<AEKey> next = Set.copyOf(runtime.expected().keySet());
+            for (AEKey key : indexed) if (!next.contains(key)) host.requesting(key, false);
+            for (AEKey key : next) host.requesting(key, true);
+            indexed = next;
+            observedVersion = -1;
+            unreadable = null;
         } catch (RuntimeException e) {
             runtime = null;
             unreadable = tag.copy(); // preserve data verbatim rather than deleting unknown/corrupt task inventory
@@ -392,6 +425,7 @@ public final class GraphCpuController {
         if (waiting != 0) return waiting;
         if (runtime.reason().equals("WAIT_INPUT") || runtime.reason().equals("WAIT_PREFIX_RESERVATION"))
             return CraftingDispatchReason.WAITING_FOR_INPUTS.mask();
+        if (runtime.reason().equals("WAIT_INVENTORY_CAPACITY")) return CraftingDispatchReason.WAITING_FOR_CAPACITY.mask();
         return switch (adapter == null ? "" : adapter.reason()) {
             case "WAIT_ENERGY" -> CraftingDispatchReason.INSUFFICIENT_POWER.mask();
             case "PROVIDER_OFFLINE" -> CraftingDispatchReason.NO_PROVIDER.mask();

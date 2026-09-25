@@ -14,7 +14,12 @@ public final class CapturedPattern {
 
     static final int MAX_VARIANTS = 256;
 
-    public record Candidate(GenericStack stack, AEKey remaining, boolean configuration) {}
+    public record Candidate(GenericStack stack, AEKey remaining, boolean configuration, boolean reusable) {
+
+        public Candidate(GenericStack stack, AEKey remaining, boolean configuration) {
+            this(stack, remaining, configuration, false);
+        }
+    }
 
     public record Input(long multiplier, List<Candidate> candidates) {
 
@@ -155,7 +160,9 @@ public final class CapturedPattern {
                 for (Picked picked : selections.get(slot).get(indices[slot])) {
                     Candidate candidate = picked.candidate();
                     slots.add(new GraphRecipe.Slot<>(candidate.stack().what(), CheckedAmounts.multiply(candidate.stack().amount(), picked.copies()),
-                            slot, candidate.configuration()));
+                            slot, candidate.configuration(), candidate.reusable()));
+                    if (candidate.reusable()) produced.merge(candidate.stack().what(),
+                            CheckedAmounts.multiply(candidate.stack().amount(), picked.copies()), CheckedAmounts::add);
                     if (candidate.remaining() != null) produced.merge(candidate.remaining(), picked.copies(), CheckedAmounts::add);
                 }
             }

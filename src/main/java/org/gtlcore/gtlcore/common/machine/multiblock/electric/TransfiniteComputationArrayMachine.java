@@ -108,6 +108,8 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
     private final Map<UUID, TransfiniteCraftingCPU> activeCpus = new LinkedHashMap<>();
     private final Map<AEKey, ObjectOpenHashSet<TransfiniteCraftingCPU>> waitingIndex = new Object2ObjectOpenHashMap<>();
     @Nullable
+    private ListTag pendingCpus;
+    @Nullable
     private MECraftingCPUInterfacePartMachine networkInterface;
     private TransfiniteCraftingCPU capacityCpu;
     private final AtomicBoolean patternCheckQueued = new AtomicBoolean();
@@ -121,6 +123,7 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
     @Override
     public void onLoad() {
         super.onLoad();
+        restoreCpus();
         // Entering the world should settle the structure as soon as possible, so prioritise it over the
         // throttled cadence until it forms or the window runs out.
         this.eagerCheckTicks.set(!isFormed() || this.networkInterface == null ? EAGER_CHECK_TICKS : 0);
@@ -481,6 +484,12 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
     @Override
     public void saveCustomPersistedData(@NotNull CompoundTag tag, boolean forDrop) {
         super.saveCustomPersistedData(tag, forDrop);
+        if (this.pendingCpus != null) {
+            // A save during chunk attachment must retain jobs whose patterns
+            // cannot yet be decoded against a server level.
+            tag.put(NBT_CPUS, this.pendingCpus.copy());
+            return;
+        }
         ListTag cpuList = new ListTag();
         for (var entry : this.activeCpus.entrySet()) {
             CompoundTag cpuTag = new CompoundTag();
@@ -502,7 +511,15 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
         }
         this.activeCpus.clear();
         this.waitingIndex.clear();
-        ListTag cpuList = tag.getList(NBT_CPUS, Tag.TAG_COMPOUND);
+        this.pendingCpus = tag.getList(NBT_CPUS, Tag.TAG_COMPOUND).copy();
+        restoreCpus();
+    }
+
+    private void restoreCpus() {
+        if (this.pendingCpus == null || getLevel() == null) return;
+        ListTag cpuList = this.pendingCpus;
+        this.activeCpus.clear();
+        this.waitingIndex.clear();
         for (int i = 0; i < cpuList.size(); i++) {
             CompoundTag cpuTag = cpuList.getCompound(i);
             if (!cpuTag.hasUUID(NBT_CPU_ID)) {
@@ -514,6 +531,7 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
             cpu.getCraftingLogic().readFromNbt(cpuTag.getCompound(NBT_CPU_STATE));
             this.activeCpus.put(id, cpu);
         }
+        this.pendingCpus = null;
     }
 
     @Override

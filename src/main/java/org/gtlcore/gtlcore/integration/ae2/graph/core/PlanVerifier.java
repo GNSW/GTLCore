@@ -43,20 +43,13 @@ public final class PlanVerifier {
     }
 
     /**
-     * AE's current physical CPU inventory stores a long per key. This is a
-     * submission boundary, not a limit on abstract requirements or cumulative
-     * recipe work. Check it before any extraction; do not truncate ownership.
+     * AE's physical CPU inventory stores a long per key. Only the initial
+     * reservation must fit simultaneously. Execution reserves output headroom
+     * per batch and can deliver/refund surplus between batches, so a serial
+     * whole-plan peak is not a submission limit. Never truncate ownership.
      */
     public static <K> void verifyRuntimeInventory(GraphPlan<K> plan) {
         verify(plan);
-        SequenceSummary<K> summary = SequenceSummary.of(plan.steps(), plan.recipes());
-        Set<K> keys = summary.keys();
-        keys.addAll(plan.initialExact().keySet());
-        for (K key : keys) {
-            BigInteger initial = plan.initialExact().getOrDefault(key, BigInteger.ZERO);
-            CheckedAmounts.amount(initial);
-            CheckedAmounts.amount(initial.add(summary.delta(key)));
-            CheckedAmounts.amount(initial.add(summary.peak(key)));
-        }
+        plan.initialExact().values().forEach(CheckedAmounts::amount);
     }
 }

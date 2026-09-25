@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph.core;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,12 +13,13 @@ public final class GraphCompiler<K> {
     private final List<GraphRecipe<K>> catalog;
     private final Map<K, List<GraphRecipe<K>>> producers;
     private final Map<CacheKey<K>, Compiled<K>> cache = new LinkedHashMap<>(16, 0.75f, true);
+    private final List<QuantityCertificate<K>> quantityCertificates = new ArrayList<>();
 
     public GraphCompiler(List<GraphRecipe<K>> catalog) {
         this.catalog = List.copyOf(catalog);
         this.producers = new LinkedHashMap<>();
         for (GraphRecipe<K> recipe : catalog) {
-            for (K output : recipe.outputs().keySet()) producers.computeIfAbsent(output, key -> new ArrayList<>()).add(recipe);
+            for (K output : recipe.executionOutputs().keySet()) producers.computeIfAbsent(output, key -> new ArrayList<>()).add(recipe);
         }
         producers.replaceAll((key, values) -> List.copyOf(values));
     }
@@ -34,6 +36,22 @@ public final class GraphCompiler<K> {
     public List<GraphRecipe<K>> catalog() {
         return catalog;
     }
+
+    synchronized List<QuantityCertificate<K>> quantityCertificates(Set<String> excluded) {
+        return quantityCertificates.stream().filter(certificate -> certificate.excluded().equals(excluded)).toList();
+    }
+
+    synchronized void rememberQuantityCertificate(Set<String> excluded, Map<K, BigInteger> weights) {
+        // This compiler owns one immutable effective catalog. A replacement
+        // pattern/multiplier creates another compiler and cannot inherit proofs.
+        if (weights.size() > 128 || excluded.size() > 192) return;
+        var entry = new QuantityCertificate<K>(Set.copyOf(excluded), Map.copyOf(weights));
+        quantityCertificates.remove(entry);
+        quantityCertificates.add(0, entry);
+        while (quantityCertificates.size() > 16) quantityCertificates.remove(quantityCertificates.size() - 1);
+    }
+
+    record QuantityCertificate<K>(Set<String> excluded, Map<K, BigInteger> weights) {}
 
     public Compiled<K> compile(K target, Map<K, Integer> choices, Set<String> excluded, PlanningBudget budget) {
         Compiled<K> cached = cached(target, choices, excluded);

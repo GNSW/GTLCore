@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
 import org.gtlcore.gtlcore.integration.ae2.compat.MAE2Compat;
 import org.gtlcore.gtlcore.integration.ae2.crafting.IPatternProviderAutoExpand;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphDispatchContext;
 import org.gtlcore.gtlcore.utils.NumberUtils;
 
 import com.gregtechceu.gtceu.common.data.GTItems;
@@ -591,6 +592,13 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
     @Unique
     private KeyCounter gtlcore$toInputCounter(IPatternDetails pattern) {
         var baseInputs = new KeyCounter();
+        var selected = GraphDispatchContext.selectedInputs();
+        if (selected != null) {
+            selected.forEach((key, amount) -> {
+                if (!AEUtils.isIntegratedCircuit(key)) baseInputs.add(key, amount);
+            });
+            return baseInputs;
+        }
         for (var input : pattern.getInputs()) {
             var possibleInputs = input.getPossibleInputs();
             if (possibleInputs.length == 0) {
@@ -600,7 +608,7 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
             if (AEUtils.isIntegratedCircuit(possibleInputs[0].what())) {
                 continue;
             }
-            baseInputs.add(possibleInputs[0].what(), input.getMultiplier());
+            baseInputs.add(possibleInputs[0].what(), Math.multiplyExact(possibleInputs[0].amount(), input.getMultiplier()));
         }
         return baseInputs;
     }

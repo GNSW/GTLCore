@@ -19,7 +19,7 @@ import java.util.Objects;
 public final class GraphJobCodec {
 
     public static final String NBT_KEY = "gtlcoreGraphJob";
-    private static final int SCHEMA = 5;
+    private static final int SCHEMA = 6;
     private static final int MAX_ENTRIES = 100_000;
 
     private GraphJobCodec() {}
@@ -47,6 +47,7 @@ public final class GraphJobCodec {
                 input.putLong("amount", slot.amount());
                 input.putInt("inputSlot", slot.inputSlot());
                 input.putBoolean("configuration", slot.configuration());
+                input.putBoolean("reusable", slot.reusable());
                 slots.add(input);
             });
             row.put("slots", slots);
@@ -116,7 +117,7 @@ public final class GraphJobCodec {
             List<GraphRecipe.Slot<AEKey>> slots = new ArrayList<>();
             for (Tag input : list(row, "slots")) {
                 CompoundTag value = (CompoundTag) input;
-                slots.add(new GraphRecipe.Slot<>(key(value.getCompound("key")), amount(value, "amount"), value.getInt("inputSlot"), value.getBoolean("configuration")));
+                slots.add(new GraphRecipe.Slot<>(key(value.getCompound("key")), amount(value, "amount"), value.getInt("inputSlot"), value.getBoolean("configuration"), schema >= 6 && value.getBoolean("reusable")));
             }
             String id = row.getString("id");
             if (id.isEmpty() || recipes.put(id, new GraphRecipe<>(id, row.getString("binding"), slots,

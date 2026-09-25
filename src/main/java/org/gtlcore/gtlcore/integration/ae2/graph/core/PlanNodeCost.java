@@ -16,7 +16,7 @@ public final class PlanNodeCost {
         Map<K, Set<Request<K>>> dependencies = new LinkedHashMap<>();
         for (String id : selectedRecipes) {
             var recipe = plan.recipes().get(id);
-            for (K output : recipe.outputs().keySet()) {
+            for (K output : recipe.executionOutputs().keySet()) {
                 var children = dependencies.computeIfAbsent(output, ignored -> new LinkedHashSet<>());
                 for (int index = 0; index < recipe.slots().size(); index++) {
                     var slot = recipe.slots().get(index);

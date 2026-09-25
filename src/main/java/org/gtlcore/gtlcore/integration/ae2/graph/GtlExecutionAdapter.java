@@ -66,13 +66,35 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
         return bindingDetail;
     }
 
+    public String waitingDetails(GraphPlan<AEKey> plan, Map<AEKey, Long> expected) {
+        List<String> details = new ArrayList<>();
+        int checked = 0;
+        for (GraphRecipe<AEKey> recipe : plan.recipes().values()) {
+            if (++checked > 4096 || details.size() >= 4) break;
+            if (recipe.executionOutputs().keySet().stream().noneMatch(expected::containsKey)) continue;
+            IPatternDetails pattern = resolve(recipe);
+            if (pattern == null) {
+                details.add(bindingFailure + ": " + bindingDetail);
+                continue;
+            }
+            int providers = 0;
+            for (ICraftingProvider provider : service.getProviders(pattern)) {
+                if (++providers > 2 || details.size() >= 4) break;
+                details.add(provider instanceof org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachine buffer ?
+                        buffer.gtlcore$graphDiagnostic(pattern) : provider.getClass().getName() + "; busy=" + provider.isBusy());
+            }
+            if (providers == 0) details.add("NO_REGISTERED_PROVIDER: " + recipe.id());
+        }
+        return details.toString();
+    }
+
     public IPatternDetails resolve(GraphRecipe<AEKey> recipe) {
         bindingFailure = "NO_REGISTERED_PATTERN";
         bindingDetail = "";
         IPatternDetails existing = bindings.get(recipe.binding());
         if (existing != null && matches(existing, recipe)) return existing;
         bindings.remove(recipe.binding());
-        for (AEKey key : recipe.outputs().keySet()) {
+        for (AEKey key : recipe.executionOutputs().keySet()) {
             for (IPatternDetails pattern : service.getCraftingFor(key)) {
                 if (matches(pattern, recipe)) {
                     bindings.put(recipe.binding(), pattern);
@@ -99,6 +121,7 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
             if (inputSlot < 0 || inputSlot >= pattern.getInputs().length) return mismatch("INPUT_SLOT_CHANGED", "slot=" + inputSlot + " current_slots=" + pattern.getInputs().length);
             var input = pattern.getInputs()[inputSlot];
             if (slot.configuration() != (pattern.supportsPushInputsToExternalInventory() && GtlDispatchPolicy.configuration(slot.key()))) return mismatch("INPUT_CONFIGURATION_CHANGED", "slot=" + slot);
+            if (slot.reusable() != (pattern.supportsPushInputsToExternalInventory() && GtlDispatchPolicy.reusable(slot.key()))) return mismatch("INPUT_REUSE_CHANGED", "slot=" + slot);
             if (!input.isValid(slot.key(), host.level())) return mismatch("INPUT_NOT_VALID", "slot=" + slot);
             long copies = 0;
             for (var possible : input.getPossibleInputs()) {
@@ -114,7 +137,7 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
         }
         for (int i = 0; i < selectedMultipliers.length; i++) if (selectedMultipliers[i] != pattern.getInputs()[i].getMultiplier())
             return mismatch("INPUT_MULTIPLIER_CHANGED", "slot=" + i + " selected=" + selectedMultipliers[i] + " current=" + pattern.getInputs()[i].getMultiplier());
-        if (!currentOutputs.equals(recipe.outputs())) return mismatch("REMAINDER_OR_OUTPUT_CHANGED", "selected=" + recipe.outputs() + " current=" + currentOutputs);
+        if (!currentOutputs.equals(recipe.executionOutputs())) return mismatch("REMAINDER_OR_OUTPUT_CHANGED", "selected=" + recipe.executionOutputs() + " current=" + currentOutputs);
         bindingFailure = "";
         bindingDetail = "";
         return true;
@@ -194,7 +217,7 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
     @Override
     public GraphJobRuntime.Outcome push(GraphRecipe<AEKey> recipe, long runs, Map<AEKey, Long> inputs) {
         if (selectedProvider == null || selectedBatch != runs) throw new IllegalStateException("Unprepared graph dispatch");
-        for (AEKey key : recipe.outputs().keySet()) {
+        for (AEKey key : recipe.executionOutputs().keySet()) {
             host.requesting(key, true);
             ((GraphRequestTracker) service).gtlcore$expectGraphOutput(key);
         }

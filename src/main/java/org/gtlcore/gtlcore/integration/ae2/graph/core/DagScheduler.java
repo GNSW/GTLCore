@@ -3,11 +3,11 @@ package org.gtlcore.gtlcore.integration.ae2.graph.core;
 import java.math.BigInteger;
 import java.util.*;
 
-/** Ready queue for a proven acyclic flat witness; cyclic stages keep their serial barriers. */
+/** Ready queue for acyclic material flow, allowing tools conserved by every selected recipe. */
 final class DagScheduler<K> {
 
-    private final List<PlanStep.Batch> steps;
-    private final long[] remaining;
+    private final List<String> recipes;
+    private final BigInteger[] remaining;
     private final boolean[] queued;
     private final long[] generation;
     private final Deque<Integer> ready = new ArrayDeque<>();
@@ -16,42 +16,58 @@ final class DagScheduler<K> {
     private int unfinished;
     private int active = -1;
 
-    private DagScheduler(List<PlanStep.Batch> steps, Map<String, GraphRecipe<K>> recipes, Map<String, BigInteger> accepted) {
-        this.steps = List.copyOf(steps);
-        remaining = new long[steps.size()];
-        queued = new boolean[steps.size()];
-        generation = new long[steps.size()];
-        for (int i = 0; i < steps.size(); i++) {
-            PlanStep.Batch step = steps.get(i);
-            remaining[i] = step.runs() - accepted.getOrDefault(step.recipe(), BigInteger.ZERO).longValueExact();
-            if (remaining[i] < 0) throw new IllegalArgumentException("DAG accepted count exceeds plan");
-            if (remaining[i] > 0) {
+    private DagScheduler(Map<String, BigInteger> counts, Map<String, GraphRecipe<K>> recipes, Map<String, BigInteger> accepted) {
+        this.recipes = List.copyOf(counts.keySet());
+        remaining = new BigInteger[counts.size()];
+        queued = new boolean[counts.size()];
+        generation = new long[counts.size()];
+        for (int i = 0; i < this.recipes.size(); i++) {
+            String recipe = this.recipes.get(i);
+            remaining[i] = counts.get(recipe).subtract(accepted.getOrDefault(recipe, BigInteger.ZERO));
+            if (remaining[i].signum() < 0) throw new IllegalArgumentException("DAG accepted count exceeds plan");
+            if (remaining[i].signum() > 0) {
                 unfinished++;
                 enqueue(i);
             }
-            for (K key : recipes.get(step.recipe()).inputs().keySet()) consumers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(i);
+            for (K key : recipes.get(recipe).inputs().keySet()) consumers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(i);
         }
     }
 
     static <K> DagScheduler<K> create(GraphPlan<K> plan, Map<String, BigInteger> accepted) {
-        if (!(plan.steps() instanceof PlanStep.Sequence sequence) || !plan.seeds().isEmpty()) return null;
-        List<PlanStep.Batch> steps = new ArrayList<>();
-        Set<String> unique = new HashSet<>();
+        // Count the shared program without expanding repeats. A long-sized order
+        // can require more than long executions of an intermediate recipe.
+        Map<String, BigInteger> counts = plan.patternTimesExact();
+        List<String> steps = new ArrayList<>(counts.keySet());
+        Set<K> conserved = new HashSet<>(), changed = new HashSet<>();
+        for (String id : steps) {
+            GraphRecipe<K> recipe = plan.recipes().get(id);
+            recipe.inputs().forEach((key, input) -> {
+                if (!recipe.configurationInputs().containsKey(key) && recipe.executionOutputs().getOrDefault(key, 0L).equals(input)) conserved.add(key);
+                else changed.add(key);
+            });
+            recipe.executionOutputs().forEach((key, output) -> {
+                if (!recipe.inputs().getOrDefault(key, 0L).equals(output)) changed.add(key);
+            });
+        }
+        conserved.removeAll(changed);
+        if (!conserved.containsAll(plan.seeds().keySet())) return null;
         Map<K, Integer> lastProducer = new HashMap<>();
-        for (PlanStep step : sequence.children()) {
-            if (!(step instanceof PlanStep.Batch batch) || !unique.add(batch.recipe())) return null;
-            int index = steps.size();
-            steps.add(batch);
-            for (K output : plan.recipes().get(batch.recipe()).outputs().keySet()) lastProducer.put(output, index);
+        for (int i = 0; i < steps.size(); i++) {
+            for (K output : plan.recipes().get(steps.get(i)).executionOutputs().keySet()) lastProducer.put(output, i);
         }
         for (int i = 0; i < steps.size(); i++) {
-            for (K input : plan.recipes().get(steps.get(i).recipe()).inputs().keySet()) {
+            for (K input : plan.recipes().get(steps.get(i)).inputs().keySet()) {
+                // Every use returns exactly what it took. Actual owned stock
+                // still gates dispatch, and all returns must arrive to finish.
+                // Removing only these edges lets consumers free a full buffer
+                // without imposing a serial barrier across a shared tool.
+                if (conserved.contains(input)) continue;
                 // No resource can be regenerated by this or any later operation.
                 // Thus arbitrary ready-node dispatch cannot steal a cyclic seed.
                 if (lastProducer.getOrDefault(input, -1) >= i) return null;
             }
         }
-        return new DagScheduler<>(steps, plan.recipes(), accepted);
+        return new DagScheduler<>(counts, plan.recipes(), accepted);
     }
 
     PlanStep.Batch poll(long tick) {
@@ -65,13 +81,13 @@ final class DagScheduler<K> {
         }
         active = ready.removeFirst();
         queued[active] = false;
-        return new PlanStep.Batch(steps.get(active).recipe(), remaining[active]);
+        return new PlanStep.Batch(recipes.get(active), ExactAmounts.capped(remaining[active]));
     }
 
     void accepted(long runs) {
-        if (active < 0 || runs <= 0 || runs > remaining[active]) throw new IllegalArgumentException("No prepared DAG batch");
-        remaining[active] -= runs;
-        if (remaining[active] == 0) unfinished--;
+        if (active < 0 || runs <= 0 || BigInteger.valueOf(runs).compareTo(remaining[active]) > 0) throw new IllegalArgumentException("No prepared DAG batch");
+        remaining[active] = remaining[active].subtract(BigInteger.valueOf(runs));
+        if (remaining[active].signum() == 0) unfinished--;
         else enqueue(active);
     }
 
@@ -84,7 +100,7 @@ final class DagScheduler<K> {
     }
 
     private void enqueue(int index) {
-        if (remaining[index] <= 0 || queued[index]) return;
+        if (remaining[index].signum() <= 0 || queued[index]) return;
         generation[index]++;
         queued[index] = true;
         ready.addLast(index);

@@ -116,6 +116,16 @@ public class VirtualIngredientBehavior implements IItemUIFactory, IAddInformatio
         return payloadItemKey(wrapper) != null || payloadFluidKey(wrapper) != null;
     }
 
+    /** The published token depends on its payload, not unused UI storage tags or its display name. */
+    public static ItemStack canonicalStack(ItemStack wrapper) {
+        if (!GTLItems.VIRTUAL_INGREDIENT.isIn(wrapper)) return ItemStack.EMPTY;
+        ItemStack item = getItemStorage(wrapper).getStackInSlot(0);
+        FluidStack fluid = getFluidStorage(wrapper).getFluidInTank(0);
+        // Do not turn a malformed wrapper carrying two payloads into two supplies.
+        if (item.isEmpty() == fluid.isEmpty()) return ItemStack.EMPTY;
+        return item.isEmpty() ? wrap(fluid) : wrap(item);
+    }
+
     /** Sealed on creation: built for publishing, not for the player to edit. */
     public static ItemStack wrap(ItemStack payload) {
         ItemStack wrapper = new ItemStack(GTLItems.VIRTUAL_INGREDIENT.asItem());

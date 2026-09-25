@@ -714,6 +714,11 @@ public final class TransfiniteCraftingLogic implements ICraftingJobSuspension, I
     }
 
     @Override
+    public boolean unboundedJobStorage() {
+        return true;
+    }
+
+    @Override
     public long dispatchCapacity() {
         return this.cpu.getParallelism();
     }

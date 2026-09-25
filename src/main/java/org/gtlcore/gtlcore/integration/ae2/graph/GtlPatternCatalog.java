@@ -412,7 +412,8 @@ public final class GtlPatternCatalog {
                 if (input.isValid(choice.stack().what(), level)) {
                     budget.reserve(64);
                     selected = List.of(new CapturedPattern.Candidate(choice.stack(), choice.remaining(),
-                            values.external() && GtlDispatchPolicy.configuration(choice.stack().what())));
+                            values.external() && GtlDispatchPolicy.configuration(choice.stack().what()),
+                            values.external() && GtlDispatchPolicy.reusable(choice.stack().what())));
                 } else selected = List.of();
                 capturedInputs.add(new CapturedPattern.Input(inputValues.multiplier(), selected));
                 if (++inputSlot == inputs.length || selected.isEmpty()) {
@@ -460,7 +461,8 @@ public final class GtlPatternCatalog {
             if (!declared) remaining = input.getRemainingKey(candidate.what());
             budget.reserve(64);
             capturedCandidates.add(new CapturedPattern.Candidate(candidate, remaining,
-                    values.external() && GtlDispatchPolicy.configuration(candidate.what())));
+                    values.external() && GtlDispatchPolicy.configuration(candidate.what()),
+                    values.external() && GtlDispatchPolicy.reusable(candidate.what())));
             if (!capturing.hasNext()) {
                 capturedInputs.add(new CapturedPattern.Input(inputValues.multiplier(), capturedCandidates));
                 capturedCandidates.clear();

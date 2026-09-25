@@ -62,7 +62,7 @@ final class DemandExpansion<K> {
         if (phase == 0) {
             if (indexing.hasNext()) {
                 GraphRecipe<K> recipe = indexing.next();
-                for (K key : recipe.outputs().keySet()) {
+                for (K key : recipe.executionOutputs().keySet()) {
                     budget.check();
                     producers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(recipe);
                     reserve(96);
@@ -395,7 +395,7 @@ final class DemandExpansion<K> {
 
     private record Change<K>(K key, BigInteger previous) {}
 
-    private record Producer<K>(GraphRecipe<K> recipe, int blocked, int missing) {}
+    private record Producer<K>(GraphRecipe<K> recipe, int blocked, int missing, BigInteger fundedOutput) {}
 
     private final class Frame {
 
@@ -425,15 +425,25 @@ final class DemandExpansion<K> {
                 List<Producer<K>> ranked = new ArrayList<>(candidates.size());
                 for (GraphRecipe<K> recipe : candidates) {
                     int blocked = 0, missing = 0;
+                    BigInteger funded = null;
                     for (var input : recipe.inputs().entrySet()) {
                         budget.check();
+                        if (preview) {
+                            BigInteger runs = amount(input.getKey()).divide(BigInteger.valueOf(input.getValue()));
+                            funded = funded == null ? runs : funded.min(runs);
+                        }
                         if (amount(input.getKey()).compareTo(BigInteger.valueOf(input.getValue())) >= 0) continue;
                         missing++;
                         if (input.getKey().equals(key) || active.containsKey(input.getKey())) blocked++;
                     }
-                    ranked.add(new Producer<>(recipe, blocked, missing));
+                    ranked.add(new Producer<>(recipe, blocked, missing,
+                            funded == null ? wanted : funded.multiply(BigInteger.valueOf(recipe.outputs().get(key)))));
                 }
-                ranked.sort(Comparator.comparingInt(Producer<K>::blocked).thenComparingInt(Producer<K>::missing));
+                Comparator<Producer<K>> ordering = Comparator.comparingInt(Producer<K>::blocked).thenComparingInt(Producer<K>::missing);
+                // Diagnostic refills should first try a route that can cover the
+                // request with the supplied stock, retaining every other source.
+                if (preview) ordering = ordering.thenComparing(Producer<K>::fundedOutput, Comparator.reverseOrder());
+                ranked.sort(ordering);
                 alternatives = ranked.stream().map(Producer::recipe).toList();
             }
         }

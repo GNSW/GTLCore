@@ -28,9 +28,7 @@ public final class RegionSelection<K> {
     private final Set<K> produced = new LinkedHashSet<>();
     private final List<List<GraphRecipe<K>>> permutations = new ArrayList<>();
     private int phase, index, order, variant;
-    private int missing, bestMissing = Integer.MAX_VALUE;
-    private int absentSeedTypes, bestAbsentSeedTypes;
-    private BigInteger missingAmount, bestMissingAmount;
+    private int missing;
     private BigInteger runs;
     private List<PlanStep> children;
     private PlanStep body;
@@ -40,14 +38,19 @@ public final class RegionSelection<K> {
     private Iterator<K> keys;
     private BigInteger count;
     private Map<K, Long> reserve;
-    private boolean possible;
+    private boolean possible, needsWork;
     private Choice<K> best;
+    private PlanPreference<K> preference;
     private CatalystPolicy catalystPolicy = CatalystPolicy.MINIMAL;
     private boolean scaled;
     private int workingCopies = 1;
     private RegionOrder<K> ordering;
     private List<GraphRecipe<K>> preferredOrder;
     private final long searchStarted;
+    private RegionCounts<K> counts;
+    private long countWork;
+    private RegionSelection<K> single;
+    private boolean triedSingles;
 
     public RegionSelection(GraphCompiler.Region<K> region, Map<K, BigInteger> demand, Map<K, Long> stock,
                            K target, long amount, boolean preserve, boolean forceTarget, Set<K> external, PlanningBudget budget, CatalystPolicy policy, Map<K, Long> catalystStock) {
@@ -84,13 +87,13 @@ public final class RegionSelection<K> {
         // Keep a concrete candidate even when this local search is cut short.
         // Its deficits do not prove that stock is missing: the caller must still
         // try other allocations or independently prove that no plan can start.
-        if (phase != 8 && region.cyclic() && budget.nodes() - searchStarted > 32_768L + 128L * recipes.size()) {
+        if (phase != 8 && phase != 10 && phase != 11 && region.cyclic() && budget.nodes() - searchStarted - countWork > 32_768L + 128L * recipes.size()) {
             if (ordering != null) {
                 ordering.close();
                 ordering = null;
             }
             phase = 8;
-            return true;
+            return complete();
         }
         switch (phase) {
             case 0 -> {
@@ -99,6 +102,12 @@ public final class RegionSelection<K> {
                     byId.put(recipe.id(), recipe);
                     produced.addAll(recipe.outputs().keySet());
                 } else {
+                    if (region.cyclic() && recipes.size() > 6) {
+                        counts = new RegionCounts<>(recipes, demand, stock, external, target, amount, forceTarget, preserve, budget);
+                        countWork = budget.nodes();
+                        phase = 10;
+                        return false;
+                    }
                     if (recipes.size() > 2 && recipes.size() <= 6) permutations(new ArrayList<>(recipes), 0);
                     if (region.cyclic() && recipes.size() > 2) {
                         ordering = new RegionOrder<>(recipes, produced, stock, external, budget);
@@ -148,6 +157,7 @@ public final class RegionSelection<K> {
                     keys = produced.iterator();
                     count = BigInteger.ZERO;
                     possible = true;
+                    needsWork = false;
                     phase = 4;
                 }
             }
@@ -155,17 +165,22 @@ public final class RegionSelection<K> {
                 if (keys.hasNext()) {
                     K key = keys.next();
                     BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    needsWork |= gap.signum() > 0;
                     BigInteger gain = unitSummary.delta(key);
                     if (gain.signum() > 0) count = count.max(CheckedAmounts.ceilDiv(gap, gain));
                     else if (gap.signum() > 0 && summary.required(key).signum() == 0) possible = false;
                 } else {
+                    // Zero iterations cannot supply a remaining regional
+                    // demand. Otherwise a lossy conversion cycle wins as an
+                    // apparently free plan before its useful direction is tried.
+                    if (count.signum() == 0 && needsWork) possible = false;
                     if (forceTarget && produced.contains(target)) {
                         if (unitSummary.delta(target).signum() <= 0) possible = false;
                         else count = count.max(CheckedAmounts.ceilDiv(BigInteger.valueOf(amount), unitSummary.delta(target)));
                     }
                     if (!possible) {
                         nextTrial();
-                        return phase == 8;
+                        return complete();
                     }
                     if (recipes.size() > 1 && count.signum() > 0 && count.compareTo(BigInteger.valueOf(workingCopies)) < 0) {
                         workingCopies = count.intValueExact();
@@ -223,17 +238,9 @@ public final class RegionSelection<K> {
                     BigInteger deficit = required.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
                     if (!external.contains(key) && deficit.signum() > 0) {
                         missing++;
-                        if (stock.getOrDefault(key, 0L) == 0) absentSeedTypes++;
-                        missingAmount = missingAmount.add(deficit);
                     }
                 } else {
-                    if (best == null || missing < bestMissing || missing == bestMissing &&
-                            (absentSeedTypes < bestAbsentSeedTypes || absentSeedTypes == bestAbsentSeedTypes && missingAmount.compareTo(bestMissingAmount) < 0)) {
-                        best = new Choice<>(body, summary, runs, Map.copyOf(reserve));
-                        bestMissing = missing;
-                        bestAbsentSeedTypes = absentSeedTypes;
-                        bestMissingAmount = missingAmount;
-                    }
+                    consider(new Choice<>(body, summary, runs, Map.copyOf(reserve)));
                     if (missing == 0) phase = 8;
                     else nextTrial();
                 }
@@ -252,11 +259,95 @@ public final class RegionSelection<K> {
                     phase = 1;
                 }
             }
+            case 10 -> {
+                if (!counts.step()) return false;
+                best = counts.result();
+                counts.close();
+                counts = null;
+                countWork = budget.nodes() - countWork;
+                if (best != null) phase = 8;
+                else {
+                    ordering = new RegionOrder<>(recipes, produced, stock, external, budget);
+                    phase = 9;
+                }
+            }
+            case 11 -> {
+                if (index >= recipes.size()) {
+                    phase = 8;
+                    return true;
+                }
+                if (single == null) {
+                    GraphRecipe<K> recipe = recipes.get(index);
+                    single = new RegionSelection<>(new GraphCompiler.Region<>(List.of(recipe),
+                            !Collections.disjoint(recipe.inputs().keySet(), recipe.outputs().keySet())), demand, stock,
+                            target, amount, preserve, forceTarget, external, budget, catalystPolicy, catalystStock);
+                }
+                if (!single.step()) return false;
+                Choice<K> choice = single.result();
+                single = null;
+                index++;
+                if (choice != null && choice.runs().signum() > 0 &&
+                        (!forceTarget || !produced.contains(target) || choice.summary().delta(target).signum() > 0) &&
+                        produced.stream().allMatch(key -> demand.getOrDefault(key, BigInteger.ZERO).compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) <= 0 ||
+                                choice.summary().delta(key).signum() > 0 || choice.summary().required(key).signum() > 0)) {
+                    // A conversion cycle need not run every recipe. A single
+                    // direction can be a valid funded preview even when a full
+                    // traversal has zero net gain. The caller proves missing
+                    // stock independently and verifies the complete program.
+                    consider(choice);
+                    if (recipes.size() > 6) phase = 8;
+                }
+            }
             default -> {
                 return true;
             }
         }
+        return complete();
+    }
+
+    private boolean complete() {
+        if (phase == 8 && (best == null || region.recipes().size() <= 6 && best.runs().signum() > 0) &&
+                region.cyclic() && region.recipes().size() > 1 && !triedSingles) {
+            triedSingles = true;
+            phase = 11;
+            index = 0;
+        }
         return phase == 8;
+    }
+
+    private void consider(Choice<K> choice) {
+        if (best != null && preference == null) preference = PlanPreference.of(best, produced, demand, stock, external, budget);
+        if (preference != null && cannotPreferStartup(choice)) return;
+        PlanPreference<K> next = PlanPreference.of(choice, produced, demand, stock, external, budget);
+        // When resource vectors are incomparable, retain the existing startup
+        // policy: prefer topping up a known catalyst to introducing an absent
+        // catalyst type. This is a choice heuristic, never a dominance proof.
+        if (best == null || next.preferredTo(preference) || !preference.preferredTo(next) &&
+                next.absentRequirements(produced, stock) < preference.absentRequirements(produced, stock)) {
+            best = choice;
+            preference = next;
+        }
+    }
+
+    private boolean cannotPreferStartup(Choice<K> choice) {
+        int absent = 0;
+        boolean largerDeficit = false;
+        BigInteger runs = choice.runs(), preceding = runs.subtract(BigInteger.ONE).max(BigInteger.ZERO);
+        for (K key : produced) {
+            budget.check();
+            if (external.contains(key)) continue;
+            BigInteger delta = choice.summary().delta(key);
+            BigInteger prefix = runs.signum() == 0 ? BigInteger.ZERO : choice.summary().required(key)
+                    .add(delta.negate().max(BigInteger.ZERO).multiply(preceding));
+            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
+            BigInteger deficit = prefix.max(goal.subtract(delta.multiply(runs)))
+                    .subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L))).max(BigInteger.ZERO);
+            largerDeficit |= deficit.compareTo(preference.missing(key)) > 0;
+            if (deficit.signum() > 0 && stock.getOrDefault(key, 0L) == 0) absent++;
+        }
+        // One worse deficit already rules out vector improvement. Only the
+        // explicit catalyst-startup tie-break can still select this ordering.
+        return largerDeficit && absent >= preference.absentRequirements(produced, stock);
     }
 
     private PlanStep parallelBody(long copies) {
@@ -271,8 +362,6 @@ public final class RegionSelection<K> {
     private void beginValidation() {
         keys = produced.iterator();
         missing = 0;
-        absentSeedTypes = 0;
-        missingAmount = BigInteger.ZERO;
         phase = 6;
     }
 

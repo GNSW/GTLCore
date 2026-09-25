@@ -58,6 +58,8 @@ public final class GraphJobRuntime<K> {
     private long replanEpoch;
     private final Map<String, BigInteger> pendingRuns = new LinkedHashMap<>();
     private final Map<K, BigInteger> pendingOutputs = new LinkedHashMap<>();
+    private final Map<K, BigInteger> pendingInputs = new LinkedHashMap<>();
+    private final Deque<K> streamingOutputs = new ArrayDeque<>();
     private final Set<K> changedKeys = new LinkedHashSet<>();
     private Map<K, Long> uncertainInputs = Map.of();
     private Map<K, Long> preparedOutputs;
@@ -118,7 +120,13 @@ public final class GraphJobRuntime<K> {
         this.dag = DagScheduler.create(plan, acceptedRuns);
         this.pipeline = dag == null ? new PipelineScheduler<>(cursor, plan.recipes(), saved.pipeline()) : null;
         if (dag == null && !remainingCounts.equals(pipeline.remainingCounts())) throw new IllegalArgumentException("Cursor and accepted batch counts disagree");
-        if (dag != null && (!saved.cursor().isEmpty() || !saved.pipeline().isEmpty())) throw new IllegalArgumentException("Unexpected serial cursor for DAG");
+        if (dag != null && (!saved.cursor().isEmpty() || !saved.pipeline().isEmpty())) {
+            // Older versions used the serial pipeline for repeated acyclic
+            // programs. Check its exact remainder before migrating to the DAG;
+            // accepted outputs and their ownership remain untouched.
+            var previous = new PipelineScheduler<>(cursor, plan.recipes(), saved.pipeline());
+            if (!remainingCounts.equals(previous.remainingCounts())) throw new IllegalArgumentException("Cursor and accepted batch counts disagree");
+        }
         remainingDelivery = CheckedAmounts.nonNegative(saved.remainingDelivery());
         if (remainingDelivery > plan.amount()) throw new IllegalArgumentException("Invalid delivery remainder");
         state = saved.state();
@@ -133,12 +141,29 @@ public final class GraphJobRuntime<K> {
 
     private void initializePending() {
         if (state == State.CANCELLING || finished()) return;
+        Map<K, BigInteger> consumed = new LinkedHashMap<>();
         plan.patternTimesExact().forEach((id, count) -> {
             BigInteger remaining = count.subtract(acceptedRuns.getOrDefault(id, BigInteger.ZERO));
             if (remaining.signum() == 0) return;
             pendingRuns.put(id, remaining);
-            plan.recipes().get(id).outputs().forEach((key, amount) -> pendingOutputs.merge(key,
+            plan.recipes().get(id).executionOutputs().forEach((key, amount) -> pendingOutputs.merge(key,
                     remaining.multiply(BigInteger.valueOf(amount)), BigInteger::add));
+            // Gross future input use is deliberately conservative: it cannot
+            // release a catalyst merely because its net consumption is zero.
+            plan.recipes().get(id).inputs().forEach((key, amount) -> pendingInputs.merge(key,
+                    remaining.multiply(BigInteger.valueOf(amount)), BigInteger::add));
+            var recipe = plan.recipes().get(id);
+            recipe.inputs().forEach((key, amount) -> consumed.merge(key,
+                    remaining.multiply(BigInteger.valueOf(amount - recipe.configurationInputs().getOrDefault(key, 0L))), BigInteger::add));
+        });
+        pendingOutputs.forEach((key, amount) -> {
+            // Intermediate material is drained by its consumers. Only a possible
+            // final surplus needs early settlement; do not stream a repeatedly
+            // returned catalyst just because its gross turnover exceeds long.
+            if (amount.subtract(consumed.getOrDefault(key, BigInteger.ZERO))
+                    .add(BigInteger.valueOf(owned.get(key))).add(BigInteger.valueOf(expected.getOrDefault(key, 0L)))
+                    .compareTo(ExactAmounts.LONG_MAX) > 0)
+                streamingOutputs.add(key);
         });
         changedKeys.addAll(owned.snapshot().keySet());
         changedKeys.addAll(expected.keySet());
@@ -151,13 +176,16 @@ public final class GraphJobRuntime<K> {
             return 0;
         }
         if (state != State.RUNNING || suspended || replanning) return 0;
+        drainSurplus(adapter, workBudget);
+        if (state != State.RUNNING) return 0;
         int pushed = 0;
         long deadline = System.nanoTime() + 2_000_000L;
         int checkBudget = (int) Math.min(4096L, Math.max(0L, workBudget) + PipelineScheduler.WINDOW);
         for (int work = 0; pushed < workBudget && work < checkBudget && state == State.RUNNING; work++) {
             if (work > 0 && System.nanoTime() - deadline >= 0) break;
             checks++;
-            PlanStep.Batch step = dag == null ? pipeline.poll(tick) : dag.poll(tick);
+            PlanStep.Batch step = dag == null ? pipeline.poll(tick,
+                    key -> CheckedAmounts.add(owned.get(key), expected.getOrDefault(key, 0L))) : dag.poll(tick);
             if (step == null) {
                 if (expected.isEmpty() && (dag == null ? pipeline.finished() : dag.finished())) {
                     if (!seedsHeld()) {
@@ -188,7 +216,7 @@ public final class GraphJobRuntime<K> {
                 else if (input.getValue() > fixed) batch = Math.min(batch, (available - fixed) / (input.getValue() - fixed));
             }
             boolean missingInput = batch == 0;
-            for (var output : recipe.outputs().entrySet()) {
+            for (var output : recipe.executionOutputs().entrySet()) {
                 batch = Math.min(batch, Long.MAX_VALUE / output.getValue());
                 long fixed = recipe.configurationInputs().getOrDefault(output.getKey(), 0L);
                 long net = output.getValue() - (recipeInputs.getOrDefault(output.getKey(), 0L) - fixed);
@@ -199,7 +227,7 @@ public final class GraphJobRuntime<K> {
                 }
             }
             if (batch == 0) {
-                reason = "WAIT_INPUT";
+                reason = missingInput ? "WAIT_INPUT" : "WAIT_INVENTORY_CAPACITY";
                 if (dag != null) {
                     // Actual input insertion already wakes precisely its consumers.
                     // Only capacity/provider waits need polling without a callback.
@@ -229,7 +257,7 @@ public final class GraphJobRuntime<K> {
                 continue;
             }
             Map<K, Long> outputs = new LinkedHashMap<>();
-            for (var output : recipe.outputs().entrySet()) outputs.put(output.getKey(), CheckedAmounts.multiply(output.getValue(), batch));
+            for (var output : recipe.executionOutputs().entrySet()) outputs.put(output.getKey(), CheckedAmounts.multiply(output.getValue(), batch));
             Map<K, Long> combined = new LinkedHashMap<>(expected);
             outputs.forEach((key, amount) -> combined.merge(key, amount, CheckedAmounts::add));
             Map<K, Long> escrow = owned.take(recipe.dispatchInputs(batch), 1);
@@ -260,10 +288,16 @@ public final class GraphJobRuntime<K> {
                 if (dag == null) pipeline.accepted(batch);
                 else dag.accepted(batch);
                 acceptedRuns.merge(recipe.id(), BigInteger.valueOf(batch), BigInteger::add);
+                BigInteger sent = BigInteger.valueOf(batch);
+                recipe.inputs().forEach((key, amount) -> {
+                    BigInteger remaining = pendingInputs.get(key).subtract(sent.multiply(BigInteger.valueOf(amount)));
+                    if (remaining.signum() == 0) pendingInputs.remove(key);
+                    else pendingInputs.put(key, remaining);
+                });
                 BigInteger undispatched = pendingRuns.get(recipe.id()).subtract(BigInteger.valueOf(batch));
                 if (undispatched.signum() == 0) pendingRuns.remove(recipe.id());
                 else pendingRuns.put(recipe.id(), undispatched);
-                for (var output : recipe.outputs().entrySet()) {
+                for (var output : recipe.executionOutputs().entrySet()) {
                     BigInteger remaining = pendingOutputs.get(output.getKey()).subtract(BigInteger.valueOf(output.getValue()).multiply(BigInteger.valueOf(batch)));
                     if (remaining.signum() == 0) pendingOutputs.remove(output.getKey());
                     else pendingOutputs.put(output.getKey(), remaining);
@@ -389,6 +423,49 @@ public final class GraphJobRuntime<K> {
         }
     }
 
+    private void drainSurplus(Adapter<K> adapter, int budget) {
+        int limit = Math.min(32, Math.max(0, budget));
+        int transfers = 0;
+        int visits = Math.min(limit, streamingOutputs.size());
+        for (int i = 0; i < visits && transfers < limit && state == State.RUNNING; i++) {
+            // A full destination must not starve other keys of their headroom.
+            K key = streamingOutputs.removeFirst();
+            streamingOutputs.addLast(key);
+            BigInteger reserved = pendingInputs.getOrDefault(key, BigInteger.ZERO)
+                    .add(BigInteger.valueOf(plan.seeds().getOrDefault(key, 0L)));
+            BigInteger spare = BigInteger.valueOf(owned.get(key)).subtract(reserved);
+            if (spare.signum() <= 0) continue;
+            long available = spare.longValueExact();
+            if (key.equals(plan.target()) && remainingDelivery > 0) {
+                long sent = transfer(adapter, key, Math.min(available, remainingDelivery), true);
+                if (sent < 0) return;
+                remainingDelivery -= sent;
+                available -= sent;
+                transfers++;
+                if (sent > 0) changed();
+                if (cancelRequested) {
+                    cancel();
+                    return;
+                }
+                // Undelivered target stock is still reserved for this order.
+                available = Math.max(0, available - remainingDelivery);
+            }
+            if (available > 0 && transfers < limit) {
+                long sent = transfer(adapter, key, available, false);
+                if (sent < 0) return;
+                transfers++;
+                if (sent > 0) changed();
+                if (cancelRequested) {
+                    cancel();
+                    return;
+                }
+            }
+            changedKeys.add(key);
+            if (dag != null) dag.resourceChanged(key);
+            else pipeline.resourceChanged(key);
+        }
+    }
+
     private static long validTransfer(long accepted, long offered) {
         if (accepted < 0 || accepted > offered) throw new IllegalStateException("Invalid external transfer result");
         return accepted;
@@ -431,6 +508,8 @@ public final class GraphJobRuntime<K> {
         obligations.clear();
         pendingOutputs.clear();
         pendingRuns.clear();
+        pendingInputs.clear();
+        streamingOutputs.clear();
         state = State.CANCELLING;
         reason = "CANCELLED";
         changed();
@@ -493,8 +572,8 @@ public final class GraphJobRuntime<K> {
         extraExternal.forEach((key, count) -> projected.merge(key, CheckedAmounts.nonNegative(count), CheckedAmounts::add));
         for (var required : replacement.initial().entrySet())
             if (projected.getOrDefault(required.getKey(), 0L) < required.getValue()) throw new IllegalArgumentException("Unfunded replacement suffix");
-        // Include surplus from the old prefix in the long/peak check, even if the
-        // replacement no longer consumes it. It remains physically owned until refund.
+        // Surplus from the old prefix remains owned until an actual refund.
+        // Verify the whole initial reservation before replacing the suffix.
         PlanVerifier.verifyRuntimeInventory(new GraphPlan<>(replacement.target(), replacement.amount(), replacement.preserveSeeds(), replacement.steps(),
                 replacement.recipes(), projected, replacement.seeds(), Map.of(), GraphPlan.Result.FEASIBLE, 0, 0));
         Map<String, BigInteger> history = new LinkedHashMap<>(committedHistory);
@@ -511,6 +590,8 @@ public final class GraphJobRuntime<K> {
         changedKeys.addAll(pendingOutputs.keySet());
         pendingRuns.clear();
         pendingOutputs.clear();
+        pendingInputs.clear();
+        streamingOutputs.clear();
         plan = replacement;
         cursor = newCursor;
         dag = newDag;

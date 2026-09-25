@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.ToLongFunction;
 
 /** Bounded lookahead over the verified witness, with a feasible-prefix reservation. */
@@ -30,7 +31,19 @@ final class PipelineScheduler<K> {
     }
 
     PlanStep.Batch poll(long tick) {
+        return poll(tick, null);
+    }
+
+    PlanStep.Batch poll(long tick, ToLongFunction<K> forecast) {
         while (window.size() < WINDOW) {
+            if (forecast != null) {
+                var group = cursor.takeLoopBatch(recipes, WINDOW - window.size(), () -> suffixStock(forecast));
+                if (group != null) {
+                    if (group.isEmpty()) break;
+                    group.forEach(this::append);
+                    continue;
+                }
+            }
             var batch = cursor.current();
             if (batch == null) break;
             append(batch);
@@ -51,6 +64,18 @@ final class PipelineScheduler<K> {
         }
         active = -1;
         return null;
+    }
+
+    private Function<K, BigInteger> suffixStock(ToLongFunction<K> forecast) {
+        Map<K, BigInteger> changes = new LinkedHashMap<>();
+        for (Entry entry : window) {
+            GraphRecipe<K> recipe = recipes.get(entry.recipe);
+            if (!LoopBatching.fixedPerRun(recipe)) return null;
+            BigInteger count = BigInteger.valueOf(entry.remaining);
+            recipe.inputs().forEach((key, amount) -> changes.merge(key, count.multiply(BigInteger.valueOf(amount)).negate(), BigInteger::add));
+            recipe.outputs().forEach((key, amount) -> changes.merge(key, count.multiply(BigInteger.valueOf(amount)), BigInteger::add));
+        }
+        return key -> BigInteger.valueOf(forecast.applyAsLong(key)).add(changes.getOrDefault(key, BigInteger.ZERO));
     }
 
     private void append(PlanStep.Batch batch) {
@@ -84,7 +109,7 @@ final class PipelineScheduler<K> {
                 peak = peak.max(delta.add(change.max(BigInteger.ZERO).multiply(count)));
                 delta = delta.add(change.multiply(count));
             }
-            long fixed = recipe.configurationInputs().getOrDefault(key, 0L);
+            long fixed = recipe.configurationInputs().getOrDefault(key, 0L) - recipe.reusableInputs().getOrDefault(key, 0L);
             BigInteger base = BigInteger.valueOf(forecast.applyAsLong(key)).subtract(BigInteger.valueOf(fixed));
             BigInteger net = BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L))
                     .subtract(BigInteger.valueOf(recipe.inputs().getOrDefault(key, 0L) - fixed));

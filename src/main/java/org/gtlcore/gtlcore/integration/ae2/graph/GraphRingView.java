@@ -96,8 +96,8 @@ public final class GraphRingView {
                 var recipe = plan.recipes().get(entry.getKey());
                 if (recipe.inputs().size() > 512 || recipe.outputs().size() > 512)
                     throw new IllegalArgumentException("Too many graph display slots");
-                all.add(new Row(Kind.RECIPE, entry.getKey(), stacks(recipe.outputs()).get(0), entry.getValue(), 0, 0,
-                        stacks(recipe.inputs()), stacks(recipe.outputs()), -1));
+                all.add(new Row(Kind.RECIPE, entry.getKey(), stacks(recipe.executionOutputs()).get(0), entry.getValue(), 0, 0,
+                        stacks(recipe.inputs()), stacks(recipe.executionOutputs()), -1));
             } else if (!pending.isEmpty()) {
                 var target = new GenericStack(plan.target(), plan.amount());
                 var next = pending.peek();

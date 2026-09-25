@@ -32,7 +32,7 @@ import java.util.UUID;
 
 public class WirelessNetworkCoreBlock extends MetaMachineBlock {
 
-    public static final DirectionProperty FACING = RotationState.NON_Y_AXIS.property;
+    public static final DirectionProperty FACING = RotationState.ALL.property;
 
     public WirelessNetworkCoreBlock() {
         super(prepareProperties(), WirelessNetworkCoreBlockEntity.definition());
@@ -90,7 +90,7 @@ public class WirelessNetworkCoreBlock extends MetaMachineBlock {
     }
 
     private static BlockBehaviour.Properties prepareProperties() {
-        RotationState.set(RotationState.NON_Y_AXIS);
+        RotationState.set(RotationState.ALL);
         return BlockBehaviour.Properties.of()
                 .mapColor(MapColor.COLOR_PURPLE)
                 .strength(5.0F)

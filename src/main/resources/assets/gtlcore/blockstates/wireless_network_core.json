@@ -1,8 +1,10 @@
-﻿{
+{
   "variants": {
     "facing=north": { "model": "gtlcore:block/wireless_network_core" },
     "facing=east": { "model": "gtlcore:block/wireless_network_core", "y": 90 },
     "facing=south": { "model": "gtlcore:block/wireless_network_core", "y": 180 },
-    "facing=west": { "model": "gtlcore:block/wireless_network_core", "y": 270 }
+    "facing=west": { "model": "gtlcore:block/wireless_network_core", "y": 270 },
+    "facing=up": { "model": "gtlcore:block/wireless_network_core", "x": 270 },
+    "facing=down": { "model": "gtlcore:block/wireless_network_core", "x": 90 }
   }
 }

@@ -44,11 +44,13 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     CountNetwork network;
     BigInteger[] separatorPartial;
     boolean separatorCandidate;
+    boolean structuralCandidate;
     CountGroups groups;
     CountConditioning conditioning;
     CountRecovery<K> recovery;
     CountScale scaling;
     CountDiophantine diophantine;
+    CountStructureSearch structural;
     CountCongruence congruence;
     CountPacking packing;
     CountJump jumping;
@@ -76,10 +78,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     CountDomainSearch cdcl;
     CountModelViews modelViews;
     CountViewSearch viewSearch;
+    CountLpSearch lpSearch;
+    boolean lpTried, lpActive, lpResuming, preferLpResume = true;
     int viewStage, viewCandidateStage;
     CountLcg auxiliaryLcg;
     int auxiliaryMode;
     long auxiliaryWork;
+    long auxiliaryUntil = 262144;
+    boolean auxiliaryCompared, auxiliaryLive;
     CountDecisionDiagram diagram;
     CountObbt obbt;
     boolean gomoryTried;
@@ -97,6 +103,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     ExactRational[] branchProbePoint;
     ExactLinearProgram linear;
     ExactLinearProgram.Basis inheritedBasis, sharedBasis;
+    boolean inheritedBasisOriginal, sharedBasisOriginal;
     CountReduction.Coordinates inheritedCoordinates;
     CountSchedule<K> scheduling;
     CountSupportSearch<K> supportSearch;
@@ -182,7 +189,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (propagating != null) propagating.learn(choices);
             do {
                 if (stopped.getAsBoolean()) return;
-                if (auxiliaryMode != 0 && auxiliaryWork + budget.threadWork() - before >= 262144) {
+                if (auxiliaryMode != 0 && auxiliaryWork + budget.threadWork() - before >= auxiliaryUntil) {
                     state = State.UNRESOLVED;
                     return;
                 }
@@ -197,17 +204,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                     String strategy = activeStrategy();
                     long start = System.nanoTime();
                     try {
-                        advance();
+                        advance(before, quantum, stopped);
                     } finally {
                         budget.strategy(strategy, budget.threadWork() - scheduleBefore, System.nanoTime() - start);
                     }
-                } else advance();
+                } else advance(before, quantum, stopped);
                 if (inSchedule) schedulingWork += budget.threadWork() - scheduleBefore;
-                if (scheduling != null && (jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || viewCandidateStage != 0) && schedulingWork >= 8192) {
-                    scheduling.close();
-                    scheduling = null;
-                    counts = null;
-                    resumeSpeculativeCandidate();
+                if (scheduling != null && speculativeCandidate() && schedulingWork >= 8192) {
+                    rejectSpeculativeCandidate();
                     return;
                 }
                 if (scheduling != null && !partitioned && schedulingWork >= 8192) {
@@ -229,7 +233,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         }
     }
 
-    private void advance() {
+    private void advance(long runStart, long quantum, BooleanSupplier stopped) {
         if (upper != null) while (checkedChoices < knownChoices.size()) {
             var conflict = knownChoices.get(checkedChoices++);
             if (conflict.impliedBy(lower, upper, budget)) {
@@ -284,11 +288,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (status == CountSchedule.Result.WITNESS) beginAssembly(scheduling.witness());
             scheduling.close();
             scheduling = null;
-            if ((jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || viewCandidateStage != 0) && status != CountSchedule.Result.WITNESS) {
+            if (speculativeCandidate() && status != CountSchedule.Result.WITNESS) {
                 // Failure to schedule a local-search candidate must leave the
                 // original count domain and all the other strategies available.
-                counts = null;
-                resumeSpeculativeCandidate();
+                rejectSpeculativeCandidate();
                 return;
             }
             if (status == CountSchedule.Result.DEAD) {
@@ -338,6 +341,26 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             program = new CountProgram<>(model.recipes, counts, budget);
             return;
         }
+        if (lpActive) {
+            if (!lpSearch.step()) return;
+            lpActive = false;
+            counts = lpSearch.counts();
+            boolean impossible = lpSearch.infeasible();
+            if (!lpSearch.retained()) {
+                lpSearch.close();
+                lpSearch = null;
+            }
+            int continuation = lpResuming ? 4 : 2;
+            if (counts != null) {
+                viewCandidateStage = continuation;
+                schedulingWork = 0;
+                scheduling = new CountSchedule<>(model, counts, budget);
+            } else if (impossible) {
+                learnedChoices.add(new CountConflict(current));
+                state = State.DEAD;
+            } else afterViewSearch(continuation);
+            return;
+        }
         if (viewStage != 0) {
             if (!viewSearch.step()) return;
             int continuation = viewStage;
@@ -370,11 +393,28 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             diophantine.close();
             diophantine = null;
             if (counts != null) scheduling = new CountSchedule<>(model, counts, budget);
-            else if (current.isEmpty()) {
+            else if (current.isEmpty()) structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 4_500_000);
+            else dispatchCompiledStrategies();
+            return;
+        }
+        if (structural != null) {
+            if (!structural.step()) return;
+            counts = reduction.expand(structural.counts());
+            boolean impossible = structural.infeasible();
+            structural.close();
+            structural = null;
+            if (counts != null) {
+                structuralCandidate = true;
+                schedulingWork = 0;
+                scheduling = new CountSchedule<>(model, counts, budget);
+            } else if (impossible) {
+                learnedChoices.add(new CountConflict(current));
+                state = State.DEAD;
+            } else {
                 sourceFace = CountQuickSolve.sourceFace(reduction.rows(), reduction.lower(), reduction.upper(), budget, false);
                 sourceFaceAttempt = 1;
                 if (sourceFace == null) packing = new CountPacking(reduction.rows(), reduction.lower(), reduction.upper(), budget);
-            } else dispatchCompiledStrategies();
+            }
             return;
         }
         if (sourceFace != null) {
@@ -657,12 +697,25 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             return;
         }
         if (auxiliaryLcg != null) {
-            if (!auxiliaryLcg.step()) return;
+            // Keep the current worker slice inside the same owned LCG. Its
+            // atomic steps retain their work/cancellation checks; only repeated
+            // outer dispatch, incumbent checks and timing samples are avoided.
+            // Yield at the original worker quantum and auxiliary allowance.
+            long allowance = auxiliaryMode == 0 ? quantum : Math.min(quantum, auxiliaryUntil - auxiliaryWork);
+            while (!auxiliaryLcg.step()) {
+                if (stopped.getAsBoolean() || budget.threadWork() - runStart >= allowance) return;
+            }
             counts = reduction.expand(auxiliaryLcg.counts());
             boolean impossible = auxiliaryLcg.infeasible();
+            if (counts == null && !impossible && auxiliaryLcg.paused()) {
+                auxiliaryLive = true;
+                state = State.UNRESOLVED;
+                return;
+            }
             importReducedConflicts(auxiliaryLcg.learnedConflicts());
             auxiliaryLcg.close();
             auxiliaryLcg = null;
+            auxiliaryLive = false;
             if (counts != null) {
                 domainCandidate = true;
                 schedulingWork = 0;
@@ -795,11 +848,19 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (!reduction.step()) return;
             compiled = true;
             preprocessingOnly = (reduction.variables() > 64 || reduction.rows().size() > 512) &&
-                    !ExactRevisedProgram.extendsDenseAdmission(reduction.variables(), reduction.rows());
+                    !ExactRevisedProgram.extendsDenseAdmission(reduction.variables(), reduction.rows()) && !mediumBooleanLp();
             lowerCost = PlanPreference.compiledLowerBound(model, reduction, lower, seeds, budget);
             if (auxiliaryMode == 1) cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072, CountCdcl.Branching.LEARNING_RATE);
             else if (auxiliaryMode >= 2) auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072);
             else {
+                if (!lpTried && current.isEmpty()) {
+                    lpTried = true;
+                    lpSearch = CountLpSearch.create(reduction, model.recipes.size(), budget);
+                    if (lpSearch != null) {
+                        lpActive = true;
+                        return;
+                    }
+                }
                 if (modelViews != null) {
                     modelViews.compileLight();
                     modelViews.addReduced(reduction);
@@ -821,6 +882,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (status == ExactLinearProgram.Result.INFEASIBLE && !reducedLinear && !linear.hot() && relaxationCuts.isEmpty()) learnMaterialConflict(linear.certificate());
         if (sharedBasis != null) sharedBasis.close();
         sharedBasis = linear.takeBasis();
+        sharedBasisOriginal = !reducedLinear;
         linear.close();
         linear = null;
         if (status == ExactLinearProgram.Result.INFEASIBLE) {
@@ -866,6 +928,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (neighborhood != null || repair != null || jumping != null) return "count_heuristics";
         if (recovery != null || scaling != null) return "count_recovery";
         if (components != null || groups != null || conditioning != null || sourceFace != null) return "count_decompose";
+        if (structural != null) return "count_structure";
         if (partition != null || packing != null) return "count_dp";
         return "count_compile";
     }
@@ -917,12 +980,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             coverPoint = null;
             if (inheritedBasis != null) inheritedBasis.close();
             inheritedBasis = sharedBasis == null ? null : sharedBasis.retain();
+            inheritedBasisOriginal = sharedBasisOriginal;
             inheritedCoordinates = reduction.coordinates();
             beginLinear();
         }
     }
 
     private boolean earlyCutDomain() {
+        if (mediumBooleanLp()) return true;
         if (reduction.variables() > 64) return false;
         BigInteger[] low = reduction.lower(), high = reduction.upper();
         boolean eliminated = 2 * reduction.variables() <= model.recipes.size();
@@ -942,6 +1007,13 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void resumeSpeculativeCandidate() {
+        if (structuralCandidate) {
+            structuralCandidate = false;
+            sourceFace = CountQuickSolve.sourceFace(reduction.rows(), reduction.lower(), reduction.upper(), budget, false);
+            sourceFaceAttempt = 1;
+            if (sourceFace == null) packing = new CountPacking(reduction.rows(), reduction.lower(), reduction.upper(), budget);
+            return;
+        }
         if (viewCandidateStage != 0) {
             int continuation = viewCandidateStage;
             viewCandidateStage = 0;
@@ -1102,15 +1174,52 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         // Tiny tableaux are cheap to rebuild. Keep their canonical recipe
         // ordering instead of paying for basis reuse and changing degenerate ties.
         boolean reuse = (model.recipes.size() + 2L) * (model.constraints.size() + 2L) > 256;
-        reducedLinear = reuse && reduction.variables() != model.recipes.size();
+        // Fixing a Boolean variable in each child must not renumber every
+        // surviving column and discard its parent's exact simplex basis.
+        reducedLinear = reuse && !mediumBooleanLp() && reduction.variables() != model.recipes.size();
         linear = new ExactLinearProgram(reducedLinear ? reduction.variables() : model.recipes.size(),
                 relaxationRows(),
                 reducedLinear ? reduction.objective(model.objective(true)) : model.objective(true), budget,
-                reuse && reduction.coordinates().equals(inheritedCoordinates) ? inheritedBasis : null, reuse);
+                reuse && (reducedLinear ? !inheritedBasisOriginal && reduction.coordinates().equals(inheritedCoordinates) : inheritedBasisOriginal) ? inheritedBasis : null, reuse);
         if (inheritedBasis != null) {
             inheritedBasis.close();
             inheritedBasis = null;
         }
+    }
+
+    private boolean speculativeCandidate() {
+        return jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || structuralCandidate || viewCandidateStage != 0;
+    }
+
+    private void rejectSpeculativeCandidate() {
+        clearCandidate();
+        counts = null;
+        resumeSpeculativeCandidate();
+    }
+
+    /** Drop only the candidate pipeline, retaining the searches that proposed it. */
+    private void clearCandidate() {
+        if (scheduling != null) scheduling.close();
+        if (program != null) program.close();
+        if (assembling != null) assembling.close();
+        if (verifying != null) verifying.close();
+        scheduling = null;
+        program = null;
+        assembling = null;
+        verifying = null;
+        plan = null;
+        preference = null;
+        schedulingWork = 0;
+    }
+
+    private boolean mediumBooleanLp() {
+        if (model.recipes.size() < 64 || model.recipes.size() > 128 || reduction.rows().size() > 512) return false;
+        BigInteger[] low = reduction.lower(), high = reduction.upper();
+        for (int i = 0; i < low.length; i++) {
+            budget.check();
+            if (low[i].signum() < 0 || high[i] == null || high[i].compareTo(BigInteger.ONE) > 0) return false;
+        }
+        return true;
     }
 
     private List<ExactLinearProgram.Constraint> relaxationRows() {
@@ -1183,18 +1292,48 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void unresolved() {
+        if (speculativeCandidate()) {
+            // A schedulable vector can still fail the exact force-crafting or
+            // seed checks. Preserve the same continuation as scheduling failure.
+            rejectSpeculativeCandidate();
+            return;
+        }
         plan = null;
         partitionCounts();
         state = State.UNRESOLVED;
     }
 
     boolean resume() {
+        if (auxiliaryMode != 0) {
+            if (limit != null || auxiliaryMode < 2 || auxiliaryLcg == null) return false;
+            if (auxiliaryLcg.paused()) auxiliaryLcg.resume(131072);
+            auxiliaryUntil = auxiliaryWork + Math.min(262144, budget.remainingWork());
+            state = State.OPEN;
+            return true;
+        }
+        if (limit == null && lpSearch != null && lpSearch.retained() &&
+                (preferLpResume || viewSearch == null || !viewSearch.retained())) {
+            clearCandidate();
+            jumpCandidate = neighborhoodCandidate = domainCandidate = separatorCandidate = structuralCandidate = false;
+            viewCandidateStage = 0;
+            counts = null;
+            lpSearch.resume(262144);
+            lpActive = lpResuming = true;
+            preferLpResume = false;
+            state = State.OPEN;
+            return true;
+        }
         if (limit == null && viewSearch != null && viewSearch.retained()) {
             // Other strategies have had their turn. Continue the same model
             // searches rather than silently closing their unfinished domains.
+            // A rejected assembly must not run again ahead of the resumed view.
+            clearCandidate();
+            jumpCandidate = neighborhoodCandidate = domainCandidate = separatorCandidate = structuralCandidate = false;
+            viewCandidateStage = 0;
             counts = null;
             viewSearch.resume(262144);
             viewStage = 4;
+            preferLpResume = true;
             state = State.OPEN;
             return true;
         }
@@ -1206,10 +1345,63 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         return true;
     }
 
+    /** Same original recipe coordinates and exact domain, not just a similar matrix. */
+    boolean sameAuxiliarySearch(IntegerCountBranch<K> other) {
+        if (other == this || auxiliaryMode < 2 || other.auxiliaryMode < 2 || model != other.model ||
+                auxiliaryLcg == null || other.auxiliaryLcg == null || limit != null || other.limit != null ||
+                !auxiliaryLive || !other.auxiliaryLive || memory == 0 || workspace == 0 ||
+                other.memory == 0 || other.workspace == 0 || other.state != State.OPEN ||
+                state != State.OPEN && state != State.UNRESOLVED ||
+                !current.equals(other.current) || reduction == null || other.reduction == null ||
+                reduction.variables() != other.reduction.variables())
+            return false;
+        var rows = reduction.rows();
+        var otherRows = other.reduction.rows();
+        if (rows.size() != otherRows.size()) return false;
+        // Bounds accessors clone their arrays; this optional comparison owns
+        // that temporary storage and declines when it does not fit.
+        long bytes = 256L + 64L * reduction.variables();
+        if (!budget.tryReserve(bytes)) return false;
+        try {
+            for (int i = 0; i < model.recipes.size(); i++) {
+                budget.check();
+                budget.check();
+                budget.check();
+            }
+            if (!reduction.sameCoordinates(other.reduction)) return false;
+            var low = reduction.lower();
+            var high = reduction.upper();
+            var otherLow = other.reduction.lower();
+            var otherHigh = other.reduction.upper();
+            for (int i = 0; i < low.length; i++) {
+                budget.check();
+                if (!low[i].equals(otherLow[i]) || !Objects.equals(high[i], otherHigh[i])) return false;
+            }
+            for (int r = 0; r < rows.size(); r++) {
+                budget.check();
+                var row = rows.get(r);
+                var next = otherRows.get(r);
+                if (!row.upper().equals(next.upper()) || row.terms().size() != next.terms().size()) return false;
+                for (var term : row.terms().entrySet()) {
+                    budget.check();
+                    if (!term.getValue().equals(next.terms().get(term.getKey()))) return false;
+                }
+            }
+            return true;
+        } finally {
+            budget.release(bytes);
+        }
+    }
+
     void releaseWorkspace() {
         closeViews();
+        if (lpSearch != null) lpSearch.close();
+        lpSearch = null;
+        lpActive = false;
         if (diophantine != null) diophantine.close();
         diophantine = null;
+        if (structural != null) structural.close();
+        structural = null;
         if (repair != null) repair.close();
         repair = null;
         repairPoint = null;
@@ -1389,7 +1581,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void learnMaterialConflict(ExactRational[] proof) {
-        if (learnedMaterials.size() >= 64) return;
+        if (proof == null || proof.length < globalRows || learnedMaterials.size() >= 64) return;
         // Combine only globally valid material rows. The other Farkas terms
         // describe this branch; dropping those terms leaves a reusable resource
         // inequality that is valid for all branches of THIS inventory snapshot.

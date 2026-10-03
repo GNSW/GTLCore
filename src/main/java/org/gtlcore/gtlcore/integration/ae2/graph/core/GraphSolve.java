@@ -25,6 +25,7 @@ final class GraphSolve<K> {
     private final Map<K, Long> seeds = new LinkedHashMap<>();
     private final List<PlanStep> reversed = new ArrayList<>();
     private boolean targetProduced;
+    private boolean consumeTargetSeed;
     private int regionIndex;
     private RegionSelection<K> selection;
     private RegionSelection.Choice<K> selected;
@@ -55,6 +56,12 @@ final class GraphSolve<K> {
         demand.put(target, BigInteger.valueOf(amount));
         requiredSeeds.forEach((key, count) -> demand.merge(key, BigInteger.valueOf(count), BigInteger::add));
         seeds.putAll(requiredSeeds);
+    }
+
+    GraphSolve<K> allowTargetSeedConsumption(boolean allow) {
+        if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
+        consumeTargetSeed = allow;
+        return this;
     }
 
     boolean step() {
@@ -121,7 +128,8 @@ final class GraphSolve<K> {
                 ordinaryCount = BigInteger.ZERO;
                 ordinaryPhase = 0;
             } else selection = new RegionSelection<>(region, demand, stock, target, amount,
-                    preserve, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock);
+                    preserve, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock)
+                    .allowTargetSeedConsumption(consumeTargetSeed);
         } else if (!targetProduced) {
             budget.note("selected_graph", "target_not_produced; target=" + target + "; recipes=" + graph.recipes().size() + "; force_craft=" + forceCraft);
             result = failure(GraphPlan.Result.UNKNOWN);

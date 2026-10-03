@@ -68,7 +68,7 @@ public final class PlanVerification<K> implements AutoCloseable {
                 } else if (patterns.hasNext()) {
                     var pattern = patterns.next();
                     runs = pattern.getValue();
-                    outputs = plan.recipes().get(pattern.getKey()).outputs().entrySet().iterator();
+                    outputs = plan.recipes().get(pattern.getKey()).executionOutputs().entrySet().iterator();
                 } else phase = 4;
             }
             default -> {
@@ -76,6 +76,21 @@ public final class PlanVerification<K> implements AutoCloseable {
             }
         }
         return phase == 4;
+    }
+
+    SequenceSummary<K> summary() {
+        if (phase != 4) throw new IllegalStateException("Verification incomplete");
+        return summary;
+    }
+
+    BigInteger physicalProduced(K key) {
+        if (phase != 4) throw new IllegalStateException("Verification incomplete");
+        return totals.getOrDefault(key, BigInteger.ZERO);
+    }
+
+    Map<String, BigInteger> patternCounts() {
+        if (phase != 4) throw new IllegalStateException("Verification incomplete");
+        return counts.result();
     }
 
     @Override

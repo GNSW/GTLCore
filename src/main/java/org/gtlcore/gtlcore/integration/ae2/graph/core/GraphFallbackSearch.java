@@ -34,6 +34,8 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
     private long memory, workLimit;
     private int attempts;
     private boolean partial;
+    private GraphFallbackSources<K> sourceOrder;
+    private boolean byCost;
 
     GraphFallbackSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
                         Set<K> external, Map<K, Long> seeds, boolean force, PlanningBudget budget) {
@@ -55,15 +57,35 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
         // the same total work/choice limits and release their failed workspace.
         workLimit = allowance / 2;
         if (search()) return true;
-        close();
+        reset();
+        partial = true;
+        workLimit = allowance;
+        if (search()) return true;
+        // Preserve both original priority passes and their work allowance.
+        // Only failed searches use relaxed reachability and stable rankings.
+        reset();
+        sourceOrder = GraphFallbackSources.create(compiler, stock, external, target, force, budget);
+        if (sourceOrder == null) return false;
+        for (int pass = 0; pass < 2; pass++) {
+            long room = budget.remainingWork() - 24_576;
+            if (room < 4096) return false;
+            workLimit = budget.nodes() - started + Math.min(24_576, room);
+            attempts = 0;
+            byCost = pass == 1;
+            if (search()) return true;
+            reset();
+        }
+        return false;
+    }
+
+    private void reset() {
+        budget.release(memory);
+        memory = 0;
         inventory.clear();
         changes.clear();
         choices.clear();
         firings.clear();
         pending = null;
-        partial = true;
-        workLimit = allowance;
-        return search();
     }
 
     private boolean search() {
@@ -144,7 +166,7 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
                 choice.hint = null;
             }
             if (choice.runs == null || choice.runs.signum() == 0) {
-                List<GraphRecipe<K>> sources = compiler.producers(choice.task.key);
+                List<GraphRecipe<K>> sources = sourceOrder == null ? compiler.producers(choice.task.key) : sourceOrder.sources(choice.task.key, byCost);
                 if (choice.source == sources.size()) return false;
                 choice.recipe = sources.get(choice.source++);
                 long gain = choice.recipe.outputs().getOrDefault(choice.task.key, 0L) - choice.recipe.inputs().getOrDefault(choice.task.key, 0L);
@@ -353,5 +375,6 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
     public void close() {
         budget.release(memory);
         memory = 0;
+        if (sourceOrder != null) sourceOrder.close();
     }
 }

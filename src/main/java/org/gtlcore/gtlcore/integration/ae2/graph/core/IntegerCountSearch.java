@@ -9,6 +9,9 @@ import java.util.function.Supplier;
 /** Bounded branch search with retained continuations, shared proofs and verified incumbents. */
 final class IntegerCountSearch<K> implements AutoCloseable {
 
+    private static final int MAX_PENDING_CACHES = 128;
+    private static final long CACHE_ENTRY_BYTES = 96;
+
     private final RecipeCountModel<K> model;
     private final GraphCompiler<K> compiler;
     private final CountExecution<K> execution;
@@ -21,6 +24,9 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private final boolean compileRecovery;
     private final PlanningBudget budget;
     private final Deque<IntegerCountBranch<K>> pending = new ArrayDeque<>(), deferred = new ArrayDeque<>();
+    private final Map<IntegerCountBranch<K>, Long> propagationCaches = new IdentityHashMap<>();
+    private final long propagationCacheLimit;
+    private long propagationCacheBytes;
     private final CountCutPool materialConflicts;
     private final Set<CountGuard> supportConflicts = new LinkedHashSet<>();
     private final CountConflictPool choiceConflicts;
@@ -65,6 +71,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         this.preserve = preserve;
         this.force = force;
         this.budget = budget;
+        propagationCacheLimit = Math.min(16L << 20, Math.max(0, budget.availableBytes()) / 8);
         this.proofs = proofs;
         choiceConflicts = new CountConflictPool(budget);
         materialConflicts = new CountCutPool(budget);
@@ -263,6 +270,9 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             selected.add(branch);
         }
         while (selected.size() < width && !deferred.isEmpty()) selected.add(deferred.removeFirst());
+        // The branch keeps its reference until initialization or disposal. Only
+        // waiting references count against this optional frontier cache quota.
+        selected.forEach(this::releasePropagationCache);
         return selected;
     }
 
@@ -325,6 +335,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             branch.usedChoices.clear();
             for (var child : branch.children) enqueue(child, branch);
             branch.children.clear();
+            if (duplicateAuxiliary(branch)) {
+                budget.note("count_portfolio_reuse", "identical_rows_domains_and_recipe_mapping; retired_mode=" + branch.auxiliaryMode);
+                branch.close();
+                continue;
+            }
             switch (branch.state) {
                 case OPEN -> {
                     suspensions++;
@@ -335,12 +350,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                     branch.close();
                 }
                 case UNRESOLVED -> {
-                    if (branch.auxiliaryMode != 0) branch.close();
-                    else if (branch.resume()) {
+                    if (branch.resume()) {
                         suspensions++;
                         deferred.addLast(branch);
                     } else {
-                        unresolved = true;
+                        if (branch.auxiliaryMode == 0) unresolved = true;
                         branch.close();
                     }
                 }
@@ -351,6 +365,16 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                 default -> branch.close();
             }
         }
+    }
+
+    private boolean duplicateAuxiliary(IntegerCountBranch<K> branch) {
+        if (branch.auxiliaryMode < 2 || branch.auxiliaryLcg == null || !branch.auxiliaryLive || branch.auxiliaryCompared ||
+                branch.state != IntegerCountBranch.State.OPEN && branch.state != IntegerCountBranch.State.UNRESOLVED)
+            return false;
+        branch.auxiliaryCompared = true;
+        for (var other : pending) if (branch.sameAuxiliarySearch(other)) return true;
+        for (var other : deferred) if (branch.sameAuxiliarySearch(other)) return true;
+        return false;
     }
 
     private void retain(IntegerCountBranch<K> branch) {
@@ -449,13 +473,46 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             unresolved = true;
             branch.close();
         } else {
-            if (parent != null && parent.sharedBounds != null) branch.inheritedBounds = parent.sharedBounds.retain();
-            if (parent != null && parent.sharedBasis != null) {
-                branch.inheritedBasis = parent.sharedBasis.retain();
-                branch.inheritedCoordinates = parent.reduction.coordinates();
+            try {
+                if (parent != null && parent.sharedBounds != null) retainPropagationCache(branch, parent.sharedBounds);
+                if (parent != null && parent.sharedBasis != null) {
+                    branch.inheritedBasis = parent.sharedBasis.retain();
+                    branch.inheritedBasisOriginal = parent.sharedBasisOriginal;
+                    branch.inheritedCoordinates = parent.reduction.coordinates();
+                }
+                pending.addLast(branch);
+            } catch (RuntimeException | Error failure) {
+                releasePropagationCache(branch);
+                branch.close();
+                throw failure;
             }
-            pending.addLast(branch);
         }
+    }
+
+    private void retainPropagationCache(IntegerCountBranch<K> branch, CountBounds.Seed seed) {
+        long bytes = seed.retainedBytes();
+        // Each waiting sibling is charged conservatively even when it shares
+        // a seed. Rejecting a cache retains the branch's complete assumptions;
+        // CountBounds reconstructs the same propagation state when it runs.
+        if (propagationCaches.size() >= MAX_PENDING_CACHES || bytes > propagationCacheLimit - propagationCacheBytes ||
+                !budget.tryReserve(CACHE_ENTRY_BYTES))
+            return;
+        try {
+            propagationCaches.put(branch, bytes);
+            branch.inheritedBounds = seed.retain();
+            propagationCacheBytes += bytes;
+        } catch (RuntimeException | Error failure) {
+            propagationCaches.remove(branch);
+            budget.release(CACHE_ENTRY_BYTES);
+            throw failure;
+        }
+    }
+
+    private void releasePropagationCache(IntegerCountBranch<K> branch) {
+        Long bytes = propagationCaches.remove(branch);
+        if (bytes == null) return;
+        propagationCacheBytes -= bytes;
+        budget.release(CACHE_ENTRY_BYTES);
     }
 
     GraphPlan<K> result() {
@@ -500,6 +557,9 @@ final class IntegerCountSearch<K> implements AutoCloseable {
 
     private void release() {
         if (!released.compareAndSet(false, true)) return;
+        budget.release(CACHE_ENTRY_BYTES * propagationCaches.size());
+        propagationCaches.clear();
+        propagationCacheBytes = 0;
         pending.forEach(IntegerCountBranch::close);
         deferred.forEach(IntegerCountBranch::close);
         dispatched.forEach(IntegerCountBranch::close);

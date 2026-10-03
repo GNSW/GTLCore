@@ -26,10 +26,11 @@ final class CountReduction implements AutoCloseable {
     private int cursor, saturatedPairs;
     private boolean complete, changed, saturated, implicationsDone;
     private CountImplications implications;
+    private CountResiduePresolve residues;
     private CountHermite hermite;
     private CountHall hall;
     private CountBounds finalBounds;
-    private boolean compiled, hermiteDone, hallDone;
+    private boolean compiled, hermiteDone, hallDone, residuesDone;
     private final boolean strengthening;
 
     CountReduction(List<ExactLinearProgram.Constraint> source, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget) {
@@ -111,6 +112,30 @@ final class CountReduction implements AutoCloseable {
             }
             complete = true;
             return true;
+        }
+        if (!residuesDone) {
+            if (residues == null) residues = new CountResiduePresolve(source, sourceLower, sourceUpper, budget);
+            if (!residues.step()) return false;
+            var extra = residues.cuts();
+            long bytes = 384L * extra.size();
+            if (!extra.isEmpty() && budget.tryReserve(bytes)) {
+                memory += bytes;
+                source.addAll(extra);
+                var tightenedLower = residues.lower();
+                var tightenedUpper = residues.upper();
+                for (int i = 0; i < root.length; i++) {
+                    budget.check();
+                    sourceLower[i] = tightenedLower[i];
+                    sourceUpper[i] = tightenedUpper[i];
+                    if (sourceLower[i].equals(sourceUpper[i])) {
+                        root[i] = -1;
+                        offset[i] = sourceLower[i];
+                    }
+                }
+            }
+            residues.close();
+            residues = null;
+            residuesDone = true;
         }
         if (!implicationsDone) {
             if (implications == null) implications = new CountImplications(source, sourceLower, sourceUpper, budget);
@@ -717,6 +742,8 @@ final class CountReduction implements AutoCloseable {
 
     @Override
     public void close() {
+        if (residues != null) residues.close();
+        residues = null;
         if (hall != null) hall.close();
         hall = null;
         if (hermite != null) hermite.close();

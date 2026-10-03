@@ -36,12 +36,18 @@ public final class CountProof {
 
     /** Axioms describe the exact scope, including branch/domain assumptions, never an implicit whole-order claim. */
     public record Certificate(String scope, int variables, List<Row> axioms, List<List<Row>> forbidden,
-                              List<Fraction> farkas, boolean closed) {
+                              List<Fraction> farkas, boolean closed, List<Combination> derived) {
+
+        public Certificate(String scope, int variables, List<Row> axioms, List<List<Row>> forbidden,
+                           List<Fraction> farkas, boolean closed) {
+            this(scope, variables, axioms, forbidden, farkas, closed, List.of());
+        }
 
         public Certificate {
             axioms = List.copyOf(axioms);
             forbidden = forbidden.stream().map(List::copyOf).toList();
             farkas = List.copyOf(farkas);
+            derived = List.copyOf(derived);
         }
     }
 
@@ -291,35 +297,39 @@ public final class CountProof {
         try {
             List<Row> available = new ArrayList<>(proof.axioms);
             for (Row row : available) if (!valid(row, proof.variables)) return Verdict.INVALID;
-            for (Combination step : proof.steps) {
-                tick(work);
-                if (step.divisor == null || step.divisor.signum() <= 0 || !valid(step.consequence, proof.variables)) return Verdict.INVALID;
-                Map<Integer, BigInteger> sum = new TreeMap<>();
-                BigInteger bound = BigInteger.ZERO;
-                for (var parent : step.parents.entrySet()) {
-                    tick(work);
-                    if (parent.getKey() < 0 || parent.getKey() >= available.size() || parent.getValue() == null || parent.getValue().signum() < 0) return Verdict.INVALID;
-                    Row row = available.get(parent.getKey());
-                    bound = bound.add(parent.getValue().multiply(row.upper));
-                    for (var term : row.terms.entrySet()) {
-                        tick(work);
-                        sum.merge(term.getKey(), parent.getValue().multiply(term.getValue()), BigInteger::add);
-                    }
-                }
-                Map<Integer, BigInteger> divided = new TreeMap<>();
-                for (var term : sum.entrySet()) {
-                    tick(work);
-                    var qr = term.getValue().divideAndRemainder(step.divisor);
-                    if (qr[1].signum() != 0) return Verdict.INVALID;
-                    if (qr[0].signum() != 0) divided.put(term.getKey(), qr[0]);
-                }
-                if (!new Row(divided, floor(bound, step.divisor)).equals(step.consequence)) return Verdict.INVALID;
-                available.add(step.consequence);
-            }
-            return Verdict.VERIFIED;
+            return derive(proof.variables, available, proof.steps, work) ? Verdict.VERIFIED : Verdict.INVALID;
         } catch (CheckLimit limit) {
             return Verdict.INCOMPLETE;
         }
+    }
+
+    private static boolean derive(int variables, List<Row> available, List<Combination> steps, long[] work) {
+        for (Combination step : steps) {
+            tick(work);
+            if (step.divisor == null || step.divisor.signum() <= 0 || !valid(step.consequence, variables)) return false;
+            Map<Integer, BigInteger> sum = new TreeMap<>();
+            BigInteger bound = BigInteger.ZERO;
+            for (var parent : step.parents.entrySet()) {
+                tick(work);
+                if (parent.getKey() < 0 || parent.getKey() >= available.size() || parent.getValue() == null || parent.getValue().signum() < 0) return false;
+                Row row = available.get(parent.getKey());
+                bound = bound.add(parent.getValue().multiply(row.upper));
+                for (var term : row.terms.entrySet()) {
+                    tick(work);
+                    sum.merge(term.getKey(), parent.getValue().multiply(term.getValue()), BigInteger::add);
+                }
+            }
+            Map<Integer, BigInteger> divided = new TreeMap<>();
+            for (var term : sum.entrySet()) {
+                tick(work);
+                var qr = term.getValue().divideAndRemainder(step.divisor);
+                if (qr[1].signum() != 0) return false;
+                if (qr[0].signum() != 0) divided.put(term.getKey(), qr[0]);
+            }
+            if (!new Row(divided, floor(bound, step.divisor)).equals(step.consequence)) return false;
+            available.add(step.consequence);
+        }
+        return true;
     }
 
     /** Signed combinations require both directions of every used equality. */
@@ -331,9 +341,29 @@ public final class CountProof {
         }
     }
 
-    /** Nonnegative aggregation followed by integer rounding after an explicit lower-bound shift. */
+    public enum RoundingKind {
+        FLOOR,
+        MIR,
+        TABLEAU
+    }
+
+    /** Scoped rounding or an integer-tableau disjunction after an explicit lower-bound shift. */
     public record Rounding(String scope, int variables, List<Row> axioms, List<BigInteger> multipliers,
-                           BigInteger divisor, List<BigInteger> lower, Row consequence) {
+                           BigInteger divisor, List<BigInteger> lower, Row consequence, RoundingKind kind) {
+
+        public Rounding(String scope, int variables, List<Row> axioms, List<BigInteger> multipliers,
+                        BigInteger divisor, List<BigInteger> lower, Row consequence) {
+            this(scope, variables, axioms, multipliers, divisor, lower, consequence, RoundingKind.FLOOR);
+        }
+
+        public Rounding(String scope, int variables, List<Row> axioms, List<BigInteger> multipliers,
+                        BigInteger divisor, List<BigInteger> lower, Row consequence, boolean mixedInteger) {
+            this(scope, variables, axioms, multipliers, divisor, lower, consequence, mixedInteger ? RoundingKind.MIR : RoundingKind.FLOOR);
+        }
+
+        public boolean mixedInteger() {
+            return kind == RoundingKind.MIR;
+        }
 
         public Rounding {
             axioms = List.copyOf(axioms);
@@ -413,7 +443,7 @@ public final class CountProof {
     public static Verdict verify(Rounding proof, long maximumWork) {
         if (proof.variables < 0 || proof.variables > 16384 || maximumWork <= 0 ||
                 proof.axioms.size() != proof.multipliers.size() || proof.lower.size() != proof.variables ||
-                proof.divisor == null || proof.divisor.signum() <= 0 || !valid(proof.consequence, proof.variables))
+                proof.divisor == null || proof.divisor.signum() <= 0 || proof.kind == null || !valid(proof.consequence, proof.variables))
             return Verdict.INVALID;
         long[] work = { maximumWork };
         try {
@@ -424,7 +454,7 @@ public final class CountProof {
                 tick(work);
                 var row = proof.axioms.get(i);
                 var weight = proof.multipliers.get(i);
-                if (!valid(row, proof.variables) || weight == null || weight.signum() < 0) return Verdict.INVALID;
+                if (!valid(row, proof.variables) || weight == null || weight.signum() < 0 && proof.kind != RoundingKind.TABLEAU) return Verdict.INVALID;
                 if (weight.signum() == 0) continue;
                 constant = constant.add(row.upper.multiply(weight));
                 for (var term : row.terms.entrySet()) {
@@ -438,11 +468,16 @@ public final class CountProof {
                 if (low == null || !known.contains(new Row(Map.of(id, BigInteger.ONE.negate()), low.negate()))) return Verdict.INVALID;
                 constant = constant.subtract(sum.getOrDefault(id, BigInteger.ZERO).multiply(low));
             }
-            BigInteger bound = floor(constant, proof.divisor);
+            BigInteger remainder = constant.mod(proof.divisor);
+            if (proof.kind != RoundingKind.FLOOR && remainder.signum() == 0) return Verdict.INVALID;
+            if (proof.kind == RoundingKind.TABLEAU) return verifyTableauRounding(proof, sum, remainder, work);
+            BigInteger factor = proof.mixedInteger() ? proof.divisor.subtract(remainder) : BigInteger.ONE;
+            BigInteger bound = floor(constant, proof.divisor).multiply(factor);
             Map<Integer, BigInteger> rounded = new TreeMap<>();
             for (var term : sum.entrySet()) {
                 tick(work);
-                BigInteger value = floor(term.getValue(), proof.divisor);
+                BigInteger value = floor(term.getValue(), proof.divisor).multiply(factor);
+                if (proof.mixedInteger()) value = value.add(term.getValue().mod(proof.divisor).subtract(remainder).max(BigInteger.ZERO));
                 if (value.signum() != 0) rounded.put(term.getKey(), value);
                 bound = bound.add(value.multiply(proof.lower.get(term.getKey())));
             }
@@ -450,6 +485,40 @@ public final class CountProof {
         } catch (CheckLimit limit) {
             return Verdict.INCOMPLETE;
         }
+    }
+
+    private static Verdict verifyTableauRounding(Rounding proof, Map<Integer, BigInteger> sum, BigInteger remainder, long[] work) {
+        // Reconstruct the disjunction independently of the separator. Integral
+        // counts and integral row slacks have nonnegative shifted coordinates.
+        BigInteger d = proof.divisor, complement = d.subtract(remainder);
+        BigInteger bound = remainder.multiply(complement).negate();
+        Map<Integer, BigInteger> result = new TreeMap<>();
+        for (var term : sum.entrySet()) {
+            tick(work);
+            BigInteger residue = term.getValue().mod(d);
+            BigInteger value = residue.compareTo(remainder) <= 0 ? residue.multiply(complement) : remainder.multiply(d.subtract(residue));
+            result.put(term.getKey(), value.negate());
+        }
+        for (int i = 0; i < proof.axioms.size(); i++) {
+            tick(work);
+            BigInteger residue = proof.multipliers.get(i).mod(d);
+            BigInteger weight = residue.compareTo(remainder) <= 0 ? residue.multiply(complement) : remainder.multiply(d.subtract(residue));
+            if (weight.signum() == 0) continue;
+            Row row = proof.axioms.get(i);
+            BigInteger rhs = row.upper;
+            for (var term : row.terms.entrySet()) {
+                tick(work);
+                rhs = rhs.subtract(term.getValue().multiply(proof.lower.get(term.getKey())));
+                result.merge(term.getKey(), term.getValue().multiply(weight), BigInteger::add);
+            }
+            bound = bound.add(weight.multiply(rhs));
+        }
+        result.values().removeIf(value -> value.signum() == 0);
+        for (var term : result.entrySet()) {
+            tick(work);
+            bound = bound.add(term.getValue().multiply(proof.lower.get(term.getKey())));
+        }
+        return new Row(result, bound).equals(proof.consequence) ? Verdict.VERIFIED : Verdict.INVALID;
     }
 
     public static Verdict verify(Divisibility proof, long maximumWork) {
@@ -511,12 +580,7 @@ public final class CountProof {
         }
 
         public synchronized void add(Certificate certificate) {
-            long size = certificateSize(certificate);
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.certificate(certificate))) return;
             entries.add(certificate);
         }
 
@@ -561,95 +625,54 @@ public final class CountProof {
         }
 
         synchronized void add(CountInduction.Proof proof) {
-            long size = 512L + certificateSize(proof.base()) + certificateSize(proof.induction());
-            var vectors = new ArrayList<>(proof.problem().inputs());
-            vectors.addAll(proof.problem().outputs());
-            vectors.add(proof.problem().initial());
-            vectors.add(proof.problem().goal());
-            for (var vector : vectors) for (var value : vector) size += 64L + value.bitLength() / 8;
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.induction(proof))) return;
             inductions.add(proof);
         }
 
         public synchronized void add(Symmetry proof) {
-            long size = 512L + proof.axioms.stream().mapToLong(CountProof::size).sum() +
-                    proof.leaders.stream().mapToLong(CountProof::size).sum() + 32L * proof.variables * proof.permutations.size();
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.symmetry(proof))) return;
             symmetries.add(proof);
         }
 
         public synchronized void add(Diagram proof) {
-            long size = 512L + proof.axioms.stream().mapToLong(CountProof::size).sum() + 192L * proof.variables +
-                    proof.layers.stream().flatMap(List::stream).mapToLong(state -> 128L + 96L * state.size()).sum();
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.diagram(proof))) return;
             diagrams.add(proof);
         }
 
         public synchronized void add(Knapsack proof) {
-            long size = 256L + 160L * proof.variables + size(proof.source) + size(proof.consequence);
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.knapsack(proof))) return;
             knapsacks.add(proof);
         }
 
         public synchronized void add(Derivation proof) {
-            long size = 256L + proof.axioms.stream().mapToLong(CountProof::size).sum() +
-                    proof.steps.stream().mapToLong(s -> 128L + size(s.consequence) + 96L * s.parents.size()).sum();
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.derivation(proof))) return;
             derivations.add(proof);
         }
 
         public synchronized void add(Clique proof) {
-            long size = 256L + proof.axioms.stream().mapToLong(CountProof::size).sum() + size(proof.consequence) +
-                    160L * proof.variables + 8L * (proof.literals.size() + proof.witnesses.size());
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.clique(proof))) return;
             cliques.add(proof);
         }
 
         public synchronized void add(Rounding proof) {
-            long size = 256L + proof.axioms.stream().mapToLong(CountProof::size).sum() + size(proof.consequence) +
-                    proof.multipliers.stream().mapToLong(v -> 64L + v.bitLength() / 8).sum() +
-                    proof.lower.stream().mapToLong(v -> 64L + v.bitLength() / 8).sum();
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.rounding(proof))) return;
             rounding.add(proof);
         }
 
         public synchronized void add(Divisibility proof) {
-            long size = 256L + proof.axioms.stream().mapToLong(CountProof::size).sum() +
-                    proof.multipliers.stream().mapToLong(v -> 64L + v.bitLength() / 8).sum();
-            if (size > maximumBytes - bytes) {
+            if (!retain(ArchiveSize.divisibility(proof))) return;
+            divisibility.add(proof);
+        }
+
+        private boolean retain(long size) {
+            // Include the archive's growing entry array as well as its payload.
+            size = ArchiveSize.add(size, 32);
+            if (size == Long.MAX_VALUE || size > maximumBytes - bytes) {
                 truncated = true;
-                return;
+                return false;
             }
             bytes += size;
-            divisibility.add(proof);
+            return true;
         }
 
         public synchronized boolean truncated() {
@@ -661,12 +684,7 @@ public final class CountProof {
         }
 
         public synchronized void add(ExecutionProof.Certificate proof) {
-            long size = 512L + 96L * proof.initial().size() * (2L + proof.inputs().size() * 2L + proof.states().size());
-            if (size > maximumBytes - bytes) {
-                truncated = true;
-                return;
-            }
-            bytes += size;
+            if (!retain(ArchiveSize.execution(proof))) return;
             executions.add(proof);
         }
 
@@ -674,10 +692,14 @@ public final class CountProof {
             try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
                 int version = !symmetries.isEmpty() ? 0x43475039 : !diagrams.isEmpty() ? 0x43475038 : !knapsacks.isEmpty() ? 0x43475037 : !derivations.isEmpty() ? 0x43475036 : !cliques.isEmpty() ? 0x43475035 : rounding.isEmpty() ? 0x43475033 : 0x43475034;
                 if (!inductions.isEmpty()) version = 0x43475041;
+                if (rounding.stream().anyMatch(proof -> proof.kind != RoundingKind.FLOOR)) version = 0x43475042;
+                if (entries.stream().anyMatch(proof -> !proof.derived.isEmpty()) ||
+                        inductions.stream().anyMatch(proof -> !proof.base().derived.isEmpty() || !proof.induction().derived.isEmpty()))
+                    version = 0x43475043;
                 output.writeInt(version);
                 output.writeBoolean(truncated);
                 output.writeInt(entries.size());
-                for (var proof : entries) certificate(output, proof);
+                for (var proof : entries) certificate(output, proof, version);
                 output.writeInt(executions.size());
                 for (var proof : executions) {
                     output.writeUTF(proof.scope());
@@ -709,6 +731,7 @@ public final class CountProof {
                         output.writeInt(proof.lower.size());
                         for (var value : proof.lower) integer(output, value);
                         rows(output, List.of(proof.consequence));
+                        if (version >= 0x43475042) output.writeByte(proof.kind.ordinal());
                     }
                 }
                 if (version >= 0x43475035) {
@@ -785,29 +808,154 @@ public final class CountProof {
                         rows(output, proof.leaders);
                     }
                 }
-                if (version == 0x43475041) {
+                if (version >= 0x43475041) {
                     output.writeInt(inductions.size());
                     for (var proof : inductions) {
                         vectors(output, List.of(proof.problem().initial(), proof.problem().goal()));
                         vectors(output, proof.problem().inputs());
                         vectors(output, proof.problem().outputs());
                         output.writeInt(proof.depth());
-                        certificate(output, proof.base());
-                        certificate(output, proof.induction());
+                        certificate(output, proof.base(), version);
+                        certificate(output, proof.induction(), version);
                     }
                 }
             }
         }
     }
 
-    private static long certificateSize(Certificate certificate) {
-        return 256L + certificate.axioms.stream().mapToLong(CountProof::size).sum() +
-                certificate.forbidden.stream().flatMap(List::stream).mapToLong(CountProof::size).sum() +
-                certificate.farkas.stream().mapToLong(f -> 96L + (f.numerator.bitLength() + f.denominator.bitLength()) / 8).sum();
-    }
+    /** Conservative retained payload estimates; shared values may be counted more than once. */
+    private static final class ArchiveSize {
 
-    private static long size(Row row) {
-        return 128L + row.upper.bitLength() / 8 + row.terms.values().stream().mapToLong(v -> 96L + v.bitLength() / 8).sum();
+        static long add(long left, long right) {
+            return left < 0 || right < 0 || left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+        }
+
+        static long multiply(long count, long bytes) {
+            return count < 0 || bytes < 0 || bytes != 0 && count > Long.MAX_VALUE / bytes ?
+                    Long.MAX_VALUE : count * bytes;
+        }
+
+        static long sum(long... values) {
+            long result = 0;
+            for (long value : values) result = add(result, value);
+            return result;
+        }
+
+        static long integer(BigInteger value) {
+            // Include the integer object, its magnitude array and alignment.
+            // One extra sign bit also covers negative powers of two, whose
+            // bitLength is smaller than their unsigned magnitude length.
+            return value == null ? 0 : add(80, multiply(((long) value.bitLength() + 32) / 32, 4));
+        }
+
+        static long text(String value) {
+            return value == null ? 0 : add(64, multiply(value.length(), 2));
+        }
+
+        static long list(int count) {
+            return add(96, multiply(count, 16));
+        }
+
+        static long map(int count) {
+            // Tree/hash nodes, boxed indices, references, backing storage.
+            return add(128, multiply(count, 96));
+        }
+
+        static long indices(Collection<Integer> values) {
+            return add(list(values.size()), multiply(values.size(), 32));
+        }
+
+        static long vector(List<BigInteger> values) {
+            long result = list(values.size());
+            for (var value : values) result = add(result, integer(value));
+            return result;
+        }
+
+        static long vectors(List<List<BigInteger>> values) {
+            long result = list(values.size());
+            for (var value : values) result = add(result, vector(value));
+            return result;
+        }
+
+        static long row(Row row) {
+            long result = sum(128, map(row.terms.size()), integer(row.upper));
+            for (var coefficient : row.terms.values()) result = add(result, integer(coefficient));
+            return result;
+        }
+
+        static long rows(List<Row> rows) {
+            long result = list(rows.size());
+            for (var row : rows) result = add(result, row(row));
+            return result;
+        }
+
+        static long combination(Combination value) {
+            long result = sum(128, map(value.parents.size()), integer(value.divisor), row(value.consequence));
+            for (var multiplier : value.parents.values()) result = add(result, integer(multiplier));
+            return result;
+        }
+
+        static long combinations(List<Combination> values) {
+            long result = list(values.size());
+            for (var value : values) result = add(result, combination(value));
+            return result;
+        }
+
+        static long certificate(Certificate value) {
+            long result = sum(128, text(value.scope), rows(value.axioms), list(value.forbidden.size()),
+                    list(value.farkas.size()), combinations(value.derived));
+            for (var clause : value.forbidden) result = add(result, rows(clause));
+            for (var fraction : value.farkas)
+                result = add(result, sum(64, integer(fraction.numerator), integer(fraction.denominator)));
+            return result;
+        }
+
+        static long derivation(Derivation value) {
+            return sum(128, text(value.scope), rows(value.axioms), combinations(value.steps));
+        }
+
+        static long divisibility(Divisibility value) {
+            return sum(128, text(value.scope), rows(value.axioms), vector(value.multipliers));
+        }
+
+        static long rounding(Rounding value) {
+            return sum(128, text(value.scope), rows(value.axioms), vector(value.multipliers),
+                    integer(value.divisor), vector(value.lower), row(value.consequence));
+        }
+
+        static long clique(Clique value) {
+            return sum(128, text(value.scope), rows(value.axioms), vector(value.lower), vector(value.upper),
+                    indices(value.literals), indices(value.witnesses), row(value.consequence));
+        }
+
+        static long knapsack(Knapsack value) {
+            return sum(128, text(value.scope), row(value.source), row(value.consequence),
+                    vector(value.lower), vector(value.upper));
+        }
+
+        static long diagram(Diagram value) {
+            long result = sum(128, text(value.scope), rows(value.axioms), vector(value.lower), vector(value.upper),
+                    indices(value.order), list(value.layers.size()));
+            for (var layer : value.layers) result = add(result, vectors(layer));
+            return result;
+        }
+
+        static long symmetry(Symmetry value) {
+            long result = sum(128, text(value.scope), rows(value.axioms), rows(value.leaders), list(value.permutations.size()));
+            for (var permutation : value.permutations) result = add(result, indices(permutation));
+            return result;
+        }
+
+        static long execution(ExecutionProof.Certificate value) {
+            return sum(128, text(value.scope()), vector(value.initial()), vector(value.goal()),
+                    vectors(value.inputs()), vectors(value.outputs()), vectors(value.states()), map(value.marked().size()));
+        }
+
+        static long induction(CountInduction.Proof value) {
+            var problem = value.problem();
+            return sum(256, certificate(value.base()), certificate(value.induction()), vector(problem.initial()),
+                    vector(problem.goal()), vectors(problem.inputs()), vectors(problem.outputs()));
+        }
     }
 
     static Certificate certificate(String scope, int variables, List<ExactLinearProgram.Constraint> rows,
@@ -832,9 +980,14 @@ public final class CountProof {
         for (var clause : proof.forbidden) for (var row : clause) if (!valid(row, proof.variables)) return Verdict.INVALID;
         long[] work = { maximumWork };
         try {
+            // Learned linear rows are consequences, never additional axioms.
+            // Check their parent chain before allowing the clause checker to
+            // use them, including in a closed infeasibility certificate.
+            List<Row> available = new ArrayList<>(proof.axioms);
+            if (!derive(proof.variables, available, proof.derived, work)) return Verdict.INVALID;
             List<List<Row>> established = new ArrayList<>();
             for (var clause : proof.forbidden) {
-                List<Row> assumed = new ArrayList<>(proof.axioms);
+                List<Row> assumed = new ArrayList<>(available);
                 assumed.addAll(clause);
                 // Most leaf exclusions follow directly from a material row.
                 // Avoid scanning the entire accumulated clause archive for
@@ -845,14 +998,14 @@ public final class CountProof {
                 established.add(clause);
             }
             if (!proof.farkas.isEmpty()) {
-                if (proof.farkas.size() != proof.axioms.size()) return Verdict.INVALID;
+                if (proof.farkas.size() != available.size()) return Verdict.INVALID;
                 Fraction total = new Fraction(BigInteger.ZERO, BigInteger.ONE);
                 Map<Integer, Fraction> columns = new HashMap<>();
-                for (int i = 0; i < proof.axioms.size(); i++) {
+                for (int i = 0; i < available.size(); i++) {
                     tick(work);
                     var weight = proof.farkas.get(i);
                     if (weight.numerator.signum() < 0) return Verdict.INVALID;
-                    var row = proof.axioms.get(i);
+                    var row = available.get(i);
                     total = total.add(weight.multiply(row.upper));
                     for (var term : row.terms.entrySet()) {
                         tick(work);
@@ -862,7 +1015,7 @@ public final class CountProof {
                 if (total.numerator.signum() >= 0 || columns.values().stream().anyMatch(v -> v.numerator.signum() < 0)) return Verdict.INVALID;
                 return Verdict.VERIFIED;
             }
-            return !proof.closed || contradiction(proof.variables, proof.axioms, established, work) ? Verdict.VERIFIED : Verdict.INVALID;
+            return !proof.closed || contradiction(proof.variables, available, established, work) ? Verdict.VERIFIED : Verdict.INVALID;
         } catch (CheckLimit limit) {
             return Verdict.INCOMPLETE;
         } finally {
@@ -871,7 +1024,7 @@ public final class CountProof {
     }
 
     private static boolean valid(Row row, int variables) {
-        return row.upper != null && row.terms.entrySet().stream().allMatch(e -> e.getKey() >= 0 && e.getKey() < variables && e.getValue() != null);
+        return row != null && row.upper != null && row.terms.entrySet().stream().allMatch(e -> e.getKey() >= 0 && e.getKey() < variables && e.getValue() != null);
     }
 
     private static boolean contradiction(int variables, List<Row> axioms, List<List<Row>> clauses, long[] work) {
@@ -1036,7 +1189,7 @@ public final class CountProof {
         return result;
     }
 
-    private static void certificate(DataOutputStream output, Certificate proof) throws IOException {
+    private static void certificate(DataOutputStream output, Certificate proof, int version) throws IOException {
         output.writeUTF(proof.scope);
         output.writeInt(proof.variables);
         rows(output, proof.axioms);
@@ -1048,9 +1201,21 @@ public final class CountProof {
             integer(output, weight.denominator);
         }
         output.writeBoolean(proof.closed);
+        if (version >= 0x43475043) {
+            output.writeInt(proof.derived.size());
+            for (var step : proof.derived) {
+                output.writeInt(step.parents.size());
+                for (var parent : step.parents.entrySet()) {
+                    output.writeInt(parent.getKey());
+                    integer(output, parent.getValue());
+                }
+                integer(output, step.divisor);
+                rows(output, List.of(step.consequence));
+            }
+        }
     }
 
-    private static Certificate certificate(DataInputStream input) throws IOException {
+    private static Certificate certificate(DataInputStream input, int version) throws IOException {
         String scope = input.readUTF();
         int variables = length(input, 16384);
         List<Row> axioms = rows(input);
@@ -1058,7 +1223,20 @@ public final class CountProof {
         for (int n = length(input, 8192); n > 0; n--) forbidden.add(rows(input));
         List<Fraction> weights = new ArrayList<>();
         for (int n = length(input, 65536); n > 0; n--) weights.add(new Fraction(integer(input), integer(input)));
-        return new Certificate(scope, variables, axioms, forbidden, weights, input.readBoolean());
+        boolean closed = input.readBoolean();
+        List<Combination> derived = new ArrayList<>();
+        if (version >= 0x43475043) for (int count = length(input, 8192); count > 0; count--) {
+            Map<Integer, BigInteger> parents = new TreeMap<>();
+            for (int n = length(input, 65536); n > 0; n--) {
+                int id = input.readInt();
+                if (parents.put(id, integer(input)) != null) throw new IOException("Duplicate proof parent");
+            }
+            BigInteger divisor = integer(input);
+            List<Row> consequence = rows(input);
+            if (consequence.size() != 1) throw new IOException("Expected one derived row");
+            derived.add(new Combination(parents, divisor, consequence.get(0)));
+        }
+        return new Certificate(scope, variables, axioms, forbidden, weights, closed, derived);
     }
 
     public static Journal read(Path path) throws IOException {
@@ -1066,9 +1244,9 @@ public final class CountProof {
         Journal journal = new Journal(128L << 20);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
             int version = input.readInt();
-            if ((version < 0x43475032 || version > 0x43475039) && version != 0x43475041) throw new IOException("Unsupported certificate format");
+            if ((version < 0x43475032 || version > 0x43475039) && version != 0x43475041 && version != 0x43475042 && version != 0x43475043) throw new IOException("Unsupported certificate format");
             journal.truncated = input.readBoolean();
-            for (int remaining = length(input, 8192); remaining > 0; remaining--) journal.add(certificate(input));
+            for (int remaining = length(input, 8192); remaining > 0; remaining--) journal.add(certificate(input, version));
             for (int n = length(input, 8192); n > 0; n--) {
                 String scope = input.readUTF();
                 int kind = length(input, ExecutionProof.Kind.values().length - 1);
@@ -1100,7 +1278,9 @@ public final class CountProof {
                 for (int m = length(input, 16384); m > 0; m--) low.add(integer(input));
                 List<Row> consequence = rows(input);
                 if (consequence.size() != 1) throw new IOException("Invalid rounding consequence");
-                journal.add(new Rounding(scope, variables, axioms, weights, divisor, low, consequence.get(0)));
+                int kind = version >= 0x43475042 ? input.readUnsignedByte() : 0;
+                if (kind >= RoundingKind.values().length) throw new IOException("Invalid rounding rule");
+                journal.add(new Rounding(scope, variables, axioms, weights, divisor, low, consequence.get(0), RoundingKind.values()[kind]));
             }
             if (version >= 0x43475035) for (int n = length(input, 8192); n > 0; n--) {
                 String scope = input.readUTF();
@@ -1176,12 +1356,12 @@ public final class CountProof {
                 }
                 journal.add(new Symmetry(scope, variables, axioms, permutations, rows(input)));
             }
-            if (version == 0x43475041) for (int n = length(input, 8192); n > 0; n--) {
+            if (version >= 0x43475041) for (int n = length(input, 8192); n > 0; n--) {
                 var boundaries = vectors(input);
                 if (boundaries.size() != 2) throw new IOException("Invalid induction boundaries");
                 var problem = new CountInduction.Problem(boundaries.get(0), boundaries.get(1), vectors(input), vectors(input));
                 int depth = length(input, 6);
-                journal.add(new CountInduction.Proof(problem, depth, certificate(input), certificate(input)));
+                journal.add(new CountInduction.Proof(problem, depth, certificate(input, version), certificate(input, version)));
             }
             if (input.read() != -1) throw new IOException("Trailing certificate bytes");
         }

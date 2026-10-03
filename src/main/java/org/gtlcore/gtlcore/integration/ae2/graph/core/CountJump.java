@@ -12,59 +12,139 @@ import java.util.*;
  */
 final class CountJump implements AutoCloseable {
 
-    private record Term(int row, BigInteger coefficient) {}
+    private static final class Term {
+
+        final int row, variable;
+        final BigInteger coefficient;
+        // For a clean binary variable, this is the exact hinge difference for
+        // its current proposed flip. Dirty variables never consume this cache.
+        BigInteger gain;
+
+        Term(int row, int variable, BigInteger coefficient) {
+            this.row = row;
+            this.variable = variable;
+            this.coefficient = coefficient;
+        }
+
+        int row() {
+            return row;
+        }
+
+        BigInteger coefficient() {
+            return coefficient;
+        }
+    }
 
     private final List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] lower, upper, values, residual, scales, jumps;
     private final double[] weights, scores;
+    private final boolean[] binaryDomains, cacheGains;
+    private final List<List<Term>> neighbors = new ArrayList<>();
+    private final BitSet movable = new BitSet();
+    private long cachedGainBytes;
     private final List<List<Term>> affected = new ArrayList<>();
     private final BitSet dirty = new BitSet(), violated = new BitSet();
     private final PlanningBudget budget;
-    private final long allowance;
+    private final long pairAfter;
+    private long allowance;
     private final SplittableRandom random = new SplittableRandom(0x49f6b58dL);
     private BigInteger[] counts;
-    private long memory, work;
+    private long memory, work, improvements;
+    private double violation, bestViolation = Double.POSITIVE_INFINITY;
     private int initialized, moves, bumps, restarts, stale, pairs, last = -1;
-    private boolean complete, pairMode;
+    private boolean complete, pairMode, retained, paused, compoundEligible;
 
     CountJump(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
               PlanningBudget budget, long allowance) {
         this.rows = rows;
-        this.lower = lower.clone();
-        this.upper = upper.clone();
         this.budget = budget;
         this.allowance = Math.min(allowance, budget.remainingWork() / 8);
-        values = lower.clone();
-        residual = new BigInteger[rows.size()];
-        scales = new BigInteger[rows.size()];
-        weights = new double[rows.size()];
-        jumps = new BigInteger[lower.length];
-        scores = new double[lower.length];
+        pairAfter = this.allowance * 3 / 4;
         long entries = rows.stream().mapToLong(row -> row.terms().size()).sum();
-        long bytes = 2048 + 256L * lower.length + 256L * rows.size() + 96L * entries;
-        if (lower.length > 512 || rows.size() > 2048 || entries > 32768 || this.allowance < 1024 || !budget.tryReserve(bytes)) {
-            complete = true;
-            return;
+        long bytes = 2048 + 256L * lower.length + 288L * rows.size() + 112L * entries;
+        boolean admitted = lower.length <= 1024 && rows.size() <= 4096 && entries <= 65536 &&
+                this.allowance >= 1024 && CountModelViews.admissible(lower.length, rows.size(), entries, budget) &&
+                budget.tryReserve(bytes);
+        memory = admitted ? bytes : 0;
+        try {
+            this.lower = admitted ? lower.clone() : new BigInteger[0];
+            this.upper = admitted ? upper.clone() : new BigInteger[0];
+            values = this.lower.clone();
+            residual = new BigInteger[admitted ? rows.size() : 0];
+            scales = new BigInteger[residual.length];
+            weights = new double[residual.length];
+            jumps = new BigInteger[this.lower.length];
+            scores = new double[this.lower.length];
+            binaryDomains = new boolean[this.lower.length];
+            cacheGains = new boolean[residual.length];
+            if (!admitted) {
+                complete = true;
+                return;
+            }
+            compoundEligible = lower.length <= 128 && entries <= 8192;
+            for (int i = 0; i < lower.length; i++) {
+                charge();
+                if (upper[i] == null || upper[i].subtract(lower[i]).compareTo(BigInteger.ONE) > 0) compoundEligible = false;
+                affected.add(new ArrayList<>());
+                binaryDomains[i] = upper[i] != null && upper[i].subtract(lower[i]).equals(BigInteger.ONE);
+            }
+            for (int i = 0; i < residual.length; i++) neighbors.add(new ArrayList<>());
+            Arrays.fill(weights, 1.0);
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
         }
-        memory = bytes;
-        for (int i = 0; i < lower.length; i++) affected.add(new ArrayList<>());
-        Arrays.fill(weights, 1.0);
+    }
+
+    CountJump retained() {
+        retained = true;
+        return this;
+    }
+
+    boolean paused() {
+        return paused;
+    }
+
+    void resume(long quantum) {
+        if (!paused || quantum <= 0) throw new IllegalStateException("Jump search is not paused");
+        if (budget.remainingWork() == 0) budget.check();
+        allowance = work + Math.min(quantum, budget.remainingWork());
+        paused = false;
+        complete = false;
+    }
+
+    /** Best unweighted violation observed; repeated moves earn no new reward. */
+    long progress() {
+        return improvements;
     }
 
     boolean step() {
         if (complete) return true;
+        if (work >= allowance) {
+            paused = retained;
+            return finish(retained ? "local_pause" : "work_limit");
+        }
         charge();
-        if (work >= allowance) return finish("work_limit");
-        if (!pairMode && values.length <= 128 && initialized == rows.size() && work >= allowance * 3 / 4) {
+        // A retained arm's trajectory must not depend on its first scheduling
+        // quantum. The original one-shot arm keeps its old quota split.
+        if (!pairMode && values.length <= 128 && (!retained || compoundEligible) &&
+                initialized == rows.size() && work >= (retained ? 32_768 : pairAfter)) {
             // A second heuristic starts from the same domains. Its failures
             // have no bearing on any unvisited count or execution ordering.
             pairMode = true;
             System.arraycopy(lower, 0, values, 0, lower.length);
             Arrays.fill(weights, 1.0);
             affected.forEach(List::clear);
+            neighbors.forEach(List::clear);
+            budget.release(cachedGainBytes);
+            memory -= cachedGainBytes;
+            cachedGainBytes = 0;
+            Arrays.fill(cacheGains, false);
+            movable.clear();
             dirty.clear();
             violated.clear();
             initialized = 0;
+            violation = 0;
             stale = 0;
             last = -1;
             return false;
@@ -72,19 +152,51 @@ final class CountJump implements AutoCloseable {
         if (initialized < rows.size()) {
             int r = initialized++;
             var row = rows.get(r);
-            BigInteger value = row.upper().negate(), scale = BigInteger.ONE;
+            BigInteger value = row.upper().negate(), scale = BigInteger.ONE, maximum = BigInteger.ZERO;
             for (var term : row.terms().entrySet()) {
                 charge();
                 value = value.add(term.getValue().multiply(values[term.getKey()]));
                 scale = scale.max(term.getValue().abs());
-                if (!lower[term.getKey()].equals(upper[term.getKey()]) && term.getValue().signum() != 0)
-                    affected.get(term.getKey()).add(new Term(r, term.getValue()));
+                if (term.getValue().signum() != 0 && maximum != null) {
+                    BigInteger endpoint = term.getValue().signum() > 0 ? upper[term.getKey()] : lower[term.getKey()];
+                    maximum = endpoint == null ? null : maximum.add(term.getValue().multiply(endpoint));
+                }
+            }
+            // A root-domain tautology contributes no violation at any future
+            // point. Keep it in the final exact witness check, but omit its
+            // constant-zero score and neighbor updates during the walk.
+            if (maximum != null && maximum.compareTo(row.upper()) <= 0) value = BigInteger.ZERO;
+            else {
+                long cacheBytes = 0;
+                for (var term : row.terms().entrySet()) {
+                    charge();
+                    int id = term.getKey();
+                    if (lower[id].equals(upper[id]) || term.getValue().signum() == 0) continue;
+                    Term edge = new Term(r, id, term.getValue());
+                    affected.get(id).add(edge);
+                    neighbors.get(r).add(edge);
+                    movable.set(id);
+                    // For a binary flip, the hinge gain is bounded by |coefficient|.
+                    if (binary(id)) cacheBytes += 64L + (term.getValue().bitLength() + 7L) / 8;
+                }
+                if (budget.tryReserve(cacheBytes)) {
+                    // Refusing this optional cache keeps the same arithmetic
+                    // and candidate order, without retaining gain objects.
+                    cacheGains[r] = true;
+                    memory += cacheBytes;
+                    cachedGainBytes += cacheBytes;
+                }
             }
             residual[r] = value;
             scales[r] = scale;
+            violation += ratio(value.max(BigInteger.ZERO), scale);
             violated.set(r, value.signum() > 0);
-            if (initialized == rows.size()) dirty.set(0, lower.length);
+            if (initialized == rows.size()) dirty.or(movable);
             return false;
+        }
+        if (violation < bestViolation - 1e-12 * Math.max(1, Math.abs(violation))) {
+            bestViolation = violation;
+            improvements++;
         }
         if (violated.isEmpty()) {
             // Re-evaluate the original rows instead of trusting cached deltas.
@@ -111,7 +223,7 @@ final class CountJump implements AutoCloseable {
             return false;
         }
         int best = -1;
-        for (int i = 0; i < scores.length; i++) {
+        for (int i = movable.nextSetBit(0); i >= 0; i = movable.nextSetBit(i + 1)) {
             charge();
             if (jumps[i] != null && (best < 0 || scores[i] < scores[best] || scores[i] == scores[best] && i != last && best == last)) best = i;
         }
@@ -169,6 +281,7 @@ final class CountJump implements AutoCloseable {
             int r = term.row();
             BigInteger changed = residual[r].add(term.coefficient().multiply(delta));
             BigInteger difference = changed.max(BigInteger.ZERO).subtract(residual[r].max(BigInteger.ZERO));
+            if (binary(variable) && cacheGains[r]) term.gain = difference;
             score += weights[r] * ratio(difference, scales[r]);
         }
         return score;
@@ -185,20 +298,23 @@ final class CountJump implements AutoCloseable {
             int r = term.row();
             BigInteger old = residual[r];
             residual[r] = old.add(term.coefficient().multiply(delta));
+            violation += ratio(residual[r].max(BigInteger.ZERO).subtract(old.max(BigInteger.ZERO)), scales[r]);
             violated.set(r, residual[r].signum() > 0);
-            for (var entry : rows.get(r).terms().entrySet()) {
+            for (Term entry : neighbors.get(r)) {
                 charge();
-                int id = entry.getKey();
+                int id = entry.variable;
                 if (dirty.get(id)) continue;
                 if (binary(id) && jumps[id] != null) {
-                    BigInteger change = entry.getValue().multiply(jumps[id].subtract(values[id]));
-                    BigInteger previous = old.add(change).max(BigInteger.ZERO).subtract(old.max(BigInteger.ZERO));
+                    BigInteger change = entry.coefficient.multiply(jumps[id].subtract(values[id]));
+                    BigInteger previous = cacheGains[r] && entry.gain != null ? entry.gain :
+                            old.add(change).max(BigInteger.ZERO).subtract(old.max(BigInteger.ZERO));
                     BigInteger next = residual[r].add(change).max(BigInteger.ZERO).subtract(residual[r].max(BigInteger.ZERO));
                     scores[id] += weights[r] * ratio(next.subtract(previous), scales[r]);
+                    if (cacheGains[r]) entry.gain = next;
                 } else dirty.set(id);
             }
         }
-        if (moves % 128 == 0) dirty.set(0, values.length);
+        if (moves % 128 == 0) dirty.or(movable);
     }
 
     private void bump() {
@@ -206,36 +322,44 @@ final class CountJump implements AutoCloseable {
         for (int r = violated.nextSetBit(0); r >= 0; r = violated.nextSetBit(r + 1)) {
             charge();
             weights[r] += 1.0;
-            for (var entry : rows.get(r).terms().entrySet()) {
+            for (Term entry : neighbors.get(r)) {
                 charge();
-                int id = entry.getKey();
+                int id = entry.variable;
                 if (dirty.get(id)) continue;
                 if (binary(id) && jumps[id] != null) {
-                    BigInteger next = residual[r].add(entry.getValue().multiply(jumps[id].subtract(values[id])));
-                    scores[id] += ratio(next.max(BigInteger.ZERO).subtract(residual[r].max(BigInteger.ZERO)), scales[r]);
+                    BigInteger gain = cacheGains[r] ? entry.gain : null;
+                    if (gain == null) {
+                        BigInteger next = residual[r].add(entry.coefficient.multiply(jumps[id].subtract(values[id])));
+                        gain = next.max(BigInteger.ZERO).subtract(residual[r].max(BigInteger.ZERO));
+                    }
+                    scores[id] += ratio(gain, scales[r]);
                 } else dirty.set(id);
             }
         }
     }
 
     private boolean binary(int id) {
-        return upper[id] != null && upper[id].subtract(lower[id]).equals(BigInteger.ONE);
+        return binaryDomains[id];
     }
 
     /** Cross a one-coordinate barrier without committing an expensive prefix. */
     private boolean pair() {
-        if (values.length > 128) return false;
+        if (values.length > 128 || retained && !compoundEligible) return false;
+        // Stop only after a complete candidate evaluation and restore the
+        // tentative first move. This private quota is independent of portfolio
+        // slices; dense or multi-value walks keep ordinary jumps instead.
+        long until = retained ? work + 32_768 : allowance;
         List<Integer> choices = new ArrayList<>();
         for (int i = 0; i < values.length; i++) if (jumps[i] != null) choices.add(i);
         choices.sort(Comparator.comparingDouble((Integer i) -> scores[i]).thenComparingInt(i -> i));
         BigInteger[] proposed = jumps.clone();
         double[] firstScores = scores.clone();
         int previous = last;
-        for (int k = 0; k < Math.min(6, choices.size()) && work < allowance; k++) {
+        for (int k = 0; k < Math.min(6, choices.size()) && work < until; k++) {
             int first = choices.get(k);
             BigInteger original = values[first];
             move(first, proposed[first]);
-            for (int second = 0; second < values.length && work < allowance; second++) {
+            for (int second = 0; second < values.length && work < until; second++) {
                 charge();
                 if (second == first || affected.get(second).isEmpty()) continue;
                 recompute(second);

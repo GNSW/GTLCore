@@ -37,6 +37,8 @@ public final class RegionSelection<K> {
     private SequenceSummary<K> unitSummary;
     private Iterator<K> keys;
     private BigInteger count;
+    private BigInteger unitProduced;
+    private boolean consumeTargetSeed;
     private Map<K, Long> reserve;
     private boolean possible, needsWork;
     private Choice<K> best;
@@ -83,6 +85,12 @@ public final class RegionSelection<K> {
         searchStarted = budget.nodes();
     }
 
+    RegionSelection<K> allowTargetSeedConsumption(boolean allow) {
+        if (phase != 0) throw new IllegalStateException("Region search already started");
+        consumeTargetSeed = allow;
+        return this;
+    }
+
     public boolean step() {
         budget.check();
         budget.phase(PlanningBudget.Phase.SOLVE);
@@ -123,6 +131,7 @@ public final class RegionSelection<K> {
             }
             case 1 -> {
                 children = new ArrayList<>();
+                unitProduced = BigInteger.ZERO;
                 scaled = false;
                 workingCopies = 1;
                 index = 0;
@@ -135,6 +144,8 @@ public final class RegionSelection<K> {
                             recipes.get((index - trial + recipes.size()) % recipes.size()) : permutations.get(trial - recipes.size()).get(index);
                     long coefficient = recipes.size() <= 6 ? 1 + ((variant >>> (2 * index)) & 3) : 1;
                     children.add(new PlanStep.Batch(recipe.id(), coefficient));
+                    unitProduced = unitProduced.add(BigInteger.valueOf(recipe.executionOutputs().getOrDefault(target, 0L))
+                            .multiply(BigInteger.valueOf(coefficient)));
                     index++;
                 } else {
                     body = children.size() == 1 ? children.get(0) : new PlanStep.Sequence(children);
@@ -181,8 +192,19 @@ public final class RegionSelection<K> {
                     // apparently free plan before its useful direction is tried.
                     if (count.signum() == 0 && needsWork) possible = false;
                     if (forceTarget && produced.contains(target)) {
-                        if (unitSummary.delta(target).signum() <= 0) possible = false;
-                        else count = count.max(CheckedAmounts.ceilDiv(BigInteger.valueOf(amount), unitSummary.delta(target)));
+                        if (unitSummary.delta(target).signum() <= 0 || unitProduced.signum() == 0) possible = false;
+                        // Delivery and seeds are covered by the net-balance
+                        // bounds above/below. Forced production counts physical
+                        // outputs, allowing a productive bootstrap to consume an
+                        // initial target seed. The final rewritten witness must
+                        // separately pass ForceCraftProof; gross turnover alone
+                        // never certifies an executable forced order.
+                        // Preserved catalysts and single-recipe self-growth
+                        // retain their existing net-production contract: extra
+                        // stored copies must not replace the configured seed
+                        // loan with consumption of the target inventory.
+                        else count = count.max(CheckedAmounts.ceilDiv(BigInteger.valueOf(amount),
+                                consumeTargetSeed && !preserve && recipes.size() > 1 ? unitProduced : unitSummary.delta(target)));
                     }
                     if (!possible) {
                         nextTrial();

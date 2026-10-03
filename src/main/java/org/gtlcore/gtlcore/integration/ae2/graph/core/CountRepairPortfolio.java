@@ -22,6 +22,9 @@ final class CountRepairPortfolio implements AutoCloseable {
     private final BigInteger[] lower, upper;
     private final PlanningBudget budget;
     private final List<View> views = new ArrayList<>();
+    private CountDiving diving;
+    private boolean diveDone;
+    private long diveSlice;
     private int cursor;
     private BigInteger[] counts;
     private long memory;
@@ -41,21 +44,23 @@ final class CountRepairPortfolio implements AutoCloseable {
                 views.add(new View(alternative));
             }
         }
+        cursor = views.size();
     }
 
     boolean step() {
         if (complete) return true;
+        if (cursor == views.size()) return stepDive();
         View view = views.get(cursor);
         if (view.attempt == 4) {
             budget.check();
-            if (views.stream().allMatch(v -> v.attempt == 4)) {
+            if (diveDone && views.stream().allMatch(v -> v.attempt == 4)) {
                 complete = true;
                 return true;
             }
-            cursor = (cursor + 1) % views.size();
+            cursor = (cursor + 1) % (views.size() + 1);
             return false;
         }
-        long before = views.size() > 1 ? budget.threadWork() : 0;
+        long before = budget.threadWork();
         try {
             if (view.repair == null) view.repair = new CountLatticeRepair(rows, lower, upper, view.point, view.attempt, budget);
             if (view.repair.step()) {
@@ -71,12 +76,41 @@ final class CountRepairPortfolio implements AutoCloseable {
             }
             return false;
         } finally {
-            if (views.size() > 1) {
-                view.slice += budget.threadWork() - before;
-                if (view.slice >= 4096 || view.attempt == 4) {
-                    view.slice = 0;
-                    cursor = (cursor + 1) % views.size();
-                }
+            view.slice += budget.threadWork() - before;
+            if (view.slice >= 4096 || view.attempt == 4) {
+                view.slice = 0;
+                cursor = (cursor + 1) % (views.size() + 1);
+            }
+        }
+    }
+
+    private boolean stepDive() {
+        if (diveDone) {
+            budget.check();
+            complete = views.stream().allMatch(view -> view.attempt == 4);
+            cursor = 0;
+            return complete;
+        }
+        long before = budget.threadWork();
+        try {
+            // This member retains its own bounded search across handoffs. A
+            // new quantum neither recreates it nor replenishes its local quota.
+            if (diving == null) diving = new CountDiving(rows, lower, upper, views.get(0).point, budget);
+            if (!diving.step()) return false;
+            counts = diving.counts();
+            diving.close();
+            diving = null;
+            diveDone = true;
+            if (counts != null) {
+                complete = true;
+                budget.note("count_repair_view", "witness_view=diving; lattice_views=" + views.size());
+            }
+            return complete;
+        } finally {
+            diveSlice += budget.threadWork() - before;
+            if (diveSlice >= 4096 || diveDone) {
+                diveSlice = 0;
+                cursor = 0;
             }
         }
     }
@@ -91,6 +125,8 @@ final class CountRepairPortfolio implements AutoCloseable {
 
     @Override
     public void close() {
+        if (diving != null) diving.close();
+        diving = null;
         for (View view : views) {
             if (view.repair != null) view.repair.close();
             view.repair = null;

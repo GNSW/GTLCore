@@ -42,7 +42,8 @@ final class CountModelViews implements AutoCloseable {
 
     static CountModelViews create(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high,
                                   PlanningBudget budget) {
-        if (low.length > 512 || rows.size() > 2048 || rows.stream().mapToLong(r -> r.terms().size()).sum() > 32768) return null;
+        long terms = rows.stream().mapToLong(r -> r.terms().size()).sum();
+        if (!admissible(low.length, rows.size(), terms, budget)) return null;
         long bytes = 1024L + 32L * low.length + 16L * rows.size();
         if (!budget.tryReserve(bytes)) return null;
         try {
@@ -51,6 +52,15 @@ final class CountModelViews implements AutoCloseable {
             budget.release(bytes);
             throw failure;
         }
+    }
+
+    /** Optional search admission, never an infeasibility test. */
+    static boolean admissible(int variables, int rows, long terms, PlanningBudget budget) {
+        // Permit large sparse models when their actual indexing work fits.
+        // Outer limits bound Java allocations even with an enormous caller
+        // budget; each representation separately reserves its real workspace.
+        return variables <= 8192 && rows <= 32768 && terms <= 1_048_576 &&
+                4L * variables + rows + terms <= budget.remainingWork();
     }
 
     List<View> available() {
@@ -118,7 +128,8 @@ final class CountModelViews implements AutoCloseable {
                 term.setValue(next);
             }
         }
-        return CountReduction.normalize(new ExactLinearProgram.Constraint(terms, bound));
+        var normalized = CountReduction.normalize(new ExactLinearProgram.Constraint(terms, bound));
+        return CountIntegerCoefficients.simplify(normalized, original.lower, original.upper, budget);
     }
 
     /** The owner retains the reduction until all searches using its inverse close. */

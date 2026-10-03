@@ -11,6 +11,15 @@ import java.util.*;
  */
 final class CountCoverCuts implements AutoCloseable {
 
+    private static final class Stop extends RuntimeException {
+
+        private static final Stop INSTANCE = new Stop();
+
+        private Stop() {
+            super(null, null, false, false);
+        }
+    }
+
     private record Literal(int id, int sign, BigInteger weight, BigInteger offset, ExactRational value) {}
 
     private final List<ExactLinearProgram.Constraint> rows;
@@ -18,12 +27,16 @@ final class CountCoverCuts implements AutoCloseable {
     private final ExactRational[] point;
     private final PlanningBudget budget;
     private final List<ExactLinearProgram.Constraint> cuts = new ArrayList<>();
-    private final Set<ExactLinearProgram.Constraint> known;
+    private final Set<ExactLinearProgram.Constraint> known = new HashSet<>();
     private final Set<ExactLinearProgram.Constraint> lifted = new HashSet<>();
     private final long allowance;
+    private final boolean fair;
+    private final List<Integer> eligible = new ArrayList<>();
+    private final Map<ExactLinearProgram.Constraint, ExactRational> scores = new HashMap<>();
     private long work, memory;
+    private long rowUntil;
     private int cursor;
-    private boolean complete;
+    private boolean complete, liftingPass;
 
     CountCoverCuts(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                    ExactRational[] point, PlanningBudget budget) {
@@ -32,18 +45,64 @@ final class CountCoverCuts implements AutoCloseable {
         this.upper = upper;
         this.point = point;
         this.budget = budget;
-        known = new HashSet<>(rows);
         allowance = Math.min(32768, budget.remainingWork() / 32);
-        long bytes = 2048 + 256L * lower.length + 192L * rows.size();
-        if (lower.length > 512 || rows.size() > 1024 || allowance < 1024 || !budget.tryReserve(bytes)) complete = true;
-        else memory = bytes;
+        if (lower.length > 512 || rows.size() > 1024 || allowance < 1024) {
+            fair = false;
+            complete = true;
+            return;
+        }
+        long bytes = 2048 + 256L * lower.length + 192L * rows.size() +
+                (lower.length > 64 ? 2048L + 32L * rows.size() : 0);
+        if (!budget.tryReserve(bytes)) {
+            fair = false;
+            complete = true;
+            return;
+        }
+        memory = bytes;
+        try {
+            known.addAll(rows);
+            long estimated = 0;
+            if (lower.length > 64) for (int i = 0; i < rows.size(); i++) {
+                budget.check();
+                work++;
+                int size = rows.get(i).terms().size();
+                if (size < 2 || size > 256) continue;
+                eligible.add(i);
+                estimated += (long) size * size;
+            }
+            // Preserve the established small-model order. Wide rows can spend
+            // the entire slice lifting one early cover, before later resources.
+            fair = lower.length > 64 && estimated > allowance / 4;
+            if (work >= allowance) complete = true;
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
+        }
     }
 
     boolean step() {
+        try {
+            return advance();
+        } catch (Stop ignored) {
+            return finish();
+        }
+    }
+
+    private boolean advance() {
         if (complete) return true;
         charge();
-        if (cursor == rows.size() || work >= allowance || cuts.size() >= 8) return finish();
-        var row = rows.get(cursor++);
+        if (work >= allowance || !fair && (cursor == rows.size() || cuts.size() >= 8)) return finish();
+        if (fair && cursor == eligible.size()) {
+            if (liftingPass) return finish();
+            // Basic separation gets the first sweep. Lifting then shares the
+            // remaining work across rows, rather than renewing a row's quota.
+            liftingPass = true;
+            cursor = 0;
+        }
+        if (fair && eligible.isEmpty()) return finish();
+        if (fair && liftingPass) rowUntil = Math.min(allowance,
+                work + Math.max(0, (allowance - work) / (eligible.size() - cursor)));
+        var row = rows.get(fair ? eligible.get(cursor++) : cursor++);
         if (row.terms().size() < 2 || row.terms().size() > 256) return false;
         BigInteger minimum = BigInteger.ZERO;
         List<Literal> literals = new ArrayList<>();
@@ -62,7 +121,7 @@ final class CountCoverCuts implements AutoCloseable {
         }
         BigInteger capacity = row.upper().subtract(minimum);
         if (capacity.signum() < 0 || literals.size() < 2) return false;
-        for (int pass = 0; pass < 3 && work < allowance && cuts.size() < 8; pass++) {
+        for (int pass = 0; pass < 3 && work < allowance && (fair || cuts.size() < 8); pass++) {
             if (pass == 0) literals.sort((a, b) -> {
                 int c = ExactRational.ONE.subtract(a.value()).multiply(ExactRational.of(b.weight()))
                         .compareTo(ExactRational.ONE.subtract(b.value()).multiply(ExactRational.of(a.weight())));
@@ -99,8 +158,9 @@ final class CountCoverCuts implements AutoCloseable {
                 terms.put(literal.id(), BigInteger.valueOf(literal.sign()));
             }
             var cut = new ExactLinearProgram.Constraint(terms, bound);
-            if (activity.compareTo(ExactRational.of(BigInteger.valueOf(cover.size() - 1L))) > 0 && known.add(cut)) cuts.add(cut);
-            if (cuts.size() < 8) lift(row, literals, cover, capacity);
+            ExactRational violation = activity.subtract(ExactRational.of(BigInteger.valueOf(cover.size() - 1L)));
+            if ((!fair || !liftingPass) && violation.signum() > 0) offer(cut, violation);
+            if ((!fair && cuts.size() < 8 || fair && liftingPass) && work < allowance) lift(row, literals, cover, capacity);
         }
         return false;
     }
@@ -117,7 +177,7 @@ final class CountCoverCuts implements AutoCloseable {
             charge();
             if (coefficients.containsKey(extra)) continue;
             long effort = (long) (total + 1) * (coefficients.size() + 1);
-            if (total > 8192 || effort > allowance - work) break;
+            if (total > 8192 || effort > (fair ? Math.min(rowUntil, allowance) : allowance) - work) break;
             long bytes = 96L * (total + 1);
             if (!budget.tryReserve(bytes)) break;
             int maximum = -1;
@@ -168,16 +228,45 @@ final class CountCoverCuts implements AutoCloseable {
             terms.put(literal.id(), weight.multiply(BigInteger.valueOf(literal.sign())));
         }
         var cut = new ExactLinearProgram.Constraint(terms, limit);
-        if (activity.compareTo(ExactRational.of(BigInteger.valueOf(rhs))) <= 0 || !known.add(cut)) return;
-        cuts.add(cut);
+        ExactRational violation = activity.subtract(ExactRational.of(BigInteger.valueOf(rhs)));
+        if (violation.signum() <= 0 || !offer(cut, violation)) return;
         lifted.add(cut);
         if (budget.proofJournal() != null) budget.proofJournal().add(new CountProof.Knapsack("sequential_cover_lifting", lower.length,
                 CountProof.row(source), Arrays.asList(lower), Arrays.asList(upper), CountProof.row(cut)));
     }
 
     private void charge() {
+        if (fair && work >= allowance) throw Stop.INSTANCE;
         budget.check();
         work++;
+    }
+
+    private boolean offer(ExactLinearProgram.Constraint cut, ExactRational violation) {
+        if (known.contains(cut)) return false;
+        if (fair) {
+            BigInteger squared = BigInteger.ZERO;
+            for (var coefficient : cut.terms().values()) {
+                charge();
+                squared = squared.add(coefficient.multiply(coefficient));
+            }
+            if (squared.signum() == 0) return false;
+            // Efficacy only selects among already proved, exactly violated
+            // cuts. Retain at most eight; scoring never proves infeasibility.
+            ExactRational score = violation.multiply(violation).divide(ExactRational.of(squared));
+            if (cuts.size() == 8) {
+                var weakest = cuts.get(0);
+                for (var old : cuts) if (scores.get(old).compareTo(scores.get(weakest)) < 0) weakest = old;
+                if (score.compareTo(scores.get(weakest)) <= 0) return false;
+                cuts.remove(weakest);
+                known.remove(weakest);
+                scores.remove(weakest);
+                lifted.remove(weakest);
+            }
+            scores.put(cut, score);
+        }
+        known.add(cut);
+        cuts.add(cut);
+        return true;
     }
 
     private boolean finish() {

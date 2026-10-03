@@ -35,6 +35,7 @@ final class ExactLinearProgram implements AutoCloseable {
     }
 
     private final List<Constraint> constraints;
+    private final List<Constraint> inputRows;
     private final BigInteger[] objective;
     private final PlanningBudget budget;
     private final int rows, variables;
@@ -114,6 +115,8 @@ final class ExactLinearProgram implements AutoCloseable {
     ExactLinearProgram(int variables, List<Constraint> constraints, BigInteger[] objective, PlanningBudget budget, Basis ancestor, boolean keepBasis, boolean allowPricing) {
         this.allowPricing = allowPricing;
         this.variables = variables;
+        var requestedRows = constraints;
+        constraints = distinctRows(variables, constraints, budget);
         if (ancestor != null && (ancestor.variables != variables || !Arrays.equals(ancestor.objective, objective))) ancestor = null;
         if (ancestor != null && !retainsConstraints(constraints, ancestor.constraints, budget)) ancestor = null;
         List<Constraint> combined = constraints;
@@ -128,6 +131,7 @@ final class ExactLinearProgram implements AutoCloseable {
             }
         }
         this.constraints = List.copyOf(combined);
+        inputRows = this.constraints.equals(requestedRows) ? null : List.copyOf(requestedRows);
         this.objective = objective.clone();
         this.budget = budget;
         this.keepBasis = keepBasis;
@@ -135,6 +139,27 @@ final class ExactLinearProgram implements AutoCloseable {
         rows = this.constraints.size();
         long cells = (rows + 2L) * (variables + 2L);
         long bytes = cells * 768L + 64L * (rows + variables + 2L);
+        // Medium cold tableaux can spend their whole rational allowance just
+        // finding a basis. The numerical pass supplies indices only; exact
+        // factorization and rational optimization still own every verdict.
+        if (ancestor == null && variables >= 64 && variables <= 128 && rows <= 256) {
+            try {
+                numericalTried = true;
+                int[] proposal = CountLpProposal.propose(variables, this.constraints, this.objective, budget,
+                        Math.min(2_000_000, budget.remainingWork() / 4));
+                if (proposal != null) {
+                    sparse = new ExactRevisedProgram(variables, this.constraints, this.objective, budget);
+                    if (sparse.reconstruct(proposal)) return;
+                    sparse.close();
+                    sparse = null;
+                }
+            } catch (RuntimeException | Error failure) {
+                // A constructor has no caller-owned workspace yet. This also
+                // releases a factorization interrupted during reconstruction.
+                close();
+                throw failure;
+            }
+        }
         if (ancestor != null && ancestor.revised != null) {
             sparse = new ExactRevisedProgram(variables, this.constraints, this.objective, budget, ancestor);
             return;
@@ -181,6 +206,29 @@ final class ExactLinearProgram implements AutoCloseable {
             // owns this workspace. Release it here, just as after a work slice.
             close();
             throw failure;
+        }
+    }
+
+    private static List<Constraint> distinctRows(int variables, List<Constraint> rows, PlanningBudget budget) {
+        // Propagation often repeats the original unary upper bounds. Retain
+        // the first occurrence so these equal rows do not double the basis.
+        if (variables < 64 || variables > 128 || rows.size() > 1024) return rows;
+        long allowance = Math.min(16384, budget.remainingWork() / 64), started = budget.threadWork();
+        long bytes = 128L + 96L * rows.size();
+        if (allowance < 1024 || !budget.tryReserve(bytes)) return rows;
+        try {
+            Set<Constraint> distinct = new LinkedHashSet<>();
+            for (var row : rows) {
+                budget.check();
+                for (var ignored : row.terms().entrySet()) {
+                    budget.check();
+                    if (budget.threadWork() - started >= allowance) return rows;
+                }
+                distinct.add(row);
+            }
+            return distinct.size() == rows.size() ? rows : List.copyOf(distinct);
+        } finally {
+            budget.release(bytes);
         }
     }
 
@@ -518,11 +566,40 @@ final class ExactLinearProgram implements AutoCloseable {
     }
 
     ExactRational[] certificate() {
-        return certificate == null ? null : certificate.clone();
+        return inputWeights(certificate);
     }
 
     ExactRational[] optimumDual() {
-        return optimumDual == null ? null : optimumDual.clone();
+        return inputWeights(optimumDual);
+    }
+
+    private ExactRational[] inputWeights(ExactRational[] weights) {
+        if (weights == null) return null;
+        if (inputRows == null) return weights.clone();
+        long bytes = 128L + 96L * inputRows.size();
+        budget.reserve(bytes);
+        try {
+            Map<Constraint, Integer> positions = new HashMap<>();
+            for (int i = 0; i < inputRows.size(); i++) {
+                budget.check();
+                positions.putIfAbsent(inputRows.get(i), i);
+            }
+            ExactRational[] restored = new ExactRational[inputRows.size()];
+            Arrays.fill(restored, ExactRational.ZERO);
+            for (int i = 0; i < weights.length; i++) {
+                budget.check();
+                if (weights[i].signum() == 0) continue;
+                Integer position = positions.get(constraints.get(i));
+                // A hot ancestor can retain a weaker row absent from the new
+                // input. Its internal proof remains valid, but does not expose
+                // positional multipliers for a different caller row list.
+                if (position == null) return null;
+                restored[position] = restored[position].add(weights[i]);
+            }
+            return restored;
+        } finally {
+            budget.release(bytes);
+        }
     }
 
     @Override

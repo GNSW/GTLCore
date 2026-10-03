@@ -10,27 +10,86 @@ import java.util.*;
  */
 final class CountViewSearch implements AutoCloseable {
 
-    private static final long QUANTUM = 32768;
     private final CountModelViews models;
     private final PlanningBudget budget;
     private final List<Search> searches = new ArrayList<>();
+    private final CountPortfolioPolicy policy = new CountPortfolioPolicy();
     private Search active;
     private long work, until;
-    private int turn;
     private boolean infeasible;
     private BigInteger[] counts;
 
     private static final class Search {
 
         final CountModelViews.View view;
+        final CountPortfolioPolicy.Arm scheduling;
+        final Engine engine;
         CountLcg solver;
-        long work, progress;
-        int lastTurn = -1, slices, idleSlices, nextTurn;
-        boolean done, productive;
+        CountCdcl cdcl;
+        CountJump jump;
+        long sliceWork, progress;
+        boolean done;
 
-        Search(CountModelViews.View view) {
+        Search(CountModelViews.View view, CountPortfolioPolicy.Arm scheduling, Engine engine) {
             this.view = view;
+            this.scheduling = scheduling;
+            this.engine = engine;
         }
+
+        boolean started() {
+            return solver != null || cdcl != null || jump != null;
+        }
+
+        boolean paused() {
+            return solver != null ? solver.paused() : cdcl != null ? cdcl.paused() : jump != null && jump.paused();
+        }
+
+        void resume(long quantum, PlanningBudget budget) {
+            if (engine == Engine.PB) {
+                if (cdcl == null) cdcl = new CountCdcl(view.rows(), view.lower(), view.upper(), budget, quantum).retained();
+                else cdcl.resume(quantum);
+            } else if (engine == Engine.JUMP) {
+                if (jump == null) jump = new CountJump(view.rows(), view.lower(), view.upper(), budget, quantum).retained();
+                else jump.resume(quantum);
+            } else {
+                if (solver == null) {
+                    solver = new CountLcg(view.rows(), view.lower(), view.upper(), budget, quantum);
+                    if (engine == Engine.LOCKS) solver.lockBranching();
+                } else solver.resume(quantum);
+            }
+        }
+
+        void close() {
+            if (solver != null) solver.close();
+            if (cdcl != null) cdcl.close();
+            if (jump != null) jump.close();
+            solver = null;
+            cdcl = null;
+            jump = null;
+        }
+
+        boolean step() {
+            return cdcl != null ? cdcl.step() : jump != null ? jump.step() : solver.step();
+        }
+
+        long progress() {
+            return cdcl != null ? cdcl.progress() : jump != null ? jump.progress() : solver.progress();
+        }
+
+        BigInteger[] counts() {
+            return cdcl != null ? cdcl.counts() : jump != null ? jump.counts() : solver.counts();
+        }
+
+        boolean infeasible() {
+            return cdcl != null ? cdcl.infeasible() : solver != null && solver.infeasible();
+        }
+    }
+
+    private enum Engine {
+        LCG,
+        PB,
+        LOCKS,
+        JUMP
     }
 
     CountViewSearch(CountModelViews models, PlanningBudget budget) {
@@ -42,88 +101,88 @@ final class CountViewSearch implements AutoCloseable {
         if (allowance <= 0 || infeasible) throw new IllegalStateException("Invalid view search continuation");
         counts = null;
         until = work + Math.min(allowance, budget.remainingWork() / 4);
-        for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view)) searches.add(new Search(view));
+        for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view)) {
+            searches.add(new Search(view, policy.add(view.shape().cost()), Engine.LCG));
+            // The weighted Boolean engine has different propagation, phase
+            // saving and conflicts. Retain that complementary search too;
+            // repeatedly restarting a short PB attempt discards its learning.
+            if (binary(view)) {
+                searches.add(new Search(view, policy.add(view.shape().cost()), Engine.PB));
+                searches.add(new Search(view, policy.add(view.shape().cost()), Engine.LOCKS));
+                searches.add(new Search(view, policy.add(view.shape().cost()), Engine.JUMP));
+            }
+        }
+    }
+
+    private boolean binary(CountModelViews.View view) {
+        if (view.lower().length > 1024 || view.rows().size() > 4096 || view.shape().terms() > 65536) return false;
+        for (int i = 0; i < view.lower().length; i++) {
+            budget.check();
+            if (view.upper()[i] == null || view.upper()[i].subtract(view.lower()[i]).compareTo(BigInteger.ONE) > 0) return false;
+        }
+        return true;
     }
 
     boolean step() {
         if (counts != null || infeasible || work >= until) return true;
         long before = budget.threadWork();
+        boolean completedSlice = false;
+        long gained = 0;
         try {
             if (active == null) {
                 active = select();
                 if (active == null) return true;
-                long quantum = Math.min(QUANTUM, until - work);
-                if (active.solver == null && quantum < 1024) {
+                long quantum = policy.quantum(active.scheduling, until - work);
+                // A local walk crosses temporary violation barriers before
+                // establishing a new best point. Give it a full bounded
+                // batch; the common aging policy still schedules every arm.
+                if (active.engine == Engine.JUMP) quantum = Math.min(CountPortfolioPolicy.MAX_QUANTUM, until - work);
+                if (!active.started() && quantum < 1024) {
                     active = null;
                     return true;
                 }
-                if (active.solver == null) {
-                    var v = active.view;
-                    active.solver = new CountLcg(v.rows(), v.lower(), v.upper(), budget, quantum);
-                } else active.solver.resume(quantum);
-                active.lastTurn = turn++;
-                active.slices++;
+                policy.selected(active.scheduling);
+                active.sliceWork = 0;
+                active.resume(quantum, budget);
             }
-            if (!active.solver.step()) return false;
-            long progress = active.solver.progress();
-            active.productive = progress > active.progress;
+            if (!active.step()) return false;
+            long progress = active.progress();
+            gained = Math.max(0, progress - active.progress);
             active.progress = progress;
-            // Repeatedly fruitless slices get a bounded cooldown, as opposed
-            // to permanently excluding the representation. Learning resumes
-            // its normal frequency; all state remains local to this search.
-            active.idleSlices = active.productive ? 0 : Math.min(4, active.idleSlices + 1);
-            active.nextTurn = turn + (active.productive ? 0 : (1 << active.idleSlices) - 1);
-            BigInteger[] candidate = active.solver.counts();
-            infeasible = active.solver.infeasible();
+            completedSlice = true;
+            BigInteger[] candidate = active.counts();
+            infeasible = active.infeasible();
             if (candidate != null) counts = models.restoreAndCheck(active.view, candidate);
-            if (!active.solver.paused()) {
+            if (!active.paused()) {
                 active.done = true;
-                active.solver.close();
-                active.solver = null;
+                active.scheduling.retired = true;
+                active.close();
             }
-            budget.note("count_view", active.view.name() + "; slices=" + active.slices + "; witness=" + (counts != null) +
+            budget.note("count_view", active.view.name() + "; engine=" + active.engine.name().toLowerCase(Locale.ROOT) + "; slices=" + active.scheduling.selections + "; progress=" + gained + "; witness=" + (counts != null) +
                     "; proven_infeasible=" + infeasible + "; retained=" + !active.done);
             // Let complementary arithmetic/source strategies run when every
             // live representation has stalled. A later resume keeps the exact
             // queues and clauses; this handoff is neither failure nor closure.
-            boolean stalled = searches.stream().allMatch(search -> search.done || search.idleSlices >= 2);
+            boolean stalled = true;
+            for (Search search : searches) {
+                int idle = search == active ? gained > 0 ? 0 : search.scheduling.idleSlices + 1 : search.scheduling.idleSlices;
+                if (!search.done && idle < 2) stalled = false;
+            }
             return counts != null || infeasible || stalled;
         } finally {
             long spent = budget.threadWork() - before;
             work += spent;
             if (active != null) {
-                active.work += spent;
-                if (active.done || active.solver.paused()) active = null;
+                active.sliceWork += spent;
+                if (completedSlice) policy.feedback(active.scheduling, active.sliceWork, gained);
+                if (active.done || !active.started() || active.paused()) active = null;
             }
         }
     }
 
     private Search select() {
-        Search best = null;
-        int earliest = Integer.MAX_VALUE;
-        for (Search next : searches) {
-            if (next.done) continue;
-            earliest = Math.min(earliest, next.nextTurn);
-            if (next.nextTurn > turn) continue;
-            if (best == null || score(next) < score(best)) best = next;
-        }
-        // Cooldowns are a relative scheduling preference, never a reason to
-        // stop when every other view is sleeping or has already finished.
-        if (best == null && earliest != Integer.MAX_VALUE) {
-            turn = earliest;
-            return select();
-        }
-        return best;
-    }
-
-    private long score(Search search) {
-        // Every representation gets a first look; cheaper structure breaks
-        // ties. Aging bounds starvation even if another view keeps learning.
-        if (search.slices == 0) return Long.MIN_VALUE / 2 + search.view.shape().cost();
-        if (turn - search.lastTurn > 2 * searches.size()) return Long.MIN_VALUE / 4 + search.lastTurn;
-        // Reward propagation/learning mildly, not objective improvement: this
-        // scheduler looks for the first executable witness, not an incumbent.
-        return search.work / (search.productive ? 2 : 1);
+        var chosen = policy.select();
+        return searches.stream().filter(search -> search.scheduling == chosen).findFirst().orElse(null);
     }
 
     BigInteger[] counts() {
@@ -141,7 +200,7 @@ final class CountViewSearch implements AutoCloseable {
 
     @Override
     public void close() {
-        for (var search : searches) if (search.solver != null) search.solver.close();
+        for (var search : searches) search.close();
         searches.clear();
         active = null;
     }

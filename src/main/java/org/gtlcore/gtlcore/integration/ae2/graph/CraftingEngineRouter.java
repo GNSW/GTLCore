@@ -140,15 +140,18 @@ public final class CraftingEngineRouter {
                                               Level level, IActionSource source, AEKey target, long amount, CalculationStrategy strategy,
                                               GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve, boolean refreshInventory) {
         if (amount <= 0) throw new IllegalArgumentException("Non-positive crafting request");
+        PlanningScheduler planner = scheduler();
+        long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.ae2GraphPlannerMaxSteps,
+                planner.parallelism(), ConfigHolder.INSTANCE.ae2GraphPlannerParallelWorkBudget);
         PlanningBudget budget = new PlanningBudget(ConfigHolder.INSTANCE.ae2GraphPlannerTimeoutMs,
-                ConfigHolder.INSTANCE.ae2GraphPlannerMaxSteps, ConfigHolder.INSTANCE.ae2GraphPlannerMemoryMiB * (1L << 20),
+                workLimit, ConfigHolder.INSTANCE.ae2GraphPlannerMemoryMiB * (1L << 20),
                 () -> false, System::nanoTime);
         GraphPlanningRequest result = new GraphPlanningRequest(budget);
         if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) budget.enableMetrics();
         CompletableFuture<GtlPatternCatalog.Snapshot> snapshot = new CompletableFuture<>();
         var work = new RequestWork(grid, snapshot, target, amount, strategy, budget, checkpoint, preserve, result);
         // Admit before collecting world data; rejected/cancelled requests never collect a snapshot.
-        var worker = scheduler().submit(work, budget);
+        var worker = planner.submit(work, budget);
         result.attach(worker);
         worker.whenComplete((plan, error) -> {
             if (error != null) {

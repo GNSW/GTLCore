@@ -35,6 +35,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private GraphSolve<K> solving;
     private Bootstrap bootstrap;
     private PlanVerification<K> verifying;
+    private ForceCraftProof<K> productionProof;
     private AllocationSearch<K> allocating;
     private IntegerCountSearch<K> countSearch;
     private IntegerCountSearch<K> parkedCounts;
@@ -60,6 +61,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private Boolean stockBlocked;
     private boolean allocationAttempted, countAttempted, frontierTruncated;
     private boolean bootstrapTooLarge;
+    private boolean triedTargetSeedConsumption;
     private Iterator<K> alternatives;
     private Set<K> preferredAlternatives = Set.of();
     private long alternativeMemory;
@@ -248,6 +250,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     }
                     // Proven conflicts skipped above are not source attempts.
                     sourceAttempts++;
+                    triedTargetSeedConsumption = false;
                     solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock);
                     budget.note("compile", "choice=" + seen.size() + "; recipes=" + graph.recipes().size() + "; regions=" + graph.regions().size() +
                             "; cyclic=" + graph.regions().stream().filter(GraphCompiler.Region::cyclic).count());
@@ -282,12 +285,34 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         if (best == null || (!candidate.missing().isEmpty() &&
                                 (best.missing().isEmpty() || candidate.missing().size() < best.missing().size())))
                             best = candidate;
+                        if (retryWithTargetSeed()) return false;
                         prepareAlternatives();
                         phase = 5;
                     }
                 }
                 case 4 -> {
                     if (!verifying.step()) return false;
+                    if (forceCraft && !external.contains(target)) {
+                        if (productionProof == null) productionProof = new ForceCraftProof<>(candidate, verifying, requiredSeeds, budget);
+                        if (!productionProof.step()) return false;
+                        boolean productive = productionProof.proved();
+                        productionProof.close();
+                        productionProof = null;
+                        if (!productive) {
+                            budget.note("force_craft", "candidate_rejected; production_not_proved_after_rewrite");
+                            verifying.close();
+                            verifying = null;
+                            if (retryWithTargetSeed()) return false;
+                            // Reject this witness, not the remaining allocation
+                            // and count searches. Keep an unresolved placeholder
+                            // without closing their retained frontiers.
+                            if (best == null) best = new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()),
+                                    Map.of(), Map.of(), Map.of(), Map.of(), GraphPlan.Result.UNKNOWN, budget.nodes(), System.nanoTime() - started);
+                            prepareAlternatives();
+                            phase = 5;
+                            return false;
+                        }
+                    }
                     verified = candidate;
                     if (optimizeSeeds(candidate)) return false;
                     result = candidate;
@@ -704,6 +729,23 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         else pending.addLast(Map.copyOf(changed));
     }
 
+    private boolean retryWithTargetSeed() {
+        if (triedTargetSeedConsumption || preserve || !forceCraft || external.contains(target) || graph == null ||
+                graph.regions().stream().noneMatch(region -> region.cyclic() && region.recipes().size() > 1 &&
+                        region.recipes().stream().anyMatch(recipe -> recipe.executionOutputs().containsKey(target))))
+            return false;
+        // Retain the original net-production attempt, including its bootstrap,
+        // before trying a smaller productive cycle that consumes a target seed.
+        // Otherwise a cheaper but unprovable gross-output candidate can hide a
+        // perfectly executable net-output plan using exactly the same sources.
+        triedTargetSeedConsumption = true;
+        budget.note("region_solve", "retry_with_target_seed; same_sources");
+        solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                .allowTargetSeedConsumption(true);
+        phase = 2;
+        return true;
+    }
+
     private void afterSolve() {
         if (!candidate.feasible() && quantityBlocked == null && quantities == null) {
             quantities = new QuantityAnalysis<>(compiler, target, amount, stock, external, requiredSeeds, excluded, budget, forceCraft);
@@ -810,6 +852,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public void close() {
+        if (productionProof != null) productionProof.close();
+        productionProof = null;
         clearAlternativeOrder();
         if (countSearch != null) countSearch.close();
         if (parkedCounts != null) parkedCounts.close();
@@ -951,7 +995,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 }
                 // Bootstrapping material is newly manufactured, not new stock that
                 // grants another allowance of extra catalysts during the tail solve.
-                restarted = new GraphSolve<>(graph, target, amount, available, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock);
+                restarted = new GraphSolve<>(graph, target, amount, available, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                        .allowTargetSeedConsumption(triedTargetSeedConsumption);
                 return false;
             }
             var deficit = deficits.next();

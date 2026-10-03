@@ -16,8 +16,10 @@ final class CountNeighborhood implements AutoCloseable {
     private final ExactRational[] point;
     private final PlanningBudget budget;
     private final List<Integer> release = new ArrayList<>();
+    private final List<Integer> relax = new ArrayList<>();
     private final long allowance;
     private CountCdcl search;
+    private CountLcg relaxedSearch;
     private CountFeasibilityPump pump;
     private CountDomainSearch incumbentSearch;
     private CountSoftSearch softSearch;
@@ -25,9 +27,22 @@ final class CountNeighborhood implements AutoCloseable {
     private int incumbentAttempt;
     private long memory, work;
     private int attempt;
+    private int relaxedAttempt;
     private BigInteger[] counts;
     private boolean complete;
     private boolean allowPump = true;
+    private boolean wideDomains;
+    private CountPortfolioPolicy policy;
+    private CountPortfolioPolicy.Arm binaryArm, relaxedArm, pumpArm, activeArm;
+    private long sliceWork, sliceLimit, sliceProgress;
+
+    private void initializePortfolio() {
+        policy = new CountPortfolioPolicy();
+        long setup = lower.length + (long) rows.size();
+        binaryArm = policy.add(setup);
+        if (wideDomains) relaxedArm = policy.add(setup);
+        if (allowPump) pumpArm = policy.add(setup + lower.length);
+    }
 
     CountNeighborhood pump(boolean enabled) {
         allowPump = enabled;
@@ -54,65 +69,181 @@ final class CountNeighborhood implements AutoCloseable {
             complete = true;
             return;
         }
-        long bytes = 1024 + 384L * lower.length;
+        // Includes the three optional scheduling arms and their retained observations.
+        long bytes = 2048 + 384L * lower.length;
         if (!budget.tryReserve(bytes)) {
             complete = true;
             return;
         }
         memory = bytes;
-        int[] connections = new int[lower.length];
-        for (var row : rows) {
-            boolean fractional = row.terms().keySet().stream().anyMatch(i -> !point[i].integral());
-            for (int id : row.terms().keySet()) connections[id] += fractional ? 4 : 1;
+        long before = budget.threadWork();
+        try {
+            int[] connections = new int[lower.length];
+            for (var row : rows) {
+                boolean fractional = false;
+                for (int id : row.terms().keySet()) {
+                    if (!initializeStep(before)) return;
+                    fractional |= !point[id].integral();
+                }
+                for (int id : row.terms().keySet()) {
+                    if (!initializeStep(before)) return;
+                    connections[id] += fractional ? 4 : 1;
+                }
+            }
+            for (int i = 0; i < point.length; i++) {
+                if (!initializeStep(before)) return;
+                if (lower[i].equals(upper[i])) continue;
+                relax.add(i);
+                wideDomains |= upper[i] == null || upper[i].subtract(lower[i]).compareTo(BigInteger.ONE) > 0;
+                if (point[i].integral()) release.add(i);
+            }
+            release.sort(Comparator.<Integer>comparingInt(i -> -connections[i]).thenComparingInt(i -> i));
+            relax.sort(Comparator.<Integer>comparingInt(i -> -connections[i])
+                    .thenComparingInt(i -> point[i].integral() ? 1 : 0).thenComparingInt(i -> i));
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
+        } finally {
+            work += budget.threadWork() - before;
         }
-        for (int i = 0; i < point.length; i++) if (!lower[i].equals(upper[i]) && point[i].integral()) release.add(i);
-        release.sort(Comparator.<Integer>comparingInt(i -> -connections[i]).thenComparingInt(i -> i));
+    }
+
+    private boolean initializeStep(long started) {
+        // Building a dense neighborhood is part of its local allowance, not
+        // free preprocessing before the first cooperative search step.
+        if (budget.threadWork() - started >= allowance) {
+            complete = true;
+            return false;
+        }
+        budget.check();
+        return true;
     }
 
     boolean step() {
         if (complete) return true;
+        boolean completedStep = false;
         long before = budget.threadWork();
         try {
             budget.check();
             if (work >= allowance) return finish("neighborhoods_unresolved");
             if (incumbent != null && incumbentAttempt < 3) return improveIncumbent();
-            if (attempt == 4) {
-                if (!allowPump) return finish("root_heuristic_budget_spent");
-                if (pump == null) pump = new CountFeasibilityPump(rows, lower, upper, point, budget, Math.min(32768, allowance - work));
-                if (!pump.step()) return false;
-                counts = pump.counts();
-                pump.close();
-                pump = null;
-                return finish(counts == null ? "neighborhoods_unresolved" : "verified_pump_witness");
+            if (policy == null) initializePortfolio();
+            if (activeArm == null) {
+                activeArm = policy.select();
+                if (activeArm == null) return finish("neighborhoods_unresolved");
+                policy.selected(activeArm);
+                sliceWork = sliceProgress = 0;
+                sliceLimit = policy.quantum(activeArm, allowance - work);
             }
-            if (search == null) {
-                BigInteger[] low = lower.clone(), high = upper.clone();
-                Set<Integer> free = new HashSet<>(release.subList(0, Math.min(release.size(), attempt * 8)));
-                for (int i = 0; i < low.length; i++) {
-                    budget.check();
-                    BigInteger l = point[i].floor(), h = point[i].ceil();
-                    if (point[i].integral() && free.contains(i)) {
-                        boolean canUp = upper[i] == null || h.compareTo(upper[i]) < 0;
-                        boolean canDown = l.compareTo(lower[i]) > 0;
-                        if (canUp && (!canDown || attempt % 2 == 1)) h = h.add(BigInteger.ONE);
-                        else if (canDown) l = l.subtract(BigInteger.ONE);
-                    }
-                    low[i] = l.max(lower[i]);
-                    high[i] = upper[i] == null ? h : h.min(upper[i]);
-                    if (high[i].compareTo(low[i]) < 0) return finish("point_outside_domain");
-                }
-                search = new CountCdcl(rows, low, high, budget, Math.min(32768, allowance - work));
-            }
-            if (!search.step()) return false;
-            counts = search.counts();
-            search.close();
-            search = null;
-            attempt++;
-            if (counts != null) return finish("verified_witness");
-            return false;
+            if (activeArm == binaryArm) stepBinary();
+            else if (activeArm == relaxedArm) relaxDomains();
+            else stepPump();
+            completedStep = true;
+            return complete;
         } finally {
-            work += budget.threadWork() - before;
+            long spent = budget.threadWork() - before;
+            work += spent;
+            if (activeArm != null) {
+                sliceWork += spent;
+                if ((completedStep || complete) && (complete || activeArm.retired || sliceWork >= sliceLimit)) {
+                    // Only a completed local observation is scored. A proved
+                    // restricted neighborhood improves generator feedback; it
+                    // is never a contradiction of the original count model.
+                    policy.feedback(activeArm, sliceWork, sliceProgress);
+                    activeArm = null;
+                }
+            }
         }
+    }
+
+    private void stepBinary() {
+        if (search == null) {
+            BigInteger[] low = lower.clone(), high = upper.clone();
+            Set<Integer> free = new HashSet<>(release.subList(0, Math.min(release.size(), attempt * 8)));
+            for (int i = 0; i < low.length; i++) {
+                budget.check();
+                BigInteger l = point[i].floor(), h = point[i].ceil();
+                if (point[i].integral() && free.contains(i)) {
+                    boolean canUp = upper[i] == null || h.compareTo(upper[i]) < 0;
+                    boolean canDown = l.compareTo(lower[i]) > 0;
+                    if (canUp && (!canDown || attempt % 2 == 1)) h = h.add(BigInteger.ONE);
+                    else if (canDown) l = l.subtract(BigInteger.ONE);
+                }
+                low[i] = l.max(lower[i]);
+                high[i] = upper[i] == null ? h : h.min(upper[i]);
+                if (high[i].compareTo(low[i]) < 0) {
+                    finish("point_outside_domain");
+                    return;
+                }
+            }
+            search = new CountCdcl(rows, low, high, budget, Math.min(32768, allowance - work));
+        }
+        if (!search.step()) return;
+        counts = search.counts();
+        if (counts != null || search.infeasible()) sliceProgress++;
+        search.close();
+        search = null;
+        attempt++;
+        binaryArm.retired = attempt == 4;
+        if (counts != null) finish("verified_witness");
+    }
+
+    private void stepPump() {
+        if (!allowPump) {
+            pumpArm.retired = true;
+            return;
+        }
+        if (pump == null) pump = new CountFeasibilityPump(rows, lower, upper, point, budget, Math.min(32768, allowance - work));
+        if (!pump.step()) return;
+        counts = pump.counts();
+        pump.close();
+        pump = null;
+        pumpArm.retired = true;
+        if (counts != null) {
+            sliceProgress++;
+            finish("verified_pump_witness");
+        }
+    }
+
+    private boolean relaxDomains() {
+        // Floor/ceil boxes can contain NO integer solution even when one is
+        // only a few steps away. This retained portfolio member releases
+        // selected connected coordinates to their actual domains.
+        // This includes fractional coordinates, not only integral LP values.
+        // Both trials share this heuristic's remaining work and memory budget.
+        if (relaxedAttempt >= 2 || allowance - work < 1024 || !wideDomains) {
+            relaxedArm.retired = true;
+            return false;
+        }
+        if (relaxedSearch == null) {
+            BigInteger[] low = lower.clone(), high = upper.clone();
+            BitSet free = new BitSet(low.length);
+            int size = Math.min(relax.size(), relaxedAttempt == 0 ? 8 : 32);
+            for (int i = 0; i < size; i++) free.set(relax.get(i));
+            for (int i = 0; i < low.length; i++) {
+                budget.check();
+                if (free.get(i)) continue;
+                low[i] = lower[i].max(point[i].floor());
+                high[i] = upper[i] == null ? point[i].ceil() : upper[i].min(point[i].ceil());
+                if (high[i].compareTo(low[i]) < 0) return finish("point_outside_domain");
+            }
+            relaxedSearch = new CountLcg(rows, low, high, budget, Math.min(16384, allowance - work));
+        }
+        if (!relaxedSearch.step()) return false;
+        counts = relaxedSearch.counts();
+        if (counts != null || relaxedSearch.infeasible()) sliceProgress++;
+        if (counts != null) return finish("verified_relaxed_neighborhood; stage=" + relaxedAttempt);
+        // Reuse a paused full-domain search instead of reconstructing the same
+        // small neighborhood. A larger neighborhood needs its own fresh state.
+        if (relaxedAttempt++ == 0 && relax.size() <= 8 && relaxedSearch.paused() && allowance - work >= 2048) {
+            relaxedSearch.resume(Math.min(16384, allowance - work));
+            return false;
+        }
+        relaxedSearch.close();
+        relaxedSearch = null;
+        relaxedArm.retired = relaxedAttempt >= 2;
+        // Failure concerns only this neighborhood. No contradiction escapes.
+        return false;
     }
 
     private boolean improveIncumbent() {
@@ -176,6 +307,8 @@ final class CountNeighborhood implements AutoCloseable {
         incumbentSearch = null;
         softSearch = null;
         if (search != null) search.close();
+        if (relaxedSearch != null) relaxedSearch.close();
+        relaxedSearch = null;
         if (pump != null) pump.close();
         pump = null;
         search = null;

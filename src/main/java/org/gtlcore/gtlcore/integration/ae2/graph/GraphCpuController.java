@@ -58,6 +58,8 @@ public final class GraphCpuController {
     private long providerGeneration = Long.MIN_VALUE;
     private boolean dependencyChanged;
     private Iterator<String> bindingsToCheck;
+    private final GraphReplanRetry replanRetry = new GraphReplanRetry();
+    private String replanOrigin = "";
 
     public GraphCpuController(GraphCpuHost host) {
         this.host = host;
@@ -301,6 +303,8 @@ public final class GraphCpuController {
     }
 
     public void read(CompoundTag parent) {
+        clearReplan();
+        providerGeneration = Long.MIN_VALUE;
         CompoundTag tag = parent.getCompound(GraphJobCodec.NBT_KEY);
         try {
             runtime = new GraphJobRuntime<>(GraphJobCodec.read(tag));
@@ -449,6 +453,10 @@ public final class GraphCpuController {
     }
 
     private void clearReplan() {
+        clearReplan(true);
+    }
+
+    private void clearReplan(boolean resetFailures) {
         if (replanRequest != null) replanRequest.cancel(false);
         replanRequest = null;
         checkpoint = null;
@@ -457,6 +465,10 @@ public final class GraphCpuController {
         failedBindings = Map.of();
         dependencyChanged = false;
         bindingsToCheck = null;
+        if (resetFailures) {
+            replanRetry.reset();
+            replanOrigin = "";
+        }
     }
 
     /** Poll completed futures only; world access and ownership changes stay on this thread. */
@@ -466,6 +478,7 @@ public final class GraphCpuController {
             return;
         }
         long generation = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
+        long tick = TickHandler.instance().getCurrentTick();
         if (generation != providerGeneration) {
             providerGeneration = generation;
             bindingsToCheck = runtime.pendingRuns().keySet().iterator();
@@ -499,24 +512,34 @@ public final class GraphCpuController {
                 failure = "REPLAN_" + cause.getClass().getSimpleName() + ": " + cause.getMessage();
             }
             Set<AEKey> dependencies = new LinkedHashSet<>(request.dependencies());
-            dependencies.add(runtime.plan().target());
-            runtime.plan().recipes().values().forEach(recipe -> {
+            // A completed snapshot includes the new suffix and recovery roots.
+            // Retired/committed recipes from the old plan must not keep waking it.
+            // Failed snapshot collection still needs a conservative fallback.
+            if (dependencies.isEmpty()) for (String id : runtime.pendingRuns().keySet()) {
+                var recipe = runtime.plan().recipes().get(id);
                 dependencies.addAll(recipe.inputs().keySet());
                 dependencies.addAll(recipe.outputs().keySet());
-            });
+            }
+            dependencies.add(runtime.plan().target());
+            dependencies.addAll(checkpoint.recoverySeeds().keySet());
             failedBindings = bindingSignatures(service, dependencies);
             if (dependencyWatch != null) dependencyWatch.close();
             dependencyChanged = false;
             dependencyWatch = ((GraphStorageWatch) host.grid().getStorageService())
                     .gtlcore$watchGraphResources(dependencies, () -> dependencyChanged = true);
             runtime.waitForReplanDependency(checkpoint.epoch(), failure);
-            GTLCore.LOGGER.info("[Graph Crafting] job={} {}; waiting for relevant storage/provider change", link.getCraftingID(), failure);
+            int delay = replanRetry.failed(tick);
+            if (replanRetry.shouldLog(tick, failure)) GTLCore.LOGGER.info(
+                    "[Graph Crafting] job={} {}; failures={} retry_after_ticks={} watched_keys={} origin={}; waiting for relevant storage/provider change",
+                    link.getCraftingID(), failure, replanRetry.failures(), delay, dependencies.size(), replanOrigin);
             return;
         }
         if (checkpoint != null) {
-            if (!dependencyChanged) return;
+            // Keep the event latched while cooling down, including provider repairs.
+            // One notification is sufficient; a busy network cannot force one solve per tick.
+            if (runtime.suspended() || !dependencyChanged || !replanRetry.ready(tick)) return;
             runtime.abortReplan(checkpoint.epoch(), "");
-            clearReplan();
+            clearReplan(false);
             startReplan(service);
             return;
         }
@@ -525,6 +548,11 @@ public final class GraphCpuController {
         for (int checked = 0; checked < 32 && bindingsToCheck.hasNext(); checked++) {
             var recipe = runtime.plan().recipes().get(bindingsToCheck.next());
             if (recipe != null && adapter.resolve(recipe) == null) {
+                replanOrigin = "recipe=" + recipe.id() + " binding=" + recipe.binding() +
+                        " reason=" + adapter.bindingFailure() + " detail=" + adapter.bindingDetail() +
+                        " provider_revision=" + generation;
+                GTLCore.LOGGER.warn("[Graph Crafting] job={} replan=required origin={} selected_slots={} selected_outputs={}",
+                        link.getCraftingID(), replanOrigin, recipe.slots(), recipe.executionOutputs());
                 bindingsToCheck = null;
                 startReplan(service);
                 return;

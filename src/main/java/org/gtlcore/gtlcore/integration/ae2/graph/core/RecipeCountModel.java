@@ -11,6 +11,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
     final Map<K, Integer> ids;
     final Map<K, Long> stock;
     final Map<K, BigInteger> goals;
+    final Map<K, BigInteger> productionGoals = new LinkedHashMap<>();
     final Set<K> external;
     final List<ExactLinearProgram.Constraint> constraints = new ArrayList<>();
     final List<K> rowKeys = new ArrayList<>();
@@ -72,6 +73,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
             long entries = 0;
             for (GraphRecipe<K> recipe : recipes.values()) entries += recipe.inputs().size() + recipe.outputs().size();
             long sparseBytes = 128L * entries + 128L * (keys.size() + recipes.size());
+            if (force && !external.contains(target)) sparseBytes += 128L + 96L * recipes.size();
             if (!budget.tryReserve(sparseBytes)) {
                 budget.note("count_model", "skipped; sparse_bytes=" + sparseBytes + "; insufficient memory");
                 return null;
@@ -88,7 +90,8 @@ final class RecipeCountModel<K> implements AutoCloseable {
 
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, K target, long amount, Map<K, Long> stock,
                              Map<K, Long> seeds, Set<K> external, boolean force, PlanningBudget budget) {
-        this(recipes, keys, stock, external, budget, goals(target, amount, stock, seeds, force));
+        this(recipes, keys, stock, external, budget, goals(target, amount, seeds));
+        if (force && !external.contains(target)) requireProduction(target, amount);
     }
 
     /** Selected region only: upstream inputs are left for backward propagation. */
@@ -120,13 +123,29 @@ final class RecipeCountModel<K> implements AutoCloseable {
         }
     }
 
-    private static <K> Map<K, BigInteger> goals(K target, long amount, Map<K, Long> stock, Map<K, Long> seeds, boolean force) {
+    private static <K> Map<K, BigInteger> goals(K target, long amount, Map<K, Long> seeds) {
         Map<K, BigInteger> goals = new LinkedHashMap<>();
         seeds.forEach((key, value) -> goals.put(key, BigInteger.valueOf(value)));
         BigInteger reserve = BigInteger.valueOf(seeds.getOrDefault(target, 0L));
-        if (force) reserve = reserve.max(BigInteger.valueOf(stock.getOrDefault(target, 0L)));
         goals.put(target, reserve.add(BigInteger.valueOf(amount)));
         return goals;
+    }
+
+    /**
+     * Necessary production bound, not permission to execute a turnover loop.
+     * Target stock may fund startup, so retaining all of it in the final goal
+     * would incorrectly prove valid recycling orders impossible. Every count
+     * witness still passes the independent scheduling and candidate checks.
+     */
+    private void requireProduction(K target, long amount) {
+        Map<Integer, BigInteger> terms = new LinkedHashMap<>();
+        for (int i = 0; i < recipes.size(); i++) {
+            budget.check();
+            long output = recipes.get(i).executionOutputs().getOrDefault(target, 0L);
+            if (output != 0) terms.put(i, BigInteger.valueOf(output).negate());
+        }
+        productionGoals.put(target, BigInteger.valueOf(amount));
+        constraints.add(new ExactLinearProgram.Constraint(terms, BigInteger.valueOf(amount).negate()));
     }
 
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
@@ -180,6 +199,9 @@ final class RecipeCountModel<K> implements AutoCloseable {
     }
 
     Map<K, BigInteger> certificate(ExactRational[] values) {
+        // A physical-production row is not a conserved material and cannot be
+        // published as a resource-weight certificate for another request.
+        if (values.length != rowKeys.size()) return Map.of();
         BigInteger scale = BigInteger.ONE;
         for (ExactRational value : values) {
             scale = scale.divide(scale.gcd(value.denominator())).multiply(value.denominator());

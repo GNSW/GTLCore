@@ -12,8 +12,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Bounded ordinary-recipe expansion. A dependency returning to an ancestor is
- * left as a refill boundary: this path never invokes a cycle or count solver.
+ * Bounded ordinary-recipe search, followed by a refill preview if no funded
+ * witness was found. This path never invokes a cycle or count solver.
  * Missing inputs describe this witness only, not infeasibility of the catalog.
  */
 public final class GraphFallback {
@@ -44,7 +44,7 @@ public final class GraphFallback {
         private final List<PlanStep> steps = new ArrayList<>();
         private final Deque<Frame> pending = new ArrayDeque<>();
         private final Set<K> ancestors = new HashSet<>();
-        private final Iterator<Map.Entry<K, Long>> seedGoals;
+        private Iterator<Map.Entry<K, Long>> seedGoals;
         private final Map<K, BigInteger> initial = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
         private SummaryComputation<K> summary;
         private PlanVerification<K> verification;
@@ -53,7 +53,7 @@ public final class GraphFallback {
         private GraphPlan<K> candidate, result;
         private int expansions;
         private long memory;
-        private boolean rootsDone;
+        private boolean rootsDone, searched;
 
         Expansion(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external,
                   Map<K, Long> seeds, boolean preserve, boolean forceCraft, PlanningBudget budget) {
@@ -105,6 +105,19 @@ public final class GraphFallback {
 
         private boolean step() {
             budget.check();
+            if (!searched) {
+                searched = true;
+                try (var search = new GraphFallbackSearch<>(compiler, target, amount, stock, external, seeds, forceCraft, budget)) {
+                    if (search.find()) {
+                        reserve(256L * search.size());
+                        search.copyTo(steps, recipes);
+                        while (!pending.isEmpty()) pop();
+                        rootsDone = true;
+                        seedGoals = java.util.Collections.emptyIterator();
+                    }
+                }
+                return false;
+            }
             if (result != null) return true;
             if (verification != null) {
                 if (verification.step()) result = candidate;

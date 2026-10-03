@@ -283,6 +283,10 @@ final class QuantityAnalysis<K> {
         return phase == 8;
     }
 
+    boolean heavyAnalysisActive() {
+        return phase == 8 || phase == 2 || phase == 3;
+    }
+
     boolean hasBinaryChoices() {
         return phase == 8 && binaryChoices;
     }

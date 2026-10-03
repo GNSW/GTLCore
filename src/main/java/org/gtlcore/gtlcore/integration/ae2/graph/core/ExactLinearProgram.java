@@ -367,7 +367,7 @@ final class ExactLinearProgram implements AutoCloseable {
         for (int part = 0; part < 256 && cell < cells; part++, cell++) {
             int i = cell / columns, j = cell % columns;
             if (i == pivotRow || j == pivotColumn || table[i][pivotColumn].signum() == 0 || table[pivotRow][j].signum() == 0) continue;
-            charge();
+            chargePivot(table[i][j], table[pivotRow][j], table[i][pivotColumn], divisor);
             table[i][j] = table[i][j].subtract(table[pivotRow][j].multiply(table[i][pivotColumn]).divide(divisor));
         }
         if (cell < cells) return;
@@ -464,6 +464,15 @@ final class ExactLinearProgram implements AutoCloseable {
     private void charge() {
         budget.check();
         work++;
+    }
+
+    private void chargePivot(ExactRational a, ExactRational b, ExactRational c, ExactRational d) {
+        int bits = Math.max(Math.max(bits(a), bits(b)), Math.max(bits(c), bits(d)));
+        work += budget.operation(PlanningBudget.Operation.RATIONAL, bits) / PlanningBudget.WORK_SCALE;
+    }
+
+    private static int bits(ExactRational value) {
+        return Math.max(value.numerator().bitLength(), value.denominator().bitLength());
     }
 
     private boolean finish(Result value) {

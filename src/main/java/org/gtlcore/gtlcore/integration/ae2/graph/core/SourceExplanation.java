@@ -135,7 +135,9 @@ final class SourceExplanation<K> implements AutoCloseable {
     }
 
     private boolean finish(Map<K, Integer> value) {
-        result = value == null ? null : Map.copyOf(value);
+        // Repair scheduling follows this decision order. Map.copyOf would
+        // randomize it across JVM starts, changing which candidates get a turn.
+        result = value == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(value));
         if (result != null) {
             proofs.learnSource(result);
             budget.note("source_backjump", "relevant_decisions=" + result.size() + "; count_premises=" + conflict.assumptions().size());

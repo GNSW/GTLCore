@@ -74,6 +74,9 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     CountBoolean binary;
     boolean earlyBinary, triedBinary;
     CountDomainSearch cdcl;
+    CountModelViews modelViews;
+    CountViewSearch viewSearch;
+    int viewStage, viewCandidateStage;
     CountLcg auxiliaryLcg;
     int auxiliaryMode;
     long auxiliaryWork;
@@ -200,7 +203,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                     }
                 } else advance();
                 if (inSchedule) schedulingWork += budget.threadWork() - scheduleBefore;
-                if (scheduling != null && (jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate) && schedulingWork >= 8192) {
+                if (scheduling != null && (jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || viewCandidateStage != 0) && schedulingWork >= 8192) {
                     scheduling.close();
                     scheduling = null;
                     counts = null;
@@ -281,7 +284,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (status == CountSchedule.Result.WITNESS) beginAssembly(scheduling.witness());
             scheduling.close();
             scheduling = null;
-            if ((jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate) && status != CountSchedule.Result.WITNESS) {
+            if ((jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || viewCandidateStage != 0) && status != CountSchedule.Result.WITNESS) {
                 // Failure to schedule a local-search candidate must leave the
                 // original count domain and all the other strategies available.
                 counts = null;
@@ -333,6 +336,21 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         }
         if (rescue) {
             program = new CountProgram<>(model.recipes, counts, budget);
+            return;
+        }
+        if (viewStage != 0) {
+            if (!viewSearch.step()) return;
+            int continuation = viewStage;
+            viewStage = 0;
+            counts = viewSearch.counts();
+            if (counts != null) {
+                viewCandidateStage = continuation;
+                schedulingWork = 0;
+                scheduling = new CountSchedule<>(model, counts, budget);
+            } else if (viewSearch.infeasible()) {
+                learnedChoices.add(new CountConflict(current));
+                state = State.DEAD;
+            } else afterViewSearch(continuation);
             return;
         }
         if (congruence != null) {
@@ -476,6 +494,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                     if (term.getValue().signum() < 0) lower[id] = lower[id].max(row.upper().negate());
                     else upper[id] = upper[id] == null ? row.upper() : upper[id].min(row.upper());
                 }
+                closeViews();
                 reduction.close();
                 reduction = new CountReduction(linearConstraints, lower, upper, budget);
                 compiled = false;
@@ -630,7 +649,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 state = State.DEAD;
             } else if (current.isEmpty() && !triedCdcl) {
                 triedCdcl = true;
-                cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 1_048_576);
+                if (viewSearch != null && viewSearch.retained()) {
+                    viewSearch.resume(1_048_576);
+                    viewStage = 3;
+                } else cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 1_048_576);
             } else afterBoolean();
             return;
         }
@@ -757,6 +779,16 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             }
             linearConstraints.addAll(tightened);
             reduction = new CountReduction(linearConstraints, lower, upper, budget, auxiliaryMode == 3);
+            if (current.isEmpty() && auxiliaryMode == 0) {
+                modelViews = CountModelViews.create(linearConstraints, lower, upper, budget);
+                if (modelViews != null) {
+                    viewSearch = new CountViewSearch(modelViews, budget);
+                    if (!CountBoolean.preferred(linearConstraints, lower, upper, budget)) {
+                        viewSearch.resume(32768);
+                        viewStage = 1;
+                    }
+                }
+            }
             return;
         }
         if (!compiled) {
@@ -767,7 +799,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             lowerCost = PlanPreference.compiledLowerBound(model, reduction, lower, seeds, budget);
             if (auxiliaryMode == 1) cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072, CountCdcl.Branching.LEARNING_RATE);
             else if (auxiliaryMode >= 2) auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072);
-            else congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
+            else {
+                if (modelViews != null) {
+                    modelViews.compileLight();
+                    modelViews.addReduced(reduction);
+                    // Preserve the specialized Boolean path on its preferred
+                    // structure. Other domains get a retained no-LP portfolio.
+                    if (!CountBoolean.preferred(reduction.rows(), reduction.lower(), reduction.upper(), budget)) {
+                        viewSearch.resume(262144);
+                        viewStage = 2;
+                        return;
+                    }
+                }
+                congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
+            }
             return;
         }
         if (!linear.step()) return;
@@ -809,6 +854,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (scheduling != null || supportSearch != null) return "count_schedule";
         if (matching != null) return "count_mitm";
         if (binary != null) return "count_boolean";
+        if (viewStage != 0) return "count_views";
         if (cdcl != null) return "count_cdcl";
         if (auxiliaryLcg != null) return "count_portfolio_lcg";
         if (linear != null) return "count_lp";
@@ -896,6 +942,12 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void resumeSpeculativeCandidate() {
+        if (viewCandidateStage != 0) {
+            int continuation = viewCandidateStage;
+            viewCandidateStage = 0;
+            afterViewSearch(continuation);
+            return;
+        }
         if (auxiliaryMode != 0) {
             state = State.UNRESOLVED;
             return;
@@ -1016,8 +1068,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             }
             if (current.size() <= 3) {
                 int[] representatives = reduction.representatives();
-                int localChoice = 0;
-                while (representatives[localChoice] != chosen) localChoice++;
+                int localChoice = Arrays.binarySearch(representatives, chosen);
+                if (localChoice < 0) {
+                    // An uncompressed LP may violate an integer-only affine
+                    // relation. Split its ORIGINAL coordinate, not a nonexistent
+                    // reduced variable, and retain both integer subdomains.
+                    splitPoint(point, chosen);
+                    return;
+                }
                 ExactRational[] local = Arrays.stream(representatives).mapToObj(i -> point[i]).toArray(ExactRational[]::new);
                 branchProbePoint = point;
                 branchProbe = new CountBranchProbe(reduction.rows(), reduction.lower(), reduction.upper(), local, localChoice, budget,
@@ -1089,6 +1147,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 bestActivity = activity;
             }
         }
+        // Integer presolve may have rounded rows before discovering an
+        // equality. The raw relaxation need not satisfy that equality, so
+        // integral representatives alone do not certify an integer vector.
+        if (best < 0) for (int id = 0; id < point.length; id++) if (!point[id].integral()) return id;
         return best;
     }
 
@@ -1127,6 +1189,15 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     boolean resume() {
+        if (limit == null && viewSearch != null && viewSearch.retained()) {
+            // Other strategies have had their turn. Continue the same model
+            // searches rather than silently closing their unfinished domains.
+            counts = null;
+            viewSearch.resume(262144);
+            viewStage = 4;
+            state = State.OPEN;
+            return true;
+        }
         if (retried || counts == null || memory == 0 || limit != null) return false;
         releaseWorkspace();
         initialized = true;
@@ -1136,6 +1207,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     void releaseWorkspace() {
+        closeViews();
         if (diophantine != null) diophantine.close();
         diophantine = null;
         if (repair != null) repair.close();
@@ -1279,7 +1351,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         // Disjoint lexicographic siblings cover every OTHER integer vector.
         // An undecided fixed vector stays owned by this retained branch.
         var prefix = new ArrayList<>(current);
-        for (int i : reduction.representatives()) {
+        int[] coordinates = compiled ? reduction.representatives() : java.util.stream.IntStream.range(0, counts.length).toArray();
+        for (int i : coordinates) {
             if (counts[i].compareTo(lower[i]) > 0) enqueue(prefix, bound(i, counts[i].subtract(BigInteger.ONE), false));
             if (upper[i] == null || counts[i].compareTo(upper[i]) < 0) enqueue(prefix, bound(i, counts[i].add(BigInteger.ONE), true));
             prefix.add(bound(i, counts[i], false));
@@ -1354,6 +1427,21 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         var next = new ArrayList<>(prefix);
         next.add(constraint);
         children.add(List.copyOf(next));
+    }
+
+    private void afterViewSearch(int continuation) {
+        if (continuation == 2) congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
+        else if (continuation == 3) diagram = new CountDecisionDiagram(reduction.rows(), reduction.lower(), reduction.upper(), budget, 65536);
+        else if (continuation == 4) state = State.UNRESOLVED;
+        // Stage 1 resumes compilation, preserving the untouched original model.
+    }
+
+    private void closeViews() {
+        if (viewSearch != null) viewSearch.close();
+        if (modelViews != null) modelViews.close();
+        viewSearch = null;
+        modelViews = null;
+        viewStage = viewCandidateStage = 0;
     }
 
     private static ExactLinearProgram.Constraint bound(int variable, BigInteger value, boolean lower) {

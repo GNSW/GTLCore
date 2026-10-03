@@ -17,6 +17,24 @@ import java.util.function.LongSupplier;
 /** One request's cumulative limits; a work slice never creates another budget. */
 public final class PlanningBudget {
 
+    // Sixteen ticks per existing work unit. Small literal inspections need not
+    // cost as much as big-integer elimination. Integer ticks keep scheduling
+    // reproducible; wall time, cancellation and memory remain independent caps.
+    static final int WORK_SCALE = 16;
+
+    enum Operation {
+
+        SCAN(4),
+        INTEGER(8),
+        RATIONAL(64);
+
+        final int ticks;
+
+        Operation(int ticks) {
+            this.ticks = ticks;
+        }
+    }
+
     public enum Limit {
         TIMEOUT,
         SEARCH_LIMIT,
@@ -107,24 +125,39 @@ public final class PlanningBudget {
     }
 
     public void check() {
-        checkpoint();
-        if (countThreadWork) THREAD_NODES.get()[0]++;
-        if (nodes.incrementAndGet() > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + nodes.get() + "/" + maxNodes);
+        chargeTicks(WORK_SCALE);
     }
 
     /** Account bounded independent checker work without a second per-unit loop. */
     void charge(long units) {
         if (units < 0) throw new IllegalArgumentException("Negative work");
+        if (units > Long.MAX_VALUE / WORK_SCALE) throw exhausted(Limit.SEARCH_LIMIT, "work_accounting_overflow");
+        chargeTicks(units * WORK_SCALE);
+    }
+
+    /** Returns charged ticks so a local continuation uses the same cost model. */
+    int operation(Operation operation, int bits) {
+        int words = (int) Math.max(1, Math.min(32, (Math.max(0, bits) + 63L) / 64));
+        int ticks = operation.ticks * (operation == Operation.SCAN ? 1 : words);
+        chargeTicks(ticks);
+        return ticks;
+    }
+
+    private void chargeTicks(long ticks) {
         checkpoint();
-        if (countThreadWork) THREAD_NODES.get()[0] += units;
-        long total = nodes.addAndGet(units);
-        if (total < 0 || total > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + total + "/" + maxNodes);
+        if (countThreadWork) THREAD_NODES.get()[0] += ticks;
+        long total = nodes.addAndGet(ticks);
+        if (total < 0 || units(total) > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + units(total) + "/" + maxNodes);
+    }
+
+    static long units(long ticks) {
+        return ticks / WORK_SCALE + (ticks % WORK_SCALE == 0 ? 0 : 1);
     }
 
     /** Per-thread accounting prevents concurrent branches charging one another's work. */
     long threadWork() {
         countThreadWork = true;
-        return THREAD_NODES.get()[0];
+        return units(THREAD_NODES.get()[0]);
     }
 
     public Exhausted exhausted(Limit limit, String detail) {
@@ -143,7 +176,7 @@ public final class PlanningBudget {
 
     /** A bounded trace of strategy transitions, not a record for every search node. */
     public synchronized void note(String stage, String detail) {
-        String entry = stage + "@" + nodes.get() + ": " + detail;
+        String entry = stage + "@" + nodes() + ": " + detail;
         diagnostics.addLast(entry.length() > 768 ? entry.substring(0, 768) + "..." : entry);
         while (diagnostics.size() > 32) diagnostics.removeFirst();
     }
@@ -193,11 +226,11 @@ public final class PlanningBudget {
     }
 
     public long nodes() {
-        return nodes.get();
+        return units(nodes.get());
     }
 
     long remainingWork() {
-        return Math.max(0, maxNodes - nodes.get());
+        return Math.max(0, maxNodes - nodes());
     }
 
     long availableBytes() {

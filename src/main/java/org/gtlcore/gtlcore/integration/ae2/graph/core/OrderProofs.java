@@ -154,7 +154,7 @@ final class OrderProofs<K> implements AutoCloseable {
         long bytes = 128L + 64L * core.size();
         if (sourceCores.size() >= 128 || !budget.tryReserve(bytes)) return;
         memory += bytes;
-        sourceCores.add(Map.copyOf(core));
+        sourceCores.add(Collections.unmodifiableMap(new LinkedHashMap<>(core)));
     }
 
     Map<K, Integer> sourceConflict(Map<K, Integer> assignment) {

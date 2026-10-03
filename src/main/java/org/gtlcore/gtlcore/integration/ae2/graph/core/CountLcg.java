@@ -48,22 +48,25 @@ final class CountLcg implements AutoCloseable {
     private final PlanningBudget budget;
     private final List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] rootLow, rootHigh, low, high;
+    private final BigInteger[] levelZeroLow, levelZeroHigh;
     private final double[] activity;
     private final List<List<Integer>> incident = new ArrayList<>();
+    private final List<List<Integer>> boundTrail = new ArrayList<>();
     private final Deque<Integer> queue = new ArrayDeque<>();
     private final BitSet queued = new BitSet();
     private final List<Change> trail = new ArrayList<>();
     private final List<Nogood> clauses = new ArrayList<>();
     private final List<CountConflict> learned = new ArrayList<>(), proofSteps = new ArrayList<>();
-    private final long allowance;
+    private long allowance;
     private List<Literal> conflict;
     private BigInteger[] counts;
     private int level, scan, decisions, conflicts, jumps, restarts, nextRestart = 64;
-    private long work, memory;
+    private long work, workTicks, memory, rootProgress, learnedProgress, relaxedReasons;
     private double increment = 1;
-    private boolean complete, infeasible, rescan;
+    private boolean complete, infeasible, rescan, paused, differenceChecked;
     private final boolean retainProof;
     private CountProof.Certificate certificate;
+    private CountProof.Certificate differenceProof;
 
     CountLcg(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
              PlanningBudget budget, long maximumWork) {
@@ -79,6 +82,8 @@ final class CountLcg implements AutoCloseable {
         rootHigh = upper.clone();
         low = lower.clone();
         high = upper.clone();
+        levelZeroLow = lower.clone();
+        levelZeroHigh = upper.clone();
         activity = new double[lower.length];
         allowance = Math.min(maximumWork, budget.remainingWork() / 8);
         long terms = rows.stream().mapToLong(r -> r.terms().size()).sum();
@@ -86,7 +91,7 @@ final class CountLcg implements AutoCloseable {
             complete = true;
             return;
         }
-        long bytes = 2048 + 384L * lower.length + 96L * terms + 64L * rows.size();
+        long bytes = 2048 + 544L * lower.length + 96L * terms + 64L * rows.size();
         if (!budget.tryReserve(bytes)) {
             complete = true;
             return;
@@ -94,11 +99,16 @@ final class CountLcg implements AutoCloseable {
         memory = bytes;
         for (int i = 0; i < lower.length; i++) {
             incident.add(new ArrayList<>());
+            incident.add(new ArrayList<>());
+            boundTrail.add(new ArrayList<>());
+            boundTrail.add(new ArrayList<>());
             if (upper[i] != null && lower[i].compareTo(upper[i]) > 0) conflict = List.of();
         }
         for (int r = 0; r < rows.size(); r++) {
-            for (int id : rows.get(r).terms().keySet()) {
-                incident.get(id).add(r);
+            for (var term : rows.get(r).terms().entrySet()) {
+                if (term.getValue().signum() == 0) continue;
+                int id = term.getKey();
+                incident.get(boundKey(id, term.getValue().signum() > 0)).add(r);
                 activity[id] += 1.0 / rows.get(r).terms().size();
             }
             enqueue(r);
@@ -107,8 +117,26 @@ final class CountLcg implements AutoCloseable {
 
     boolean step() {
         if (complete) return true;
+        // Yield only between atomic propagation/analysis operations. Throwing
+        // from charge() used to lose a dequeued row or half of an explanation.
+        // A suspended search retains its queue, trail, activities and clauses.
+        if (work >= allowance) {
+            paused = true;
+            return finish("local_pause");
+        }
         try {
             charge();
+            if (!differenceChecked) {
+                differenceChecked = true;
+                long before = budget.threadWork();
+                differenceProof = CountDifference.contradiction(rows, rootLow, rootHigh, budget, allowance - work);
+                workTicks += (budget.threadWork() - before) * PlanningBudget.WORK_SCALE;
+                work = PlanningBudget.units(workTicks);
+                if (differenceProof != null) {
+                    infeasible = true;
+                    return finish("difference_cycle");
+                }
+            }
             if (conflict != null) {
                 analyze();
                 return complete;
@@ -150,7 +178,7 @@ final class CountLcg implements AutoCloseable {
             tighten(new Literal(best, false, middle), null);
             return false;
         } catch (Stop stopped) {
-            return finish("local_limit");
+            return finish("workspace_limit");
         }
     }
 
@@ -159,14 +187,18 @@ final class CountLcg implements AutoCloseable {
         int infinite = -1, infinities = 0;
         for (var term : row.terms().entrySet()) {
             charge();
+            if (term.getValue().signum() == 0) continue;
             BigInteger endpoint = term.getValue().signum() > 0 ? low[term.getKey()] : high[term.getKey()];
             if (endpoint == null) {
                 infinite = term.getKey();
                 infinities++;
-            } else sum = sum.add(term.getValue().multiply(endpoint));
+            } else {
+                integerCost(term.getValue(), endpoint);
+                sum = sum.add(term.getValue().multiply(endpoint));
+            }
         }
         if (infinities == 0 && sum.compareTo(row.upper()) > 0) {
-            conflict = antecedents(row, -1);
+            conflict = antecedents(row, -1, sum.subtract(row.upper()).subtract(BigInteger.ONE));
             return;
         }
         if (infinities > 1) return;
@@ -185,13 +217,16 @@ final class CountLcg implements AutoCloseable {
                     new Literal(id, true, floor(row.upper().subtract(other), a.negate()).negate());
             if (truth(next) != 1) {
                 candidates.add(next);
-                explanations.add(antecedents(row, id));
+                // The opposite bound must violate this integer row by at
+                // least one. Spend only the surplus on relaxing its reason.
+                BigInteger slack = other.add(a.multiply(next.opposite().value)).subtract(row.upper()).subtract(BigInteger.ONE);
+                explanations.add(antecedents(row, id, slack));
             }
         }
         for (int i = 0; i < candidates.size() && conflict == null; i++) tighten(candidates.get(i), explanations.get(i));
     }
 
-    private List<Literal> antecedents(ExactLinearProgram.Constraint row, int except) {
+    private List<Literal> antecedents(ExactLinearProgram.Constraint row, int except, BigInteger slack) {
         var result = new ArrayList<Literal>();
         for (var term : row.terms().entrySet()) {
             charge();
@@ -200,6 +235,19 @@ final class CountLcg implements AutoCloseable {
             boolean minimum = term.getValue().signum() > 0;
             var literal = new Literal(id, minimum, minimum ? low[id] : high[id]);
             if (literal.value == null) throw new IllegalStateException("Infinite implication endpoint");
+            if (rootTrue(literal)) continue;
+            if (slack.signum() > 0) {
+                BigInteger magnitude = term.getValue().abs();
+                BigInteger distance = slack.divide(magnitude);
+                BigInteger root = minimum ? levelZeroLow[id] : levelZeroHigh[id];
+                if (root != null) distance = distance.min(literal.value.subtract(root).abs());
+                if (distance.signum() > 0) {
+                    integerCost(distance, magnitude);
+                    slack = slack.subtract(distance.multiply(magnitude));
+                    literal = new Literal(id, minimum, minimum ? literal.value.subtract(distance) : literal.value.add(distance));
+                    relaxedReasons++;
+                }
+            }
             if (!rootTrue(literal)) result.add(literal);
         }
         return result;
@@ -236,13 +284,29 @@ final class CountLcg implements AutoCloseable {
             conflict = why;
             return;
         }
-        long bytes = 160L + 96L * (reason == null ? 0 : reason.size());
+        long bytes = 192L + 96L * (reason == null ? 0 : reason.size());
         reserve(bytes);
         BigInteger old = literal.minimum ? low[literal.variable] : high[literal.variable];
         trail.add(new Change(literal, old, level, reason == null ? null : List.copyOf(reason), bytes));
+        boundTrail.get(boundKey(literal.variable, literal.minimum)).add(trail.size() - 1);
+        if (level == 0) {
+            BigInteger beforeLow = levelZeroLow[literal.variable], beforeHigh = levelZeroHigh[literal.variable];
+            if (literal.minimum) levelZeroLow[literal.variable] = literal.value;
+            else levelZeroHigh[literal.variable] = literal.value;
+            BigInteger afterLow = levelZeroLow[literal.variable], afterHigh = levelZeroHigh[literal.variable];
+            // Count multiplicative domain shrinkage, not every +1 in a huge
+            // feedback domain. Otherwise a stalled propagation loop looks
+            // permanently productive to the portfolio scheduler.
+            if (beforeHigh != null) rootProgress += Math.max(0,
+                    beforeHigh.subtract(beforeLow).bitLength() - afterHigh.subtract(afterLow).bitLength());
+            else if (afterHigh != null) rootProgress++;
+            else rootProgress += Math.max(0, afterLow.abs().bitLength() - beforeLow.abs().bitLength());
+        }
         if (literal.minimum) low[literal.variable] = literal.value;
         else high[literal.variable] = literal.value;
-        incident.get(literal.variable).forEach(this::enqueue);
+        // Only the endpoint contributing to a row's minimum can strengthen
+        // propagation. Waking both directions used to rescan unrelated rows.
+        incident.get(boundKey(literal.variable, literal.minimum)).forEach(this::enqueue);
         rescan = true;
     }
 
@@ -290,6 +354,7 @@ final class CountLcg implements AutoCloseable {
         remember(frontier);
         reserve(128L + 96L * frontier.size());
         clauses.add(new Nogood(List.copyOf(frontier), levels.cardinality(), conflicts));
+        learnedProgress++;
         if (back + 1 < level) jumps++;
         backtrack(back);
         conflict = null;
@@ -324,23 +389,36 @@ final class CountLcg implements AutoCloseable {
 
     private int source(Literal literal) {
         if (rootTrue(literal)) return -1;
-        for (int i = 0; i < trail.size(); i++) {
+        // Bounds tighten monotonically along each live trail. Find the first
+        // implication that entailed even a relaxed literal, not the latest one
+        // (which could create a circular explanation).
+        List<Integer> indices = boundTrail.get(boundKey(literal.variable, literal.minimum));
+        int left = 0, right = indices.size();
+        while (left < right) {
             charge();
-            Literal candidate = trail.get(i).literal;
-            if (candidate.variable == literal.variable && candidate.minimum == literal.minimum &&
-                    (literal.minimum ? candidate.value.compareTo(literal.value) >= 0 : candidate.value.compareTo(literal.value) <= 0))
-                return i;
+            int middle = (left + right) >>> 1;
+            Literal candidate = trail.get(indices.get(middle)).literal;
+            boolean implies = literal.minimum ? candidate.value.compareTo(literal.value) >= 0 : candidate.value.compareTo(literal.value) <= 0;
+            if (implies) right = middle;
+            else left = middle + 1;
         }
+        if (left < indices.size()) return indices.get(left);
         throw new IllegalStateException("Lost integer implication antecedent");
+    }
+
+    private static int boundKey(int variable, boolean minimum) {
+        return variable * 2 + (minimum ? 1 : 0);
     }
 
     private void backtrack(int to) {
         while (!trail.isEmpty() && trail.get(trail.size() - 1).level > to) {
             charge();
             Change change = trail.remove(trail.size() - 1);
+            var indices = boundTrail.get(boundKey(change.literal.variable, change.literal.minimum));
+            indices.remove(indices.size() - 1);
             if (change.literal.minimum) low[change.literal.variable] = change.old;
             else high[change.literal.variable] = change.old;
-            incident.get(change.literal.variable).forEach(this::enqueue);
+            incident.get(boundKey(change.literal.variable, change.literal.minimum)).forEach(this::enqueue);
             memory -= change.bytes;
             budget.release(change.bytes);
         }
@@ -350,8 +428,11 @@ final class CountLcg implements AutoCloseable {
     }
 
     private boolean rootTrue(Literal literal) {
-        return literal.minimum ? rootLow[literal.variable].compareTo(literal.value) >= 0 :
-                rootHigh[literal.variable] != null && rootHigh[literal.variable].compareTo(literal.value) <= 0;
+        // Level-zero consequences survive every backtrack. Do not copy their
+        // literals into each subsequent reason. Certificates still use the
+        // ORIGINAL domains and independently reconstruct these consequences.
+        return literal.minimum ? levelZeroLow[literal.variable].compareTo(literal.value) >= 0 :
+                levelZeroHigh[literal.variable] != null && levelZeroHigh[literal.variable].compareTo(literal.value) <= 0;
     }
 
     private int truth(Literal literal) {
@@ -371,6 +452,7 @@ final class CountLcg implements AutoCloseable {
             BigInteger sum = BigInteger.ZERO;
             for (var term : row.terms().entrySet()) {
                 charge();
+                integerCost(term.getValue(), value[term.getKey()]);
                 sum = sum.add(term.getValue().multiply(value[term.getKey()]));
             }
             if (sum.compareTo(row.upper()) > 0) return false;
@@ -399,8 +481,30 @@ final class CountLcg implements AutoCloseable {
     }
 
     private void charge() {
-        budget.check();
-        if (++work > allowance) throw new Stop();
+        workTicks += budget.operation(PlanningBudget.Operation.SCAN, 0);
+        work = PlanningBudget.units(workTicks);
+    }
+
+    private void integerCost(BigInteger a, BigInteger b) {
+        workTicks += budget.operation(PlanningBudget.Operation.INTEGER, Math.max(a.bitLength(), b.bitLength()));
+        work = PlanningBudget.units(workTicks);
+    }
+
+    boolean paused() {
+        return paused;
+    }
+
+    void resume(long quantum) {
+        if (!paused || quantum <= 0) throw new IllegalStateException("Integer search is not paused");
+        allowance = work + Math.min(quantum, budget.remainingWork());
+        paused = false;
+        complete = false;
+        certificate = null;
+    }
+
+    /** Search feedback, never a proof or a reason to exclude a model. */
+    long progress() {
+        return rootProgress + learnedProgress;
     }
 
     private void reserve(long bytes) {
@@ -415,12 +519,12 @@ final class CountLcg implements AutoCloseable {
                 scope.add(new Literal(i, true, rootLow[i]).row());
                 if (rootHigh[i] != null) scope.add(new Literal(i, false, rootHigh[i]).row());
             }
-            certificate = CountProof.certificate("lcg:" + detail, low.length, scope, proofSteps, null, infeasible);
+            certificate = differenceProof != null ? differenceProof : CountProof.certificate("lcg:" + detail, low.length, scope, proofSteps, null, infeasible);
             if (budget.proofJournal() != null) budget.proofJournal().add(certificate);
         }
         complete = true;
         budget.note("count_lcg", detail + "; decisions=" + decisions + "; conflicts=" + conflicts + "; backjumps=" + jumps +
-                "; restarts=" + restarts + "; work=" + work);
+                "; restarts=" + restarts + "; relaxed_reasons=" + relaxedReasons + "; work=" + work);
         return true;
     }
 

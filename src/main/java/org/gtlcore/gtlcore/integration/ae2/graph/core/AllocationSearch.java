@@ -336,7 +336,16 @@ final class AllocationSearch<K> {
         if (labels.stream().anyMatch(old -> PartialOrder.subset(old, sleeping))) return false;
         // Reaching the same marking with fewer sleeping actions can expose a
         // continuation that the old representative was forbidden to explore.
-        labels.removeIf(old -> PartialOrder.subset(sleeping, old));
+        for (var it = labels.iterator(); it.hasNext();) {
+            var old = it.next();
+            if (!PartialOrder.subset(sleeping, old)) continue;
+            it.remove();
+            // Replaced labels are no longer retained. Charging their cumulative
+            // history can exhaust memory while the live cache stays small.
+            long released = 96L + old.toLongArray().length * 8L;
+            memory -= released;
+            budget.release(released);
+        }
         labels.add((BitSet) sleeping.clone());
         reserve(96L + sleeping.toLongArray().length * 8L);
         return true;

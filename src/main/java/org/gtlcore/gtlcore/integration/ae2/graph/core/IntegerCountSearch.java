@@ -220,6 +220,12 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         return pending.peekFirst().scaling != null;
     }
 
+    boolean hasRetainedViews() {
+        if (running != null) return false;
+        return pending.stream().anyMatch(branch -> branch.viewSearch != null && branch.viewSearch.retained()) ||
+                deferred.stream().anyMatch(branch -> branch.viewSearch != null && branch.viewSearch.retained());
+    }
+
     /** A short first attempt keeps its full frontier for the normal continuation. */
     void scout(long maxWork) {
         if (work != 0 || paused || running != null || maxWork <= 0) throw new IllegalStateException("Count search already started");
@@ -240,7 +246,12 @@ final class IntegerCountSearch<K> implements AutoCloseable {
 
     private List<IntegerCountBranch<K>> take(int width, int residentLimit) {
         List<IntegerCountBranch<K>> selected = new ArrayList<>();
-        long resident = pending.stream().filter(branch -> branch.initialized).count();
+        long resident = pending.stream().filter(branch -> branch.initialized).count() +
+                deferred.stream().filter(branch -> branch.initialized).count();
+        // A retained continuation must not wait for an exponentially growing
+        // fresh frontier to empty. Reserve one turn in four; the rest still
+        // explores fresh branches and shares their proofs deterministically.
+        if (!deferred.isEmpty() && (rounds & 3) == 3) selected.add(deferred.removeFirst());
         int scanned = pending.size();
         while (selected.size() < width && scanned-- > 0) {
             var branch = pending.removeFirst();

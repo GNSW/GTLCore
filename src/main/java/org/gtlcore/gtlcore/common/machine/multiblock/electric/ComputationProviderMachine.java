@@ -76,7 +76,7 @@ public class ComputationProviderMachine extends WorkableElectricMultiblockMachin
         return allocatedCWUt(cwut, simulate);
     }
 
-    // Retain the original signature: GTL Additions shadows this method to delegate computation requests.
+    // Legacy int entry point; all requests share the physical source ledger.
     private int allocatedCWUt(int cwut, boolean simulate) {
         return ComputationNetwork.request(this, cwut, simulate);
     }

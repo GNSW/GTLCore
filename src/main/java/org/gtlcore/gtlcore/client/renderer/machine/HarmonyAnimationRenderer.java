@@ -39,8 +39,9 @@ import java.util.Map;
 
 /**
  * Shared model entry point for harmony animations, including addons using ClientUtil.
- * Collects only ordinary world block-entity draws; previews, shader packs and custom consumers
- * retain the original renderer. No dependency on addon classes or their animation implementations.
+ * Collects ordinary world block-entity draws into static buffers. With shader packs, cached
+ * model data goes straight to the original consumer instead, preserving its material and passes.
+ * No dependency on addon classes or their animation implementations.
  */
 public final class HarmonyAnimationRenderer {
 
@@ -72,9 +73,13 @@ public final class HarmonyAnimationRenderer {
 
     /** Called by ClientUtil without changing its public return type or existing addon linkage. */
     public static ModelBlockRenderer modelRenderer(ModelBlockRenderer original) {
-        if (!collecting || !RenderSystem.isOnRenderThread()) return original;
+        if (!RenderSystem.isOnRenderThread() || (!collecting && !shaderBatching())) return original;
         if (renderer == null || renderer.original != original) renderer = new Renderer(original);
         return renderer;
+    }
+
+    private static boolean shaderBatching() {
+        return Minecraft.getInstance().level != null && HarmonyShaderMesh.available() && shaders();
     }
 
     private static void reload(RegisterClientReloadListenersEvent event) {
@@ -114,7 +119,7 @@ public final class HarmonyAnimationRenderer {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
             reset();
             if (Minecraft.getInstance().level != null && animationShader != null && animationTransform != null &&
-                    !Minecraft.useShaderTransparency() && !shaders() && standardShaders()) {
+                    !shaders() && standardShaders()) {
                 projection.set(RenderSystem.getProjectionMatrix());
                 collecting = true;
             }
@@ -201,9 +206,16 @@ public final class HarmonyAnimationRenderer {
     }
 
     private static void draw() {
+        boolean fabulous = Minecraft.useShaderTransparency();
         for (var mesh : ORDER) {
             if (mesh == null || mesh.instances == 0) continue;
-            mesh.type.setupRenderState();
+            // The bundled star is fully opaque (checked by HarmonyModelCache), despite its
+            // original translucent type. Fabulous clears the terrain translucent target later
+            // in the frame, so drawing it there now loses the star. Put its opaque color and
+            // depth in the main target, before Fabulous copies depth and composites glass,
+            // water and particles. Custom/transparent star materials retain the original path.
+            RenderType drawType = fabulous ? RenderType.solid() : mesh.type;
+            drawType.setupRenderState();
             ShaderInstance shader = animationShader;
             try {
                 mesh.bind();
@@ -223,7 +235,7 @@ public final class HarmonyAnimationRenderer {
             } finally {
                 if (shader != null) shader.clear();
                 VertexBuffer.unbind();
-                mesh.type.clearRenderState();
+                drawType.clearRenderState();
             }
         }
     }
@@ -264,17 +276,19 @@ public final class HarmonyAnimationRenderer {
         public void renderModel(PoseStack.Pose pose, VertexConsumer consumer, @Nullable BlockState state,
                                 BakedModel model, float red, float green, float blue, int light, int overlay,
                                 ModelData data, RenderType type) {
-            if (collecting && animationShader != null && animationTransform != null &&
-                    state == null && data == ModelData.EMPTY && red == 1 && green == 1 && blue == 1 &&
+            if (state == null && data == ModelData.EMPTY && red == 1 && green == 1 && blue == 1 &&
                     light == LightTexture.FULL_BRIGHT && overlay == OverlayTexture.NO_OVERLAY &&
                     (type == RenderType.solid() || type == RenderType.translucent()) &&
-                    RenderSystem.getShaderColor()[3] == 1 &&
-                    buffers.owns(consumer, type)) {
+                    RenderSystem.getShaderColor()[3] == 1) {
                 prepareModels();
                 var mesh = MODELS.get(model);
-                if (mesh != null && mesh.type == type && mesh.prepare(original) &&
-                        mesh.enqueue(pose.pose(), RenderSystem.getModelViewMatrix(), projection))
-                    return;
+                if (mesh != null && mesh.type == type) {
+                    if (collecting && animationShader != null && animationTransform != null &&
+                            buffers.owns(consumer, type) && mesh.prepare(original) &&
+                            mesh.enqueue(pose.pose(), RenderSystem.getModelViewMatrix(), projection))
+                        return;
+                    if (shaderBatching() && mesh.writeShader(pose, consumer)) return;
+                }
             }
             original.renderModel(pose, consumer, state, model, red, green, blue, light, overlay, data, type);
         }

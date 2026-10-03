@@ -21,6 +21,7 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexBuffer;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryUtil;
@@ -49,6 +50,8 @@ final class HarmonyModelCache implements AutoCloseable {
     int instances;
     private VertexBuffer vertices;
     private boolean attempted;
+    private boolean shaderAttempted;
+    private HarmonyShaderMesh shaderMesh;
     private float minX = Float.POSITIVE_INFINITY, minY = Float.POSITIVE_INFINITY, minZ = Float.POSITIVE_INFINITY;
     private float maxX = Float.NEGATIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY, maxZ = Float.NEGATIVE_INFINITY;
     private final Matrix4f clip = new Matrix4f();
@@ -71,6 +74,19 @@ final class HarmonyModelCache implements AutoCloseable {
             }
         }
         return vertices != null;
+    }
+
+    boolean writeShader(PoseStack.Pose pose, VertexConsumer consumer) {
+        if (!HarmonyShaderMesh.accepts(consumer)) return false;
+        if (!shaderAttempted) {
+            shaderAttempted = true;
+            if (supportsResources()) shaderMesh = HarmonyShaderMesh.create(model, type);
+        }
+        if (shaderMesh == null) return false;
+        // Submit immediately, including during shadow rendering. Do not use the main camera's
+        // culling or deferred draw queue: a shader can displace vertices or render another view.
+        shaderMesh.write(pose, consumer);
+        return true;
     }
 
     private static boolean original(ResourceManager resources, ResourceLocation location) {
@@ -217,6 +233,10 @@ final class HarmonyModelCache implements AutoCloseable {
         if (vertices != null) {
             vertices.close();
             vertices = null;
+        }
+        if (shaderMesh != null) {
+            shaderMesh.close();
+            shaderMesh = null;
         }
     }
 }

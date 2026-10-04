@@ -179,7 +179,7 @@ final class CountLcg implements AutoCloseable {
     }
 
     void shareRows() {
-        shareRows = !retainProof;
+        shareRows = true;
     }
 
     List<CountLpLearning.Cut> sharedRows() {
@@ -214,6 +214,7 @@ final class CountLcg implements AutoCloseable {
     CountLcg(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
              PlanningBudget budget, long maximumWork, boolean retainProof) {
         this.rows = rows;
+        originalRows = rows.size();
         this.budget = budget;
         this.retainProof = retainProof || budget.proofJournal() != null;
         allowance = Math.min(maximumWork, budget.remainingWork() / 8);
@@ -275,7 +276,7 @@ final class CountLcg implements AutoCloseable {
             if (!differenceChecked) {
                 differenceChecked = true;
                 long before = budget.threadWork();
-                differenceProof = CountDifference.contradiction(rows, rootLow, rootHigh, budget, allowance - work);
+                differenceProof = CountDifference.contradiction(retainProof ? rows.subList(0, originalRows) : rows, rootLow, rootHigh, budget, allowance - work);
                 workTicks += (budget.threadWork() - before) * PlanningBudget.WORK_SCALE;
                 work = PlanningBudget.units(workTicks);
                 if (differenceProof != null) {
@@ -1012,7 +1013,7 @@ final class CountLcg implements AutoCloseable {
 
     private boolean finish(String detail) {
         if (!complete && retainProof) {
-            var scope = new ArrayList<>(learnedRelaxation ? rows.subList(0, originalRows) : rows);
+            var scope = new ArrayList<>(rows.subList(0, originalRows));
             for (int i = 0; i < low.length; i++) {
                 scope.add(new Literal(i, true, rootLow[i]).row());
                 if (rootHigh[i] != null) scope.add(new Literal(i, false, rootHigh[i]).row());
@@ -1052,7 +1053,7 @@ final class CountLcg implements AutoCloseable {
 
     /** Import only a proved, scoped conjunction. Decision bounds must remain literal guards. */
     boolean learn(CountConflict value) {
-        if (retainProof || complete && !paused || imported.size() >= 64 || imported.contains(value) || value.assumptions().size() > 16) return false;
+        if (complete && !paused || imported.size() >= 64 || imported.contains(value) || value.assumptions().size() > 16) return false;
         List<Literal> literals = new ArrayList<>();
         for (var row : value.assumptions()) {
             charge();
@@ -1067,21 +1068,45 @@ final class CountLcg implements AutoCloseable {
             if (rootTrue(literal.opposite())) return false;
             if (!rootTrue(literal)) literals.add(literal);
         }
+        if (retainProof && !checkImportedClause(value.assumptions().stream().map(CountProof::row).toList())) return false;
         long bytes = 256L + 512L * value.assumptions().size();
         if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
         memory += bytes;
         imported.add(value);
+        if (retainProof) proofSteps.add(value);
         clauses.add(new Nogood(List.copyOf(literals), 0, conflicts));
         rescan = true;
         return true;
     }
 
+    /** Imported explanations are independently replayed from the original axioms, never trusted as new axioms. */
+    private boolean checkImportedClause(List<CountProof.Row> clause) {
+        if (Arrays.stream(rootLow).anyMatch(value -> value.signum() < 0)) return false;
+        var scope = new ArrayList<>(rows.subList(0, originalRows).stream().map(CountProof::row).toList());
+        for (int i = 0; i < rootLow.length; i++) {
+            scope.add(CountProof.row(new Literal(i, true, rootLow[i]).row()));
+            if (rootHigh[i] != null) scope.add(CountProof.row(new Literal(i, false, rootHigh[i]).row()));
+        }
+        long before = budget.threadWork();
+        var proof = CountAffineConflictProof.clause(rootLow.length, scope, clause);
+        CountProof.Verdict verdict = CountProof.verify(proof, Math.min(16384, budget.remainingWork() / 32), budget::charge);
+        workTicks += (budget.threadWork() - before) * PlanningBudget.WORK_SCALE;
+        work = PlanningBudget.units(workTicks);
+        return verdict == CountProof.Verdict.VERIFIED;
+    }
+
     /** Only the owner's certified, unconditional original-model consequences may enter here. */
     boolean learn(ExactLinearProgram.Constraint row) {
-        if (retainProof || complete && !paused || importedRows.size() >= 64 || row.terms().size() > 64 ||
+        if (complete && !paused || importedRows.size() >= 64 || row.terms().size() > 64 ||
                 row.upper().bitLength() > 2048 || importedRows.contains(row) || rows.contains(row))
             return false;
         if (learnedRelaxation && rows.size() >= rowActivity.length) return false;
+        CountConflict explanation = null;
+        if (retainProof) {
+            var negative = CountAffineProof.opposite(CountProof.row(row));
+            if (!checkImportedClause(List.of(negative))) return false;
+            explanation = new CountConflict(List.of(new ExactLinearProgram.Constraint(negative.terms(), negative.upper())));
+        }
         for (var term : row.terms().entrySet()) {
             charge();
             if (term.getKey() < 0 || term.getKey() >= low.length || term.getValue().bitLength() > 2048) return false;
@@ -1097,6 +1122,7 @@ final class CountLcg implements AutoCloseable {
         if (capacity != rowActivity.length) rowActivity = Arrays.copyOf(rowActivity, capacity);
         rows.add(row);
         importedRows.add(row);
+        if (explanation != null) proofSteps.add(explanation);
         if (relaxationKnown != null) relaxationKnown.add(row);
         if (rowPool != null) rowPool.added(id, decisions);
         for (var term : row.terms().entrySet()) {

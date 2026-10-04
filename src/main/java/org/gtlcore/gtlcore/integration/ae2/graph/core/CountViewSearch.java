@@ -22,6 +22,17 @@ final class CountViewSearch implements AutoCloseable {
     private CandidateOrigin candidateOrigin;
     private Search candidateSource;
     private boolean strideScoutAttempted;
+    private long commonWork, restorationWork;
+    private CountPortfolioPolicy.Mode candidateMode;
+
+    void mode(CountPortfolioPolicy.Mode mode) {
+        policy.mode(mode);
+    }
+
+    void commonWork(long work) {
+        if (work < 0) throw new IllegalArgumentException("Negative common work");
+        commonWork = work > Long.MAX_VALUE - commonWork ? Long.MAX_VALUE : commonWork + work;
+    }
 
     record CandidateOrigin(long id, String view, String engine) {}
 
@@ -252,14 +263,19 @@ final class CountViewSearch implements AutoCloseable {
             completedSlice = true;
             BigInteger[] candidate = active.counts();
             infeasible = active.infeasible() && active.view.semantics().transfersProof();
+            if (infeasible) policy.candidateFeedback(CountPortfolioPolicy.Mode.PROOF, active.scheduling,
+                    active.work, commonWork, true, true);
             if (!active.infeasible() && active.solver != null && active.solver.rootVersion() > active.publishedRoots && models.sharesBounds(active.view)) {
                 models.publishBounds(active.view, active.solver.rootLower(), active.solver.rootUpper());
                 active.publishedRoots = active.solver.rootVersion();
             }
             if (!infeasible) active.publish(models);
             if (candidate != null) {
+                long restoreStarted = budget.threadWork();
                 counts = models.restoreAndCheck(active.view, candidate);
+                restorationWork = budget.threadWork() - restoreStarted;
                 if (counts != null) {
+                    candidateMode = policy.mode();
                     candidateSource = active;
                     candidateOrigin = new CandidateOrigin(++candidateSequence, active.view.name(), active.engine.name().toLowerCase(Locale.ROOT));
                     active.candidates++;
@@ -322,6 +338,10 @@ final class CountViewSearch implements AutoCloseable {
 
     /** Request-local selection feedback; proof domains and mandatory exploration are unchanged. */
     void feedback(CandidateOrigin origin, CandidateOutcome outcome, long downstreamWork) {
+        feedback(origin, outcome, downstreamWork, true);
+    }
+
+    void feedback(CandidateOrigin origin, CandidateOutcome outcome, long downstreamWork, boolean improved) {
         if (!Objects.equals(origin, candidateOrigin) || candidateSource == null) return;
         Search source = candidateSource;
         boolean terminal = outcome != CandidateOutcome.SCHEDULE_WITNESS;
@@ -329,18 +349,26 @@ final class CountViewSearch implements AutoCloseable {
         else if (outcome == CandidateOutcome.SCHEDULE_DEAD) source.dead++;
         else if (outcome == CandidateOutcome.SCHEDULE_UNKNOWN || outcome == CandidateOutcome.UNRESOLVED) source.unknown++;
         if (terminal) source.downstreamWork += downstreamWork;
-        if (terminal) policy.candidateFeedback(source.scheduling, source.work, downstreamWork,
-                outcome == CandidateOutcome.VERIFIED || outcome == CandidateOutcome.SCHEDULE_DEAD || outcome == CandidateOutcome.REJECTED,
-                outcome == CandidateOutcome.VERIFIED);
+        long sharedCost = commonWork / Math.max(1, candidateSequence);
+        long overhead = saturatedAdd(sharedCost, saturatedAdd(restorationWork, downstreamWork));
+        if (terminal) policy.candidateFeedback(candidateMode, source.scheduling, Math.max(0, source.work - restorationWork), overhead,
+                candidateMode != CountPortfolioPolicy.Mode.PROOF && (outcome == CandidateOutcome.VERIFIED || outcome == CandidateOutcome.SCHEDULE_DEAD || outcome == CandidateOutcome.REJECTED),
+                candidateMode != CountPortfolioPolicy.Mode.PROOF && outcome == CandidateOutcome.VERIFIED &&
+                        (candidateMode != CountPortfolioPolicy.Mode.IMPROVEMENT || improved));
         budget.note("count_candidate", "id=" + origin.id() + "; view=" + origin.view() + "; engine=" + origin.engine() +
                 "; outcome=" + outcome + "; solver_work=" + source.work + "; downstream_work=" + downstreamWork +
                 "; candidates=" + source.candidates + "; verified=" + source.verified + "; dead=" + source.dead +
                 "; unknown=" + source.unknown + "; total_downstream_work=" + source.downstreamWork +
                 "; selection_efficiency=" + policy.candidateEfficiency(source.scheduling));
+        if (terminal) budget.note("count_candidate_cost", "mode=" + candidateMode + "; common_work=" + sharedCost + "; restore_work=" + restorationWork + "; downstream_work=" + downstreamWork);
         if (terminal) {
             candidateOrigin = null;
             candidateSource = null;
         }
+    }
+
+    private static long saturatedAdd(long a, long b) {
+        return b > Long.MAX_VALUE - a ? Long.MAX_VALUE : a + b;
     }
 
     boolean infeasible() {

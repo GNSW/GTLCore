@@ -109,7 +109,11 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     boolean inheritedBasisOriginal, sharedBasisOriginal;
     CountReduction.Coordinates inheritedCoordinates;
     CountSchedule<K> scheduling;
-    private final CountScheduleContinuations<K> scheduleContinuations;
+    private CountScheduleContinuations<K> scheduleContinuations;
+    private boolean sharedSchedules;
+    private PlanPreference<K> feedbackIncumbent;
+    private CountPortfolioPolicy.Mode portfolioMode = CountPortfolioPolicy.Mode.FIRST_WITNESS;
+    long commonCompilationWork;
     CountSupportSearch<K> supportSearch;
     CountProgram<K> program;
     AllocationSearch.Candidate<K> assembling;
@@ -157,6 +161,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         measuringRun = true;
         try {
             if (state != State.OPEN) return;
+            feedbackIncumbent = incumbent;
+            portfolioMode = incumbent != null ? CountPortfolioPolicy.Mode.IMPROVEMENT :
+                    choices.isEmpty() ? CountPortfolioPolicy.Mode.FIRST_WITNESS : CountPortfolioPolicy.Mode.PROOF;
+            if (viewSearch != null) viewSearch.mode(portfolioMode);
             scheduleContinuations.trim();
             if (!knownChoices.equals(choices)) checkedChoices = 0;
             knownChoices = choices;
@@ -313,7 +321,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 rejectSpeculativeCandidate();
                 return;
             }
-            if (status == CountSchedule.Result.WITNESS) beginAssembly(scheduling.witness());
+            if (status == CountSchedule.Result.WITNESS) {
+                scheduleContinuations.remember(counts, scheduling.witness());
+                beginAssembly(scheduling.witness());
+            }
             scheduling.close();
             scheduling = null;
             if (status == CountSchedule.Result.DEAD) {
@@ -871,6 +882,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 if (modelViews != null) {
                     reduction.retainStrideView();
                     viewSearch = new CountViewSearch(modelViews, budget);
+                    viewSearch.mode(portfolioMode);
+                    viewSearch.commonWork(commonCompilationWork);
                     if (!CountBoolean.preferred(linearConstraints, lower, upper, budget)) {
                         viewSearch.resume(32768);
                         viewStage = 1;
@@ -880,7 +893,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             return;
         }
         if (!compiled) {
-            if (!reduction.step()) return;
+            long reductionStarted = budget.threadWork();
+            boolean reduced = reduction.step();
+            if (viewSearch != null) viewSearch.commonWork(budget.threadWork() - reductionStarted);
+            if (!reduced) return;
             compiled = true;
             preprocessingOnly = (reduction.variables() > 64 || reduction.rows().size() > 512) &&
                     !ExactRevisedProgram.extendsDenseAdmission(reduction.variables(), reduction.rows()) && !mediumBooleanLp();
@@ -1092,8 +1108,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             }
         }
         if (modelViews != null) {
+            long compilationStarted = budget.threadWork();
             modelViews.compileLight();
             modelViews.addReduced(reduction);
+            viewSearch.commonWork(budget.threadWork() - compilationStarted);
             if (!CountBoolean.preferred(reduction.rows(), reduction.lower(), reduction.upper(), budget)) {
                 viewSearch.resume(262144);
                 viewStage = 2;
@@ -1270,7 +1288,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
 
     private void beginScheduling() {
         schedulingWork = 0;
+        PlanStep reused = scheduleContinuations.witness(counts);
+        if (reused != null) {
+            beginAssembly(reused);
+            return;
+        }
         scheduling = scheduleContinuations.acquire(counts);
+    }
+
+    IntegerCountBranch<K> shareSchedules(CountScheduleContinuations<K> pool) {
+        if (initialized || sharedSchedules) throw new IllegalStateException("Late schedule pool handoff");
+        scheduleContinuations.close();
+        scheduleContinuations = pool;
+        sharedSchedules = true;
+        return this;
     }
 
     /** Drop only the candidate pipeline, retaining the searches that proposed it. */
@@ -1301,7 +1332,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
 
     private void candidateFeedback(CountViewSearch.CandidateOutcome outcome) {
         if (candidateOrigin == null) return;
-        viewSearch.feedback(candidateOrigin, outcome, Math.max(0, measuredWork() - candidateStarted));
+        viewSearch.feedback(candidateOrigin, outcome, Math.max(0, measuredWork() - candidateStarted),
+                feedbackIncumbent == null || preference != null && preference.preferredTo(feedbackIncumbent));
         if (outcome != CountViewSearch.CandidateOutcome.SCHEDULE_WITNESS) candidateOrigin = null;
     }
 
@@ -1382,6 +1414,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         model.recipes.forEach(recipe -> recipes.put(recipe.id(), recipe));
         assembling = new AllocationSearch.Candidate<>(witness, recipes, target, amount, stock, seeds, external,
                 preserve, force, false, budget, started);
+        assembling.sharedSummaries = scheduleContinuations.programs;
     }
 
     /** A lifted optional kernel exports a witness, never a proof or search exclusion. */
@@ -1500,7 +1533,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     void releaseWorkspace() {
-        scheduleContinuations.close();
+        if (!sharedSchedules) scheduleContinuations.close();
         closeViews();
         if (lpSearch != null) lpSearch.close();
         lpSearch = null;

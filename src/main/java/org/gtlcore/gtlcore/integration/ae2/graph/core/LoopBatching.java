@@ -27,6 +27,46 @@ final class LoopBatching {
         return recipe.configurationInputs().equals(recipe.reusableInputs());
     }
 
+    record Group(Map<String, BigInteger> counts, long iterations) {}
+
+    /**
+     * A productive loop can accumulate the return-side material while its
+     * original first recipe still has only one seed. Trying a different cycle
+     * entry lets that material fund a larger batch, without adding any runs.
+     * Every proposed order passes the same exact prefix/headroom check below.
+     */
+    static <K> Group group(Map<String, BigInteger> counts, long remaining,
+                           Map<String, GraphRecipe<K>> recipes, Function<K, BigInteger> stock) {
+        long best = iterations(counts, remaining, recipes, stock);
+        Map<String, BigInteger> selected = counts;
+        if (best < remaining && counts.size() > 1) {
+            long incidences = 0;
+            for (String id : counts.keySet()) {
+                GraphRecipe<K> recipe = recipes.get(id);
+                if (!fixedPerRun(recipe)) return null;
+                incidences += recipe.inputs().size() + recipe.outputs().size();
+            }
+            // This is server-tick work. Limit extra exact checks by material
+            // incidences; declining a reorder leaves the original cursor intact.
+            int trials = (int) Math.min(counts.size() - 1L, 4096L / Math.max(1, incidences));
+            var entries = new ArrayList<>(counts.entrySet());
+            for (int shift = 1; shift <= trials; shift++) {
+                Map<String, BigInteger> rotated = new LinkedHashMap<>();
+                for (int i = 0; i < entries.size(); i++) {
+                    var entry = entries.get((i + shift) % entries.size());
+                    rotated.put(entry.getKey(), entry.getValue());
+                }
+                long possible = iterations(rotated, remaining, recipes, stock);
+                if (possible > best) {
+                    best = possible;
+                    selected = rotated;
+                    if (best == remaining) break;
+                }
+            }
+        }
+        return best > 1 ? new Group(selected, best) : null;
+    }
+
     /** All constraints are affine in the number of regrouped iterations; no trial dispatches. */
     static <K> long iterations(Map<String, BigInteger> counts, long remaining,
                                Map<String, GraphRecipe<K>> recipes, Function<K, BigInteger> stock) {

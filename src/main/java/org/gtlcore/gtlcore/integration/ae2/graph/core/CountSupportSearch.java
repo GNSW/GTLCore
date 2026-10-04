@@ -36,6 +36,7 @@ final class CountSupportSearch<K> implements AutoCloseable {
     private ExactLinearProgram.Constraint cut;
     private boolean repairing;
     private int certifiedStates;
+    private long distanceWork;
 
     CountSupportSearch(RecipeCountModel<K> model, BigInteger[] candidate, PlanningBudget budget) {
         this(model, candidate, budget, false);
@@ -228,7 +229,47 @@ final class CountSupportSearch<K> implements AutoCloseable {
             BigInteger gap = goals[k].subtract(marking.get(k)).max(BigInteger.ZERO);
             result = result.max(CheckedAmounts.ceilDiv(gap, gains[k]));
         }
-        return result;
+        if (!repairing || distanceWork >= allowance / 8) return result;
+        // A relaxed AND/OR graph: all inputs of a producer must be reachable,
+        // while any producer may supply a resource. Ignore consumption and
+        // competition. These distances rank states only; an unreachable hint
+        // neither prunes a state nor contributes to a closed-set certificate.
+        long before = budget.threadWork();
+        BigInteger[] depths = new BigInteger[goals.length];
+        try {
+            boolean changed = true;
+            for (int round = 0; changed && round < goals.length; round++) {
+                changed = false;
+                for (int i = 0; i < support.size(); i++) {
+                    BigInteger depth = BigInteger.ZERO;
+                    for (int k = 0; k < goals.length; k++) {
+                        budget.check();
+                        BigInteger deficit = inputs[i][k].subtract(marking.get(k));
+                        if (deficit.signum() <= 0) continue;
+                        if (depths[k] == null) {
+                            depth = null;
+                            break;
+                        }
+                        depth = depth.max(depths[k].add(CheckedAmounts.ceilDiv(deficit, gains[k])));
+                    }
+                    if (depth != null) for (int k = 0; k < goals.length; k++) {
+                        budget.check();
+                        if (changes[i][k].signum() > 0 && (depths[k] == null || depth.compareTo(depths[k]) < 0)) {
+                            depths[k] = depth;
+                            changed = true;
+                        }
+                    }
+                    if (distanceWork + budget.threadWork() - before >= allowance / 8) return result;
+                }
+            }
+            for (int k = 0; k < goals.length; k++) {
+                BigInteger gap = goals[k].subtract(marking.get(k));
+                if (gap.signum() > 0 && depths[k] != null) result = result.max(depths[k].add(CheckedAmounts.ceilDiv(gap, gains[k])));
+            }
+            return result;
+        } finally {
+            distanceWork += budget.threadWork() - before;
+        }
     }
 
     private boolean goal(List<BigInteger> marking) {

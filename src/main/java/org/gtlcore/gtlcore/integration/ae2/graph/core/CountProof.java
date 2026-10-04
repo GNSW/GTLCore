@@ -292,6 +292,10 @@ public final class CountProof {
 
     /** Exact nonnegative elimination and integral division, checked without the search kernel. */
     public static Verdict verify(Derivation proof, long maximumWork) {
+        return verify(proof, maximumWork, ignored -> {});
+    }
+
+    static Verdict verify(Derivation proof, long maximumWork, java.util.function.LongConsumer charged) {
         if (proof.variables < 0 || proof.variables > 16384 || maximumWork <= 0) return Verdict.INVALID;
         long[] work = { maximumWork };
         try {
@@ -300,6 +304,8 @@ public final class CountProof {
             return derive(proof.variables, available, proof.steps, work) ? Verdict.VERIFIED : Verdict.INVALID;
         } catch (CheckLimit limit) {
             return Verdict.INCOMPLETE;
+        } finally {
+            charged.accept(maximumWork - work[0]);
         }
     }
 
@@ -573,6 +579,8 @@ public final class CountProof {
         private final List<Diagram> diagrams = new ArrayList<>();
         private final List<Symmetry> symmetries = new ArrayList<>();
         private final List<CountInduction.Proof> inductions = new ArrayList<>();
+        private final List<CountAffineProof.Certificate> affine = new ArrayList<>();
+        private final List<CountAffineConflictProof.Certificate> affineConflicts = new ArrayList<>();
 
         public Journal(long maximumBytes) {
             if (maximumBytes <= 0) throw new IllegalArgumentException("Nonpositive proof archive size");
@@ -606,6 +614,26 @@ public final class CountProof {
 
         public synchronized List<Derivation> derivations() {
             return List.copyOf(derivations);
+        }
+
+        public synchronized List<CountAffineProof.Certificate> affine() {
+            return List.copyOf(affine);
+        }
+
+        public synchronized List<CountAffineConflictProof.Certificate> affineConflicts() {
+            return List.copyOf(affineConflicts);
+        }
+
+        synchronized boolean add(CountAffineConflictProof.Certificate proof) {
+            if (!retain(CountAffineConflictProof.bytes(proof))) return false;
+            affineConflicts.add(proof);
+            return true;
+        }
+
+        synchronized boolean add(CountAffineProof.Certificate proof) {
+            if (!retain(CountAffineProof.bytes(proof))) return false;
+            affine.add(proof);
+            return true;
         }
 
         public synchronized List<Knapsack> knapsacks() {
@@ -696,6 +724,8 @@ public final class CountProof {
                 if (entries.stream().anyMatch(proof -> !proof.derived.isEmpty()) ||
                         inductions.stream().anyMatch(proof -> !proof.base().derived.isEmpty() || !proof.induction().derived.isEmpty()))
                     version = 0x43475043;
+                if (!affine.isEmpty()) version = 0x43475044;
+                if (!affineConflicts.isEmpty()) version = 0x43475045;
                 output.writeInt(version);
                 output.writeBoolean(truncated);
                 output.writeInt(entries.size());
@@ -818,6 +848,14 @@ public final class CountProof {
                         certificate(output, proof.base(), version);
                         certificate(output, proof.induction(), version);
                     }
+                }
+                if (version >= 0x43475044) {
+                    output.writeInt(affine.size());
+                    for (var proof : affine) CountAffineProof.write(output, proof);
+                }
+                if (version >= 0x43475045) {
+                    output.writeInt(affineConflicts.size());
+                    for (var proof : affineConflicts) CountAffineConflictProof.write(output, proof);
                 }
             }
         }
@@ -1140,13 +1178,13 @@ public final class CountProof {
         return new BigInteger(bytes);
     }
 
-    private static int length(DataInputStream in, int max) throws IOException {
+    static int length(DataInputStream in, int max) throws IOException {
         int length = in.readInt();
         if (length < 0 || length > max) throw new IOException("Certificate size exceeds limit");
         return length;
     }
 
-    private static void rows(DataOutputStream out, List<Row> rows) throws IOException {
+    static void rows(DataOutputStream out, List<Row> rows) throws IOException {
         out.writeInt(rows.size());
         for (var row : rows) {
             out.writeInt(row.terms.size());
@@ -1158,7 +1196,7 @@ public final class CountProof {
         }
     }
 
-    private static List<Row> rows(DataInputStream in) throws IOException {
+    static List<Row> rows(DataInputStream in) throws IOException {
         List<Row> rows = new ArrayList<>();
         for (int remaining = length(in, 65536); remaining > 0; remaining--) {
             Map<Integer, BigInteger> terms = new LinkedHashMap<>();
@@ -1189,7 +1227,7 @@ public final class CountProof {
         return result;
     }
 
-    private static void certificate(DataOutputStream output, Certificate proof, int version) throws IOException {
+    static void certificate(DataOutputStream output, Certificate proof, int version) throws IOException {
         output.writeUTF(proof.scope);
         output.writeInt(proof.variables);
         rows(output, proof.axioms);
@@ -1215,7 +1253,7 @@ public final class CountProof {
         }
     }
 
-    private static Certificate certificate(DataInputStream input, int version) throws IOException {
+    static Certificate certificate(DataInputStream input, int version) throws IOException {
         String scope = input.readUTF();
         int variables = length(input, 16384);
         List<Row> axioms = rows(input);
@@ -1244,7 +1282,7 @@ public final class CountProof {
         Journal journal = new Journal(128L << 20);
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
             int version = input.readInt();
-            if ((version < 0x43475032 || version > 0x43475039) && version != 0x43475041 && version != 0x43475042 && version != 0x43475043) throw new IOException("Unsupported certificate format");
+            if ((version < 0x43475032 || version > 0x43475039) && (version < 0x43475041 || version > 0x43475045)) throw new IOException("Unsupported certificate format");
             journal.truncated = input.readBoolean();
             for (int remaining = length(input, 8192); remaining > 0; remaining--) journal.add(certificate(input, version));
             for (int n = length(input, 8192); n > 0; n--) {
@@ -1363,6 +1401,8 @@ public final class CountProof {
                 int depth = length(input, 6);
                 journal.add(new CountInduction.Proof(problem, depth, certificate(input, version), certificate(input, version)));
             }
+            if (version >= 0x43475044) for (int n = length(input, 8192); n > 0; n--) journal.add(CountAffineProof.read(input));
+            if (version >= 0x43475045) for (int n = length(input, 8192); n > 0; n--) journal.add(CountAffineConflictProof.read(input));
             if (input.read() != -1) throw new IOException("Trailing certificate bytes");
         }
         return journal;
@@ -1419,6 +1459,16 @@ public final class CountProof {
         for (var proof : journal.inductions()) {
             Verdict result = CountInduction.verify(proof, 20_000_000, unused -> {});
             System.out.println("token_sum_k_induction: " + result + "; depth=" + proof.depth());
+            valid &= result == Verdict.VERIFIED;
+        }
+        for (var proof : journal.affine()) {
+            Verdict result = CountAffineProof.verify(proof, 20_000_000);
+            System.out.println("affine_cut_transfer: " + result);
+            valid &= result == Verdict.VERIFIED;
+        }
+        for (var proof : journal.affineConflicts()) {
+            Verdict result = CountAffineConflictProof.verify(proof, 20_000_000);
+            System.out.println("affine_conflict_transfer: " + result);
             valid &= result == Verdict.VERIFIED;
         }
         if (!valid) throw new IllegalStateException("Incomplete or invalid proof archive");

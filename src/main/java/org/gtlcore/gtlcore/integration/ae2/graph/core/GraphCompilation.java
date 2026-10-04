@@ -53,11 +53,12 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private GraphCatalogIndex<K> catalogIndex;
     private GraphCatalogIndex.Builder<K> indexing;
     private int catalogCursor, packedInput, packedEdge;
-    private long selectedIncidences;
+    private long selectedIncidences, selectedOutputs;
     private boolean indexedSelection;
     private long indexedMemory;
     private final List<GraphCatalogIndex.Ports> ports = new ArrayList<>();
     private Ints[] packedOutputs;
+    private int[] firstProducers;
     private int[][] packedTargets;
     private final Map<Integer, int[]> packedHubs = new HashMap<>();
     private int[] packedEdges;
@@ -154,7 +155,10 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 if (catalogIndex != null) {
                     var packed = catalogIndex.ports(recipe);
                     if (packed == null) indexedSelection = false;
-                    else selectedIncidences += packed.inputs().length + packed.physicalOutputs().length;
+                    else {
+                        selectedIncidences += packed.inputs().length + packed.physicalOutputs().length;
+                        selectedOutputs += packed.physicalOutputs().length;
+                    }
                 }
             }
             candidates = null;
@@ -192,6 +196,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         if (catalogIndex != null) {
             if (!indexedSelection) {
                 selectedIncidences = 0;
+                selectedOutputs = 0;
                 for (var recipe : recipes.values()) {
                     budget.check();
                     var packed = catalogIndex.ports(recipe);
@@ -200,14 +205,18 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                         break;
                     }
                     selectedIncidences += packed.inputs().length + packed.physicalOutputs().length;
+                    selectedOutputs += packed.physicalOutputs().length;
                 }
             }
             // A tiny closure should not scan a whole network's resource mask.
             if (catalogIndex != null && catalogIndex.resourceCount() <= Math.max(256, 4 * selectedIncidences)) {
-                long bytes = 1024L + 104L * catalogIndex.resourceCount() + 16L * recipes.size();
+                // Most materials have one selected producer. Store it inline;
+                // allocate a growable list only when a second producer appears.
+                long bytes = 1024L + 72L * catalogIndex.resourceCount() + 16L * selectedOutputs;
                 if (bytes <= budget.availableBytes() / 8 && budget.tryReserve(bytes)) {
                     indexedMemory = bytes;
                     packedOutputs = new Ints[catalogIndex.resourceCount()];
+                    firstProducers = new int[catalogIndex.resourceCount()];
                     packedTargets = new int[catalogIndex.resourceCount()][];
                     budget.note("graph_catalog", "packed_selected_mask; recipes=" + recipes.size() + "; resources=" + catalogIndex.resourceCount());
                 }
@@ -229,8 +238,14 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 ports.add(packed);
                 for (int key : packed.physicalOutputs()) {
                     budget.check();
-                    if (packedOutputs[key] == null) packedOutputs[key] = new Ints();
-                    packedOutputs[key].add(nodes.size() - 1);
+                    if (firstProducers[key] == 0) firstProducers[key] = nodes.size();
+                    else {
+                        if (packedOutputs[key] == null) {
+                            packedOutputs[key] = new Ints();
+                            packedOutputs[key].add(firstProducers[key] - 1);
+                        }
+                        packedOutputs[key].add(nodes.size() - 1);
+                    }
                     // Keep the cold traversal's material order without its
                     // boxed producer lists. Hub order can affect later plan
                     // heuristics even when the SCC partition is unchanged.
@@ -252,7 +267,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private void registerHubs() {
         if (packedTargets != null && sharedOutputs.hasNext()) {
             int resource = catalogIndex.resourceId(sharedOutputs.next().getKey());
-            int[] targets = packedOutputs[resource].array();
+            int[] targets = packedOutputs[resource] == null ? new int[] { firstProducers[resource] - 1 } : packedOutputs[resource].array();
             packedOutputs[resource] = null;
             if (targets.length > 1) {
                 budget.reserve(160);

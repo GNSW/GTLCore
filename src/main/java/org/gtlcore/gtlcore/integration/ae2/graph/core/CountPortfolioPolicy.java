@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,12 @@ import java.util.Map;
 final class CountPortfolioPolicy {
 
     static final long MIN_QUANTUM = 4096, MAX_QUANTUM = 32768;
+
+    enum Mode {
+        FIRST_WITNESS,
+        PROOF,
+        IMPROVEMENT
+    }
 
     static final class Arm {
 
@@ -32,8 +39,17 @@ final class CountPortfolioPolicy {
     }
 
     private final List<Arm> arms = new ArrayList<>();
-    private final Map<Object, CandidateCosts> candidateCosts = new HashMap<>();
+    private final Map<Mode, Map<Object, CandidateCosts>> candidateCosts = new EnumMap<>(Mode.class);
+    private Mode mode = Mode.FIRST_WITNESS;
     private long turn;
+
+    void mode(Mode value) {
+        mode = value;
+    }
+
+    Mode mode() {
+        return mode;
+    }
 
     Arm add(long startupCost) {
         return add(startupCost, null);
@@ -155,8 +171,12 @@ final class CountPortfolioPolicy {
 
     /** Completed candidate pipeline observations, separate from solver-internal progress. */
     void candidateFeedback(Arm source, long upstream, long downstream, boolean resolved, boolean verified) {
+        candidateFeedback(mode, source, upstream, downstream, resolved, verified);
+    }
+
+    void candidateFeedback(Mode goal, Arm source, long upstream, long downstream, boolean resolved, boolean verified) {
         if (upstream < 0 || downstream < 0 || verified && !resolved) throw new IllegalArgumentException("Invalid candidate observation");
-        CandidateCosts costs = candidateCosts.computeIfAbsent(source.family, ignored -> new CandidateCosts());
+        CandidateCosts costs = candidateCosts.computeIfAbsent(goal, ignored -> new HashMap<>()).computeIfAbsent(source.family, ignored -> new CandidateCosts());
         if (costs.observations < Long.MAX_VALUE) costs.observations++;
         costs.upstream += (Math.max(1, upstream) - costs.upstream) / costs.observations;
         costs.downstream += (downstream - costs.downstream) / costs.observations;
@@ -165,7 +185,7 @@ final class CountPortfolioPolicy {
     }
 
     double candidateEfficiency(Arm arm) {
-        CandidateCosts costs = candidateCosts.get(arm.family);
+        CandidateCosts costs = candidateCosts.getOrDefault(mode, Map.of()).get(arm.family);
         if (costs == null) return 1;
         // Progress is still normalized within each arm. Discount its selection
         // score by measured pipeline overhead and checked candidate yield, not

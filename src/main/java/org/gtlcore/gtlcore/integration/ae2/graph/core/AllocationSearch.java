@@ -503,6 +503,7 @@ final class AllocationSearch<K> {
         final Set<K> walked = new HashSet<>();
         SummaryComputation<K> computation;
         SequenceSummary<K> summary;
+        CountProgramSummaries<K> sharedSummaries;
         Iterator<K> keys;
         K checkingKey;
         int stage;
@@ -561,12 +562,16 @@ final class AllocationSearch<K> {
                     if (used.putIfAbsent(id, recipe) == null)
                         for (K key : recipe.executionOutputs().keySet()) producers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(recipe);
                 } else {
-                    computation = new SummaryComputation<>(witness, used, budget);
+                    summary = sharedSummaries == null ? null : sharedSummaries.get(witness);
+                    if (summary == null) computation = new SummaryComputation<>(witness, used, budget);
                     stage = 1;
                 }
             } else if (stage == 1) {
-                if (!computation.step()) return false;
-                summary = computation.result();
+                if (summary == null) {
+                    if (!computation.step()) return false;
+                    summary = computation.result();
+                    if (sharedSummaries != null) sharedSummaries.put(witness, summary);
+                }
                 // A productive startup may consume an initial target seed.
                 // Requiring the entire order as NET gain would discard valid
                 // integer schedules after the count model already found them.

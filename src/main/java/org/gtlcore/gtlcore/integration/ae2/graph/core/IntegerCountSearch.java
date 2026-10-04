@@ -32,6 +32,8 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private final CountConflictPool choiceConflicts;
     private final OrderProofs<K> proofs;
     private CountBranchHistory branchHistory;
+    private CountScheduleContinuations<K> scheduleContinuations;
+    private long compilationWork;
     private final List<Incumbent<K>> frontier = new ArrayList<>();
     private final AtomicBoolean stopped = new AtomicBoolean(), released = new AtomicBoolean();
     private CompletableFuture<List<IntegerCountBranch<K>>> running;
@@ -83,9 +85,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         this.started = started;
         allowance = Math.min(2_000_000, budget.remainingWork() / 4);
         preprocessingAllowance = Math.min(16_000_000, budget.remainingWork() / 5 * 4);
+        long compilationStarted = budget.threadWork();
         model = RecipeCountModel.create(compiler, target, amount, this.stock, this.seeds, this.external, excluded, force, budget);
         try {
             execution = model == null ? null : new CountExecution<>(model, budget);
+            compilationWork = budget.threadWork() - compilationStarted;
         } catch (RuntimeException | Error failure) {
             if (model != null) model.close();
             choiceConflicts.close();
@@ -102,6 +106,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         }
         try {
             branchHistory = new CountBranchHistory(model.recipes.size(), budget);
+            scheduleContinuations = new CountScheduleContinuations<>(model, budget);
             choiceConflicts.add(compiler.countSessions.reuse(model, budget));
             enqueue(List.of());
         } catch (RuntimeException | Error failure) {
@@ -500,7 +505,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         repairScheduled = true;
         if (model.keys.size() > 16 || model.recipes.size() > 32) return;
         long before = budget.threadWork();
-        var branch = new IntegerCountBranch<>(model, execution, target, amount, stock, seeds, external, preserve, force, budget, started, List.of());
+        var branch = new IntegerCountBranch<>(model, execution, target, amount, stock, seeds, external, preserve, force, budget, started, List.of()).shareSchedules(scheduleContinuations);
         branch.compileRecovery = compileRecovery;
         try {
             if (branch.state != IntegerCountBranch.State.OPEN) return;
@@ -524,7 +529,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         if (model.recipes.size() < 8 || model.recipes.size() > 192 || budget.remainingWork() < 262144) return;
         for (int mode = 1; mode <= 3; mode++) {
             var branch = new IntegerCountBranch<>(model, execution, target, amount, stock, seeds, external,
-                    preserve, force, budget, started, List.of());
+                    preserve, force, budget, started, List.of()).shareSchedules(scheduleContinuations);
             if (branch.state != IntegerCountBranch.State.OPEN) {
                 branch.close();
                 continue;
@@ -544,8 +549,9 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         // Pending assumptions are lightweight and explicitly memory charged.
         // Only a bounded number of workspaces are resident; the cumulative
         // number of already closed branches is not a reason to drop siblings.
-        var branch = new IntegerCountBranch<>(model, execution, target, amount, stock, seeds, external, preserve, force, budget, started, constraints);
+        var branch = new IntegerCountBranch<>(model, execution, target, amount, stock, seeds, external, preserve, force, budget, started, constraints).shareSchedules(scheduleContinuations);
         branch.branchHistory = branchHistory;
+        branch.commonCompilationWork = compilationWork;
         branch.compileRecovery = compileRecovery;
         branches++;
         if (branch.state != IntegerCountBranch.State.OPEN) {
@@ -651,6 +657,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         choiceConflicts.close();
         materialConflicts.close();
         if (branchHistory != null) branchHistory.close();
+        if (scheduleContinuations != null) scheduleContinuations.close();
         frontier.forEach(candidate -> budget.release(candidate.memory()));
         frontier.clear();
     }

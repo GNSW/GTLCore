@@ -9,11 +9,12 @@ final class CountViewCuts implements AutoCloseable {
 
     private static final int MAX_FACTS = 64, MAX_TERMS = 64, MAX_BITS = 2048;
 
-    private record Fact(Object origin, ExactLinearProgram.Constraint row) {}
+    private record Fact(Object origin, ExactLinearProgram.Constraint row, CountProof.Derivation source, List<CountProof.Row> mapping) {}
 
     private record Coordinate(int original, BigInteger scale, BigInteger offset) {}
 
     private final PlanningBudget budget;
+    private final CountModelViews.View original;
     private final List<Fact> facts = new ArrayList<>();
     private final Set<ExactLinearProgram.Constraint> known = new HashSet<>();
     private final Map<CountModelViews.View, Coordinate[]> lifts = new IdentityHashMap<>();
@@ -37,14 +38,19 @@ final class CountViewCuts implements AutoCloseable {
         budget.check();
     }
 
-    private CountViewCuts(PlanningBudget budget, long bytes) {
+    private CountViewCuts(PlanningBudget budget, long bytes, CountModelViews.View original) {
         this.budget = budget;
         memory = bytes;
+        this.original = original;
     }
 
     static CountViewCuts create(PlanningBudget budget) {
+        return create(budget, null);
+    }
+
+    static CountViewCuts create(PlanningBudget budget, CountModelViews.View original) {
         long bytes = 262144; // Bounded certificate accumulation and affine lift scratch.
-        return bytes <= budget.availableBytes() / 8 && budget.tryReserve(bytes) ? new CountViewCuts(budget, bytes) : null;
+        return bytes <= budget.availableBytes() / 8 && budget.tryReserve(bytes) ? new CountViewCuts(budget, bytes, original) : null;
     }
 
     int version() {
@@ -73,10 +79,15 @@ final class CountViewCuts implements AutoCloseable {
             row = CountReduction.normalize(row);
             if (row.terms().isEmpty() && row.upper().signum() >= 0 || known.contains(row)) continue;
             long bytes = 256L + 512L * row.terms().size() + (row.upper().bitLength() + 7L) / 8;
+            if (budget.proofJournal() != null) bytes += 512L + 192L * view.rows().size() + 384L * view.shape().terms() +
+                    (view.substitution() == null ? 0 : 512L * view.substitution().coordinates().size());
             if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) break;
             memory += bytes;
             known.add(row);
-            facts.add(new Fact(origin, row));
+            CountProof.Derivation proof = budget.proofJournal() == null ? null : new CountProof.Derivation("affine_cut:" + view.name(),
+                    view.lower().length, view.rows().stream().map(CountProof::row).toList(),
+                    List.of(new CountProof.Combination(cut.parents(), cut.divisor(), CountProof.row(cut.row()))));
+            facts.add(new Fact(origin, row, proof, proof == null ? List.of() : CountAffineProof.mapping(view)));
         }
     }
 
@@ -164,7 +175,19 @@ final class CountViewCuts implements AutoCloseable {
                 Fact fact = facts.get(i);
                 if (fact.origin == consumer) continue;
                 var row = view.substitution() == null ? fact.row : view.substitution().row(fact.row, budget);
-                if (bounded(row) && accept.test(CountReduction.normalize(row))) imported++;
+                if (!bounded(row)) continue;
+                row = CountReduction.normalize(row);
+                if (budget.proofJournal() != null) {
+                    if (original == null || fact.source == null || Arrays.stream(original.lower()).anyMatch(v -> v.signum() < 0) ||
+                            Arrays.stream(view.lower()).anyMatch(v -> v.signum() < 0))
+                        continue;
+                    var proof = new CountAffineProof.Certificate(original.lower().length, CountAffineProof.axioms(original),
+                            fact.source, fact.mapping, CountProof.row(fact.row), view.lower().length,
+                            CountAffineProof.axioms(view), CountAffineProof.mapping(view), CountProof.row(row));
+                    long left = Math.max(0, allowance - (budget.threadWork() - started));
+                    if (CountAffineProof.verify(proof, left, budget::charge) != CountProof.Verdict.VERIFIED || !budget.proofJournal().add(proof)) continue;
+                }
+                if (accept.test(row)) imported++;
             }
         } catch (Stop ignored) {
             // Unimported facts remain optional; no search conclusion is made.

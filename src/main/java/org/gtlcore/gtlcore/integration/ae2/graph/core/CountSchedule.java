@@ -42,7 +42,10 @@ final class CountSchedule<K> implements AutoCloseable {
     private boolean preferEnabled;
     private List<SequenceSummary<K>> exactActions;
     private boolean reverseExact, reverseTried;
-    private long memory, labelMemory;
+    private long memory, labelMemory, programMemory;
+    private CountScheduleOrder<K> guidedOrder;
+    private final BitSet visited = new BitSet();
+    private boolean guidedTried, guiding;
 
     CountSchedule(RecipeCountModel<K> model, BigInteger[] counts, PlanningBudget budget) {
         this(model, counts, budget, false);
@@ -53,22 +56,29 @@ final class CountSchedule<K> implements AutoCloseable {
         this.budget = budget;
         this.balancedFirst = balancedFirst;
         original = counts.clone();
-        if (!budget.tryReserve(4L << 20)) {
+        long incidences = model.recipes.stream().mapToLong(r -> r.inputs().size() + r.outputs().size()).sum();
+        long bytes = 4096 + 512L * model.recipes.size() + 512L * incidences + 128L * model.keys.size();
+        if (!budget.tryReserve(bytes)) {
             result = Result.UNKNOWN;
             return;
         }
-        memory = 4L << 20;
-        for (GraphRecipe<K> recipe : model.recipes) {
-            recipes.put(recipe.id(), recipe);
-            SequenceSummary<K> summary = SequenceSummary.recipe(recipe);
-            int index = summaries.size();
-            summary.delta().forEach((key, amount) -> {
-                if (amount.signum() < 0 && !model.external.contains(key))
-                    consumers.computeIfAbsent(key, unused -> new ArrayList<>()).add(index);
-            });
-            summaries.add(summary);
+        memory = bytes;
+        try {
+            for (GraphRecipe<K> recipe : model.recipes) {
+                recipes.put(recipe.id(), recipe);
+                SequenceSummary<K> summary = SequenceSummary.recipe(recipe);
+                int index = summaries.size();
+                summary.delta().forEach((key, amount) -> {
+                    if (amount.signum() < 0 && !model.external.contains(key))
+                        consumers.computeIfAbsent(key, unused -> new ArrayList<>()).add(index);
+                });
+                summaries.add(summary);
+            }
+            reset();
+        } catch (RuntimeException | Error error) {
+            close();
+            throw error;
         }
-        reset();
     }
 
     boolean step() {
@@ -109,15 +119,17 @@ final class CountSchedule<K> implements AutoCloseable {
                 apply(summary, extra);
                 for (int i = 0; i < used.length; i++) remaining[i] = remaining[i].subtract(used[i].multiply(extra));
             }
+            if (!reserveProgram(extra)) return finish(Result.UNKNOWN);
             program.add(PlanStep.repeat(passBody, extra.add(BigInteger.ONE)));
             pass.clear();
             Arrays.fill(used, BigInteger.ZERO);
             cursor = 0;
+            visited.clear();
             if (done()) {
                 witness = new PlanStep.Sequence(program);
                 return finish(Result.WITNESS);
             }
-            if (++passes >= (repairingOrder ? 8 : 512)) return nextAttempt();
+            if (++passes >= (repairingOrder || guiding ? 8 : 512)) return nextAttempt();
             return false;
         }
         if (cursor < model.recipes.size()) {
@@ -128,6 +140,10 @@ final class CountSchedule<K> implements AutoCloseable {
             int recipe = (cursor++ + rotation) % count;
             if (variant >= orders) recipe = count - 1 - recipe;
             if (repairingOrder) recipe = repairOrder[cursor - 1];
+            if (guiding) {
+                recipe = guidedOrder.choose(held, remaining, visited);
+                visited.set(recipe);
+            }
             BigInteger runs = limit(summaries.get(recipe), remaining[recipe]);
             // Maximal batches can drain a shared cycle resource into one branch
             // before its competing producer runs. Try leaving some funded work
@@ -135,7 +151,9 @@ final class CountSchedule<K> implements AutoCloseable {
             if (mode == 0 && runs.signum() > 0) runs = share(recipe, runs);
             else if (mode == 1 && runs.signum() > 0) runs = runs.divide(BigInteger.TWO).max(BigInteger.ONE);
             else if (mode == 3) runs = runs.min(BigInteger.ONE);
+            if (guiding && runs.signum() > 0) runs = guidedOrder.batch(recipe, runs, held, remaining);
             if (runs.signum() > 0) {
+                if (!reserveProgram(runs)) return finish(Result.UNKNOWN);
                 apply(summaries.get(recipe), runs);
                 remaining[recipe] = remaining[recipe].subtract(runs);
                 used[recipe] = used[recipe].add(runs);
@@ -148,7 +166,7 @@ final class CountSchedule<K> implements AutoCloseable {
                 witness = new PlanStep.Sequence(program);
                 return finish(Result.WITNESS);
             }
-            if (!repairTried && prepareRepairOrder()) {
+            if (!guiding && !repairTried && prepareRepairOrder()) {
                 repairingOrder = true;
                 reset();
                 return false;
@@ -170,6 +188,14 @@ final class CountSchedule<K> implements AutoCloseable {
                 maximum = maximum.min(available.subtract(summary.required(key)).divide(summary.delta(key).negate()).add(BigInteger.ONE));
         }
         return maximum;
+    }
+
+    private boolean reserveProgram(BigInteger copies) {
+        long bytes = 256L + 96L * (copies.bitLength() / 63);
+        if (!budget.tryReserve(bytes)) return false;
+        memory += bytes;
+        programMemory += bytes;
+        return true;
     }
 
     private BigInteger share(int recipe, BigInteger maximum) {
@@ -205,7 +231,11 @@ final class CountSchedule<K> implements AutoCloseable {
         model.stock.forEach((key, amount) -> held.put(key, BigInteger.valueOf(amount)));
         program.clear();
         pass.clear();
+        budget.release(programMemory);
+        memory -= programMemory;
+        programMemory = 0;
         passes = cursor = 0;
+        visited.clear();
     }
 
     private boolean done() {
@@ -241,6 +271,22 @@ final class CountSchedule<K> implements AutoCloseable {
     }
 
     private boolean nextAttempt() {
+        if (!guidedTried && !smallMultiset()) {
+            guidedTried = true;
+            guidedOrder = new CountScheduleOrder<>(model, summaries, budget);
+            if (guidedOrder.available()) {
+                guiding = true;
+                repairingOrder = false;
+                reset();
+                budget.note("count_schedule_order", "ready_unlock_and_return_pools; candidate_only");
+                return false;
+            }
+        }
+        guiding = false;
+        if (guidedOrder != null) {
+            guidedOrder.close();
+            guidedOrder = null;
+        }
         // A guided attempt is additional. It does not replace any of the old
         // rotations, batching modes or exact scheduling continuations.
         repairingOrder = false;
@@ -618,6 +664,10 @@ final class CountSchedule<K> implements AutoCloseable {
 
     @Override
     public void close() {
+        if (guidedOrder != null) {
+            guidedOrder.close();
+            guidedOrder = null;
+        }
         if (bounded != null) {
             bounded.close();
             bounded = null;
@@ -631,5 +681,6 @@ final class CountSchedule<K> implements AutoCloseable {
         budget.release(memory);
         memory = 0;
         labelMemory = 0;
+        programMemory = 0;
     }
 }

@@ -200,7 +200,7 @@ final class CountModelViews implements AutoCloseable {
 
     /** Register the existing canonical LP engine for sharing, without starting another search arm. */
     View registerLp(CountReduction reduction, CountCanonicalModel canonical) {
-        if (!reduction.matchesScope(original.rows, original.lower, original.upper) || budget.proofJournal() != null) return null;
+        if (!reduction.matchesScope(original.rows, original.lower, original.upper)) return null;
         long bytes = 512L + 384L * original.lower.length + 64L * canonical.lower().length;
         if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return null;
         memory += bytes;
@@ -215,8 +215,8 @@ final class CountModelViews implements AutoCloseable {
     }
 
     void publishCuts(View view, List<CountLpLearning.Cut> learned, int from, Object origin) {
-        if (view == null || from >= learned.size() || !sharesBounds(view) || budget.proofJournal() != null) return;
-        if (cuts == null) cuts = CountViewCuts.create(budget);
+        if (view == null || from >= learned.size() || !sharesBounds(view)) return;
+        if (cuts == null) cuts = CountViewCuts.create(budget, original);
         if (cuts == null) return;
         int before = cuts.version();
         cuts.publish(view, learned, from, origin);
@@ -229,7 +229,7 @@ final class CountModelViews implements AutoCloseable {
     }
 
     int importCuts(View view, int after, Object origin, CountLcg solver) {
-        if (cuts == null || after >= cuts.version() || !sharesBounds(view) || budget.proofJournal() != null) return 0;
+        if (cuts == null || after >= cuts.version() || !sharesBounds(view)) return 0;
         return cuts.transfer(view, after, origin, solver::learn);
     }
 
@@ -315,11 +315,8 @@ final class CountModelViews implements AutoCloseable {
 
     /** Conditional facts remain guarded by the exporting engine's initial domains. */
     void publishConflicts(View view, Domains scope, List<CountConflict> learned, int from, Object origin) {
-        if (from >= learned.size() || !sharesBounds(view) || budget.proofJournal() != null) return;
-        // A portable proof currently has one coordinate system. Until it can
-        // certify cross-view substitutions, journal runs keep independent
-        // proof trails rather than treating an imported clause as an axiom.
-        if (conflicts == null) conflicts = CountViewConflicts.create(budget);
+        if (from >= learned.size() || !sharesBounds(view)) return;
+        if (conflicts == null) conflicts = CountViewConflicts.create(budget, original);
         if (conflicts != null) conflicts.publish(view, scope.lower, scope.upper, learned, from, origin);
     }
 
@@ -328,7 +325,7 @@ final class CountModelViews implements AutoCloseable {
     }
 
     int importConflicts(View view, int after, Object origin, CountLcg solver) {
-        if (conflicts == null || after >= conflicts.version() || !sharesBounds(view) || budget.proofJournal() != null) return 0;
+        if (conflicts == null || after >= conflicts.version() || !sharesBounds(view)) return 0;
         return conflicts.transfer(view, after, origin, solver::learn);
     }
 

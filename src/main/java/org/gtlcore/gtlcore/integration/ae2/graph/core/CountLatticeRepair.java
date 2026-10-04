@@ -24,71 +24,78 @@ final class CountLatticeRepair implements AutoCloseable {
 
     CountLatticeRepair(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                        ExactRational[] point, int attempt, PlanningBudget budget) {
+        this(rows, lower, upper, point, attempt, budget, null);
+    }
+
+    CountLatticeRepair(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
+                       ExactRational[] point, int attempt, PlanningBudget budget, CountLatticeStructure structure) {
         this.rows = rows;
         this.lower = lower;
         this.upper = upper;
         this.budget = budget;
         allowance = Math.min(1_000_000, budget.remainingWork() / 8);
         base = new BigInteger[lower.length];
-        if (lower.length > 64 || allowance < 1024) {
+        if (point == null || lower.length > 64 || allowance < 1024) {
             complete = true;
             return;
         }
-        for (int i = 0; i < base.length; i++) {
-            if (upper[i] == null) {
+        long before = budget.threadWork();
+        CountLatticeStructure owned = null;
+        try {
+            for (int i = 0; i < upper.length; i++) {
+                budget.check();
+                if (upper[i] == null) {
+                    complete = true;
+                    return;
+                }
+            }
+            if (structure == null) structure = owned = CountLatticeStructure.create(rows, budget);
+            else if (!structure.matches(rows, budget)) throw new IllegalArgumentException("Foreign lattice structure");
+            if (structure == null || !structure.usable()) {
                 complete = true;
                 return;
             }
-            base[i] = point[i].floor().max(lower[i]).min(upper[i]);
+            long bytes = structure.workspaceBytes(lower, upper);
+            if (!budget.tryReserve(bytes)) {
+                complete = true;
+                return;
+            }
+            memory = bytes;
+            initialize(structure, point, attempt);
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
+        } finally {
+            if (owned != null) owned.close();
+            work = budget.threadWork() - before;
         }
-        var known = new HashMap<Map<Integer, BigInteger>, BigInteger>();
-        for (var row : rows) known.merge(row.terms(), row.upper(), BigInteger::min);
-        List<ExactLinearProgram.Constraint> equations = new ArrayList<>();
-        Set<Map<Integer, BigInteger>> included = new HashSet<>();
-        for (var row : rows) {
-            if (row.terms().size() < 2 || included.contains(row.terms())) continue;
-            Map<Integer, BigInteger> opposite = new HashMap<>();
-            row.terms().forEach((id, value) -> opposite.put(id, value.negate()));
-            if (!row.upper().negate().equals(known.get(opposite))) continue;
-            equations.add(row);
-            included.add(row.terms());
-            included.add(opposite);
+    }
+
+    private void initialize(CountLatticeStructure structure, ExactRational[] point, int attempt) {
+        for (int i = 0; i < base.length; i++) {
+            charge();
+            base[i] = point[i].floor().max(lower[i]).min(upper[i]);
         }
         // A small amount of allowed surplus must not disable lattice repair.
         // Pick an integer face INSIDE each proved interval. These equalities
         // are candidate restrictions only; failure never certifies infeasibility.
-        if (equations.size() < 2) for (var row : rows) {
-            if (row.terms().size() < 2 || included.contains(row.terms())) continue;
-            Map<Integer, BigInteger> opposite = new HashMap<>();
-            row.terms().forEach((id, value) -> opposite.put(id, value.negate()));
-            BigInteger reverse = known.get(opposite);
-            if (reverse == null || row.upper().compareTo(reverse.negate()) < 0) continue;
-            BigInteger low = reverse.negate(), high = row.upper(), face;
-            if (attempt == 1) face = low.add(high).shiftRight(1);
-            else if (attempt == 2) face = high;
-            else if (attempt == 3) face = low;
-            else {
-                ExactRational value = ExactRational.ZERO;
-                for (var term : row.terms().entrySet()) {
-                    charge();
-                    value = value.add(point[term.getKey()].multiply(ExactRational.of(term.getValue())));
-                }
-                face = value.floor().max(low).min(high);
-            }
-            equations.add(new ExactLinearProgram.Constraint(row.terms(), face));
-            included.add(row.terms());
-            included.add(opposite);
-        }
+        var equations = structure.equations(point, attempt);
         if (equations.size() < 2) {
             complete = true;
             return;
         }
         var x = equations.get(0);
-        ExactLinearProgram.Constraint y = null;
+        CountLatticeStructure.Equation y = null;
         // Prefer the fractional basis coordinates, retaining all other bounds.
         List<Integer> candidates = new ArrayList<>();
-        for (int i = 0; i < lower.length; i++) if (!lower[i].equals(upper[i])) candidates.add(i);
-        candidates.sort(Comparator.comparing((Integer i) -> point[i].integral()));
+        for (int i = 0; i < lower.length; i++) {
+            charge();
+            if (!lower[i].equals(upper[i])) candidates.add(i);
+        }
+        candidates.sort((i, j) -> {
+            charge();
+            return Boolean.compare(point[i].integral(), point[j].integral());
+        });
         outer:
         for (int i : candidates) for (int j : candidates) if (i != j) for (int r = 1; r < equations.size(); r++) {
             charge();
@@ -109,6 +116,7 @@ final class CountLatticeRepair implements AutoCloseable {
         a = new BigInteger[lower.length];
         b = new BigInteger[lower.length];
         for (int i = 0; i < lower.length; i++) {
+            charge();
             a[i] = coefficient(x, i).multiply(coefficient(y, second)).subtract(coefficient(y, i).multiply(coefficient(x, second)));
             b[i] = coefficient(y, i).multiply(coefficient(x, first)).subtract(coefficient(x, i).multiply(coefficient(y, first)));
         }
@@ -117,8 +125,12 @@ final class CountLatticeRepair implements AutoCloseable {
         List<Integer> lhs = new ArrayList<>(), rhs = new ArrayList<>();
         Map<Integer, Integer> widths = new HashMap<>();
         long nl = 1, nr = 1;
-        if (attempt > 0) Collections.rotate(candidates, attempt);
+        if (attempt > 0) {
+            budget.charge(candidates.size());
+            Collections.rotate(candidates, attempt);
+        }
         for (int i : candidates) {
+            charge();
             if (i == first || i == second) continue;
             BigInteger start = lower[i], end = upper[i];
             if (attempt == 1 || attempt == 2) {
@@ -148,12 +160,21 @@ final class CountLatticeRepair implements AutoCloseable {
         leftStates = (int) nl;
         rightStates = (int) nr;
         for (int i = 0; i < base.length; i++) if (i != first && i != second) {
+            charge();
             rhsA = rhsA.subtract(a[i].multiply(base[i]));
             rhsB = rhsB.subtract(b[i].multiply(base[i]));
         }
-        long bytes = 2048L + 256L * leftStates;
+        BigInteger maxA = BigInteger.ZERO, maxB = BigInteger.ZERO;
+        for (int i = 0; i < split; i++) {
+            charge();
+            BigInteger extent = BigInteger.valueOf(sizes[i] - 1L);
+            maxA = maxA.add(a[free[i]].abs().multiply(extent));
+            maxB = maxB.add(b[free[i]].abs().multiply(extent));
+        }
+        long entryBytes = 256L + (maxA.bitLength() + maxB.bitLength() + 14L) / 8 + (determinant.bitLength() + 7L) / 4;
+        long bytes = 2048L + entryBytes * leftStates;
         if (!budget.tryReserve(bytes)) complete = true;
-        else memory = bytes;
+        else memory += bytes;
     }
 
     boolean step() {
@@ -198,7 +219,7 @@ final class CountLatticeRepair implements AutoCloseable {
         return false;
     }
 
-    private static BigInteger coefficient(ExactLinearProgram.Constraint row, int id) {
+    private static BigInteger coefficient(CountLatticeStructure.Equation row, int id) {
         return row.terms().getOrDefault(id, BigInteger.ZERO);
     }
 
@@ -220,6 +241,7 @@ final class CountLatticeRepair implements AutoCloseable {
 
     private void decode(BigInteger[] values, int code, int start, int end) {
         for (int i = start; i < end; i++) {
+            charge();
             values[free[i]] = base[free[i]].add(BigInteger.valueOf(code % sizes[i]));
             code /= sizes[i];
         }

@@ -74,6 +74,89 @@ final class CountMeetInMiddle implements AutoCloseable {
     private int phase, rowIndex, split, leftStates, rightStates, trials, rangeCursor = -1;
     private boolean complete, infeasible, equalities;
 
+    /** A cheap upper estimate for a bounded, weighted scalar-domain scout. */
+    static long scoutWork(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
+                          BigInteger[] upper, PlanningBudget budget) {
+        if (lower.length > 128 || rows.size() > 256) return 0;
+        long bytes = 128L + 8L * lower.length + 64L * rows.size();
+        if (!budget.tryReserve(bytes)) return 0;
+        try {
+            int[] sizes = new int[lower.length];
+            int count = 0;
+            for (int i = 0; i < lower.length; i++) {
+                budget.check();
+                if (upper[i] == null || lower[i].bitLength() > 1024 || upper[i].bitLength() > 1024) return 0;
+                BigInteger size = upper[i].subtract(lower[i]).add(BigInteger.ONE);
+                if (size.signum() <= 0 || size.compareTo(BigInteger.valueOf(MAX_STATES)) > 0) return 0;
+                if (!size.equals(BigInteger.ONE)) sizes[count++] = size.intValueExact();
+            }
+            if (count == 0) return 0;
+            Arrays.sort(sizes, 0, count);
+            long left = 1, right = 1;
+            for (int i = count - 1; i >= 0; i--) {
+                budget.check();
+                if (left <= right) left *= sizes[i];
+                else right *= sizes[i];
+                if (left > MAX_STATES || right > MAX_STATES) return 0;
+            }
+            boolean weighted = false;
+            int bits = 1, activeRows = 0;
+            long terms = 0;
+            Set<Map<Integer, BigInteger>> dimensionsSeen = new HashSet<>();
+            for (var row : rows) {
+                if (row.upper().bitLength() > 1024) return 0;
+                BigInteger maximum = BigInteger.ZERO;
+                boolean rowWeighted = false;
+                for (var term : row.terms().entrySet()) {
+                    budget.check();
+                    terms++;
+                    int id = term.getKey();
+                    BigInteger coefficient = term.getValue();
+                    if (coefficient.bitLength() > 1024) return 0;
+                    maximum = maximum.add(coefficient.multiply(coefficient.signum() > 0 ? upper[id] : lower[id]));
+                    if (lower[id].equals(upper[id])) continue;
+                    int width = coefficient.abs().bitLength();
+                    bits = Math.max(bits, width + upper[id].subtract(lower[id]).bitLength() + 7);
+                    rowWeighted |= width > 1;
+                }
+                if (maximum.compareTo(row.upper()) > 0) {
+                    weighted |= rowWeighted;
+                    if (dimensionsSeen.contains(row.terms())) continue;
+                    long temporary = 128L + 96L * row.terms().size();
+                    if (!budget.tryReserve(temporary)) return 0;
+                    try {
+                        Map<Integer, BigInteger> opposite = new HashMap<>();
+                        for (var term : row.terms().entrySet()) {
+                            budget.check();
+                            opposite.put(term.getKey(), term.getValue().negate());
+                        }
+                        // Opposite inequalities query the same signature
+                        // dimension. Counting an equality twice can incorrectly
+                        // exclude a small table in favor of a costly LP search.
+                        if (!dimensionsSeen.contains(opposite)) activeRows++;
+                        dimensionsSeen.add(row.terms());
+                    } finally {
+                        budget.release(temporary);
+                    }
+                }
+            }
+            if (!weighted) return 0;
+            // No exponential work is admitted just because the variable count
+            // is small. Include signature dimension, integer payload and both
+            // tables' traversal; the later exact matcher retains its own caps.
+            long dimensions = Math.max(1, activeRows);
+            long estimatedBytes = left * (160 + dimensions * (80 + (bits + 31L) / 8));
+            long estimatedWork = Math.max(1024, 8 * (left + right) * dimensions + 8 * terms);
+            if (estimatedBytes > budget.availableBytes() / 4 || estimatedWork > budget.remainingWork() / 16) return 0;
+            // Traversal and pruning costs vary with the signatures actually
+            // reached. Keep bounded headroom for that estimation error rather
+            // than discarding a nearly finished table at the predicted cost.
+            return Math.min(budget.remainingWork() / 16, 2 * estimatedWork);
+        } finally {
+            budget.release(bytes);
+        }
+    }
+
     CountMeetInMiddle(List<ExactLinearProgram.Constraint> original, BigInteger[] lower,
                       BigInteger[] upper, PlanningBudget budget) {
         this(original, lower, upper, budget, 12_000_000);

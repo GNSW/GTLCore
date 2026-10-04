@@ -12,6 +12,8 @@ import java.util.*;
  */
 final class CountJump implements AutoCloseable {
 
+    private record Breakpoint(BigInteger numerator, BigInteger denominator, double slope) {}
+
     private static final class Term {
 
         final int row, variable;
@@ -256,12 +258,10 @@ final class CountJump implements AutoCloseable {
         if (upper[variable] != null) candidates.add(upper[variable]);
         candidates.add(clamp(variable, values[variable].subtract(BigInteger.ONE)));
         candidates.add(clamp(variable, values[variable].add(BigInteger.ONE)));
-        for (Term term : affected.get(variable)) {
+        if (!sweep(variable, candidates)) for (Term term : affected.get(variable)) {
             charge();
-            // Every piecewise-linear hinge contributes its adjacent integers.
             BigInteger at = floorDivide(residual[term.row()].negate(), term.coefficient());
-            candidates.add(clamp(variable, values[variable].add(at)));
-            candidates.add(clamp(variable, values[variable].add(at).add(BigInteger.ONE)));
+            candidate(variable, candidates, at);
         }
         candidates.remove(values[variable]);
         for (BigInteger value : candidates) {
@@ -271,6 +271,57 @@ final class CountJump implements AutoCloseable {
                 jumps[variable] = value;
             }
         }
+    }
+
+    /** Weighted hinges form a convex function along one integer coordinate. */
+    private boolean sweep(int variable, Set<BigInteger> candidates) {
+        var incident = affected.get(variable);
+        if (incident.size() < 8) return false;
+        long bytes = 1024L + 192L * incident.size();
+        for (Term term : incident) {
+            charge();
+            bytes += 32L + (residual[term.row()].bitLength() + 7L) / 8;
+        }
+        if (!budget.tryReserve(bytes)) return false;
+        try {
+            var points = new ArrayList<Breakpoint>(incident.size());
+            double slope = 0;
+            for (Term term : incident) {
+                charge();
+                boolean positive = term.coefficient().signum() > 0;
+                double change = weights[term.row()] * ratio(term.coefficient().abs(), scales[term.row()]);
+                if (!positive) slope -= change;
+                points.add(new Breakpoint(positive ? residual[term.row()].negate() : residual[term.row()],
+                        term.coefficient().abs(), change));
+            }
+            points.sort((left, right) -> {
+                charge();
+                return left.numerator().multiply(right.denominator()).compareTo(right.numerator().multiply(left.denominator()));
+            });
+            // Keep both ends of a flat minimum. Exact rational ordering avoids
+            // merging nearby breakpoints at large recipe counts. Floating
+            // weights choose candidates only; score and witness checks below
+            // still use exact integer activities and original domains.
+            for (int i = 0; i < points.size(); i++) {
+                charge();
+                Breakpoint point = points.get(i);
+                slope += point.slope();
+                // Cancellation can leave the terminal zero slope slightly
+                // negative. Keep its endpoint even in an unbounded domain.
+                if (slope >= 0 || i == points.size() - 1) {
+                    candidate(variable, candidates, floorDivide(point.numerator(), point.denominator()));
+                    if (slope > 0) break;
+                }
+            }
+            return true;
+        } finally {
+            budget.release(bytes);
+        }
+    }
+
+    private void candidate(int variable, Set<BigInteger> candidates, BigInteger delta) {
+        candidates.add(clamp(variable, values[variable].add(delta)));
+        candidates.add(clamp(variable, values[variable].add(delta).add(BigInteger.ONE)));
     }
 
     private double score(int variable, BigInteger value) {

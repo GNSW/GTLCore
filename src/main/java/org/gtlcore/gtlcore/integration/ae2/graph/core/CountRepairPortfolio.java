@@ -23,6 +23,8 @@ final class CountRepairPortfolio implements AutoCloseable {
     private final PlanningBudget budget;
     private final List<View> views = new ArrayList<>();
     private CountDiving diving;
+    private CountLatticeStructure lattice;
+    private boolean latticePrepared;
     private boolean diveDone;
     private long diveSlice;
     private int cursor;
@@ -62,7 +64,22 @@ final class CountRepairPortfolio implements AutoCloseable {
         }
         long before = budget.threadWork();
         try {
-            if (view.repair == null) view.repair = new CountLatticeRepair(rows, lower, upper, view.point, view.attempt, budget);
+            if (!latticePrepared) {
+                latticePrepared = true;
+                if (lower.length <= 64 && budget.remainingWork() >= 8192) {
+                    boolean bounded = true;
+                    for (var limit : upper) {
+                        budget.check();
+                        if (limit == null) bounded = false;
+                    }
+                    if (bounded) lattice = CountLatticeStructure.create(rows, budget);
+                }
+                if (lattice == null || !lattice.usable()) {
+                    for (View candidate : views) candidate.attempt = 4;
+                    return false;
+                }
+            }
+            if (view.repair == null) view.repair = new CountLatticeRepair(rows, lower, upper, view.point, view.attempt, budget, lattice);
             if (view.repair.step()) {
                 counts = view.repair.counts();
                 view.repair.close();
@@ -131,6 +148,8 @@ final class CountRepairPortfolio implements AutoCloseable {
             if (view.repair != null) view.repair.close();
             view.repair = null;
         }
+        if (lattice != null) lattice.close();
+        lattice = null;
         budget.release(memory);
         memory = 0;
     }

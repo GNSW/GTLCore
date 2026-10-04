@@ -12,14 +12,18 @@ final class CountNumericRelaxation {
 
     record Result(double[] point, double[] dual, boolean phaseOneInfeasible, long work, int pivots) {}
 
-    /** One order owns one basis; a change of matrix, objective or budget invalidates it. */
+    /** One order owns a bounded pair of bases; every reuse checks its matrix and objective. */
     static final class Session implements AutoCloseable {
+
+        private record Saved(CountNumericRelaxation solver, List<ExactLinearProgram.Constraint> matrix,
+                             BigInteger[] objective, long memory) {}
 
         private PlanningBudget budget;
         private CountNumericRelaxation solver;
         private List<ExactLinearProgram.Constraint> matrix;
         private BigInteger[] objective;
-        private long memory, reused, rebuilt, invalidated, fallbacks;
+        private Saved previous;
+        private long memory, reused, rebuilt, invalidated, fallbacks, restored;
 
         Result solve(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] costs,
                      PlanningBudget budget, long maximumWork) {
@@ -34,8 +38,20 @@ final class CountNumericRelaxation {
                     clear();
                     return null;
                 }
+                boolean matching = solver != null && matches(solver, matrix, objective, variables, rows, costs, started, Math.max(1, maximumWork / 8));
+                if (!matching && previous != null && matches(previous.solver(), previous.matrix(), previous.objective(),
+                        variables, rows, costs, started, Math.max(1, maximumWork / 8))) {
+                    var saved = previous;
+                    previous = solver == null ? null : new Saved(solver, matrix, objective, memory);
+                    solver = saved.solver();
+                    matrix = saved.matrix();
+                    objective = saved.objective();
+                    memory = saved.memory();
+                    matching = true;
+                    restored++;
+                }
                 if (solver != null) {
-                    if (matches(variables, rows, costs, started, Math.max(1, maximumWork / 8))) {
+                    if (matching) {
                         solver.resetWork(Math.max(1, (maximumWork - (budget.threadWork() - started)) / 2));
                         Result result = null;
                         try {
@@ -50,8 +66,12 @@ final class CountNumericRelaxation {
                             return accounted(result, started);
                         }
                         fallbacks++;
-                    } else invalidated++;
-                    clear();
+                        // An interrupted warm tableau is not a reusable basis.
+                        clearActive();
+                    } else {
+                        invalidated++;
+                        park();
+                    }
                 }
                 long remaining = maximumWork - (budget.threadWork() - started);
                 if (remaining <= 0) return null;
@@ -61,7 +81,12 @@ final class CountNumericRelaxation {
                 // their maps and finite-double (at most 1024-bit) integer data,
                 // plus the separately retained objective, before copying them.
                 long bytes = workspaceBytes(variables, rows.size()) + 256L * (rows.size() + variables + terms);
-                if (!budget.tryReserve(bytes)) {
+                boolean reserved = budget.tryReserve(bytes);
+                if (!reserved && previous != null) {
+                    clearPrevious();
+                    reserved = budget.tryReserve(bytes);
+                }
+                if (!reserved) {
                     // Retaining a matrix is optional; its smaller cold workspace
                     // can still fit under the same request's memory limit.
                     var result = CountNumericRelaxation.solve(variables, rows, costs, budget, remaining);
@@ -82,7 +107,7 @@ final class CountNumericRelaxation {
                 if (result != null && !result.phaseOneInfeasible()) {
                     matrix = List.copyOf(rows);
                     objective = costs.clone();
-                } else clear();
+                } else clearActive();
                 return result == null ? null : accounted(result, started);
             } catch (RuntimeException | Error failure) {
                 clear();
@@ -90,7 +115,8 @@ final class CountNumericRelaxation {
             }
         }
 
-        private boolean matches(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] costs,
+        private boolean matches(CountNumericRelaxation solver, List<ExactLinearProgram.Constraint> matrix, BigInteger[] objective,
+                                int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] costs,
                                 long started, long allowance) {
             if (solver.variables != variables || matrix.size() != rows.size() || !Arrays.equals(objective, costs)) return false;
             for (int r = 0; r < rows.size(); r++) {
@@ -130,7 +156,34 @@ final class CountNumericRelaxation {
             return fallbacks;
         }
 
+        long restored() {
+            return restored;
+        }
+
+        private void park() {
+            clearPrevious();
+            // Keeping an inactive basis is optional and must leave room for
+            // other arms. No new budget or unaccounted copy is created here.
+            if (matrix != null && memory <= budget.availableBytes() / 8) {
+                previous = new Saved(solver, matrix, objective, memory);
+                solver = null;
+                matrix = null;
+                objective = null;
+                memory = 0;
+            } else clearActive();
+        }
+
+        private void clearPrevious() {
+            if (previous != null) budget.release(previous.memory());
+            previous = null;
+        }
+
         private void clear() {
+            clearActive();
+            clearPrevious();
+        }
+
+        private void clearActive() {
             solver = null;
             matrix = null;
             objective = null;
@@ -176,6 +229,42 @@ final class CountNumericRelaxation {
             // still charges its last partial batch and releases its workspace.
             solver.initialize(rows, objective);
             return solver.solve();
+        } catch (Stop stopped) {
+            return null;
+        } finally {
+            try {
+                if (solver != null) solver.flush();
+            } finally {
+                budget.release(bytes);
+            }
+        }
+    }
+
+    /** Column indices only: callers must reconstruct and check the original exact system. */
+    static int[] proposeBasis(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective,
+                              PlanningBudget budget, long maximumWork) {
+        maximumWork = Math.max(0, Math.min(maximumWork, budget.remainingWork() / 4));
+        if (!admissible(variables, rows, objective, maximumWork)) return null;
+        long bytes = workspaceBytes(variables, rows.size());
+        if (!budget.tryReserve(bytes)) return null;
+        CountNumericRelaxation solver = null;
+        try {
+            solver = new CountNumericRelaxation(variables, rows.size(), budget, maximumWork);
+            solver.initialize(rows, objective);
+            Result result = solver.solve();
+            if (result == null || result.phaseOneInfeasible()) return null;
+            int[] basis = new int[solver.basic.length];
+            var seen = new BitSet(variables + rows.size());
+            for (int r = 0; r < basis.length; r++) {
+                solver.operation();
+                int id = solver.basic[r];
+                if (id < 0 || id >= variables + rows.size() || seen.get(id)) return null;
+                seen.set(id);
+                basis[r] = id;
+            }
+            solver.flush();
+            budget.note("count_scaled_numeric_proposal", "basis=true; work=" + solver.charged + "; exact_reconstruction_required");
+            return basis;
         } catch (Stop stopped) {
             return null;
         } finally {

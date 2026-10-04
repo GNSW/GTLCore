@@ -35,7 +35,6 @@ record CountConflict(List<ExactLinearProgram.Constraint> assumptions) {
     /** All but one forbidden assumption hold: the last one must be false. */
     Propagation propagate(BigInteger[] lower, BigInteger[] upper, PlanningBudget budget) {
         ExactLinearProgram.Constraint unresolved = null;
-        List<ExactLinearProgram.Constraint> premises = new ArrayList<>();
         for (var row : assumptions) {
             BigInteger minimum = BigInteger.ZERO, maximum = BigInteger.ZERO;
             for (var term : row.terms().entrySet()) {
@@ -47,11 +46,16 @@ record CountConflict(List<ExactLinearProgram.Constraint> assumptions) {
                 maximum = maximum == null || high == null ? null : maximum.add(term.getValue().multiply(high));
             }
             if (minimum != null && minimum.compareTo(row.upper()) > 0) return null;
-            if (maximum != null && maximum.compareTo(row.upper()) <= 0) premises.add(row);
-            else if (unresolved != null) return null;
-            else unresolved = row;
+            if (maximum == null || maximum.compareTo(row.upper()) > 0) {
+                if (unresolved != null) return null;
+                unresolved = row;
+            }
         }
-        if (unresolved == null) return new Propagation(null, premises);
+        if (unresolved == null) return new Propagation(null, assumptions);
+        // Most inspected clauses cannot propagate. Keep their hot path free of
+        // a temporary premise list, without changing the certificate order.
+        List<ExactLinearProgram.Constraint> premises = new ArrayList<>(assumptions.size() - 1);
+        for (var row : assumptions) if (row != unresolved) premises.add(row);
         Map<Integer, BigInteger> terms = new LinkedHashMap<>();
         unresolved.terms().forEach((key, value) -> terms.put(key, value.negate()));
         return new Propagation(new ExactLinearProgram.Constraint(terms, unresolved.upper().negate().subtract(BigInteger.ONE)), premises);

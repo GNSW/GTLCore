@@ -88,7 +88,7 @@ final class CountLpLearning {
             numerical.close();
             clearStructure();
             if (budget != null) budget.note("count_lp_basis", "reused=" + reused() + "; rebuilt=" + rebuilt() +
-                    "; invalidated=" + invalidated() + "; fallbacks=" + fallbacks());
+                    "; invalidated=" + invalidated() + "; restored=" + numerical.restored() + "; fallbacks=" + fallbacks());
             if (budget != null) budget.note("count_lp_structure", "prepared=" + prepared + "; hits=" + structureHits);
             budget = null;
         }

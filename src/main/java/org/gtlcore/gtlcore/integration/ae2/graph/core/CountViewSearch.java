@@ -102,11 +102,12 @@ final class CountViewSearch implements AutoCloseable {
         counts = null;
         until = work + Math.min(allowance, budget.remainingWork() / 4);
         for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view)) {
+            boolean binary = binary(view);
             searches.add(new Search(view, policy.add(view.shape().cost()), Engine.LCG));
             // The weighted Boolean engine has different propagation, phase
             // saving and conflicts. Retain that complementary search too;
             // repeatedly restarting a short PB attempt discards its learning.
-            if (binary(view)) {
+            if (binary) {
                 searches.add(new Search(view, policy.add(view.shape().cost()), Engine.PB));
                 searches.add(new Search(view, policy.add(view.shape().cost()), Engine.LOCKS));
                 searches.add(new Search(view, policy.add(view.shape().cost()), Engine.JUMP));
@@ -132,12 +133,23 @@ final class CountViewSearch implements AutoCloseable {
             if (active == null) {
                 active = select();
                 if (active == null) return true;
-                long quantum = policy.quantum(active.scheduling, until - work);
+                // The parent allowance controls when step() yields, not when a
+                // retained solver finishes its batch. Carry unfinished batches
+                // across parent handoffs and publish feedback only on completion.
+                long quantum = policy.quantum(active.scheduling, budget.remainingWork());
                 // A local walk crosses temporary violation barriers before
                 // establishing a new best point. Give it a full bounded
                 // batch; the common aging policy still schedules every arm.
-                if (active.engine == Engine.JUMP) quantum = Math.min(CountPortfolioPolicy.MAX_QUANTUM, until - work);
-                if (!active.started() && quantum < 1024) {
+                if (active.engine == Engine.JUMP) quantum = Math.min(CountPortfolioPolicy.MAX_QUANTUM, budget.remainingWork());
+                if (quantum <= 0) {
+                    // Another worker can consume the shared last unit between
+                    // parent handoffs. Report budget exhaustion, not an invalid
+                    // resume(0) on a retained solver.
+                    budget.check();
+                    active = null;
+                    return true;
+                }
+                if (!active.started() && Math.min(quantum, until - work) < 1024) {
                     active = null;
                     return true;
                 }
@@ -168,6 +180,7 @@ final class CountViewSearch implements AutoCloseable {
                 int idle = search == active ? gained > 0 ? 0 : search.scheduling.idleSlices + 1 : search.scheduling.idleSlices;
                 if (!search.done && idle < 2) stalled = false;
             }
+            if (stalled && counts == null && !infeasible && addIntegerJump()) stalled = false;
             return counts != null || infeasible || stalled;
         } finally {
             long spent = budget.threadWork() - before;
@@ -178,6 +191,19 @@ final class CountViewSearch implements AutoCloseable {
                 if (active.done || !active.started() || active.paused()) active = null;
             }
         }
+    }
+
+    private boolean addIntegerJump() {
+        // General integer local search complements stalled proof search. It
+        // must not displace an exact engine that is still making progress, or
+        // duplicate the same walk on every equivalent representation.
+        if (searches.stream().anyMatch(search -> search.engine == Engine.JUMP)) return false;
+        var view = models.available().stream().filter(candidate -> candidate.shape().variables() <= 1024 &&
+                candidate.rows().size() <= 4096 && candidate.shape().terms() <= 65536)
+                .min(Comparator.comparingLong(candidate -> candidate.shape().cost())).orElse(null);
+        if (view == null) return false;
+        searches.add(new Search(view, policy.add(view.shape().cost()), Engine.JUMP));
+        return true;
     }
 
     private Search select() {

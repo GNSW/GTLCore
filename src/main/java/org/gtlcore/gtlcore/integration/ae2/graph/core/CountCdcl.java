@@ -47,6 +47,7 @@ final class CountCdcl implements AutoCloseable {
         final ExactLinearProgram.Constraint source;
         final int proofIndex;
         BigInteger spent = BigInteger.ZERO;
+        int propagated;
 
         Row(int[] literals, BigInteger[] weights, BigInteger capacity, ExactLinearProgram.Constraint source, int proofIndex) {
             this.literals = literals;
@@ -408,7 +409,10 @@ final class CountCdcl implements AutoCloseable {
             return;
         }
         BigInteger slack = row.capacity.subtract(row.spent);
-        for (int i = 0; i < row.literals.length; i++) {
+        // With no undo, slack only decreases and the already-visited prefix
+        // contains assigned literals. Resume at its frontier instead of
+        // inspecting those same large coefficients on every wake-up.
+        for (int i = row.propagated; i < row.literals.length; i++) {
             charge();
             if (row.weights[i].compareTo(slack) <= 0) break;
             if (value(row.literals[i]) < 0) {
@@ -416,6 +420,7 @@ final class CountCdcl implements AutoCloseable {
                 lazyReasons[literal / 2] = new LazyReason(row, i, trail.size());
                 assign(literal, null);
             }
+            row.propagated = i + 1;
         }
     }
 
@@ -752,6 +757,9 @@ final class CountCdcl implements AutoCloseable {
                     row.spent = row.spent.subtract(row.weights[occurrence.term]);
                     activityUpdates++;
                 }
+                // A previously visited literal becomes unassigned again.
+                // Invalidate even when its contribution to spent was zero.
+                row.propagated = 0;
                 enqueue(occurrence.row);
             }
             values[id] = -1;

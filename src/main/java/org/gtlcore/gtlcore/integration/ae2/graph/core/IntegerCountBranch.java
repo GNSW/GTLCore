@@ -68,6 +68,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     int sourceFaceAttempt;
     boolean compileRecovery = true;
     CountMeetInMiddle matching;
+    boolean matchingScout, matchingScouted;
     CountRepairPortfolio repair;
     ExactRational[] repairPoint;
     ExactRational[] uncutRepairPoint;
@@ -665,13 +666,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             boolean impossible = matching.infeasible();
             matching.close();
             matching = null;
+            boolean scout = matchingScout;
+            matchingScout = false;
             if (counts != null) {
-                if (!preprocessingOnly && refineSupport()) state = State.SPLIT;
+                if (scout) {
+                    viewCandidateStage = 5;
+                    schedulingWork = 0;
+                    scheduling = new CountSchedule<>(model, counts, budget);
+                } else if (!preprocessingOnly && refineSupport()) state = State.SPLIT;
                 else scheduling = new CountSchedule<>(model, counts, budget);
             } else if (impossible) {
                 learnedChoices.add(new CountConflict(current));
                 state = State.DEAD;
-            } else beginBoolean();
+            } else if (scout) beginCompiledPortfolio();
+            else beginBoolean();
             return;
         }
         if (binary != null) {
@@ -853,26 +861,16 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (auxiliaryMode == 1) cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072, CountCdcl.Branching.LEARNING_RATE);
             else if (auxiliaryMode >= 2) auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072);
             else {
-                if (!lpTried && current.isEmpty()) {
-                    lpTried = true;
-                    lpSearch = CountLpSearch.create(reduction, model.recipes.size(), budget);
-                    if (lpSearch != null) {
-                        lpActive = true;
+                if (!matchingScouted && current.isEmpty()) {
+                    matchingScouted = true;
+                    long allowance = CountMeetInMiddle.scoutWork(reduction.rows(), reduction.lower(), reduction.upper(), budget);
+                    if (allowance > 0) {
+                        matchingScout = true;
+                        matching = new CountMeetInMiddle(reduction.rows(), reduction.lower(), reduction.upper(), budget, allowance);
                         return;
                     }
                 }
-                if (modelViews != null) {
-                    modelViews.compileLight();
-                    modelViews.addReduced(reduction);
-                    // Preserve the specialized Boolean path on its preferred
-                    // structure. Other domains get a retained no-LP portfolio.
-                    if (!CountBoolean.preferred(reduction.rows(), reduction.lower(), reduction.upper(), budget)) {
-                        viewSearch.resume(262144);
-                        viewStage = 2;
-                        return;
-                    }
-                }
-                congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
+                beginCompiledPortfolio();
             }
             return;
         }
@@ -1054,6 +1052,27 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         else if (current.isEmpty()) beginGroups();
         else if (preprocessingOnly) state = State.UNRESOLVED;
         else beginLinear();
+    }
+
+    private void beginCompiledPortfolio() {
+        if (!lpTried && current.isEmpty()) {
+            lpTried = true;
+            lpSearch = CountLpSearch.create(reduction, model.recipes.size(), budget);
+            if (lpSearch != null) {
+                lpActive = true;
+                return;
+            }
+        }
+        if (modelViews != null) {
+            modelViews.compileLight();
+            modelViews.addReduced(reduction);
+            if (!CountBoolean.preferred(reduction.rows(), reduction.lower(), reduction.upper(), budget)) {
+                viewSearch.resume(262144);
+                viewStage = 2;
+                return;
+            }
+        }
+        congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
     }
 
     private void dispatchCompiledStrategies() {
@@ -1625,6 +1644,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (continuation == 2) congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
         else if (continuation == 3) diagram = new CountDecisionDiagram(reduction.rows(), reduction.lower(), reduction.upper(), budget, 65536);
         else if (continuation == 4) state = State.UNRESOLVED;
+        else if (continuation == 5) beginCompiledPortfolio();
         // Stage 1 resumes compilation, preserving the untouched original model.
     }
 

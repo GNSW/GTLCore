@@ -30,9 +30,11 @@ final class CountLpProposal {
         if (n < 2 || n > 128 || rows.size() > 256 || budget.remainingWork() < 32768) return null;
         for (var row : rows) {
             budget.check();
-            if (row.upper().bitLength() > 48 || row.terms().values().stream().anyMatch(v -> v.bitLength() > 48)) return null;
+            if (row.upper().bitLength() > 48 || row.terms().values().stream().anyMatch(v -> v.bitLength() > 48))
+                return CountNumericRelaxation.proposeBasis(n, rows, objective, budget, allowance);
         }
-        if (Arrays.stream(objective).anyMatch(v -> v.bitLength() > 48)) return null;
+        if (Arrays.stream(objective).anyMatch(v -> v.bitLength() > 48))
+            return CountNumericRelaxation.proposeBasis(n, rows, objective, budget, allowance);
         long bytes = 2048L + (rows.size() + 2L) * (n + 2L) * 16L;
         if (!budget.tryReserve(bytes)) return null;
         try {

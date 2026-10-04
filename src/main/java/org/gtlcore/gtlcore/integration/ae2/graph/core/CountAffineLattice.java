@@ -58,7 +58,6 @@ final class CountAffineLattice implements AutoCloseable {
             } else if (phase == 2) {
                 if (pivot < basis.size()) reduce();
                 else {
-                    gramSchmidt();
                     phase = 3;
                 }
             } else {
@@ -160,6 +159,7 @@ final class CountAffineLattice implements AutoCloseable {
     }
 
     private void intersect(ExactLinearProgram.Constraint row, boolean trial) {
+        boolean expanded = false;
         BigInteger rhs = row.upper().subtract(dot(row, point));
         var values = new BigInteger[basis.size()];
         for (int j = 0; j < values.length; j++) values[j] = dot(row, basis.get(j));
@@ -189,6 +189,7 @@ final class CountAffineLattice implements AutoCloseable {
                 charge();
                 left[i] = bounded(u[i].multiply(bezout[1]).add(v[i].multiply(bezout[2])));
                 right[i] = bounded(v[i].multiply(a.divide(g)).subtract(u[i].multiply(b.divide(g))));
+                expanded |= right[i].bitLength() > 128;
             }
             basis.set(0, left);
             basis.set(j, right);
@@ -211,6 +212,18 @@ final class CountAffineLattice implements AutoCloseable {
         for (int i = 0; i < point.length; i++) {
             charge();
             point[i] = bounded(point[i].add(fixed[i].multiply(qr[0])));
+        }
+        // Exact Bezout substitutions can inflate an otherwise small integer
+        // lattice before the final LLL stage. Reduce the intermediate basis
+        // before these representatives exhaust the local precision allowance.
+        if (expanded && basis.size() > 1) {
+            gramSchmidt();
+            pivot = 1;
+            while (pivot < basis.size()) reduce();
+            point = nearestPoint();
+            pivot = 1;
+            orthogonal = mu = null;
+            norms = null;
         }
     }
 
@@ -305,6 +318,11 @@ final class CountAffineLattice implements AutoCloseable {
     }
 
     private void nearest() {
+        var candidate = nearestPoint();
+        if (valid(candidate)) counts = candidate;
+    }
+
+    private BigInteger[] nearestPoint() {
         var candidate = point.clone();
         var residual = new ExactRational[point.length];
         for (int i = 0; i < residual.length; i++) {
@@ -315,21 +333,35 @@ final class CountAffineLattice implements AutoCloseable {
             var target = ExactRational.of(lower[i]).add(new ExactRational(upper[i].subtract(lower[i]).multiply(BigInteger.valueOf(fraction)), BigInteger.valueOf(16)));
             residual[i] = target.subtract(ExactRational.of(point[i]));
         }
-        for (int j = basis.size() - 1; j >= 0; j--) {
-            ExactRational coefficient = ExactRational.ZERO;
+        // LLL keeps mu and squared norms exact as columns are changed. Compute
+        // projections from this factorization, avoiding another Gram-Schmidt
+        // pass merely to reconstruct stale orthogonal vectors for rounding.
+        var projection = new ExactRational[basis.size()];
+        for (int j = 0; j < basis.size(); j++) {
+            ExactRational value = ExactRational.ZERO;
             for (int i = 0; i < point.length; i++) {
                 charge();
-                coefficient = coefficient.add(residual[i].multiply(orthogonal[j][i]));
+                value = value.add(residual[i].multiply(ExactRational.of(basis.get(j)[i])));
             }
-            var q = nearestInteger(coefficient.divide(norms[j]));
+            for (int i = 0; i < j; i++) {
+                charge();
+                value = value.subtract(mu[j][i].multiply(projection[i]));
+            }
+            projection[j] = value;
+        }
+        for (int j = basis.size() - 1; j >= 0; j--) {
+            var q = nearestInteger(projection[j].divide(norms[j]));
             for (int i = 0; i < point.length; i++) {
                 charge();
                 var change = basis.get(j)[i].multiply(q);
                 candidate[i] = bounded(candidate[i].add(change));
-                residual[i] = residual[i].subtract(ExactRational.of(change));
+            }
+            for (int i = 0; i < j; i++) {
+                charge();
+                projection[i] = projection[i].subtract(ExactRational.of(q).multiply(mu[j][i]).multiply(norms[i]));
             }
         }
-        if (valid(candidate)) counts = candidate;
+        return candidate;
     }
 
     private void interval() {

@@ -33,6 +33,9 @@ final class GraphSolve<K> {
     private Iterator<Map.Entry<K, Long>> ordinaryEntries;
     private BigInteger ordinaryCount;
     private int ordinaryPhase;
+    private GraphDemandProgram<K> demandProgram;
+    private GraphDemandProgram.Ports ordinaryPorts;
+    private int ordinaryPort;
     private Iterator<K> applying;
     private PlanAssembly<K> assembly;
     private GraphPlan<K> result;
@@ -61,6 +64,13 @@ final class GraphSolve<K> {
     GraphSolve<K> allowTargetSeedConsumption(boolean allow) {
         if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
         consumeTargetSeed = allow;
+        return this;
+    }
+
+    GraphSolve<K> program(GraphDemandProgram<K> program) {
+        if (program != null && program.graph != graph) throw new IllegalArgumentException("Foreign demand program");
+        if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
+        demandProgram = program;
         return this;
     }
 
@@ -124,7 +134,9 @@ final class GraphSolve<K> {
             if (!region.cyclic() && region.recipes().size() == 1 &&
                     Collections.disjoint(region.recipes().get(0).inputs().keySet(), region.recipes().get(0).outputs().keySet())) {
                 ordinary = region.recipes().get(0);
-                ordinaryEntries = ordinary.outputs().entrySet().iterator();
+                ordinaryPorts = demandProgram == null ? null : demandProgram.region(regionIndex - 1);
+                ordinaryPort = 0;
+                ordinaryEntries = ordinaryPorts == null ? ordinary.outputs().entrySet().iterator() : null;
                 ordinaryCount = BigInteger.ZERO;
                 ordinaryPhase = 0;
             } else selection = new RegionSelection<>(region, demand, stock, target, amount,
@@ -143,34 +155,45 @@ final class GraphSolve<K> {
 
     /** Exact one-recipe DAG propagation; the final serial witness is still independently verified. */
     private void ordinaryStep() {
-        if (ordinaryEntries.hasNext()) {
+        if (ordinaryPorts != null) {
+            int[] keys = ordinaryPhase == 1 ? ordinaryPorts.inputs() : ordinaryPorts.outputs();
+            BigInteger[] quantities = ordinaryPhase == 1 ? ordinaryPorts.inputAmounts() : ordinaryPorts.outputAmounts();
+            if (ordinaryPort < keys.length) {
+                ordinaryValue(demandProgram.resource(keys[ordinaryPort]), quantities[ordinaryPort]);
+                ordinaryPort++;
+                return;
+            }
+        } else if (ordinaryEntries.hasNext()) {
             var entry = ordinaryEntries.next();
-            K key = entry.getKey();
-            BigInteger quantity = BigInteger.valueOf(entry.getValue());
-            if (ordinaryPhase == 0) {
-                BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
-                ordinaryCount = ordinaryCount.max(CheckedAmounts.ceilDiv(gap, quantity));
-                if (forceCraft && !targetProduced && key.equals(target))
-                    ordinaryCount = ordinaryCount.max(CheckedAmounts.ceilDiv(BigInteger.valueOf(amount), quantity));
-            } else if (ordinaryPhase == 1) demand.merge(key, quantity.multiply(ordinaryCount), BigInteger::add);
-            else demand.put(key, demand.getOrDefault(key, BigInteger.ZERO).subtract(quantity.multiply(ordinaryCount)).max(BigInteger.ZERO));
+            ordinaryValue(entry.getKey(), BigInteger.valueOf(entry.getValue()));
             return;
         }
+        ordinaryPort = 0;
         if (ordinaryPhase == 0) {
             if (ordinaryCount.signum() == 0) {
                 ordinary = null;
                 return;
             }
-            ordinaryEntries = ordinary.inputs().entrySet().iterator();
+            if (ordinaryPorts == null) ordinaryEntries = ordinary.inputs().entrySet().iterator();
             ordinaryPhase = 1;
         } else if (ordinaryPhase == 1) {
-            ordinaryEntries = ordinary.outputs().entrySet().iterator();
+            if (ordinaryPorts == null) ordinaryEntries = ordinary.outputs().entrySet().iterator();
             ordinaryPhase = 2;
         } else {
             if (ordinary.outputs().containsKey(target)) targetProduced = true;
             reversed.add(PlanStep.batch(ordinary.id(), ordinaryCount));
             ordinary = null;
         }
+    }
+
+    private void ordinaryValue(K key, BigInteger quantity) {
+        if (ordinaryPhase == 0) {
+            BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+            ordinaryCount = ordinaryCount.max(CheckedAmounts.ceilDiv(gap, quantity));
+            if (forceCraft && !targetProduced && key.equals(target))
+                ordinaryCount = ordinaryCount.max(CheckedAmounts.ceilDiv(BigInteger.valueOf(amount), quantity));
+        } else if (ordinaryPhase == 1) demand.merge(key, quantity.multiply(ordinaryCount), BigInteger::add);
+        else demand.put(key, demand.getOrDefault(key, BigInteger.ZERO).subtract(quantity.multiply(ordinaryCount)).max(BigInteger.ZERO));
     }
 
     private GraphPlan<K> failure(GraphPlan.Result reason) {

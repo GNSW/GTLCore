@@ -92,6 +92,9 @@ final class CountLcg implements AutoCloseable {
     private final List<Nogood> clauses = new ArrayList<>();
     private final List<CountConflict> learned = new ArrayList<>(), proofSteps = new ArrayList<>();
     private final Set<CountConflict> imported = new LinkedHashSet<>();
+    private final Set<ExactLinearProgram.Constraint> importedRows = new LinkedHashSet<>();
+    private final List<CountLpLearning.Cut> sharedRows = new ArrayList<>();
+    private boolean shareRows;
     private long allowance;
     private List<Literal> conflict;
     private BigInteger[] counts;
@@ -148,7 +151,7 @@ final class CountLcg implements AutoCloseable {
     }
 
     private CountLcg enableLearnedRelaxation() {
-        if (learnedRelaxation || complete || low.length < 2 || low.length > 128 || rows.size() > 512) return this;
+        if (learnedRelaxation || !importedRows.isEmpty() || complete || low.length < 2 || low.length > 128 || rows.size() > 512) return this;
         for (int i = 0; i < low.length; i++) {
             charge();
             if (low[i].signum() < 0 || high[i] == null || high[i].compareTo(BigInteger.ONE) > 0) return this;
@@ -173,6 +176,14 @@ final class CountLcg implements AutoCloseable {
 
     boolean learnedRelaxationEnabled() {
         return learnedRelaxation;
+    }
+
+    void shareRows() {
+        shareRows = !retainProof;
+    }
+
+    List<CountLpLearning.Cut> sharedRows() {
+        return List.copyOf(sharedRows);
     }
 
     /** An independent rounding arm; the default search keeps its old ordering. */
@@ -482,6 +493,14 @@ final class CountLcg implements AutoCloseable {
                     incident.get(boundKey(term.getKey(), term.getValue().signum() > 0)).add(new Incidence(id, term.getValue()));
                 }
                 if (retainProof) derivedRows.add(new CountProof.Combination(result.cut.parents(), result.cut.divisor(), CountProof.row(cut)));
+                if (shareRows && sharedRows.size() < 64) {
+                    long retained = 128L + 128L * result.cut.parents().size() +
+                            result.cut.parents().values().stream().mapToLong(value -> 32L + (value.bitLength() + 7L) / 8).sum();
+                    if (retained <= budget.availableBytes() / 8 && budget.tryReserve(retained)) {
+                        memory += retained;
+                        sharedRows.add(result.cut);
+                    }
+                }
                 enqueue(id);
                 return true;
             }
@@ -1054,6 +1073,38 @@ final class CountLcg implements AutoCloseable {
         imported.add(value);
         clauses.add(new Nogood(List.copyOf(literals), 0, conflicts));
         rescan = true;
+        return true;
+    }
+
+    /** Only the owner's certified, unconditional original-model consequences may enter here. */
+    boolean learn(ExactLinearProgram.Constraint row) {
+        if (retainProof || complete && !paused || importedRows.size() >= 64 || row.terms().size() > 64 ||
+                row.upper().bitLength() > 2048 || importedRows.contains(row) || rows.contains(row))
+            return false;
+        if (learnedRelaxation && rows.size() >= rowActivity.length) return false;
+        for (var term : row.terms().entrySet()) {
+            charge();
+            if (term.getKey() < 0 || term.getKey() >= low.length || term.getValue().bitLength() > 2048) return false;
+        }
+        long bytes = 512L + 512L * row.terms().size();
+        if (importedRows.isEmpty() && !learnedRelaxation) bytes += 16L * rows.size();
+        int capacity = rows.size() >= rowActivity.length ? rows.size() + 16 : rowActivity.length;
+        bytes += 32L + 8L * (capacity - rowActivity.length);
+        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
+        memory += bytes;
+        if (importedRows.isEmpty() && !learnedRelaxation) rows = new ArrayList<>(rows);
+        int id = rows.size();
+        if (capacity != rowActivity.length) rowActivity = Arrays.copyOf(rowActivity, capacity);
+        rows.add(row);
+        importedRows.add(row);
+        if (relaxationKnown != null) relaxationKnown.add(row);
+        if (rowPool != null) rowPool.added(id, decisions);
+        for (var term : row.terms().entrySet()) {
+            charge();
+            if (term.getValue().signum() != 0)
+                incident.get(boundKey(term.getKey(), term.getValue().signum() > 0)).add(new Incidence(id, term.getValue()));
+        }
+        enqueue(id);
         return true;
     }
 

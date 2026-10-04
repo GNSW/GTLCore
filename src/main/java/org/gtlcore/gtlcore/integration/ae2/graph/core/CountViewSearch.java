@@ -21,6 +21,7 @@ final class CountViewSearch implements AutoCloseable {
     private long candidateSequence;
     private CandidateOrigin candidateOrigin;
     private Search candidateSource;
+    private boolean strideScoutAttempted;
 
     record CandidateOrigin(long id, String view, String engine) {}
 
@@ -41,9 +42,12 @@ final class CountViewSearch implements AutoCloseable {
         CountLcg solver;
         CountCdcl cdcl;
         CountJump jump;
+        CountSeparator separator;
+        CountMeetInMiddle matching;
         long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
         long publishedRoots;
         int publishedConflicts, importedConflicts;
+        int importedCuts;
         CountModelViews.Domains scope;
         boolean done;
 
@@ -54,7 +58,7 @@ final class CountViewSearch implements AutoCloseable {
         }
 
         boolean started() {
-            return solver != null || cdcl != null || jump != null;
+            return solver != null || cdcl != null || jump != null || separator != null || matching != null;
         }
 
         boolean paused() {
@@ -66,7 +70,11 @@ final class CountViewSearch implements AutoCloseable {
             if (domains != null) scope = domains;
             if (domains != null && domains.version() > 0)
                 budget.note("count_view_facts", "destination=" + view.name() + "; engine=" + engine + "; imported_version=" + domains.version());
-            if (engine == Engine.PB) {
+            if (engine == Engine.SEPARATOR) {
+                separator = new CountSeparator(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MAX_QUANTUM);
+            } else if (engine == Engine.MITM) {
+                matching = new CountMeetInMiddle(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MAX_QUANTUM);
+            } else if (engine == Engine.PB) {
                 if (cdcl == null) cdcl = new CountCdcl(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
                 else cdcl.resume(quantum);
             } else if (engine == Engine.JUMP) {
@@ -80,6 +88,9 @@ final class CountViewSearch implements AutoCloseable {
                 int imported = models.importConflicts(view, importedConflicts, this, solver);
                 importedConflicts = models.conflictVersion();
                 if (imported > 0) budget.note("count_view_conflicts", "destination=" + view.name() + "; engine=" + engine + "; imported=" + imported);
+                int linear = models.importCuts(view, importedCuts, this, solver);
+                importedCuts = models.cutVersion();
+                if (linear > 0) budget.note("count_view_cuts", "destination=" + view.name() + "; engine=" + engine + "; imported=" + linear);
             }
         }
 
@@ -93,24 +104,36 @@ final class CountViewSearch implements AutoCloseable {
             if (solver != null) solver.close();
             if (cdcl != null) cdcl.close();
             if (jump != null) jump.close();
+            if (separator != null) separator.close();
+            if (matching != null) matching.close();
             solver = null;
             cdcl = null;
             jump = null;
+            separator = null;
+            matching = null;
         }
 
         boolean step() {
+            if (separator != null) return separator.step();
+            if (matching != null) return matching.step();
             return cdcl != null ? cdcl.step() : jump != null ? jump.step() : solver.step();
         }
 
         long progress() {
+            if (separator != null || matching != null) return 0;
             return cdcl != null ? cdcl.progress() : jump != null ? jump.progress() : solver.progress();
         }
 
         BigInteger[] counts() {
+            if (separator != null) return separator.counts();
+            if (matching != null) return matching.counts();
             return cdcl != null ? cdcl.counts() : jump != null ? jump.counts() : solver.counts();
         }
 
         boolean infeasible() {
+            // These brief scouts only propose original-coordinate candidates.
+            // Their cutoff or local proof never displaces the retained engines.
+            if (separator != null || matching != null) return false;
             return cdcl != null ? cdcl.infeasible() : solver != null && solver.infeasible();
         }
     }
@@ -119,7 +142,9 @@ final class CountViewSearch implements AutoCloseable {
         LCG,
         PB,
         LOCKS,
-        JUMP
+        JUMP,
+        SEPARATOR,
+        MITM
     }
 
     CountViewSearch(CountModelViews models, PlanningBudget budget) {
@@ -133,16 +158,49 @@ final class CountViewSearch implements AutoCloseable {
         until = work + Math.min(allowance, budget.remainingWork() / 4);
         for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view)) {
             boolean binary = binary(view);
-            searches.add(new Search(view, policy.add(view.shape().cost()), Engine.LCG));
+            searches.add(new Search(view, policy.add(view.shape().cost(), Engine.LCG), Engine.LCG));
             // The weighted Boolean engine has different propagation, phase
             // saving and conflicts. Retain that complementary search too;
             // repeatedly restarting a short PB attempt discards its learning.
             if (binary) {
-                searches.add(new Search(view, policy.add(view.shape().cost()), Engine.PB));
-                searches.add(new Search(view, policy.add(view.shape().cost()), Engine.LOCKS));
-                searches.add(new Search(view, policy.add(view.shape().cost()), Engine.JUMP));
+                searches.add(new Search(view, policy.add(view.shape().cost(), Engine.PB), Engine.PB));
+                searches.add(new Search(view, policy.add(view.shape().cost(), Engine.LOCKS), Engine.LOCKS));
+                searches.add(new Search(view, policy.add(view.shape().cost(), Engine.JUMP), Engine.JUMP));
             }
         }
+        addStrideScout();
+    }
+
+    private void addStrideScout() {
+        if (strideScoutAttempted) return;
+        var views = models.available();
+        var stride = views.stream().filter(view -> view.name().equals("stride")).findFirst().orElse(null);
+        if (stride == null) return;
+        strideScoutAttempted = true;
+        // Compare with the coordinates the existing specialist paths consume,
+        // rather than treating ordinary affine elimination as a stride benefit.
+        var reduced = models.reduced();
+        if (reduced == null) return;
+        Engine engine = null;
+        if (separatorDomains(stride) && !separatorDomains(reduced)) engine = Engine.SEPARATOR;
+        else if (CountMeetInMiddle.scoutWork(stride.rows(), stride.lower(), stride.upper(), budget) > 0 &&
+                CountMeetInMiddle.scoutWork(reduced.rows(), reduced.lower(), reduced.upper(), budget) == 0)
+            engine = Engine.MITM;
+        if (engine != null) {
+            searches.add(new Search(stride, policy.add(stride.shape().cost(), engine), engine));
+            budget.note("count_stride_scout", "new_domain_admission; engine=" + engine.name().toLowerCase(Locale.ROOT) + "; bounded_candidate_only");
+        }
+    }
+
+    private boolean separatorDomains(CountModelViews.View view) {
+        if (view.lower().length > 256 || view.rows().size() > 2048) return false;
+        for (int i = 0; i < view.lower().length; i++) {
+            budget.check();
+            if (view.upper()[i] == null) return false;
+            BigInteger width = view.upper()[i].subtract(view.lower()[i]);
+            if (width.signum() < 0 || width.compareTo(BigInteger.valueOf(31)) > 0) return false;
+        }
+        return true;
     }
 
     private boolean binary(CountModelViews.View view) {
@@ -245,7 +303,7 @@ final class CountViewSearch implements AutoCloseable {
                 candidate.rows().size() <= 4096 && candidate.shape().terms() <= 65536)
                 .min(Comparator.comparingLong(candidate -> candidate.shape().cost())).orElse(null);
         if (view == null) return false;
-        searches.add(new Search(view, policy.add(view.shape().cost()), Engine.JUMP));
+        searches.add(new Search(view, policy.add(view.shape().cost(), Engine.JUMP), Engine.JUMP));
         return true;
     }
 
@@ -262,7 +320,7 @@ final class CountViewSearch implements AutoCloseable {
         return candidateOrigin;
     }
 
-    /** Observations only: neither strategy weights nor proof/negative caches change. */
+    /** Request-local selection feedback; proof domains and mandatory exploration are unchanged. */
     void feedback(CandidateOrigin origin, CandidateOutcome outcome, long downstreamWork) {
         if (!Objects.equals(origin, candidateOrigin) || candidateSource == null) return;
         Search source = candidateSource;
@@ -271,10 +329,14 @@ final class CountViewSearch implements AutoCloseable {
         else if (outcome == CandidateOutcome.SCHEDULE_DEAD) source.dead++;
         else if (outcome == CandidateOutcome.SCHEDULE_UNKNOWN || outcome == CandidateOutcome.UNRESOLVED) source.unknown++;
         if (terminal) source.downstreamWork += downstreamWork;
+        if (terminal) policy.candidateFeedback(source.scheduling, source.work, downstreamWork,
+                outcome == CandidateOutcome.VERIFIED || outcome == CandidateOutcome.SCHEDULE_DEAD || outcome == CandidateOutcome.REJECTED,
+                outcome == CandidateOutcome.VERIFIED);
         budget.note("count_candidate", "id=" + origin.id() + "; view=" + origin.view() + "; engine=" + origin.engine() +
                 "; outcome=" + outcome + "; solver_work=" + source.work + "; downstream_work=" + downstreamWork +
                 "; candidates=" + source.candidates + "; verified=" + source.verified + "; dead=" + source.dead +
-                "; unknown=" + source.unknown + "; total_downstream_work=" + source.downstreamWork);
+                "; unknown=" + source.unknown + "; total_downstream_work=" + source.downstreamWork +
+                "; selection_efficiency=" + policy.candidateEfficiency(source.scheduling));
         if (terminal) {
             candidateOrigin = null;
             candidateSource = null;

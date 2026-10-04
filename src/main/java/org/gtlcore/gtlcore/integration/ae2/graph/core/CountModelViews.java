@@ -42,12 +42,15 @@ final class CountModelViews implements AutoCloseable {
 
     private final PlanningBudget budget;
     private final View original;
+    private View reduced;
     private final List<View> views = new ArrayList<>();
+    private final List<View> auxiliaryViews = new ArrayList<>();
     private boolean lightAttempted;
     private long memory;
     private BigInteger[] sharedLower, sharedUpper;
     private long factVersion;
     private CountViewConflicts conflicts;
+    private CountViewCuts cuts;
 
     record Domains(BigInteger[] lower, BigInteger[] upper, long version) {}
 
@@ -84,6 +87,11 @@ final class CountModelViews implements AutoCloseable {
 
     List<View> available() {
         return List.copyOf(views);
+    }
+
+    /** Actual input of the existing reduced-model specialists, even after view deduplication. */
+    View reduced() {
+        return reduced;
     }
 
     /** Integer-equivalent row simplification without changing variable coordinates. */
@@ -173,18 +181,56 @@ final class CountModelViews implements AutoCloseable {
         var rows = reduction.rows();
         var low = reduction.lower();
         var high = reduction.upper();
-        if (views.stream().anyMatch(v -> v.rows.equals(rows) && Arrays.equals(v.lower, low) && Arrays.equals(v.upper, high))) return;
+        reduced = views.stream().filter(v -> v.rows.equals(rows) && Arrays.equals(v.lower, low) && Arrays.equals(v.upper, high)).findFirst().orElse(null);
+        if (reduced != null) return;
         long bytes = 256L + 32L * low.length + 384L * original.lower.length;
         if (!budget.tryReserve(bytes)) return;
         memory += bytes;
         var view = new View("reduced", rows, low, high, shape(rows, low, high, budget), reduction::expand, Semantics.EQUIVALENT, reduction.substitution());
         views.add(view);
+        reduced = view;
         publishBounds(view, low, high);
     }
 
     boolean sharesBounds(View view) {
         return view.semantics.transfersProof() && original.lower.length <= 1024 &&
-                budget.remainingWork() >= 8L * original.lower.length + 1024 && views.stream().anyMatch(value -> value == view);
+                budget.remainingWork() >= 8L * original.lower.length + 1024 &&
+                (views.stream().anyMatch(value -> value == view) || auxiliaryViews.stream().anyMatch(value -> value == view));
+    }
+
+    /** Register the existing canonical LP engine for sharing, without starting another search arm. */
+    View registerLp(CountReduction reduction, CountCanonicalModel canonical) {
+        if (!reduction.matchesScope(original.rows, original.lower, original.upper) || budget.proofJournal() != null) return null;
+        long bytes = 512L + 384L * original.lower.length + 64L * canonical.lower().length;
+        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return null;
+        memory += bytes;
+        var mapping = reduction.substitution().then(canonical.substitution(), budget);
+        var rows = canonical.rows();
+        var lower = canonical.lower();
+        var upper = canonical.upper();
+        var view = new View("lp_canonical", rows, lower, upper, shape(rows, lower, upper, budget),
+                values -> mapping.restore(values, budget), Semantics.EQUIVALENT, mapping);
+        auxiliaryViews.add(view);
+        return view;
+    }
+
+    void publishCuts(View view, List<CountLpLearning.Cut> learned, int from, Object origin) {
+        if (view == null || from >= learned.size() || !sharesBounds(view) || budget.proofJournal() != null) return;
+        if (cuts == null) cuts = CountViewCuts.create(budget);
+        if (cuts == null) return;
+        int before = cuts.version();
+        cuts.publish(view, learned, from, origin);
+        if (cuts.version() > before) budget.note("count_view_cuts", "origin=" + view.name() + "; certified=" + (cuts.version() - before) +
+                "; version=" + cuts.version() + "; scope=owned_count_model");
+    }
+
+    int cutVersion() {
+        return cuts == null ? 0 : cuts.version();
+    }
+
+    int importCuts(View view, int after, Object origin, CountLcg solver) {
+        if (cuts == null || after >= cuts.version() || !sharesBounds(view) || budget.proofJournal() != null) return 0;
+        return cuts.transfer(view, after, origin, solver::learn);
     }
 
     /** Only proved level-zero domains from a registered, covering view enter this request-local pool. */
@@ -334,9 +380,12 @@ final class CountModelViews implements AutoCloseable {
 
     @Override
     public void close() {
+        if (cuts != null) cuts.close();
+        cuts = null;
         if (conflicts != null) conflicts.close();
         conflicts = null;
         views.clear();
+        auxiliaryViews.clear();
         sharedLower = sharedUpper = null;
         budget.release(memory);
         memory = 0;

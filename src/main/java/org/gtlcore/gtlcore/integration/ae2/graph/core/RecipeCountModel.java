@@ -16,6 +16,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
     final List<ExactLinearProgram.Constraint> constraints = new ArrayList<>();
     final List<K> rowKeys = new ArrayList<>();
     final PlanningBudget budget;
+    CountRecoveryTemplates<K> recoveryTemplates;
     private long memory;
 
     static <K> RecipeCountModel<K> create(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
@@ -58,6 +59,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 }
                 workspace += bytes;
                 var model = new RecipeCountModel<>(cached, stock, external, budget, goals(target, amount, seeds));
+                model.recoveryTemplates = compiler.recoveryTemplates;
                 if (force && !external.contains(target)) model.requireProduction(target, amount);
                 model.memory = workspace;
                 workspace = 0;
@@ -96,7 +98,8 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 return null;
             }
             workspace += sparseBytes;
-            var model = new RecipeCountModel<>(List.copyOf(recipes.values()), List.copyOf(keys), stock, external, budget, goals(target, amount, seeds));
+            var model = new RecipeCountModel<>(List.copyOf(recipes.values()), List.copyOf(keys), stock, external, budget, goals(target, amount, seeds), compiler.catalogIndex());
+            model.recoveryTemplates = compiler.recoveryTemplates;
             if (force && !external.contains(target)) model.requireProduction(target, amount);
             if (compiler.reuseCountCatalogs() &&
                     GraphCompiler.cacheableCountCatalog(entries + keys.size() + recipes.size(), seeds.size(), excluded.size(), external.size()))
@@ -189,6 +192,11 @@ final class RecipeCountModel<K> implements AutoCloseable {
 
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
                              Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals) {
+        this(recipes, keys, stock, external, budget, goals, null);
+    }
+
+    private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
+                             Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals, GraphCatalogIndex<K> index) {
         this.recipes = recipes;
         this.keys = keys;
         this.stock = stock;
@@ -205,6 +213,15 @@ final class RecipeCountModel<K> implements AutoCloseable {
         // to the catalog cache; no second matrix is constructed for that cache.
         for (int i = 0; i < recipes.size(); i++) {
             GraphRecipe<K> recipe = recipes.get(i);
+            var ports = index == null ? null : index.ports(recipe);
+            if (ports != null) {
+                for (int p = 0; p < ports.changed().length; p++) {
+                    budget.check();
+                    var terms = rows.get(index.resource(ports.changed()[p]));
+                    if (terms != null) terms.put(i, ports.changes()[p].negate());
+                }
+                continue;
+            }
             Set<K> used = new LinkedHashSet<>(recipe.inputs().keySet());
             used.addAll(recipe.outputs().keySet());
             for (K key : used) {

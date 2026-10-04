@@ -13,6 +13,8 @@ final class CountLpSearch implements AutoCloseable {
     private final int[] representatives;
     private long memory, work, until;
     private boolean complete;
+    private CountModelViews.View sharingView;
+    private int publishedCuts;
 
     private CountLpSearch(PlanningBudget budget, CountCanonicalModel canonical, CountLcg search,
                           CountReduction.Coordinates coordinates, int[] representatives, long memory) {
@@ -112,6 +114,19 @@ final class CountLpSearch implements AutoCloseable {
 
     boolean retained() {
         return !complete;
+    }
+
+    void shareRows() {
+        search.shareRows();
+    }
+
+    void publishCuts(CountModelViews models, CountReduction reduction) {
+        if (models == null) return;
+        var cuts = search.sharedRows();
+        if (publishedCuts >= cuts.size()) return;
+        if (sharingView == null) sharingView = models.registerLp(reduction, canonical);
+        models.publishCuts(sharingView, cuts, publishedCuts, this);
+        publishedCuts = cuts.size();
     }
 
     void resume(long allowance) {

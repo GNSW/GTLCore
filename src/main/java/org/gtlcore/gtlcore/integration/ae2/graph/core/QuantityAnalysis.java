@@ -144,6 +144,7 @@ final class QuantityAnalysis<K> {
             if (!startup.step()) return false;
             if (startup.blocked()) return finish(true);
             Set<String> unreachable = startup.unreachableRecipes();
+            startup.close();
             startup = null;
             List<ExactLinearProgram.Constraint> rows = new ArrayList<>(model.constraints);
             // A returned credential or catalyst has zero net consumption but
@@ -269,6 +270,8 @@ final class QuantityAnalysis<K> {
         if (conservation != null) conservation.close();
         if (model != null) model.close();
         if (bounds != null) bounds.close();
+        if (startup != null) startup.close();
+        startup = null;
         budget.release(memory);
         memory = 0;
         return true;

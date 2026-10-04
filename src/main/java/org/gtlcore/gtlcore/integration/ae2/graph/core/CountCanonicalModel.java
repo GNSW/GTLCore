@@ -15,6 +15,15 @@ final class CountCanonicalModel implements AutoCloseable {
     private int[] order;
     private long memory;
 
+    CountMapping substitution() {
+        int[] inverse = new int[order.length];
+        for (int i = 0; i < order.length; i++) {
+            budget.check();
+            inverse[order[i]] = i;
+        }
+        return CountMapping.representatives(inverse);
+    }
+
     private CountCanonicalModel(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
                                 BigInteger[] upper, int[] order, PlanningBudget budget, long memory) {
         this.rows = rows;

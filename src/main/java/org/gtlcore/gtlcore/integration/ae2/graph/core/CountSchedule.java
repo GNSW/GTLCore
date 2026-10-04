@@ -532,6 +532,20 @@ final class CountSchedule<K> implements AutoCloseable {
         return result;
     }
 
+    boolean resumableIn(RecipeCountModel<K> owner, PlanningBudget request) {
+        return model == owner && budget == request && !balancedFirst && result == null && memory != 0;
+    }
+
+    /** Exact original coordinates; the owner keeps the immutable model and request scope. */
+    boolean sameCounts(BigInteger[] counts) {
+        if (counts.length != original.length) return false;
+        for (int i = 0; i < original.length; i++) {
+            budget.check();
+            if (!original[i].equals(counts[i])) return false;
+        }
+        return true;
+    }
+
     private boolean finish(Result value) {
         if (value == Result.UNKNOWN && exact && preferEnabled && !reverseExact) {
             // Ordering is a hint, not a replacement for the old DFS. If its

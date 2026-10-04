@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Deterministic effort-normalized feedback; scheduling observations are never proofs. */
 final class CountPortfolioPolicy {
@@ -14,6 +16,7 @@ final class CountPortfolioPolicy {
     static final class Arm {
 
         final long startupCost;
+        final Object family;
         long work;
         int selections, idleSlices, waiting;
         double reward, rewardVariance;
@@ -22,16 +25,22 @@ final class CountPortfolioPolicy {
         long observations, progressObservations, pendingWork;
         double costMean, costM2, progressCostMean, progressCostM2;
 
-        Arm(long startupCost) {
+        Arm(long startupCost, Object family) {
             this.startupCost = startupCost;
+            this.family = family == null ? this : family;
         }
     }
 
     private final List<Arm> arms = new ArrayList<>();
+    private final Map<Object, CandidateCosts> candidateCosts = new HashMap<>();
     private long turn;
 
     Arm add(long startupCost) {
-        Arm arm = new Arm(startupCost);
+        return add(startupCost, null);
+    }
+
+    Arm add(long startupCost, Object family) {
+        Arm arm = new Arm(startupCost, family);
         arms.add(arm);
         return arm;
     }
@@ -52,7 +61,7 @@ final class CountPortfolioPolicy {
             // for exploration; aging still gives every live arm another turn.
             double uncertainty = StrictMath.sqrt(arm.rewardVariance + 1.0 / arm.selections);
             double exploration = uncertainty * StrictMath.sqrt(StrictMath.log(turn + 1.0) / arm.selections);
-            double score = arm.reward + exploration;
+            double score = (arm.reward + exploration) * candidateEfficiency(arm);
             if (best == null || score > bestScore || score == bestScore && arm.work < best.work) {
                 best = arm;
                 bestScore = score;
@@ -142,6 +151,36 @@ final class CountPortfolioPolicy {
         arm.reward = reward;
         arm.rewardVariance = rewardVariance;
         arm.idleSlices = positive > 0 ? 0 : Math.min(4, arm.idleSlices + 1);
+    }
+
+    /** Completed candidate pipeline observations, separate from solver-internal progress. */
+    void candidateFeedback(Arm source, long upstream, long downstream, boolean resolved, boolean verified) {
+        if (upstream < 0 || downstream < 0 || verified && !resolved) throw new IllegalArgumentException("Invalid candidate observation");
+        CandidateCosts costs = candidateCosts.computeIfAbsent(source.family, ignored -> new CandidateCosts());
+        if (costs.observations < Long.MAX_VALUE) costs.observations++;
+        costs.upstream += (Math.max(1, upstream) - costs.upstream) / costs.observations;
+        costs.downstream += (downstream - costs.downstream) / costs.observations;
+        if (resolved && costs.resolved < Long.MAX_VALUE) costs.resolved++;
+        if (verified && costs.verified < Long.MAX_VALUE) costs.verified++;
+    }
+
+    double candidateEfficiency(Arm arm) {
+        CandidateCosts costs = candidateCosts.get(arm.family);
+        if (costs == null) return 1;
+        // Progress is still normalized within each arm. Discount its selection
+        // score by measured pipeline overhead and checked candidate yield, not
+        // by raw conflict counts. One neutral observation tempers sparse data.
+        // UNKNOWN/cutoffs contribute actual cost only, never a failed proof.
+        double costShare = costs.upstream / (costs.upstream + costs.downstream);
+        double yield = (costs.verified + 1.0) / (costs.resolved + 1.0);
+        double confidence = costs.observations / (costs.observations + 1.0);
+        return 1 - confidence * (1 - costShare * yield);
+    }
+
+    private static final class CandidateCosts {
+
+        long observations, resolved, verified;
+        double upstream, downstream;
     }
 
     private static double upperCost(double mean, double m2, long observations) {

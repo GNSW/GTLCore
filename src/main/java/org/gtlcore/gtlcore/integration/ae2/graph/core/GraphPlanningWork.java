@@ -239,6 +239,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (compiling != null) {
                         if (!(slice == null ? compiling.step() : compiling.advance(slice))) return false;
                         graph = compiling.result();
+                        compiling.close();
                         compiler.publish(target, requiredSeeds.keySet(), choices, excluded, graph);
                         compiling = null;
                     }
@@ -251,7 +252,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     // Proven conflicts skipped above are not source attempts.
                     sourceAttempts++;
                     triedTargetSeedConsumption = false;
-                    solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock);
+                    solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                            .program(compiler.demandProgram(graph, budget));
                     budget.note("compile", "choice=" + seen.size() + "; recipes=" + graph.recipes().size() + "; regions=" + graph.regions().size() +
                             "; cyclic=" + graph.regions().stream().filter(GraphCompiler.Region::cyclic).count());
                     phase = 2;
@@ -377,6 +379,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (stockBlocked == null) {
                         if (!missingAnalysis.step()) return false;
                         stockBlocked = missingAnalysis.blocked();
+                        missingAnalysis.close();
                         missingAnalysis = null;
                     }
                     if (!stockBlocked && !provenMissing(best)) {
@@ -399,6 +402,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 case 11 -> {
                     if (!missingAnalysis.step()) return false;
                     stockBlocked = missingAnalysis.blocked();
+                    missingAnalysis.close();
                     missingAnalysis = null;
                     afterSolve();
                 }
@@ -741,6 +745,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         triedTargetSeedConsumption = true;
         budget.note("region_solve", "retry_with_target_seed; same_sources");
         solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                .program(compiler.demandProgram(graph, budget))
                 .allowTargetSeedConsumption(true);
         phase = 2;
         return true;
@@ -852,6 +857,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public void close() {
+        if (compiling != null) compiling.close();
+        compiling = null;
+        if (missingAnalysis != null) missingAnalysis.close();
+        missingAnalysis = null;
         if (productionProof != null) productionProof.close();
         productionProof = null;
         clearAlternativeOrder();
@@ -996,6 +1005,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 // Bootstrapping material is newly manufactured, not new stock that
                 // grants another allowance of extra catalysts during the tail solve.
                 restarted = new GraphSolve<>(graph, target, amount, available, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                        .program(compiler.demandProgram(graph, budget))
                         .allowTargetSeedConsumption(triedTargetSeedConsumption);
                 return false;
             }

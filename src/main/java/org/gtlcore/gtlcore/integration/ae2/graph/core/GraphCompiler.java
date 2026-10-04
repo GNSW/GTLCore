@@ -16,8 +16,51 @@ public final class GraphCompiler<K> {
     private final Map<CountKey<K>, CountCatalog<K>> countCatalogs = new LinkedHashMap<>(16, 0.75f, true);
     private long countCatalogWeight;
     private boolean countCatalogRequested, countCatalogReusable;
+    private GraphCatalogIndex<K> catalogIndex;
+    private boolean catalogIndexRequested, catalogIndexReusable;
     private final List<QuantityCertificate<K>> quantityCertificates = new ArrayList<>();
     final CountSessions countSessions = new CountSessions();
+    final CountRecoveryTemplates<K> recoveryTemplates = new CountRecoveryTemplates<>();
+    private final List<DemandEntry<K>> demandPrograms = new ArrayList<>();
+
+    private record DemandEntry<K>(Compiled<K> graph, GraphDemandProgram<K> program) {}
+
+    /** Compile only an observed repeated graph; failed optional preparation is never cached as final. */
+    GraphDemandProgram<K> demandProgram(Compiled<K> graph, PlanningBudget budget) {
+        synchronized (this) {
+            int found = -1;
+            for (int i = 0; i < demandPrograms.size(); i++) if (demandPrograms.get(i).graph == graph) {
+                found = i;
+                break;
+            }
+            if (found < 0) {
+                demandPrograms.add(0, new DemandEntry<>(graph, null));
+                trimDemandPrograms();
+                return null;
+            }
+            var entry = demandPrograms.remove(found);
+            demandPrograms.add(0, entry);
+            if (entry.program != null) return entry.program;
+        }
+        var program = GraphDemandProgram.create(graph, budget);
+        if (program == null) return null;
+        synchronized (this) {
+            demandPrograms.removeIf(entry -> entry.graph == graph);
+            demandPrograms.add(0, new DemandEntry<>(graph, program));
+            trimDemandPrograms();
+        }
+        budget.note("demand_program", "compiled; regions=" + graph.regions().size() + "; weight=" + program.weight);
+        return program;
+    }
+
+    private void trimDemandPrograms() {
+        long weight = 0;
+        for (var entry : demandPrograms) weight += entry.graph.recipes().size() + (entry.program == null ? 0 : entry.program.weight);
+        while (demandPrograms.size() > 1 && (demandPrograms.size() > 8 || weight > 65536)) {
+            var removed = demandPrograms.remove(demandPrograms.size() - 1);
+            weight -= removed.graph.recipes().size() + (removed.program == null ? 0 : removed.program.weight);
+        }
+    }
 
     public GraphCompiler(List<GraphRecipe<K>> catalog) {
         this.catalog = List.copyOf(catalog);
@@ -39,6 +82,22 @@ public final class GraphCompiler<K> {
 
     public List<GraphRecipe<K>> catalog() {
         return catalog;
+    }
+
+    synchronized GraphCatalogIndex<K> catalogIndex() {
+        catalogIndexReusable |= catalogIndexRequested;
+        catalogIndexRequested = true;
+        return catalogIndex;
+    }
+
+    synchronized boolean reuseCatalogIndex() {
+        return catalogIndexReusable;
+    }
+
+    synchronized void rememberCatalogIndex(GraphCatalogIndex<K> index) {
+        // Only immutable structure is retained. Inventory, active exclusions
+        // and reachability conclusions always belong to the current analysis.
+        if (catalogIndex == null && index.belongsTo(catalog)) catalogIndex = index;
     }
 
     synchronized CountCatalog<K> countCatalog(K target, Set<K> seeds, Set<String> excluded, Set<K> external) {
@@ -97,9 +156,13 @@ public final class GraphCompiler<K> {
         Compiled<K> cached = cached(target, choices, excluded);
         if (cached != null) return cached;
         GraphCompilation<K> work = begin(target, choices, excluded, budget);
-        while (!work.step()) { /* Same continuation, without an executor for synchronous callers. */ }
-        publish(target, choices, excluded, work.result());
-        return work.result();
+        try {
+            while (!work.step()) { /* Same continuation, without an executor for synchronous callers. */ }
+            publish(target, choices, excluded, work.result());
+            return work.result();
+        } finally {
+            work.close();
+        }
     }
 
     public GraphCompilation<K> begin(K target, Map<K, Integer> choices, Set<String> excluded, PlanningBudget budget) {

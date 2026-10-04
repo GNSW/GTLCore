@@ -18,6 +18,20 @@ final class CountViewSearch implements AutoCloseable {
     private long work, until;
     private boolean infeasible;
     private BigInteger[] counts;
+    private long candidateSequence;
+    private CandidateOrigin candidateOrigin;
+    private Search candidateSource;
+
+    record CandidateOrigin(long id, String view, String engine) {}
+
+    enum CandidateOutcome {
+        SCHEDULE_WITNESS,
+        SCHEDULE_DEAD,
+        SCHEDULE_UNKNOWN,
+        VERIFIED,
+        REJECTED,
+        UNRESOLVED
+    }
 
     private static final class Search {
 
@@ -27,7 +41,10 @@ final class CountViewSearch implements AutoCloseable {
         CountLcg solver;
         CountCdcl cdcl;
         CountJump jump;
-        long sliceWork, progress;
+        long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
+        long publishedRoots;
+        int publishedConflicts, importedConflicts;
+        CountModelViews.Domains scope;
         boolean done;
 
         Search(CountModelViews.View view, CountPortfolioPolicy.Arm scheduling, Engine engine) {
@@ -44,19 +61,32 @@ final class CountViewSearch implements AutoCloseable {
             return solver != null ? solver.paused() : cdcl != null ? cdcl.paused() : jump != null && jump.paused();
         }
 
-        void resume(long quantum, PlanningBudget budget) {
+        void resume(long quantum, PlanningBudget budget, CountModelViews models) {
+            var domains = started() ? null : models.domains(view);
+            if (domains != null) scope = domains;
+            if (domains != null && domains.version() > 0)
+                budget.note("count_view_facts", "destination=" + view.name() + "; engine=" + engine + "; imported_version=" + domains.version());
             if (engine == Engine.PB) {
-                if (cdcl == null) cdcl = new CountCdcl(view.rows(), view.lower(), view.upper(), budget, quantum).retained();
+                if (cdcl == null) cdcl = new CountCdcl(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
                 else cdcl.resume(quantum);
             } else if (engine == Engine.JUMP) {
-                if (jump == null) jump = new CountJump(view.rows(), view.lower(), view.upper(), budget, quantum).retained();
+                if (jump == null) jump = new CountJump(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
                 else jump.resume(quantum);
             } else {
                 if (solver == null) {
-                    solver = new CountLcg(view.rows(), view.lower(), view.upper(), budget, quantum);
+                    solver = new CountLcg(view.rows(), domains.lower(), domains.upper(), budget, quantum);
                     if (engine == Engine.LOCKS) solver.lockBranching();
                 } else solver.resume(quantum);
+                int imported = models.importConflicts(view, importedConflicts, this, solver);
+                importedConflicts = models.conflictVersion();
+                if (imported > 0) budget.note("count_view_conflicts", "destination=" + view.name() + "; engine=" + engine + "; imported=" + imported);
             }
+        }
+
+        void publish(CountModelViews models) {
+            var learned = solver != null ? solver.learnedConflicts() : cdcl != null ? cdcl.learnedConflicts() : List.<CountConflict>of();
+            models.publishConflicts(view, scope, learned, publishedConflicts, this);
+            publishedConflicts = learned.size();
         }
 
         void close() {
@@ -155,7 +185,7 @@ final class CountViewSearch implements AutoCloseable {
                 }
                 policy.selected(active.scheduling);
                 active.sliceWork = 0;
-                active.resume(quantum, budget);
+                active.resume(quantum, budget, models);
             }
             if (!active.step()) return false;
             long progress = active.progress();
@@ -163,8 +193,20 @@ final class CountViewSearch implements AutoCloseable {
             active.progress = progress;
             completedSlice = true;
             BigInteger[] candidate = active.counts();
-            infeasible = active.infeasible();
-            if (candidate != null) counts = models.restoreAndCheck(active.view, candidate);
+            infeasible = active.infeasible() && active.view.semantics().transfersProof();
+            if (!active.infeasible() && active.solver != null && active.solver.rootVersion() > active.publishedRoots && models.sharesBounds(active.view)) {
+                models.publishBounds(active.view, active.solver.rootLower(), active.solver.rootUpper());
+                active.publishedRoots = active.solver.rootVersion();
+            }
+            if (!infeasible) active.publish(models);
+            if (candidate != null) {
+                counts = models.restoreAndCheck(active.view, candidate);
+                if (counts != null) {
+                    candidateSource = active;
+                    candidateOrigin = new CandidateOrigin(++candidateSequence, active.view.name(), active.engine.name().toLowerCase(Locale.ROOT));
+                    active.candidates++;
+                }
+            }
             if (!active.paused()) {
                 active.done = true;
                 active.scheduling.retired = true;
@@ -186,6 +228,7 @@ final class CountViewSearch implements AutoCloseable {
             long spent = budget.threadWork() - before;
             work += spent;
             if (active != null) {
+                active.work += spent;
                 active.sliceWork += spent;
                 if (completedSlice) policy.feedback(active.scheduling, active.sliceWork, gained);
                 if (active.done || !active.started() || active.paused()) active = null;
@@ -213,6 +256,29 @@ final class CountViewSearch implements AutoCloseable {
 
     BigInteger[] counts() {
         return counts == null ? null : counts.clone();
+    }
+
+    CandidateOrigin candidateOrigin() {
+        return candidateOrigin;
+    }
+
+    /** Observations only: neither strategy weights nor proof/negative caches change. */
+    void feedback(CandidateOrigin origin, CandidateOutcome outcome, long downstreamWork) {
+        if (!Objects.equals(origin, candidateOrigin) || candidateSource == null) return;
+        Search source = candidateSource;
+        boolean terminal = outcome != CandidateOutcome.SCHEDULE_WITNESS;
+        if (outcome == CandidateOutcome.VERIFIED) source.verified++;
+        else if (outcome == CandidateOutcome.SCHEDULE_DEAD) source.dead++;
+        else if (outcome == CandidateOutcome.SCHEDULE_UNKNOWN || outcome == CandidateOutcome.UNRESOLVED) source.unknown++;
+        if (terminal) source.downstreamWork += downstreamWork;
+        budget.note("count_candidate", "id=" + origin.id() + "; view=" + origin.view() + "; engine=" + origin.engine() +
+                "; outcome=" + outcome + "; solver_work=" + source.work + "; downstream_work=" + downstreamWork +
+                "; candidates=" + source.candidates + "; verified=" + source.verified + "; dead=" + source.dead +
+                "; unknown=" + source.unknown + "; total_downstream_work=" + source.downstreamWork);
+        if (terminal) {
+            candidateOrigin = null;
+            candidateSource = null;
+        }
     }
 
     boolean infeasible() {

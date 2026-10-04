@@ -81,6 +81,7 @@ final class CountLcg implements AutoCloseable {
     private List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] rootLow, rootHigh, low, high;
     private final BigInteger[] levelZeroLow, levelZeroHigh;
+    private long rootVersion;
     private final double[] activity;
     private RowActivity[] rowActivity;
     private final List<List<Incidence>> incident = new ArrayList<>();
@@ -90,6 +91,7 @@ final class CountLcg implements AutoCloseable {
     private final List<Change> trail = new ArrayList<>();
     private final List<Nogood> clauses = new ArrayList<>();
     private final List<CountConflict> learned = new ArrayList<>(), proofSteps = new ArrayList<>();
+    private final Set<CountConflict> imported = new LinkedHashSet<>();
     private long allowance;
     private List<Literal> conflict;
     private BigInteger[] counts;
@@ -734,6 +736,7 @@ final class CountLcg implements AutoCloseable {
         }
         boundTrail.get(boundKey(literal.variable, literal.minimum)).add(trail.size() - 1);
         if (level == 0) {
+            rootVersion++;
             BigInteger beforeLow = levelZeroLow[literal.variable], beforeHigh = levelZeroHigh[literal.variable];
             if (literal.minimum) levelZeroLow[literal.variable] = literal.value;
             else levelZeroHigh[literal.variable] = literal.value;
@@ -904,6 +907,21 @@ final class CountLcg implements AutoCloseable {
             }
             if (sum.compareTo(row.upper()) > 0) return false;
         }
+        // Covering relaxations may admit assignments that original-model
+        // nogoods exclude. Checking rows alone would accept such a low point
+        // before its unresolved bound literals had forced a decision.
+        for (var clause : imported) {
+            boolean forbidden = true;
+            for (var row : clause.assumptions()) {
+                charge();
+                var term = row.terms().entrySet().iterator().next();
+                if (term.getValue().multiply(value[term.getKey()]).compareTo(row.upper()) > 0) {
+                    forbidden = false;
+                    break;
+                }
+            }
+            if (forbidden) return false;
+        }
         return true;
     }
 
@@ -956,6 +974,18 @@ final class CountLcg implements AutoCloseable {
         return rootProgress + learnedProgress + fixedPeak;
     }
 
+    long rootVersion() {
+        return rootVersion;
+    }
+
+    BigInteger[] rootLower() {
+        return levelZeroLow.clone();
+    }
+
+    BigInteger[] rootUpper() {
+        return levelZeroHigh.clone();
+    }
+
     private void reserve(long bytes) {
         if (!budget.tryReserve(bytes)) throw new Stop();
         memory += bytes;
@@ -999,6 +1029,32 @@ final class CountLcg implements AutoCloseable {
 
     List<CountConflict> learnedConflicts() {
         return List.copyOf(learned);
+    }
+
+    /** Import only a proved, scoped conjunction. Decision bounds must remain literal guards. */
+    boolean learn(CountConflict value) {
+        if (retainProof || complete && !paused || imported.size() >= 64 || imported.contains(value) || value.assumptions().size() > 16) return false;
+        List<Literal> literals = new ArrayList<>();
+        for (var row : value.assumptions()) {
+            charge();
+            if (row.terms().size() != 1) return false;
+            var term = row.terms().entrySet().iterator().next();
+            int id = term.getKey();
+            if (id < 0 || id >= low.length || !term.getValue().abs().equals(BigInteger.ONE)) return false;
+            boolean minimum = term.getValue().signum() < 0;
+            var literal = new Literal(id, minimum, minimum ? row.upper().negate() : row.upper());
+            // Only permanent level-zero facts may simplify an imported
+            // clause; current decisions can disappear on the next backjump.
+            if (rootTrue(literal.opposite())) return false;
+            if (!rootTrue(literal)) literals.add(literal);
+        }
+        long bytes = 256L + 512L * value.assumptions().size();
+        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
+        memory += bytes;
+        imported.add(value);
+        clauses.add(new Nogood(List.copyOf(literals), 0, conflicts));
+        rescan = true;
+        return true;
     }
 
     @Override

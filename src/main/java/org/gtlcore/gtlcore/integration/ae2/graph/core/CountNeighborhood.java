@@ -35,6 +35,43 @@ final class CountNeighborhood implements AutoCloseable {
     private CountPortfolioPolicy policy;
     private CountPortfolioPolicy.Arm binaryArm, relaxedArm, pumpArm, activeArm;
     private long sliceWork, sliceLimit, sliceProgress;
+    private BitSet failureRegion;
+    private final List<Integer> repairMoves = new ArrayList<>();
+    private int repairMove, repairCandidates;
+    private CountLcg failureSearch;
+
+    /** Candidate-only neighborhoods of a failed executable ordering, in the caller's coordinates. */
+    CountNeighborhood failureRegion(BitSet region) {
+        if (complete) return this;
+        long before = budget.threadWork();
+        try {
+            failureRegion = (BitSet) region.clone();
+            failureRegion.clear(lower.length, Math.max(lower.length, failureRegion.length()));
+            // New seed suppliers first, then decreasing/increasing used sources.
+            for (int pass = 0; pass < 2; pass++) for (int i = failureRegion.nextSetBit(0); i >= 0; i = failureRegion.nextSetBit(i + 1)) {
+                budget.check();
+                if (!point[i].integral()) throw new IllegalArgumentException("Nonintegral failed schedule");
+                BigInteger value = point[i].numerator();
+                if ((value.signum() == 0) != (pass == 0)) continue;
+                if (value.compareTo(lower[i]) > 0) repairMoves.add(-i - 1);
+                if (upper[i] == null || value.compareTo(upper[i]) < 0) repairMoves.add(i + 1);
+            }
+            allowPump = false;
+            return this;
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
+        } finally {
+            work += budget.threadWork() - before;
+        }
+    }
+
+    /** The proposed count vector failed downstream; keep the other local moves available. */
+    void rejectFailureCandidate() {
+        if (failureRegion == null || counts == null) throw new IllegalStateException("No failure-region candidate");
+        counts = null;
+        complete = false;
+    }
 
     private void initializePortfolio() {
         policy = new CountPortfolioPolicy();
@@ -126,6 +163,7 @@ final class CountNeighborhood implements AutoCloseable {
         try {
             budget.check();
             if (work >= allowance) return finish("neighborhoods_unresolved");
+            if (failureRegion != null) return repairFailure();
             if (incumbent != null && incumbentAttempt < 3) return improveIncumbent();
             if (policy == null) initializePortfolio();
             if (activeArm == null) {
@@ -154,6 +192,36 @@ final class CountNeighborhood implements AutoCloseable {
                 }
             }
         }
+    }
+
+    private boolean repairFailure() {
+        if (failureSearch == null) {
+            if (repairMove >= Math.min(16, repairMoves.size()) || repairCandidates >= 4 || allowance - work < 1024)
+                return finish("failure_region_unresolved; moves=" + repairMove);
+            BigInteger[] low = lower.clone(), high = upper.clone();
+            for (int i = 0; i < low.length; i++) {
+                budget.check();
+                if (point[i].numerator().compareTo(low[i]) < 0 || high[i] != null && point[i].numerator().compareTo(high[i]) > 0)
+                    return finish("point_outside_domain");
+                if (!failureRegion.get(i)) low[i] = high[i] = point[i].numerator();
+            }
+            int move = repairMoves.get(repairMove++), id = Math.abs(move) - 1;
+            // This speculative bound guarantees a DIFFERENT candidate, without
+            // learning an exclusion for the old vector or the original request.
+            if (move > 0) low[id] = point[id].numerator().add(BigInteger.ONE);
+            else high[id] = point[id].numerator().subtract(BigInteger.ONE);
+            failureSearch = new CountLcg(rows, low, high, budget, Math.min(8192, allowance - work));
+        }
+        if (!failureSearch.step()) return false;
+        counts = failureSearch.counts();
+        failureSearch.close();
+        failureSearch = null;
+        if (counts != null) {
+            repairCandidates++;
+            return finish("failure_region_candidate; released=" + failureRegion.cardinality() + "; move=" + repairMove);
+        }
+        // A restricted UNSAT or cutoff has no negative meaning outside this move.
+        return false;
     }
 
     private void stepBinary() {
@@ -302,6 +370,8 @@ final class CountNeighborhood implements AutoCloseable {
 
     @Override
     public void close() {
+        if (failureSearch != null) failureSearch.close();
+        failureSearch = null;
         if (incumbentSearch != null) incumbentSearch.close();
         if (softSearch != null) softSearch.close();
         incumbentSearch = null;

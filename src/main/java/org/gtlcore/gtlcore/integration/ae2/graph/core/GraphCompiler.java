@@ -13,6 +13,9 @@ public final class GraphCompiler<K> {
     private final List<GraphRecipe<K>> catalog;
     private final Map<K, List<GraphRecipe<K>>> producers;
     private final Map<CacheKey<K>, Compiled<K>> cache = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<CountKey<K>, CountCatalog<K>> countCatalogs = new LinkedHashMap<>(16, 0.75f, true);
+    private long countCatalogWeight;
+    private boolean countCatalogRequested, countCatalogReusable;
     private final List<QuantityCertificate<K>> quantityCertificates = new ArrayList<>();
     final CountSessions countSessions = new CountSessions();
 
@@ -36,6 +39,42 @@ public final class GraphCompiler<K> {
 
     public List<GraphRecipe<K>> catalog() {
         return catalog;
+    }
+
+    synchronized CountCatalog<K> countCatalog(K target, Set<K> seeds, Set<String> excluded, Set<K> external) {
+        if (!cacheableCountCatalog(0, seeds.size(), excluded.size(), external.size())) return null;
+        countCatalogReusable |= countCatalogRequested;
+        countCatalogRequested = true;
+        if (countCatalogs.isEmpty()) return null;
+        // Preserve seed traversal order as well as membership: recipe ordering
+        // affects bounded heuristics even when the feasible set is unchanged.
+        return countCatalogs.get(new CountKey<>(target, List.copyOf(seeds), excluded, external));
+    }
+
+    synchronized boolean reuseCountCatalogs() {
+        // A one-shot compiler should pay only for its original sparse model.
+        // Retain structural rows after observing reuse of this catalog, not
+        // speculatively on its very first count-model request.
+        return countCatalogReusable;
+    }
+
+    synchronized void rememberCountCatalog(K target, Set<K> seeds, Set<String> excluded, Set<K> external, CountCatalog<K> structure) {
+        long weight = structure.weight();
+        // This cache belongs to the immutable effective catalog, not the JVM.
+        // Bound retained incidences as well as entry count, independently of
+        // the request's transient memory reservation.
+        if (!cacheableCountCatalog(weight, seeds.size(), excluded.size(), external.size())) return;
+        var key = new CountKey<>(target, List.copyOf(seeds), Set.copyOf(excluded), Set.copyOf(external));
+        var previous = countCatalogs.put(key, structure);
+        countCatalogWeight += weight - (previous == null ? 0 : previous.weight());
+        while (countCatalogs.size() > 32 || countCatalogWeight > 32_768) {
+            var removed = countCatalogs.remove(countCatalogs.keySet().iterator().next());
+            countCatalogWeight -= removed.weight();
+        }
+    }
+
+    static boolean cacheableCountCatalog(long weight, int seeds, int excluded, int external) {
+        return weight <= 32_768 && seeds <= 256 && excluded <= 256 && external <= 256;
     }
 
     synchronized List<QuantityCertificate<K>> quantityCertificates(Set<String> excluded) {
@@ -104,4 +143,6 @@ public final class GraphCompiler<K> {
                               List<Region<K>> regions) {}
 
     private record CacheKey<K>(K target, Set<K> additional, Map<K, Integer> choices, Set<String> excluded) {}
+
+    private record CountKey<K>(K target, List<K> seeds, Set<String> excluded, Set<K> external) {}
 }

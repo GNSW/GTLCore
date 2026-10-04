@@ -41,6 +41,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private boolean scouting;
     private boolean repairScoutExtended;
     private boolean portfolioScheduled;
+    private CountShellCompilation<K> shell;
+    private CountShellSearch<K> shellSearch;
+    private boolean shellPrepared;
+    private IntegerCountBranch<K> shellProbe;
+    private long shellWork, shellAllowance;
     private long work, improvementUntil = Long.MAX_VALUE, firstWitnessWork = -1, firstWitnessNanos;
     private int branches, rounds, suspensions, boundPrunes, choicePrunes, peakWidth;
 
@@ -162,6 +167,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             }
             return finish(false);
         }
+        if (!shellPrepared) {
+            shellPrepared = true;
+            prepareShell();
+        }
+        if (shell != null) return stepShell();
         if (pending.isEmpty() && deferred.isEmpty()) {
             if (unresolved && best == null && !portfolioScheduled) enqueuePortfolio();
             if (pending.isEmpty()) return finish(!unresolved && best == null);
@@ -417,6 +427,75 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         enqueue(constraints, null);
     }
 
+    private void prepareShell() {
+        // Small models already have cheap propagation. Optional program views
+        // must not recursively start another structural probe of their own.
+        if (!compileRecovery || model.recipes.size() < 16) return;
+        long before = budget.threadWork();
+        try {
+            shell = CountShellCompilation.create(model, target);
+            if (shell == null) return;
+            if (!shell.targetPeeled() || shell.peeled() < 8 || shell.peeled() * 4L < model.recipes.size()) {
+                closeShell();
+                return;
+            }
+            shellAllowance = Math.min(131072, budget.remainingWork() / 32);
+            if (shellAllowance < 4096) {
+                closeShell();
+                return;
+            }
+            shellSearch = new CountShellSearch<>(model, shell);
+        } finally {
+            work += budget.threadWork() - before;
+        }
+    }
+
+    private boolean stepShell() {
+        long before = budget.threadWork();
+        try {
+            if (shellProbe == null) {
+                if (shellSearch.step()) {
+                    if (shellSearch.witness() == null) {
+                        closeShell();
+                        return false;
+                    }
+                    shellProbe = new IntegerCountBranch<>(model, execution, target, amount, stock, seeds, external,
+                            preserve, force, budget, started, List.of());
+                    shellProbe.compiledCandidate(shellSearch.counts(), shellSearch.witness());
+                    shellSearch.close();
+                    shellSearch = null;
+                    // Verification scales with the original program, not the
+                    // small residual solver. It has its own bounded allowance.
+                    shellAllowance = shellWork + Math.min(1_000_000, budget.remainingWork() / 8);
+                }
+            } else shellProbe.run(Math.max(1, Math.min(4096, shellAllowance - shellWork)), List.of(), List.of(),
+                    List.of(), null, stopped::get);
+        } finally {
+            long spent = budget.threadWork() - before;
+            shellWork += spent;
+            work += spent;
+        }
+        boolean found = shellProbe != null && shellProbe.state == IntegerCountBranch.State.FOUND;
+        if (found) retain(shellProbe);
+        if (found || shellProbe != null && shellProbe.state != IntegerCountBranch.State.OPEN || shellWork >= shellAllowance) {
+            budget.note("count_shell_probe", "peeled=" + shell.peeled() + "; witness=" + found + "; work=" + shellWork);
+            // No assumptions, learned rows, failure or optimization bounds from
+            // this restricted view enter the untouched primary count search.
+            closeShell();
+            if (found) return finish(false);
+        }
+        return false;
+    }
+
+    private void closeShell() {
+        if (shellProbe != null) shellProbe.close();
+        shellProbe = null;
+        if (shellSearch != null) shellSearch.close();
+        shellSearch = null;
+        if (shell != null) shell.close();
+        shell = null;
+    }
+
     private void enqueueRepair() {
         repairScheduled = true;
         if (model.keys.size() > 16 || model.recipes.size() > 32) return;
@@ -557,6 +636,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
 
     private void release() {
         if (!released.compareAndSet(false, true)) return;
+        closeShell();
         budget.release(CACHE_ENTRY_BYTES * propagationCaches.size());
         propagationCaches.clear();
         propagationCacheBytes = 0;

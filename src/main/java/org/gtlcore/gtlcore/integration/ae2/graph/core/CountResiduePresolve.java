@@ -218,6 +218,22 @@ final class CountResiduePresolve implements AutoCloseable {
         return upper.clone();
     }
 
+    boolean hasStrides() {
+        return complete && !blocked && merged > 0;
+    }
+
+    int variables() {
+        return lower.length;
+    }
+
+    BigInteger[] moduli() {
+        return modulus.clone();
+    }
+
+    BigInteger[] residues() {
+        return residue.clone();
+    }
+
     private static final class LocalLimit extends RuntimeException {
 
         private static final LocalLimit INSTANCE = new LocalLimit();

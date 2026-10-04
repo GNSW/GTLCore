@@ -29,6 +29,10 @@ final class CountMapping {
         this.guards = List.copyOf(guards);
     }
 
+    List<Expression> coordinates() {
+        return coordinates;
+    }
+
     ExactLinearProgram.Constraint row(ExactLinearProgram.Constraint input, PlanningBudget budget) {
         Map<Integer, BigInteger> terms = new LinkedHashMap<>();
         BigInteger upper = input.upper();

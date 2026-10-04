@@ -95,6 +95,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     ExactRational[] obbtPoint;
     boolean triedCdcl, domainCandidate;
     CountNeighborhood neighborhood;
+    CountNeighborhood failureNeighborhood;
+    boolean failureNeighborhoodTried, failureCandidate;
     BigInteger[] incumbentCounts;
     boolean incumbentTried;
     ExactRational[] neighborhoodPoint;
@@ -117,6 +119,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     State state = State.OPEN;
     PlanningBudget.Exhausted limit;
     boolean initialized, partitioned, rescue, retried, choicePruned, needsRepair;
+    private boolean candidateOnly;
+    private CountViewSearch.CandidateOrigin candidateOrigin;
+    private long candidateStarted, runStarted, observedWork;
+    private boolean measuringRun;
     long memory, workspace, work, schedulingWork;
     int globalRows, checkedChoices;
     final Set<CountConflict> usedChoices = new LinkedHashSet<>();
@@ -145,6 +151,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     void run(long quantum, List<ExactLinearProgram.Constraint> materials, List<CountGuard> support, List<CountConflict> choices,
              PlanPreference<K> incumbent, BooleanSupplier stopped) {
         long before = budget.threadWork();
+        runStarted = before;
+        measuringRun = true;
         try {
             if (state != State.OPEN) return;
             if (!knownChoices.equals(choices)) checkedChoices = 0;
@@ -230,6 +238,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         } finally {
             long spent = budget.threadWork() - before;
             work += spent;
+            observedWork += spent;
+            measuringRun = false;
             if (auxiliaryMode != 0) auxiliaryWork += spent;
         }
     }
@@ -249,6 +259,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             for (BigInteger initial : plan.initialExact().values()) {
                 budget.check();
                 if (initial.compareTo(ExactAmounts.LONG_MAX) > 0) {
+                    candidateFeedback(CountViewSearch.CandidateOutcome.REJECTED);
                     unresolved();
                     return;
                 }
@@ -259,6 +270,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 partitioned = true;
                 budget.note("count_cost_bound", "witness_attains_componentwise_lower_bound; no_improvement_branches");
             } else partitionCounts();
+            candidateFeedback(CountViewSearch.CandidateOutcome.VERIFIED);
             state = State.FOUND;
             return;
         }
@@ -266,6 +278,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (!assembling.step()) return;
             plan = assembling.plan;
             if (plan == null) {
+                candidateFeedback(CountViewSearch.CandidateOutcome.REJECTED);
                 unresolved();
                 return;
             }
@@ -286,15 +299,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (scheduling != null) {
             if (!scheduling.step()) return;
             CountSchedule.Result status = scheduling.result();
-            if (status == CountSchedule.Result.WITNESS) beginAssembly(scheduling.witness());
-            scheduling.close();
-            scheduling = null;
+            candidateFeedback(switch (status) {
+                case WITNESS -> CountViewSearch.CandidateOutcome.SCHEDULE_WITNESS;
+                case DEAD -> CountViewSearch.CandidateOutcome.SCHEDULE_DEAD;
+                case UNKNOWN -> CountViewSearch.CandidateOutcome.SCHEDULE_UNKNOWN;
+            });
             if (speculativeCandidate() && status != CountSchedule.Result.WITNESS) {
                 // Failure to schedule a local-search candidate must leave the
                 // original count domain and all the other strategies available.
                 rejectSpeculativeCandidate();
                 return;
             }
+            if (status == CountSchedule.Result.WITNESS) beginAssembly(scheduling.witness());
+            scheduling.close();
+            scheduling = null;
             if (status == CountSchedule.Result.DEAD) {
                 execution.refine(model);
                 for (var proof : execution.proofs()) if (!supportConflicts.contains(proof.guard())) supportConflicts.add(proof.guard());
@@ -310,6 +328,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 needsRepair = true;
                 supportSearch = new CountSupportSearch<>(model, counts, budget);
             } else if (status == CountSchedule.Result.UNKNOWN) unresolved();
+            return;
+        }
+        if (failureNeighborhood != null && !failureCandidate) {
+            if (!failureNeighborhood.step()) return;
+            counts = failureNeighborhood.counts();
+            if (counts != null) {
+                failureCandidate = true;
+                schedulingWork = 0;
+                scheduling = new CountSchedule<>(model, counts, budget);
+            } else {
+                failureNeighborhood.close();
+                failureNeighborhood = null;
+                resumeSpeculativeCandidate();
+            }
             return;
         }
         if (supportSearch != null) {
@@ -368,6 +400,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             viewStage = 0;
             counts = viewSearch.counts();
             if (counts != null) {
+                candidateOrigin = viewSearch.candidateOrigin();
+                candidateStarted = measuredWork();
                 viewCandidateStage = continuation;
                 schedulingWork = 0;
                 scheduling = new CountSchedule<>(model, counts, budget);
@@ -843,6 +877,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (current.isEmpty() && auxiliaryMode == 0) {
                 modelViews = CountModelViews.create(linearConstraints, lower, upper, budget);
                 if (modelViews != null) {
+                    reduction.retainStrideView();
                     viewSearch = new CountViewSearch(modelViews, budget);
                     if (!CountBoolean.preferred(linearConstraints, lower, upper, budget)) {
                         viewSearch.resume(32768);
@@ -1207,10 +1242,30 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private boolean speculativeCandidate() {
-        return jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || structuralCandidate || viewCandidateStage != 0;
+        return failureCandidate || jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || structuralCandidate || viewCandidateStage != 0;
     }
 
     private void rejectSpeculativeCandidate() {
+        if (failureCandidate) {
+            clearCandidate();
+            failureCandidate = false;
+            counts = null;
+            failureNeighborhood.rejectFailureCandidate();
+            return;
+        }
+        if (!failureNeighborhoodTried && scheduling != null && counts != null && lower != null &&
+                model.recipes.size() <= 256 && linearConstraints.size() <= 1024 && budget.remainingWork() >= 65536) {
+            failureNeighborhoodTried = true;
+            BitSet region = scheduling.failureRegion();
+            if (!region.isEmpty()) {
+                var point = Arrays.stream(counts).map(ExactRational::of).toArray(ExactRational[]::new);
+                failureNeighborhood = new CountNeighborhood(linearConstraints, lower, upper, point, budget);
+                failureNeighborhood.failureRegion(region);
+                clearCandidate();
+                counts = null;
+                return;
+            }
+        }
         clearCandidate();
         counts = null;
         resumeSpeculativeCandidate();
@@ -1218,6 +1273,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
 
     /** Drop only the candidate pipeline, retaining the searches that proposed it. */
     private void clearCandidate() {
+        candidateFeedback(CountViewSearch.CandidateOutcome.UNRESOLVED);
         if (scheduling != null) scheduling.close();
         if (program != null) program.close();
         if (assembling != null) assembling.close();
@@ -1229,6 +1285,18 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         plan = null;
         preference = null;
         schedulingWork = 0;
+    }
+
+    private long measuredWork() {
+        // The coordinator drains work after each slice. Observations need a
+        // separate lifetime clock across those handoffs, including worker moves.
+        return observedWork + (measuringRun ? budget.threadWork() - runStarted : 0);
+    }
+
+    private void candidateFeedback(CountViewSearch.CandidateOutcome outcome) {
+        if (candidateOrigin == null) return;
+        viewSearch.feedback(candidateOrigin, outcome, Math.max(0, measuredWork() - candidateStarted));
+        if (outcome != CountViewSearch.CandidateOutcome.SCHEDULE_WITNESS) candidateOrigin = null;
     }
 
     private boolean mediumBooleanLp() {
@@ -1310,7 +1378,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 preserve, force, false, budget, started);
     }
 
+    /** A lifted optional kernel exports a witness, never a proof or search exclusion. */
+    void compiledCandidate(BigInteger[] candidate, PlanStep witness) {
+        initialized = partitioned = candidateOnly = true;
+        compileRecovery = false;
+        counts = candidate;
+        beginAssembly(witness);
+    }
+
     private void unresolved() {
+        if (candidateOnly) {
+            plan = null;
+            state = State.UNRESOLVED;
+            return;
+        }
         if (speculativeCandidate()) {
             // A schedulable vector can still fail the exact force-crafting or
             // seed checks. Preserve the same continuation as scheduling failure.
@@ -1450,6 +1531,9 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         rounding = null;
         if (neighborhood != null) neighborhood.close();
         neighborhood = null;
+        if (failureNeighborhood != null) failureNeighborhood.close();
+        failureNeighborhood = null;
+        failureCandidate = false;
         if (branchProbe != null) branchProbe.close();
         branchProbe = null;
         if (cdcl != null) cdcl.close();
@@ -1649,6 +1733,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void closeViews() {
+        candidateFeedback(CountViewSearch.CandidateOutcome.UNRESOLVED);
         if (viewSearch != null) viewSearch.close();
         if (modelViews != null) modelViews.close();
         viewSearch = null;
@@ -1662,6 +1747,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
 
     @Override
     public void close() {
+        candidateFeedback(CountViewSearch.CandidateOutcome.UNRESOLVED);
         if (auxiliaryLcg != null) auxiliaryLcg.close();
         auxiliaryLcg = null;
         releaseWorkspace();

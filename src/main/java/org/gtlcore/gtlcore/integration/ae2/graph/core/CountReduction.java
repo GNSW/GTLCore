@@ -10,6 +10,8 @@ final class CountReduction implements AutoCloseable {
                     ExactLinearProgram.Constraint first, ExactLinearProgram.Constraint second) {}
 
     private final List<ExactLinearProgram.Constraint> source;
+    private final List<ExactLinearProgram.Constraint> inputRows;
+    private final BigInteger[] inputLower, inputUpper;
     private final PlanningBudget budget;
     private final BigInteger[] sourceLower, sourceUpper;
     private final int[] root;
@@ -27,6 +29,8 @@ final class CountReduction implements AutoCloseable {
     private boolean complete, changed, saturated, implicationsDone;
     private CountImplications implications;
     private CountResiduePresolve residues;
+    private CountStride stride;
+    private boolean retainStride;
     private CountHermite hermite;
     private CountHall hall;
     private CountBounds finalBounds;
@@ -40,6 +44,9 @@ final class CountReduction implements AutoCloseable {
     CountReduction(List<ExactLinearProgram.Constraint> source, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget, boolean strengthening) {
         this.strengthening = strengthening;
         this.source = new ArrayList<>(source);
+        inputRows = List.copyOf(source);
+        inputLower = lower.clone();
+        inputUpper = upper.clone();
         this.sourceLower = lower.clone();
         this.sourceUpper = upper.clone();
         this.budget = budget;
@@ -59,10 +66,21 @@ final class CountReduction implements AutoCloseable {
             if (upper[i] != null) this.source.add(new ExactLinearProgram.Constraint(Map.of(i, BigInteger.ONE), upper[i]));
         }
         long entries = this.source.stream().mapToLong(row -> row.terms().size()).sum();
-        long bytes = 1024 + 384L * lower.length + 192L * this.source.size() + 192L * entries;
+        long bytes = 1024 + 416L * lower.length + 200L * this.source.size() + 192L * entries;
         allowance = Math.min(131_072, budget.remainingWork() / 8);
-        if (allowance < 1024 || !budget.tryReserve(bytes)) identity();
+        // The count-specific strengthening modules assume nonnegative counts.
+        // Signed auxiliary models remain exact in their original coordinates.
+        if (Arrays.stream(lower).anyMatch(value -> value.signum() < 0) || allowance < 1024 || !budget.tryReserve(bytes)) identity();
         else memory = bytes;
+    }
+
+    /** Only the root owner with equivalent model views requests this extra representation. */
+    void retainStrideView() {
+        retainStride = true;
+    }
+
+    CountStride stride() {
+        return stride;
     }
 
     boolean step() {
@@ -133,6 +151,7 @@ final class CountReduction implements AutoCloseable {
                     }
                 }
             }
+            if (retainStride) stride = CountStride.create(source, residues, budget);
             residues.close();
             residues = null;
             residuesDone = true;
@@ -607,7 +626,10 @@ final class CountReduction implements AutoCloseable {
         }
         lower = new BigInteger[representatives.length];
         upper = new BigInteger[representatives.length];
-        Arrays.fill(lower, BigInteger.ZERO);
+        // Surviving coordinates are original variables. Preserve their exact
+        // input domain, including signed auxiliary domains, before intersecting
+        // the eliminated variables' affine bounds.
+        for (int i = 0; i < lower.length; i++) lower[i] = sourceLower[representatives[i]];
         for (int i = 0; i < root.length; i++) if (root[i] >= 0) {
             int id = ids.get(root[i]);
             boolean positive = factor[i].signum() > 0;
@@ -645,6 +667,20 @@ final class CountReduction implements AutoCloseable {
         for (int i = 0; i < result.length; i++) if (root[i] >= 0)
             result[i] = result[i].add(values[Arrays.binarySearch(representatives, root[i])].multiply(factor[i]));
         return result;
+    }
+
+    boolean matchesScope(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
+        return inputRows.equals(rows) && Arrays.equals(inputLower, low) && Arrays.equals(inputUpper, high);
+    }
+
+    CountMapping substitution() {
+        var expressions = new ArrayList<CountMapping.Expression>();
+        for (int i = 0; i < root.length; i++) {
+            budget.check();
+            expressions.add(new CountMapping.Expression(root[i] < 0 ? Map.of() :
+                    Map.of(Arrays.binarySearch(representatives, root[i]), factor[i]), offset[i]));
+        }
+        return new CountMapping(expressions);
     }
 
     ExactRational[] expand(ExactRational[] values) {
@@ -742,6 +778,8 @@ final class CountReduction implements AutoCloseable {
 
     @Override
     public void close() {
+        if (stride != null) stride.close();
+        stride = null;
         if (residues != null) residues.close();
         residues = null;
         if (hall != null) hall.close();

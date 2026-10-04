@@ -47,6 +47,16 @@ final class CountSchedule<K> implements AutoCloseable {
     private final BitSet visited = new BitSet();
     private boolean guidedTried, guiding;
 
+    private enum WitnessSource {
+        RECURRENCE,
+        GREEDY,
+        EXACT,
+        BOUNDED
+    }
+
+    private WitnessSource witnessSource;
+    private boolean rejectedWitness, retainWitness;
+
     CountSchedule(RecipeCountModel<K> model, BigInteger[] counts, PlanningBudget budget) {
         this(model, counts, budget, false);
     }
@@ -87,6 +97,7 @@ final class CountSchedule<K> implements AutoCloseable {
         if (bounded != null) {
             if (!bounded.step()) return false;
             witness = bounded.witness();
+            witnessSource = WitnessSource.BOUNDED;
             Result outcome = bounded.result();
             bounded.close();
             bounded = null;
@@ -102,7 +113,10 @@ final class CountSchedule<K> implements AutoCloseable {
             witness = recurrence.witness();
             recurrence.close();
             recurrence = null;
-            if (witness != null) return finish(Result.WITNESS);
+            if (witness != null) {
+                witnessSource = WitnessSource.RECURRENCE;
+                return finish(Result.WITNESS);
+            }
         }
         if (exact) return exactStep();
         if (summarizing != null) {
@@ -127,6 +141,7 @@ final class CountSchedule<K> implements AutoCloseable {
             visited.clear();
             if (done()) {
                 witness = new PlanStep.Sequence(program);
+                witnessSource = WitnessSource.GREEDY;
                 return finish(Result.WITNESS);
             }
             if (++passes >= (repairingOrder || guiding ? 8 : 512)) return nextAttempt();
@@ -164,6 +179,7 @@ final class CountSchedule<K> implements AutoCloseable {
         if (pass.isEmpty()) {
             if (done()) {
                 witness = new PlanStep.Sequence(program);
+                witnessSource = WitnessSource.GREEDY;
                 return finish(Result.WITNESS);
             }
             if (!guiding && !repairTried && prepareRepairOrder()) {
@@ -291,7 +307,7 @@ final class CountSchedule<K> implements AutoCloseable {
         // rotations, batching modes or exact scheduling continuations.
         repairingOrder = false;
         boolean early = ++attempt < 8 * Math.min(4, model.recipes.size());
-        if (early && (attempt != 2 || !smallMultiset())) {
+        if (early && (rejectedWitness || attempt != 2 || !smallMultiset())) {
             reset();
             return false;
         }
@@ -450,6 +466,7 @@ final class CountSchedule<K> implements AutoCloseable {
                 path.add(new PlanStep.Batch(model.recipes.get(current.recipe).id(), 1));
             if (!reverseExact) Collections.reverse(path);
             witness = new PlanStep.Sequence(path);
+            witnessSource = WitnessSource.EXACT;
             return finish(Result.WITNESS);
         }
         held.clear();
@@ -592,7 +609,36 @@ final class CountSchedule<K> implements AutoCloseable {
         return true;
     }
 
+    /** Assembly can reject an executable ordering without rejecting its count vector. */
+    CountSchedule<K> retainWitnessForAssembly() {
+        retainWitness = true;
+        return this;
+    }
+
+    /** Assembly can reject an executable ordering without rejecting its count vector. */
+    boolean retryAfterRejectedWitness() {
+        if (result != Result.WITNESS || memory == 0) return false;
+        rejectedWitness = true;
+        result = null;
+        witness = null;
+        budget.note("count_schedule_order", "assembly_rejected; same_counts_alternative_order");
+        switch (witnessSource) {
+            case RECURRENCE -> reset();
+            case GREEDY -> nextAttempt();
+            case EXACT -> {
+                // Continue remaining prefixes. Marking/POR deduplication is
+                // exact for executability, not for inferred seed requirements.
+            }
+            case BOUNDED -> finish(Result.UNKNOWN);
+        }
+        return result == null;
+    }
+
     private boolean finish(Result value) {
+        // Once any ordering was executable, exhausting other orderings must
+        // not create a count-wide impossibility certificate. Seed/force checks
+        // may distinguish prefixes collapsed by the scheduling state cache.
+        if (value == Result.DEAD && rejectedWitness) value = Result.UNKNOWN;
         if (value == Result.UNKNOWN && exact && preferEnabled && !reverseExact) {
             // Ordering is a hint, not a replacement for the old DFS. If its
             // local state cap is hit, release only its labels and retry the
@@ -616,7 +662,9 @@ final class CountSchedule<K> implements AutoCloseable {
                 "; states=" + seen.size() + "; sleep_labels=" + labels + "; independent_interleavings_skipped=" + orderedAway +
                 "; reverse=" + reverseExact + "; result=" + value);
         result = value;
-        close();
+        // The caller may reject this prefix after exact seed/production
+        // assembly. Keep its reservation until accepted, retried, or closed.
+        if (value != Result.WITNESS || !retainWitness) close();
         return true;
     }
 

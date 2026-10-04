@@ -39,7 +39,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private CompletableFuture<List<IntegerCountBranch<K>>> running;
     private List<IntegerCountBranch<K>> dispatched = List.of();
     private Incumbent<K> best;
-    private boolean complete, infeasible, unresolved, repairScheduled, paused;
+    private boolean complete, infeasible, unresolved, rootProved, repairScheduled, paused;
     private boolean scouting;
     private boolean repairScoutExtended;
     private boolean portfolioScheduled;
@@ -147,6 +147,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             if (!running.isDone()) return false;
             harvest(true);
         }
+        if (rootProved) return finish(true);
         budget.check();
         // A live finite-domain enumeration retains its table and prefix stack.
         // Let it use another bounded slice of the same order budget instead of
@@ -200,12 +201,17 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         var support = List.copyOf(supportConflicts);
         var choices = choiceConflicts.snapshot();
         PlanPreference<K> incumbent = best == null ? null : best.cost();
+        // A conflict pool can be populated before the very first candidate,
+        // including from a prior request's certified clauses. It does not turn
+        // this witness-seeking order into an infeasibility-only task.
+        CountPortfolioPolicy.Mode goal = incumbent == null ? CountPortfolioPolicy.Mode.FIRST_WITNESS : CountPortfolioPolicy.Mode.IMPROVEMENT;
         List<Supplier<IntegerCountBranch<K>>> partitions = new ArrayList<>();
         BigInteger[] incumbentCounts = best == null ? null : model.recipes.stream()
                 .map(recipe -> best.plan().patternTimesExact().getOrDefault(recipe.id(), BigInteger.ZERO)).toArray(BigInteger[]::new);
         for (var branch : wave) partitions.add(() -> {
             branch.incumbentCounts = incumbentCounts;
-            branch.run(quantum, materials, support, choices, incumbent, stopped::get);
+            branch.run(quantum, materials, support, choices, incumbent,
+                    branch.proofTask ? CountPortfolioPolicy.Mode.PROOF : goal, stopped::get);
             return branch;
         });
         dispatched = wave;
@@ -314,6 +320,14 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     }
 
     private void merge(List<IntegerCountBranch<K>> wave, boolean continueSearch) {
+        // Inspect every completed sibling before optional conflict caches or
+        // resumed workspaces can encounter the shared limit. An earlier sibling
+        // exhausting during merge must not hide a later closed root proof.
+        for (var branch : wave) if (branch.proofTask && branch.proofContradiction &&
+                branch.state == IntegerCountBranch.State.DEAD && branch.current.isEmpty() && branch.model == model) {
+                    rootProved = true;
+                    budget.note("count_proof_task", "scope=full_root; outcome=PROVEN_INFEASIBLE; work=" + branch.auxiliaryWork);
+                }
         for (var branch : wave) {
             work += branch.work;
             branch.work = 0;
@@ -348,7 +362,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             else choiceConflicts.add(branch.learnedChoices.stream().filter(c -> c.assumptions().isEmpty()).toList());
             choiceConflicts.used(branch.usedChoices);
             branch.usedChoices.clear();
-            for (var child : branch.children) enqueue(child, branch);
+            // A proof scout may discover a useful count vector whose execution
+            // requires support branching. Keep the primary search responsible
+            // for those domains; otherwise a bounded optional task could spawn
+            // an unbounded ordinary frontier outside its own allowance.
+            if (!branch.proofTask) for (var child : branch.children) enqueue(child, branch);
             branch.children.clear();
             if (duplicateAuxiliary(branch)) {
                 budget.note("count_portfolio_reuse", "identical_rows_domains_and_recipe_mapping; retired_mode=" + branch.auxiliaryMode);
@@ -474,7 +492,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                     shellAllowance = shellWork + Math.min(1_000_000, budget.remainingWork() / 8);
                 }
             } else shellProbe.run(Math.max(1, Math.min(4096, shellAllowance - shellWork)), List.of(), List.of(),
-                    List.of(), null, stopped::get);
+                    List.of(), null, CountPortfolioPolicy.Mode.FIRST_WITNESS, stopped::get);
         } finally {
             long spent = budget.threadWork() - before;
             shellWork += spent;
@@ -536,13 +554,21 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             }
             branch.auxiliaryMode = mode;
             branch.partitioned = true;
+            if (mode == 3) {
+                // Reuse the existing strengthened-root slot. Its explicit goal
+                // is a bounded exact contradiction search alongside the two
+                // witness-seeking continuations, not a reaction to learning a
+                // conflict. Its cutoff leaves the primary domain untouched.
+                branch.proveRoot(Math.min(262144, budget.remainingWork() / 16));
+                budget.note("count_proof_task", "scope=full_root; allowance=" + branch.auxiliaryUntil);
+            }
             // Distinct algorithms, same explicit root scope. Their certified
             // conflicts and checked witnesses use the existing merge protocol;
             // a local cutoff cannot close the primary search's pending space.
             pending.addLast(branch);
             branches++;
         }
-        budget.note("count_portfolio", "admitted=learning_rate_order,lazy_integer,hermite_hall; shared_order_budget; original_view_retained");
+        budget.note("count_portfolio", "admitted=learning_rate_order,lazy_integer,root_proof; shared_order_budget; original_view_retained");
     }
 
     private void enqueue(List<ExactLinearProgram.Constraint> constraints, IntegerCountBranch<K> parent) {
@@ -613,12 +639,14 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     }
 
     boolean infeasible() {
-        return infeasible;
+        // As with an already verified incumbent, an exact completed root proof
+        // survives a sibling's later budget exhaustion during wave harvesting.
+        return infeasible || rootProved && best == null;
     }
 
     private boolean finish(boolean proved) {
         complete = true;
-        infeasible = proved && !unresolved && best == null;
+        infeasible = proved && (!unresolved || rootProved) && best == null;
         budget.note("integer_counts", "branches=" + branches + "; slices=" + rounds + "; suspended=" + suspensions +
                 "; peak_width=" + peakWidth + "; work=" + work + "/" + allowance + "; frontier=" + frontier.size() +
                 "; bound_prunes=" + boundPrunes + "; unresolved=" + unresolved + "; witness=" + (best != null) +
@@ -626,9 +654,17 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                 "; improvement_ms=" + (firstWitnessWork < 0 ? 0 : (System.nanoTime() - firstWitnessNanos) / 1_000_000.0));
         choiceConflicts.report();
         materialConflicts.report();
-        if (model != null) compiler.countSessions.remember(model, choiceConflicts.snapshot(), budget);
-        if (proofs != null) proofs.publish(model, choiceConflicts.snapshot());
-        close();
+        try {
+            if (model != null) compiler.countSessions.remember(model, choiceConflicts.snapshot(), budget);
+            if (proofs != null) proofs.publish(model, choiceConflicts.snapshot());
+        } catch (PlanningBudget.Exhausted exhausted) {
+            // Reusing a finished proof in a later request is optional. A cache
+            // admission or its independent checker cannot revoke the already
+            // established result when the shared deadline has just expired.
+            budget.note("count_cache", "finished_result_retained; optional_publish_limit=" + exhausted.limit());
+        } finally {
+            close();
+        }
         return true;
     }
 

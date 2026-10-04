@@ -22,11 +22,19 @@ final class CountViewSearch implements AutoCloseable {
     private CandidateOrigin candidateOrigin;
     private Search candidateSource;
     private boolean strideScoutAttempted;
-    private long commonWork, restorationWork;
+    private long commonWork, reportedCommonWork, restorationWork;
     private CountPortfolioPolicy.Mode candidateMode;
 
     void mode(CountPortfolioPolicy.Mode mode) {
+        CountPortfolioPolicy.Mode previous = policy.mode();
         policy.mode(mode);
+        if (previous == CountPortfolioPolicy.Mode.PROOF && mode != CountPortfolioPolicy.Mode.PROOF)
+            for (var view : models.available())
+                if (searches.stream().anyMatch(search -> search.view == view) && binary(view)) addSearch(view, Engine.JUMP);
+        for (Search search : searches) search.scheduling.eligible = mode != CountPortfolioPolicy.Mode.PROOF || search.engine.provesInfeasibility();
+        // A selected candidate-only batch can be retained across a goal change,
+        // but cannot consume a proof-only task's allowance.
+        if (active != null && !active.scheduling.eligible) active = null;
     }
 
     void commonWork(long work) {
@@ -57,10 +65,11 @@ final class CountViewSearch implements AutoCloseable {
         CountMeetInMiddle matching;
         long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
         long publishedRoots;
+        long importedBounds;
         int publishedConflicts, importedConflicts;
         int importedCuts;
         CountModelViews.Domains scope;
-        boolean done;
+        boolean done, batchPending, integerJump;
 
         Search(CountModelViews.View view, CountPortfolioPolicy.Arm scheduling, Engine engine) {
             this.view = view;
@@ -96,6 +105,9 @@ final class CountViewSearch implements AutoCloseable {
                     solver = new CountLcg(view.rows(), domains.lower(), domains.upper(), budget, quantum);
                     if (engine == Engine.LOCKS) solver.lockBranching();
                 } else solver.resume(quantum);
+                int bounds = models.importProofBounds(view, importedBounds, solver);
+                importedBounds = models.boundVersion();
+                if (bounds > 0) budget.note("count_view_facts", "destination=" + view.name() + "; engine=" + engine + "; certified_bounds=" + bounds);
                 int imported = models.importConflicts(view, importedConflicts, this, solver);
                 importedConflicts = models.conflictVersion();
                 if (imported > 0) budget.note("count_view_conflicts", "destination=" + view.name() + "; engine=" + engine + "; imported=" + imported);
@@ -150,12 +162,17 @@ final class CountViewSearch implements AutoCloseable {
     }
 
     private enum Engine {
+
         LCG,
         PB,
         LOCKS,
         JUMP,
         SEPARATOR,
-        MITM
+        MITM;
+
+        boolean provesInfeasibility() {
+            return this == LCG || this == PB || this == LOCKS;
+        }
     }
 
     CountViewSearch(CountModelViews models, PlanningBudget budget) {
@@ -169,20 +186,26 @@ final class CountViewSearch implements AutoCloseable {
         until = work + Math.min(allowance, budget.remainingWork() / 4);
         for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view)) {
             boolean binary = binary(view);
-            searches.add(new Search(view, policy.add(view.shape().cost(), Engine.LCG), Engine.LCG));
+            addSearch(view, Engine.LCG);
             // The weighted Boolean engine has different propagation, phase
             // saving and conflicts. Retain that complementary search too;
             // repeatedly restarting a short PB attempt discards its learning.
             if (binary) {
-                searches.add(new Search(view, policy.add(view.shape().cost(), Engine.PB), Engine.PB));
-                searches.add(new Search(view, policy.add(view.shape().cost(), Engine.LOCKS), Engine.LOCKS));
-                searches.add(new Search(view, policy.add(view.shape().cost(), Engine.JUMP), Engine.JUMP));
+                addSearch(view, Engine.PB);
+                addSearch(view, Engine.LOCKS);
+                if (policy.mode() != CountPortfolioPolicy.Mode.PROOF) addSearch(view, Engine.JUMP);
             }
         }
         addStrideScout();
     }
 
+    private void addSearch(CountModelViews.View view, Engine engine) {
+        if (searches.stream().noneMatch(search -> search.view == view && search.engine == engine))
+            searches.add(new Search(view, policy.add(view.shape().cost(), engine), engine));
+    }
+
     private void addStrideScout() {
+        if (policy.mode() == CountPortfolioPolicy.Mode.PROOF) return;
         if (strideScoutAttempted) return;
         var views = models.available();
         var stride = views.stream().filter(view -> view.name().equals("stride")).findFirst().orElse(null);
@@ -227,19 +250,24 @@ final class CountViewSearch implements AutoCloseable {
         if (counts != null || infeasible || work >= until) return true;
         long before = budget.threadWork();
         boolean completedSlice = false;
+        boolean rejectedRestoration = false;
         long gained = 0;
         try {
             if (active == null) {
                 active = select();
                 if (active == null) return true;
+            }
+            if (!active.batchPending) {
                 // The parent allowance controls when step() yields, not when a
                 // retained solver finishes its batch. Carry unfinished batches
                 // across parent handoffs and publish feedback only on completion.
                 long quantum = policy.quantum(active.scheduling, budget.remainingWork());
-                // A local walk crosses temporary violation barriers before
-                // establishing a new best point. Give it a full bounded
-                // batch; the common aging policy still schedules every arm.
-                if (active.engine == Engine.JUMP) quantum = Math.min(CountPortfolioPolicy.MAX_QUANTUM, budget.remainingWork());
+                // The Boolean walk crosses temporary violation barriers before
+                // establishing a new best point. Keep its full bounded batch.
+                // A later general-integer scout starts with the policy's normal
+                // sample; bypassing that limit can displace established exact
+                // searches under a tight request budget.
+                if (active.engine == Engine.JUMP && !active.integerJump) quantum = Math.min(CountPortfolioPolicy.MAX_QUANTUM, budget.remainingWork());
                 if (quantum <= 0) {
                     // Another worker can consume the shared last unit between
                     // parent handoffs. Report budget exhaustion, not an invalid
@@ -255,6 +283,7 @@ final class CountViewSearch implements AutoCloseable {
                 policy.selected(active.scheduling);
                 active.sliceWork = 0;
                 active.resume(quantum, budget, models);
+                active.batchPending = true;
             }
             if (!active.step()) return false;
             long progress = active.progress();
@@ -263,8 +292,6 @@ final class CountViewSearch implements AutoCloseable {
             completedSlice = true;
             BigInteger[] candidate = active.counts();
             infeasible = active.infeasible() && active.view.semantics().transfersProof();
-            if (infeasible) policy.candidateFeedback(CountPortfolioPolicy.Mode.PROOF, active.scheduling,
-                    active.work, commonWork, true, true);
             if (!active.infeasible() && active.solver != null && active.solver.rootVersion() > active.publishedRoots && models.sharesBounds(active.view)) {
                 models.publishBounds(active.view, active.solver.rootLower(), active.solver.rootUpper());
                 active.publishedRoots = active.solver.rootVersion();
@@ -275,28 +302,29 @@ final class CountViewSearch implements AutoCloseable {
                 counts = models.restoreAndCheck(active.view, candidate);
                 restorationWork = budget.threadWork() - restoreStarted;
                 if (counts != null) {
-                    candidateMode = policy.mode();
+                    candidateMode = active.scheduling.selectedMode;
                     candidateSource = active;
                     candidateOrigin = new CandidateOrigin(++candidateSequence, active.view.name(), active.engine.name().toLowerCase(Locale.ROOT));
                     active.candidates++;
-                }
+                } else rejectedRestoration = true;
             }
             if (!active.paused()) {
                 active.done = true;
                 active.scheduling.retired = true;
                 active.close();
             }
-            budget.note("count_view", active.view.name() + "; engine=" + active.engine.name().toLowerCase(Locale.ROOT) + "; slices=" + active.scheduling.selections + "; progress=" + gained + "; witness=" + (counts != null) +
+            budget.note("count_view", active.view.name() + "; engine=" + active.engine.name().toLowerCase(Locale.ROOT) + "; slices=" + policy.selections(active.scheduling) + "; progress=" + gained + "; witness=" + (counts != null) +
                     "; proven_infeasible=" + infeasible + "; retained=" + !active.done);
             // Let complementary arithmetic/source strategies run when every
             // live representation has stalled. A later resume keeps the exact
             // queues and clauses; this handoff is neither failure nor closure.
-            boolean stalled = true;
+            boolean stalled = true, sampled = true;
             for (Search search : searches) {
-                int idle = search == active ? gained > 0 ? 0 : search.scheduling.idleSlices + 1 : search.scheduling.idleSlices;
-                if (!search.done && idle < 2) stalled = false;
+                int idle = search == active && search.scheduling.selectedMode == policy.mode() ? gained > 0 ? 0 : policy.idleSlices(search.scheduling) + 1 : policy.idleSlices(search.scheduling);
+                if (!search.done && search.scheduling.eligible && idle < 2) stalled = false;
+                if (!search.done && search.scheduling.eligible && policy.selections(search.scheduling) < 2) sampled = false;
             }
-            if (stalled && counts == null && !infeasible && addIntegerJump()) stalled = false;
+            if ((stalled || sampled) && counts == null && !infeasible && addIntegerJump()) stalled = false;
             return counts != null || infeasible || stalled;
         } finally {
             long spent = budget.threadWork() - before;
@@ -305,21 +333,44 @@ final class CountViewSearch implements AutoCloseable {
                 active.work += spent;
                 active.sliceWork += spent;
                 if (completedSlice) policy.feedback(active.scheduling, active.sliceWork, gained);
-                if (active.done || !active.started() || active.paused()) active = null;
+                // Include the decisive solver step; publishing before this
+                // accounting made a one-step proof appear to cost no work.
+                if (completedSlice && infeasible) {
+                    long common = takeCommonWork();
+                    policy.candidateFeedback(CountPortfolioPolicy.Mode.PROOF, active.scheduling, active.work, common, true, true);
+                    budget.note("count_candidate_cost", "mode=PROOF; solver_work=" + active.work + "; common_work=" + common + "; outcome=PROVEN_INFEASIBLE");
+                } else if (rejectedRestoration) {
+                    long common = takeCommonWork();
+                    policy.candidateFeedback(active.scheduling.selectedMode, active.scheduling,
+                            Math.max(0, active.work - restorationWork), saturatedAdd(common, restorationWork), true, false);
+                    budget.note("count_candidate_cost", "mode=" + active.scheduling.selectedMode + "; common_work=" + common + "; restore_work=" + restorationWork + "; outcome=RESTORE_REJECTED");
+                }
+                if (active.done || !active.started() || active.paused()) {
+                    active.batchPending = false;
+                    active = null;
+                }
             }
         }
     }
 
     private boolean addIntegerJump() {
-        // General integer local search complements stalled proof search. It
-        // must not displace an exact engine that is still making progress, or
-        // duplicate the same walk on every equivalent representation.
+        if (policy.mode() == CountPortfolioPolicy.Mode.PROOF) return false;
+        // Give general integer local search one bounded initial opportunity
+        // after the exact views have each received an initial and a resumed
+        // sample, so initialization alone does not trigger the extra arm.
+        // Learned conflicts do not establish that a first witness is close;
+        // requiring every view
+        // to stop learning at the same time could postpone this arm forever.
+        // Later work shares the usual fair policy; do not duplicate the walk
+        // on every equivalent representation.
         if (searches.stream().anyMatch(search -> search.engine == Engine.JUMP)) return false;
         var view = models.available().stream().filter(candidate -> candidate.shape().variables() <= 1024 &&
                 candidate.rows().size() <= 4096 && candidate.shape().terms() <= 65536)
                 .min(Comparator.comparingLong(candidate -> candidate.shape().cost())).orElse(null);
         if (view == null) return false;
-        searches.add(new Search(view, policy.add(view.shape().cost(), Engine.JUMP), Engine.JUMP));
+        Search search = new Search(view, policy.add(view.shape().cost(), Engine.JUMP), Engine.JUMP);
+        search.integerJump = true;
+        searches.add(search);
         return true;
     }
 
@@ -349,7 +400,9 @@ final class CountViewSearch implements AutoCloseable {
         else if (outcome == CandidateOutcome.SCHEDULE_DEAD) source.dead++;
         else if (outcome == CandidateOutcome.SCHEDULE_UNKNOWN || outcome == CandidateOutcome.UNRESOLVED) source.unknown++;
         if (terminal) source.downstreamWork += downstreamWork;
-        long sharedCost = commonWork / Math.max(1, candidateSequence);
+        // Attribute each common compilation charge once. Dividing the full
+        // lifetime total by successive candidate ids counted it harmonically.
+        long sharedCost = terminal ? takeCommonWork() : 0;
         long overhead = saturatedAdd(sharedCost, saturatedAdd(restorationWork, downstreamWork));
         if (terminal) policy.candidateFeedback(candidateMode, source.scheduling, Math.max(0, source.work - restorationWork), overhead,
                 candidateMode != CountPortfolioPolicy.Mode.PROOF && (outcome == CandidateOutcome.VERIFIED || outcome == CandidateOutcome.SCHEDULE_DEAD || outcome == CandidateOutcome.REJECTED),
@@ -371,12 +424,18 @@ final class CountViewSearch implements AutoCloseable {
         return b > Long.MAX_VALUE - a ? Long.MAX_VALUE : a + b;
     }
 
+    private long takeCommonWork() {
+        long pending = commonWork - reportedCommonWork;
+        reportedCommonWork = commonWork;
+        return pending;
+    }
+
     boolean infeasible() {
         return infeasible;
     }
 
     boolean retained() {
-        return searches.stream().anyMatch(search -> !search.done) ||
+        return searches.stream().anyMatch(search -> !search.done && search.scheduling.eligible) ||
                 models.available().stream().anyMatch(view -> searches.stream().noneMatch(search -> search.view == view));
     }
 

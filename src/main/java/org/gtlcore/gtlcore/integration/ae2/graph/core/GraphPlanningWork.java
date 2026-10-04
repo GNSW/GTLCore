@@ -831,6 +831,11 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         if (countSearch != null) {
             GraphPlan<K> counted = countSearch.result();
             if (counted != null) verified = counted;
+            // A completed root proof can be harvested alongside a sibling that
+            // exhausted the order budget. Retain that conclusion just as we
+            // retain an already verified witness; optional recovery views never
+            // enter this original-domain countSearch slot.
+            if (countSearch.infeasible()) quantityBlocked = true;
             countSearch.close();
         }
         discardQuantityAnalysis();

@@ -284,7 +284,10 @@ final class CountModelViews implements AutoCloseable {
 
     /** Import into a new engine only; retained engines keep their original trail and proof scope. */
     Domains domains(View view) {
-        if (sharedLower == null || !sharesBounds(view)) return new Domains(view.lower, view.upper, 0);
+        // Proof-mode engines must begin with the declared view's axioms. A
+        // shared bound enters LCG as a checked consequence below, never as an
+        // unexplained new root-domain assumption in its final certificate.
+        if (sharedLower == null || budget.proofJournal() != null || !sharesBounds(view)) return new Domains(view.lower, view.upper, 0);
         BigInteger[] low = view.lower.clone(), high = view.upper.clone();
         for (int i = 0; i < original.lower.length; i++) {
             budget.check();
@@ -311,6 +314,71 @@ final class CountModelViews implements AutoCloseable {
             }
         }
         return new Domains(low, high, factVersion);
+    }
+
+    long boundVersion() {
+        return factVersion;
+    }
+
+    /** Independently justify original and destination coordinates before importing a root bound. */
+    int importProofBounds(View view, long after, CountLcg solver) {
+        if (budget.proofJournal() == null || sharedLower == null || after >= factVersion || !sharesBounds(view) ||
+                original.lower.length > 1024 || view.lower.length > 1024 || original.rows.size() > 2048 || view.rows.size() > 2048 ||
+                Arrays.stream(original.lower).anyMatch(value -> value.signum() < 0) ||
+                Arrays.stream(view.lower).anyMatch(value -> value.signum() < 0))
+            return 0;
+        long started = budget.threadWork(), allowance = Math.min(32768, budget.remainingWork() / 32);
+        long terms = original.shape.terms + view.shape.terms + original.rows.size() + view.rows.size() +
+                2L * (original.lower.length + view.lower.length);
+        if (view.substitution != null) {
+            terms += view.substitution.coordinates().size();
+            for (var expression : view.substitution.coordinates()) terms += expression.terms().size();
+        }
+        // Include certificate scratch even if the archive declines admission.
+        // Large/expensive implications remain optional and leave the ordinary
+        // solver and its unmodified domain available.
+        long bytes = 1024L + 256L * terms;
+        if (terms >= allowance || bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return 0;
+        try {
+            budget.charge(terms);
+            var originalAxioms = CountAffineProof.axioms(original);
+            var targetAxioms = CountAffineProof.axioms(view);
+            var targetMapping = CountAffineProof.mapping(view);
+            int imported = 0;
+            for (int i = 0; i < original.lower.length && imported < 16; i++) {
+                for (int side = 0; side < 2; side++) {
+                    boolean minimum = side == 0;
+                    long left = allowance - (budget.threadWork() - started);
+                    if (left <= 0) return imported;
+                    budget.check();
+                    BigInteger value = minimum ? sharedLower[i] : sharedUpper[i];
+                    BigInteger baseline = minimum ? original.lower[i] : original.upper[i];
+                    if (value == null || baseline != null && (minimum ? value.compareTo(baseline) <= 0 : value.compareTo(baseline) >= 0)) continue;
+                    var row = new ExactLinearProgram.Constraint(Map.of(i, minimum ? BigInteger.ONE.negate() : BigInteger.ONE), minimum ? value.negate() : value);
+                    var target = view.substitution == null ? row : view.substitution.row(row, budget);
+                    target = CountReduction.normalize(target);
+                    if (target.terms().size() != 1) continue;
+                    var term = target.terms().entrySet().iterator().next();
+                    int id = term.getKey();
+                    boolean lowerBound = term.getValue().signum() < 0;
+                    BigInteger endpoint = lowerBound ? target.upper().negate() : target.upper();
+                    if (lowerBound ? endpoint.compareTo(view.lower[id]) <= 0 : view.upper[id] != null && endpoint.compareTo(view.upper[id]) >= 0) continue;
+                    var originalClause = List.of(CountAffineProof.opposite(CountProof.row(row)));
+                    var targetClause = List.of(CountAffineProof.opposite(CountProof.row(target)));
+                    var proof = new CountAffineConflictProof.Certificate(original.lower.length, originalAxioms,
+                            CountAffineConflictProof.clause(original.lower.length, originalAxioms, originalClause), List.of(),
+                            originalClause, view.lower.length, targetAxioms, targetMapping, targetClause);
+                    left = allowance - (budget.threadWork() - started);
+                    if (left <= 0) return imported;
+                    if (CountAffineConflictProof.verify(proof, left, budget::charge) == CountProof.Verdict.VERIFIED &&
+                            budget.proofJournal().add(proof) && solver.learn(target))
+                        imported++;
+                }
+            }
+            return imported;
+        } finally {
+            budget.release(bytes);
+        }
     }
 
     /** Conditional facts remain guarded by the exporting engine's initial domains. */

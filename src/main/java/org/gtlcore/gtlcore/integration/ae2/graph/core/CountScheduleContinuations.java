@@ -33,7 +33,7 @@ final class CountScheduleContinuations<K> implements AutoCloseable {
         // Optional retained work must give way before admitting another
         // scheduler when the shared request is already using most of its memory.
         trim();
-        return new CountSchedule<>(model, counts, budget);
+        return new CountSchedule<>(model, counts, budget).retainWitnessForAssembly();
     }
 
     synchronized boolean retain(CountSchedule<K> schedule) {
@@ -73,6 +73,18 @@ final class CountScheduleContinuations<K> implements AutoCloseable {
     }
 
     synchronized void remember(BigInteger[] counts, PlanStep program) {
+        // Call only after the complete candidate passes seed/force assembly
+        // and final verification. A schedulable prefix alone is insufficient.
+        try {
+            rememberWithinBudget(counts, program);
+        } catch (PlanningBudget.Exhausted exhausted) {
+            // Optional reuse cannot discard an already verified witness. The
+            // shared budget stays exhausted, stopping any later mandatory work.
+            budget.note("count_schedule_reuse", "verified_witness_cache_declined; " + exhausted.limit());
+        }
+    }
+
+    private void rememberWithinBudget(BigInteger[] counts, PlanStep program) {
         if (!sequential || budget.availableBytes() < budget.reservedBytes()) return;
         List<BigInteger> key = List.copyOf(Arrays.asList(counts));
         if (witnesses.containsKey(key)) return;

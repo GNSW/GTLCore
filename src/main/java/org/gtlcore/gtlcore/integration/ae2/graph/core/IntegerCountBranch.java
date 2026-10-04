@@ -87,6 +87,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     long auxiliaryWork;
     long auxiliaryUntil = 262144;
     boolean auxiliaryCompared, auxiliaryLive;
+    boolean proofTask, proofContradiction;
     CountDecisionDiagram diagram;
     CountObbt obbt;
     boolean gomoryTried;
@@ -109,6 +110,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     boolean inheritedBasisOriginal, sharedBasisOriginal;
     CountReduction.Coordinates inheritedCoordinates;
     CountSchedule<K> scheduling;
+    private CountSchedule<K> witnessSchedule;
     private CountScheduleContinuations<K> scheduleContinuations;
     private boolean sharedSchedules;
     private PlanPreference<K> feedbackIncumbent;
@@ -156,14 +158,38 @@ final class IntegerCountBranch<K> implements AutoCloseable {
 
     void run(long quantum, List<ExactLinearProgram.Constraint> materials, List<CountGuard> support, List<CountConflict> choices,
              PlanPreference<K> incumbent, BooleanSupplier stopped) {
+        run(quantum, materials, support, choices, incumbent, incumbent == null ? CountPortfolioPolicy.Mode.FIRST_WITNESS : CountPortfolioPolicy.Mode.IMPROVEMENT, stopped);
+    }
+
+    void proveRoot(long allowance) {
+        if (initialized || !current.isEmpty() || allowance <= 0) throw new IllegalArgumentException("Invalid root proof task");
+        proofTask = true;
+        auxiliaryMode = 3;
+        auxiliaryUntil = allowance;
+        partitioned = true;
+    }
+
+    void run(long quantum, List<ExactLinearProgram.Constraint> materials, List<CountGuard> support, List<CountConflict> choices,
+             PlanPreference<K> incumbent, CountPortfolioPolicy.Mode goal, BooleanSupplier stopped) {
+        Objects.requireNonNull(goal);
+        if (goal == CountPortfolioPolicy.Mode.IMPROVEMENT && incumbent == null)
+            throw new IllegalArgumentException("Plan improvement requires an executable incumbent");
         long before = budget.threadWork();
         runStarted = before;
         measuringRun = true;
         try {
             if (state != State.OPEN) return;
+            if (proofTask && incumbent != null) {
+                // The original-domain feasibility question is already settled.
+                // Preserve witnesses completed by other members of the wave.
+                state = State.PRUNED;
+                return;
+            }
             feedbackIncumbent = incumbent;
-            portfolioMode = incumbent != null ? CountPortfolioPolicy.Mode.IMPROVEMENT :
-                    choices.isEmpty() ? CountPortfolioPolicy.Mode.FIRST_WITNESS : CountPortfolioPolicy.Mode.PROOF;
+            // Learned clauses describe pruning progress, not a change in what
+            // this task is seeking. Only the caller's explicit goal may select
+            // proof-only feedback; ordinary orders still seek their first plan.
+            portfolioMode = goal;
             if (viewSearch != null) viewSearch.mode(portfolioMode);
             scheduleContinuations.trim();
             if (!knownChoices.equals(choices)) checkedChoices = 0;
@@ -270,6 +296,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             for (BigInteger initial : plan.initialExact().values()) {
                 budget.check();
                 if (initial.compareTo(ExactAmounts.LONG_MAX) > 0) {
+                    if (retryScheduleOrder()) return;
                     candidateFeedback(CountViewSearch.CandidateOutcome.REJECTED);
                     unresolved();
                     return;
@@ -281,6 +308,11 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 partitioned = true;
                 budget.note("count_cost_bound", "witness_attains_componentwise_lower_bound; no_improvement_branches");
             } else partitionCounts();
+            if (witnessSchedule != null) {
+                scheduleContinuations.remember(counts, witnessSchedule.witness());
+                witnessSchedule.close();
+                witnessSchedule = null;
+            }
             candidateFeedback(CountViewSearch.CandidateOutcome.VERIFIED);
             state = State.FOUND;
             return;
@@ -289,6 +321,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (!assembling.step()) return;
             plan = assembling.plan;
             if (plan == null) {
+                if (retryScheduleOrder()) return;
                 candidateFeedback(CountViewSearch.CandidateOutcome.REJECTED);
                 unresolved();
                 return;
@@ -322,10 +355,9 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 return;
             }
             if (status == CountSchedule.Result.WITNESS) {
-                scheduleContinuations.remember(counts, scheduling.witness());
+                witnessSchedule = scheduling;
                 beginAssembly(scheduling.witness());
-            }
-            scheduling.close();
+            } else scheduling.close();
             scheduling = null;
             if (status == CountSchedule.Result.DEAD) {
                 execution.refine(model);
@@ -419,6 +451,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 beginScheduling();
             } else if (viewSearch.infeasible()) {
                 learnedChoices.add(new CountConflict(current));
+                proofContradiction = proofTask && current.isEmpty();
                 state = State.DEAD;
             } else afterViewSearch(continuation);
             return;
@@ -867,6 +900,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             propagating.close();
             propagating = null;
             if (blocked) {
+                proofContradiction = proofTask && current.isEmpty();
+                if (proofContradiction) learnedChoices.add(new CountConflict(List.of()));
                 if (conflict != null) {
                     List<ExactLinearProgram.Constraint> used = new ArrayList<>();
                     for (int i = conflict.nextSetBit(0); i >= 0; i = conflict.nextSetBit(i + 1)) used.add(current.get(i));
@@ -877,6 +912,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             }
             linearConstraints.addAll(tightened);
             reduction = new CountReduction(linearConstraints, lower, upper, budget, auxiliaryMode == 3);
+            if (proofTask) reduction.retainStrideView();
             if (current.isEmpty() && auxiliaryMode == 0) {
                 modelViews = CountModelViews.create(linearConstraints, lower, upper, budget);
                 if (modelViews != null) {
@@ -900,8 +936,23 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             compiled = true;
             preprocessingOnly = (reduction.variables() > 64 || reduction.rows().size() > 512) &&
                     !ExactRevisedProgram.extendsDenseAdmission(reduction.variables(), reduction.rows()) && !mediumBooleanLp();
-            lowerCost = PlanPreference.compiledLowerBound(model, reduction, lower, seeds, budget);
-            if (auxiliaryMode == 1) cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072, CountCdcl.Branching.LEARNING_RATE);
+            if (!proofTask) lowerCost = PlanPreference.compiledLowerBound(model, reduction, lower, seeds, budget);
+            if (proofTask) {
+                modelViews = CountModelViews.create(linearConstraints, lower, upper, budget);
+                if (modelViews == null) {
+                    state = State.UNRESOLVED;
+                    return;
+                }
+                modelViews.compileLight();
+                modelViews.addReduced(reduction);
+                viewSearch = new CountViewSearch(modelViews, budget);
+                viewSearch.mode(CountPortfolioPolicy.Mode.PROOF);
+                // This task owns its root propagation/reduction; charge that
+                // cost once rather than recharging order-wide compilation.
+                viewSearch.commonWork(observedWork + budget.threadWork() - runStarted);
+                viewSearch.resume(Math.max(1, auxiliaryUntil - auxiliaryWork - (budget.threadWork() - runStarted)));
+                viewStage = 6;
+            } else if (auxiliaryMode == 1) cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072, CountCdcl.Branching.LEARNING_RATE);
             else if (auxiliaryMode >= 2) auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072);
             else {
                 if (!matchingScouted && current.isEmpty()) {
@@ -1296,6 +1347,24 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         scheduling = scheduleContinuations.acquire(counts);
     }
 
+    private boolean retryScheduleOrder() {
+        if (witnessSchedule == null) return false;
+        if (!witnessSchedule.retryAfterRejectedWitness()) {
+            witnessSchedule.close();
+            witnessSchedule = null;
+            return false;
+        }
+        if (assembling != null) assembling.close();
+        if (verifying != null) verifying.close();
+        assembling = null;
+        verifying = null;
+        plan = null;
+        preference = null;
+        scheduling = witnessSchedule;
+        witnessSchedule = null;
+        return true;
+    }
+
     IntegerCountBranch<K> shareSchedules(CountScheduleContinuations<K> pool) {
         if (initialized || sharedSchedules) throw new IllegalStateException("Late schedule pool handoff");
         scheduleContinuations.close();
@@ -1312,10 +1381,12 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     private void clearCandidate(boolean retainSchedule) {
         candidateFeedback(CountViewSearch.CandidateOutcome.UNRESOLVED);
         if (scheduling != null && (!retainSchedule || !scheduleContinuations.retain(scheduling))) scheduling.close();
+        if (witnessSchedule != null) witnessSchedule.close();
         if (program != null) program.close();
         if (assembling != null) assembling.close();
         if (verifying != null) verifying.close();
         scheduling = null;
+        witnessSchedule = null;
         program = null;
         assembling = null;
         verifying = null;
@@ -1443,6 +1514,16 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     boolean resume() {
+        if (proofTask) {
+            if (limit != null || auxiliaryWork >= auxiliaryUntil || viewSearch == null || !viewSearch.retained()) return false;
+            clearCandidate();
+            counts = null;
+            viewCandidateStage = 0;
+            viewSearch.resume(auxiliaryUntil - auxiliaryWork);
+            viewStage = 6;
+            state = State.OPEN;
+            return true;
+        }
         if (auxiliaryMode != 0) {
             if (limit != null || auxiliaryMode < 2 || auxiliaryLcg == null) return false;
             if (auxiliaryLcg.paused()) auxiliaryLcg.resume(131072);
@@ -1585,6 +1666,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (matching != null) matching.close();
         if (binary != null) binary.close();
         if (scheduling != null) scheduling.close();
+        if (witnessSchedule != null) witnessSchedule.close();
         if (supportSearch != null) supportSearch.close();
         if (program != null) program.close();
         if (assembling != null) assembling.close();
@@ -1599,6 +1681,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         matching = null;
         binary = null;
         scheduling = null;
+        witnessSchedule = null;
         supportSearch = null;
         program = null;
         assembling = null;
@@ -1767,7 +1850,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     private void afterViewSearch(int continuation) {
         if (continuation == 2) congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
         else if (continuation == 3) diagram = new CountDecisionDiagram(reduction.rows(), reduction.lower(), reduction.upper(), budget, 65536);
-        else if (continuation == 4) state = State.UNRESOLVED;
+        else if (continuation == 4 || continuation == 6) state = State.UNRESOLVED;
         else if (continuation == 5) beginCompiledPortfolio();
         // Stage 1 resumes compilation, preserving the untouched original model.
     }

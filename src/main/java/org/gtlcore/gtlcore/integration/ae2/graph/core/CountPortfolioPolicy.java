@@ -20,17 +20,24 @@ final class CountPortfolioPolicy {
         IMPROVEMENT
     }
 
-    static final class Arm {
+    static class Statistics {
 
-        final long startupCost;
-        final Object family;
         long work;
         int selections, idleSlices, waiting;
         double reward, rewardVariance;
-        boolean retired;
         long bestProgress, bestSpent = 1;
-        long observations, progressObservations, pendingWork;
-        double costMean, costM2, progressCostMean, progressCostM2;
+        long observations;
+        double costMean, costM2;
+    }
+
+    static final class Arm extends Statistics {
+
+        final long startupCost;
+        final Object family;
+        final Map<Mode, Statistics> modes = new EnumMap<>(Mode.class);
+        Mode selectedMode = Mode.FIRST_WITNESS;
+        boolean retired;
+        boolean eligible = true;
 
         Arm(long startupCost, Object family) {
             this.startupCost = startupCost;
@@ -40,8 +47,23 @@ final class CountPortfolioPolicy {
 
     private final List<Arm> arms = new ArrayList<>();
     private final Map<Mode, Map<Object, CandidateCosts>> candidateCosts = new EnumMap<>(Mode.class);
+    private final Map<Mode, CandidateScale> candidateScales = new EnumMap<>(Mode.class);
     private Mode mode = Mode.FIRST_WITNESS;
     private long turn;
+    private final long[] modeTurns = new long[Mode.values().length];
+
+    private Statistics statistics(Arm arm, Mode goal) {
+        // The common first-witness path retains its allocation-free counters.
+        return goal == Mode.FIRST_WITNESS ? arm : arm.modes.computeIfAbsent(goal, ignored -> new Statistics());
+    }
+
+    int selections(Arm arm) {
+        return statistics(arm, mode).selections;
+    }
+
+    int idleSlices(Arm arm) {
+        return statistics(arm, mode).idleSlices;
+    }
 
     void mode(Mode value) {
         mode = value;
@@ -64,21 +86,23 @@ final class CountPortfolioPolicy {
     Arm select() {
         Arm fresh = null, overdue = null, best = null;
         double bestScore = Double.NEGATIVE_INFINITY;
-        int live = (int) arms.stream().filter(arm -> !arm.retired).count();
+        int live = (int) arms.stream().filter(arm -> !arm.retired && arm.eligible).count();
         for (Arm arm : arms) {
-            if (arm.retired) continue;
-            if (arm.selections == 0) {
+            if (arm.retired || !arm.eligible) continue;
+            Statistics state = statistics(arm, mode);
+            if (state.selections == 0) {
                 if (fresh == null || arm.startupCost < fresh.startupCost) fresh = arm;
                 continue;
             }
-            if (arm.waiting >= 2L * live && (overdue == null || arm.waiting > overdue.waiting)) overdue = arm;
+            if (state.waiting >= 2L * live && (overdue == null || state.waiting > statistics(overdue, mode).waiting)) overdue = arm;
             // Progress rates have comparable units after per-arm normalization.
             // Use observed reward variation and shrinking sample uncertainty
             // for exploration; aging still gives every live arm another turn.
-            double uncertainty = StrictMath.sqrt(arm.rewardVariance + 1.0 / arm.selections);
-            double exploration = uncertainty * StrictMath.sqrt(StrictMath.log(turn + 1.0) / arm.selections);
-            double score = (arm.reward + exploration) * candidateEfficiency(arm);
-            if (best == null || score > bestScore || score == bestScore && arm.work < best.work) {
+            double uncertainty = StrictMath.sqrt(state.rewardVariance + 1.0 / state.selections);
+            long goalTurn = mode == Mode.FIRST_WITNESS ? turn : modeTurns[mode.ordinal()];
+            double exploration = uncertainty * StrictMath.sqrt(StrictMath.log(goalTurn + 1.0) / state.selections);
+            double score = (state.reward + exploration) * candidateEfficiency(arm);
+            if (best == null || score > bestScore || score == bestScore && state.work < statistics(best, mode).work) {
                 best = arm;
                 bestScore = score;
             }
@@ -87,32 +111,42 @@ final class CountPortfolioPolicy {
     }
 
     void selected(Arm arm) {
-        if (turn < Long.MAX_VALUE) turn++;
-        if (arm.selections < Integer.MAX_VALUE) arm.selections++;
+        if (mode == Mode.FIRST_WITNESS) {
+            if (turn < Long.MAX_VALUE) turn++;
+        } else if (modeTurns[mode.ordinal()] < Long.MAX_VALUE) modeTurns[mode.ordinal()]++;
+        arm.selectedMode = mode;
+        Statistics state = statistics(arm, mode);
+        if (state.selections < Integer.MAX_VALUE) state.selections++;
         // Bounded ages remain meaningful even if lifetime counters saturate.
-        for (Arm other : arms) if (!other.retired && other.selections > 0) {
-            if (other == arm) other.waiting = 1;
-            else if (other.waiting < Integer.MAX_VALUE) other.waiting++;
+        for (Arm other : arms) if (!other.retired && other.eligible) {
+            Statistics next = statistics(other, mode);
+            if (next.selections == 0) continue;
+            if (other == arm) next.waiting = 1;
+            else if (next.waiting < Integer.MAX_VALUE) next.waiting++;
         }
     }
 
     long quantum(Arm arm, long remaining) {
-        long live = arms.stream().filter(next -> !next.retired).count();
-        // Estimate the effort of a completed observation and of reaching useful
-        // progress. The standard error leaves room for uncertain costs; recent
-        // reward contracts stale allocations instead of retaining a large batch.
-        double estimated = arm.observations == 0 ? MIN_QUANTUM : upperCost(arm.costMean, arm.costM2, arm.observations);
-        if (arm.progressObservations > 0) estimated = Math.max(estimated,
-                upperCost(arm.progressCostMean, arm.progressCostM2, arm.progressObservations));
+        Statistics state = statistics(arm, mode);
+        long live = arms.stream().filter(next -> !next.retired && next.eligible).count();
+        // Estimate one completed batch, including its atomic-step overshoot.
+        // Time spent in earlier unproductive batches is already charged to
+        // work/reward; using it again as the next batch's cost would reward a
+        // stalled arm with larger slices whenever it reports sparse progress.
+        // The standard error leaves room for uncertain actual batch costs.
+        double estimated = state.observations == 0 ? MIN_QUANTUM : upperCost(state.costMean, state.costM2, state.observations);
         long requested = live <= 1 ? MAX_QUANTUM : Math.max(MIN_QUANTUM,
-                (long) Math.min(MAX_QUANTUM, StrictMath.ceil(estimated * arm.reward)));
+                (long) Math.min(MAX_QUANTUM, StrictMath.ceil(estimated * state.reward)));
         return Math.min(requested, remaining);
     }
 
     void feedback(Arm arm, long spent, long progress) {
         if (spent < 0) throw new IllegalArgumentException("Negative completed effort");
+        // A retained batch can finish after the parent changes goals. Attribute
+        // it to the mode that selected it, not whichever mode is current now.
+        Statistics state = statistics(arm, arm.selectedMode);
         long positive = Math.max(0, progress), divisor = Math.max(1, spent);
-        long bestProgress = arm.bestProgress, bestSpent = arm.bestSpent;
+        long bestProgress = state.bestProgress, bestSpent = state.bestSpent;
         double sample = 0;
         if (positive > 0) {
             if (bestProgress == 0) {
@@ -134,39 +168,25 @@ final class CountPortfolioPolicy {
         }
         // Publish only a completed observation. EWMA forgets old success once
         // a continuation stops helping; aging still retains every live arm.
-        double reward = arm.selections == 1 ? sample : 0.75 * arm.reward + 0.25 * sample;
-        double rewardVariance = arm.selections == 1 ? 0 : 0.75 * arm.rewardVariance + 0.25 * (sample - arm.reward) * (sample - reward);
-        long nextWork = spent > Long.MAX_VALUE - arm.work ? Long.MAX_VALUE : arm.work + spent;
+        double reward = state.selections == 1 ? sample : 0.75 * state.reward + 0.25 * sample;
+        double rewardVariance = state.selections == 1 ? 0 : 0.75 * state.rewardVariance + 0.25 * (sample - state.reward) * (sample - reward);
+        long nextWork = spent > Long.MAX_VALUE - state.work ? Long.MAX_VALUE : state.work + spent;
 
         // Welford statistics use actual completed work, including atomic-step
-        // overshoot. Pending work measures the interval between useful updates.
-        long observations = arm.observations == Long.MAX_VALUE ? Long.MAX_VALUE : arm.observations + 1;
-        double delta = spent - arm.costMean;
-        double costMean = arm.costMean + delta / observations;
-        double costM2 = Math.max(0, arm.costM2 + delta * (spent - costMean));
-        long pending = spent > Long.MAX_VALUE - arm.pendingWork ? Long.MAX_VALUE : arm.pendingWork + spent;
-        long progressObservations = arm.progressObservations;
-        double progressCostMean = arm.progressCostMean, progressCostM2 = arm.progressCostM2;
-        if (positive > 0) {
-            if (progressObservations < Long.MAX_VALUE) progressObservations++;
-            double progressDelta = pending - progressCostMean;
-            progressCostMean += progressDelta / progressObservations;
-            progressCostM2 = Math.max(0, progressCostM2 + progressDelta * (pending - progressCostMean));
-            pending = 0;
-        }
-        arm.observations = observations;
-        arm.costMean = costMean;
-        arm.costM2 = costM2;
-        arm.progressObservations = progressObservations;
-        arm.progressCostMean = progressCostMean;
-        arm.progressCostM2 = progressCostM2;
-        arm.pendingWork = pending;
-        arm.work = nextWork;
-        arm.bestProgress = bestProgress;
-        arm.bestSpent = bestSpent;
-        arm.reward = reward;
-        arm.rewardVariance = rewardVariance;
-        arm.idleSlices = positive > 0 ? 0 : Math.min(4, arm.idleSlices + 1);
+        // overshoot. Every completed batch contributes exactly once.
+        long observations = state.observations == Long.MAX_VALUE ? Long.MAX_VALUE : state.observations + 1;
+        double delta = spent - state.costMean;
+        double costMean = state.costMean + delta / observations;
+        double costM2 = Math.max(0, state.costM2 + delta * (spent - costMean));
+        state.observations = observations;
+        state.costMean = costMean;
+        state.costM2 = costM2;
+        state.work = nextWork;
+        state.bestProgress = bestProgress;
+        state.bestSpent = bestSpent;
+        state.reward = reward;
+        state.rewardVariance = rewardVariance;
+        state.idleSlices = positive > 0 ? 0 : Math.min(4, state.idleSlices + 1);
     }
 
     /** Completed candidate pipeline observations, separate from solver-internal progress. */
@@ -178,29 +198,41 @@ final class CountPortfolioPolicy {
         if (upstream < 0 || downstream < 0 || verified && !resolved) throw new IllegalArgumentException("Invalid candidate observation");
         CandidateCosts costs = candidateCosts.computeIfAbsent(goal, ignored -> new HashMap<>()).computeIfAbsent(source.family, ignored -> new CandidateCosts());
         if (costs.observations < Long.MAX_VALUE) costs.observations++;
-        costs.upstream += (Math.max(1, upstream) - costs.upstream) / costs.observations;
-        costs.downstream += (downstream - costs.downstream) / costs.observations;
+        // Convert before adding so two legal long work totals cannot overflow.
+        double completedWork = Math.max(1.0, (double) upstream + downstream);
+        costs.totalWork += completedWork;
         if (resolved && costs.resolved < Long.MAX_VALUE) costs.resolved++;
         if (verified && costs.verified < Long.MAX_VALUE) costs.verified++;
+        CandidateScale scale = candidateScales.computeIfAbsent(goal, ignored -> new CandidateScale());
+        if (scale.observations < Long.MAX_VALUE) scale.observations++;
+        scale.meanWork += (completedWork - scale.meanWork) / scale.observations;
     }
 
     double candidateEfficiency(Arm arm) {
         CandidateCosts costs = candidateCosts.getOrDefault(mode, Map.of()).get(arm.family);
         if (costs == null) return 1;
-        // Progress is still normalized within each arm. Discount its selection
-        // score by measured pipeline overhead and checked candidate yield, not
-        // by raw conflict counts. One neutral observation tempers sparse data.
-        // UNKNOWN/cutoffs contribute actual cost only, never a failed proof.
-        double costShare = costs.upstream / (costs.upstream + costs.downstream);
-        double yield = (costs.verified + 1.0) / (costs.resolved + 1.0);
-        double confidence = costs.observations / (costs.observations + 1.0);
-        return 1 - confidence * (1 - costShare * yield);
+        // Completed contributions per FULL pipeline work. Splitting the same
+        // effort between solving and validation must not change its value, and
+        // cheaper solving at identical downstream cost must never be penalized.
+        // One successful observation at this mode's mean cost is a deterministic
+        // prior. UNKNOWN/cutoffs add cost without claiming a failed proof.
+        double reference = Math.max(1.0, candidateScales.get(mode).meanWork);
+        double inverseRate = (costs.totalWork + reference) / (reference * (costs.verified + 1.0));
+        // Normalize around the prior's rate without unbounded amplification.
+        // Mandatory first visits and aging remain independent of this score.
+        return 2.0 / (1.0 + inverseRate);
     }
 
     private static final class CandidateCosts {
 
         long observations, resolved, verified;
-        double upstream, downstream;
+        double totalWork;
+    }
+
+    private static final class CandidateScale {
+
+        long observations;
+        double meanWork;
     }
 
     private static double upperCost(double mean, double m2, long observations) {

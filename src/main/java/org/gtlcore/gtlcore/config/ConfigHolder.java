@@ -95,13 +95,13 @@ public class ConfigHolder {
     public AE2CalculationMode ae2CalculationMode = AE2CalculationMode.MAX_FAST;
     @Configurable
     @Configurable.Comment("config.gtlcore.option.ae2CraftingEngine.comment")
-    public AECraftingEngine ae2CraftingEngine = AECraftingEngine.LEGACY;
+    public AECraftingEngine ae2CraftingEngine = AECraftingEngine.GRAPH;
     @Configurable
     @Configurable.Comment("config.gtlcore.option.ae2GraphSeedPolicy.comment")
     public AEGraphSeedPolicy ae2GraphSeedPolicy = AEGraphSeedPolicy.PRESERVE;
     @Configurable
     @Configurable.Comment("config.gtlcore.option.ae2GraphByteCostMode.comment")
-    public CraftingCostModel.Mode ae2GraphByteCostMode = CraftingCostModel.Mode.LEGACY;
+    public CraftingCostModel.Mode ae2GraphByteCostMode = CraftingCostModel.Mode.COMPACT;
     @Configurable
     @Configurable.Comment("config.gtlcore.option.ae2GraphDiscoverByproducts.comment")
     public boolean ae2GraphDiscoverByproducts = false;

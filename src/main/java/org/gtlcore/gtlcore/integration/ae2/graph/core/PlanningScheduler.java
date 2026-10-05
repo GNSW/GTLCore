@@ -115,15 +115,22 @@ public final class PlanningScheduler implements AutoCloseable {
 
         private final Job<?> owner;
         private final long deadline = System.nanoTime() + nanosPerSlice;
+        private final long workStarted;
         private int steps;
 
         private Slice(Job<?> owner) {
             this.owner = owner;
+            workStarted = owner.budget.threadWork();
         }
 
         /** At least one bounded operation per slice; no tick gate or artificial sleep. */
         public boolean next() {
-            if (steps != 0 && (steps >= stepsPerSlice || System.nanoTime() - deadline >= 0)) return false;
+            // An advance can perform many charged arithmetic operations. Count
+            // their deterministic effort as well as continuation calls, so one
+            // expensive order yields even before its wall-time slice expires.
+            if (steps != 0 && (steps >= stepsPerSlice || owner.budget.threadWork() - workStarted >= stepsPerSlice ||
+                    System.nanoTime() - deadline >= 0))
+                return false;
             owner.budget.check();
             steps++;
             return true;

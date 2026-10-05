@@ -113,6 +113,8 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
 
     protected final int maxPatternCount;
     private final boolean[] hasPatternArray;
+    // Track the encoded circuit separately: the runtime cache may instead hold a pushed virtual circuit.
+    private final int[] patternCircuitConfigs;
     @DescSynced
     protected final boolean[] cacheRecipe;
     @Persisted
@@ -165,6 +167,8 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
         this.maxPatternCount = maxPatternCount;
 
         this.hasPatternArray = new boolean[maxPatternCount];
+        this.patternCircuitConfigs = new int[maxPatternCount];
+        Arrays.fill(patternCircuitConfigs, -1);
         this.cacheRecipe = new boolean[maxPatternCount];
         this.internalInventory = new InternalSlot[maxPatternCount];
         this.catalystItems = new ItemStackTransfer[maxPatternCount];
@@ -251,6 +255,7 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
 
         var internalInv = internalInventory[index];
         var newPattern = patternInventory.getStackInSlot(index);
+        int oldCircuit = patternCircuitConfigs[index];
         var newPatternDetailsWithOutCircuit = getRealPattern(index, newPattern);
         var oldPatternDetails = slot2PatternMap.get(index);
 
@@ -262,12 +267,18 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
             hasPatternArray[index] = false;
         }
 
-        if (oldPatternDetails != null && !oldPatternDetails.equals(newPatternDetailsWithOutCircuit)) {
+        if (oldPatternDetails != null && (!oldPatternDetails.equals(newPatternDetailsWithOutCircuit) ||
+                oldCircuit != patternCircuitConfigs[index])) {
             internalInv.getCacheManager().clearAllCaches();
             internalInv.clearVirtualSupply();
             removeSlotFromGTRecipeCache(index);
             refundSlot(internalInv.getItemInventory(), internalInv.getFluidInventory());
             AEUtils.reFunds(buffer, getMainNode().getGrid(), actionSource);
+        }
+        // Invalidation also clears the circuit installed while decoding the new pattern.
+        // Restore it only after the old recipe and its virtual supply have been discarded.
+        if (patternCircuitConfigs[index] >= 0) {
+            internalInv.getCacheManager().setCircuitCache(patternCircuitConfigs[index]);
         }
 
         reCalculatePatternSlotMap();
@@ -749,12 +760,17 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
     }
 
     private IPatternDetails getRealPattern(int slot, ItemStack stack) {
-        if (!stack.isEmpty()) {
-            var internalSlot = internalInventory[slot];
-            return realPatternHelper.processPatternWithCircuit(
-                    stack, internalSlot.getCacheManager()::setCircuitCache, getLevel(), keepByProduct);
+        int previousCircuit = patternCircuitConfigs[slot];
+        patternCircuitConfigs[slot] = -1;
+        var pattern = stack.isEmpty() ? null : realPatternHelper.processPatternWithCircuit(
+                stack, circuit -> patternCircuitConfigs[slot] = circuit, getLevel(), keepByProduct);
+        var cache = internalInventory[slot].getCacheManager();
+        if (patternCircuitConfigs[slot] >= 0) {
+            cache.setCircuitCache(patternCircuitConfigs[slot]);
+        } else if (previousCircuit >= 0) {
+            cache.clearCircuitCache();
         }
-        return null;
+        return pattern;
     }
 
     // ========================================

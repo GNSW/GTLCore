@@ -38,7 +38,9 @@ final class CountDomainSearch implements AutoCloseable {
         this.budget = budget;
         start = new int[lower.length];
         width = new int[lower.length];
-        if (lower.length > 512 || rows.size() > 2048) {
+        // Match the actual PB backend's sparse admission. A binary model must
+        // not be rejected merely because the original variable count is 513.
+        if (lower.length > 1024 || rows.size() > 4096) {
             complete = true;
             return;
         }
@@ -55,12 +57,12 @@ final class CountDomainSearch implements AutoCloseable {
             } else width[i] = span.intValueExact();
             variables += width[i];
         }
-        if (variables > 512) {
+        if (variables > 1024) {
             lazy = new CountLcg(rows, lower, upper, budget, Math.min(65536, allowance));
             return;
         }
         long terms = rows.stream().flatMap(r -> r.terms().keySet().stream()).mapToLong(i -> width[i]).sum();
-        if (terms > 32768) {
+        if (terms > 65536) {
             lazy = new CountLcg(rows, lower, upper, budget, Math.min(65536, allowance));
             return;
         }

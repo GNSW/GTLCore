@@ -3,10 +3,12 @@ package org.gtlcore.gtlcore.integration.ae2.graph.core;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +35,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private GraphSolve<K> solving;
     private Bootstrap bootstrap;
     private PlanVerification<K> verifying;
+    private ForceCraftProof<K> productionProof;
     private AllocationSearch<K> allocating;
     private IntegerCountSearch<K> countSearch;
     private IntegerCountSearch<K> parkedCounts;
@@ -58,9 +61,14 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private Boolean stockBlocked;
     private boolean allocationAttempted, countAttempted, frontierTruncated;
     private boolean bootstrapTooLarge;
+    private boolean triedTargetSeedConsumption;
     private Iterator<K> alternatives;
+    private Set<K> preferredAlternatives = Set.of();
+    private long alternativeMemory;
     private GraphPlan<K> candidate, best, verified, result;
     private int phase;
+    private int sourceAttempts, allocationAfterSources = 8;
+    private long allocationTurnStarted, allocationTurnAllowance;
     private CatalystPolicy catalystPolicy = CatalystPolicy.STOCK;
 
     public GraphPlanningWork<K> catalysts(CatalystPolicy policy) {
@@ -120,12 +128,16 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private boolean step(PlanningScheduler.Slice slice) {
         try {
             budget.check();
-            // A scaled subproblem can finish without the original expensive
-            // large-number relaxation. Give that retained calculation a turn;
-            // ordinary count branches still need the quantity precheck first.
+            // Retained integer views can finish without the expensive rational
+            // precheck. Interleave the two continuations instead of requiring
+            // the relaxation to finish before another integer-search slice.
+            // Queued source alternatives need the same turn as allocation:
+            // repeatedly resuming counts after a few proof-pruned choices can
+            // fill memory before a cheap, still-pending source gets examined.
             if (parkedCounts != null && (phase == 0 || phase == 5 || phase == 6 || phase == 9 ||
-                    phase == 12 && quantities != null && quantities.readyForHeavyAnalysis() && parkedCounts.hasScaledProgress()) &&
-                    (budget.nodes() - countPausedAt >= (phase == 6 || phase == 12 ? 1_048_576 : 32_768) || phase == 0 && pending.isEmpty() || phase == 9)) {
+                    phase == 12 && quantities != null && quantities.heavyAnalysisActive() &&
+                            (parkedCounts.hasScaledProgress() || parkedCounts.hasRetainedViews())) &&
+                    (budget.nodes() - countPausedAt >= (phase == 12 ? 131_072 : phase == 6 || !pending.isEmpty() ? 1_048_576 : 32_768) || phase == 0 && pending.isEmpty() || phase == 9)) {
                 countResumePhase = phase;
                 countSearch = parkedCounts;
                 parkedCounts = null;
@@ -135,15 +147,18 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             if (quantityDeferred && phase != 4 && phase != 8 && phase != 10 && phase != 18 &&
                     !(phase == 3 && candidate.feasible()) &&
                     (phase == 9 || budget.nodes() - quickSearchStarted >= quickSearchAllowance)) {
-                if (!countAttempted && quantities.hasLargeChoices()) {
-                    // A large finite allocation often compresses to a small
-                    // repeated integer program. Give it a bounded first try
-                    // before the full rational relaxation. If it suspends,
-                    // retain both this source state and its count frontier.
+                if (!countAttempted && quantities.readyForHeavyAnalysis() &&
+                        (catalystPolicy.maxExtraCopies() == 0 || candidate.seeds().isEmpty())) {
+                    // Feasibility scouts also help medium and unbounded count
+                    // domains. Magnitude is not an admission criterion. Retain
+                    // both frontiers when the bounded scout hands back control.
+                    // Extra-catalyst trials first keep their acceleration goal;
+                    // an early minimal witness would prematurely finish the
+                    // outer policy's search for affordable parallel seeds.
                     quantityDeferred = false;
                     quantityResumePhase = phase;
                     countBeforeQuantity = true;
-                    budget.note("quantity", "large_finite_choices; scout_exact_counts_before_relaxation");
+                    budget.note("quantity", "scout_exact_counts_before_relaxation");
                     startCountSearch();
                     countSearch.scout(524_288);
                 } else resumeQuantityAnalysis(phase);
@@ -180,16 +195,16 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     // One bad source must not send a large DAG straight into
                     // per-batch allocation search. Mixed sources still get their
                     // own attempt before enumerating the remaining combinations.
-                    if (allocating != null && (pending.isEmpty() || seen.size() >= 8)) {
-                        phase = 6;
+                    if (allocating != null && (pending.isEmpty() || sourceAttempts >= allocationAfterSources)) {
+                        beginAllocationTurn();
                         return false;
                     }
                     if (!allocationAttempted && best != null &&
-                            (pending.isEmpty() || seen.size() >= 8) && !provenMissing(best)) {
+                            (pending.isEmpty() || sourceAttempts >= allocationAfterSources) && !provenMissing(best)) {
                         allocationAttempted = true;
                         allocating = new AllocationSearch<>(compiler, target, amount, stock, external, requiredSeeds,
                                 preserve, forceCraft, excluded, budget, started).proofs(proofs);
-                        phase = 6;
+                        beginAllocationTurn();
                         return false;
                     }
                     if (pending.isEmpty()) {
@@ -224,6 +239,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (compiling != null) {
                         if (!(slice == null ? compiling.step() : compiling.advance(slice))) return false;
                         graph = compiling.result();
+                        compiling.close();
                         compiler.publish(target, requiredSeeds.keySet(), choices, excluded, graph);
                         compiling = null;
                     }
@@ -233,7 +249,11 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         phase = 5;
                         return false;
                     }
-                    solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock);
+                    // Proven conflicts skipped above are not source attempts.
+                    sourceAttempts++;
+                    triedTargetSeedConsumption = false;
+                    solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                            .program(compiler.demandProgram(graph, budget));
                     budget.note("compile", "choice=" + seen.size() + "; recipes=" + graph.recipes().size() + "; regions=" + graph.regions().size() +
                             "; cyclic=" + graph.regions().stream().filter(GraphCompiler.Region::cyclic).count());
                     phase = 2;
@@ -267,12 +287,34 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         if (best == null || (!candidate.missing().isEmpty() &&
                                 (best.missing().isEmpty() || candidate.missing().size() < best.missing().size())))
                             best = candidate;
+                        if (retryWithTargetSeed()) return false;
                         prepareAlternatives();
                         phase = 5;
                     }
                 }
                 case 4 -> {
                     if (!verifying.step()) return false;
+                    if (forceCraft && !external.contains(target)) {
+                        if (productionProof == null) productionProof = new ForceCraftProof<>(candidate, verifying, requiredSeeds, budget);
+                        if (!productionProof.step()) return false;
+                        boolean productive = productionProof.proved();
+                        productionProof.close();
+                        productionProof = null;
+                        if (!productive) {
+                            budget.note("force_craft", "candidate_rejected; production_not_proved_after_rewrite");
+                            verifying.close();
+                            verifying = null;
+                            if (retryWithTargetSeed()) return false;
+                            // Reject this witness, not the remaining allocation
+                            // and count searches. Keep an unresolved placeholder
+                            // without closing their retained frontiers.
+                            if (best == null) best = new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()),
+                                    Map.of(), Map.of(), Map.of(), Map.of(), GraphPlan.Result.UNKNOWN, budget.nodes(), System.nanoTime() - started);
+                            prepareAlternatives();
+                            phase = 5;
+                            return false;
+                        }
+                    }
                     verified = candidate;
                     if (optimizeSeeds(candidate)) return false;
                     result = candidate;
@@ -290,6 +332,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         return false;
                     }
                     if (!alternatives.hasNext()) {
+                        clearAlternativeOrder();
                         phase = 0;
                         return false;
                     }
@@ -299,10 +342,19 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (next < count) {
                         Map<K, Integer> changed = new LinkedHashMap<>(choices);
                         changed.put(key, next);
-                        queueChoice(changed);
+                        queueChoice(changed, preferredAlternatives.contains(key));
                     }
                 }
                 case 6 -> {
+                    // Allocation/count search retains its frontier, but must
+                    // also return to untried source combinations. Otherwise an
+                    // unlucky first batch can consume the entire order budget
+                    // while a cheap executable source graph is still queued.
+                    if (!pending.isEmpty() && budget.nodes() - allocationTurnStarted >= allocationTurnAllowance) {
+                        budget.note("allocation_handoff", "pending_sources=" + pending.size() + "; seen=" + seen.size());
+                        phase = 0;
+                        return false;
+                    }
                     if (!allocating.step()) {
                         // Compile and reuse nested programs before solving global
                         // counts. A count witness may need enormous buffers where
@@ -327,6 +379,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (stockBlocked == null) {
                         if (!missingAnalysis.step()) return false;
                         stockBlocked = missingAnalysis.blocked();
+                        missingAnalysis.close();
                         missingAnalysis = null;
                     }
                     if (!stockBlocked && !provenMissing(best)) {
@@ -349,6 +402,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 case 11 -> {
                     if (!missingAnalysis.step()) return false;
                     stockBlocked = missingAnalysis.blocked();
+                    missingAnalysis.close();
                     missingAnalysis = null;
                     afterSolve();
                 }
@@ -476,6 +530,13 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         return result != null;
     }
 
+    private void beginAllocationTurn() {
+        allocationAfterSources = sourceAttempts + 8;
+        allocationTurnStarted = budget.nodes();
+        allocationTurnAllowance = Math.min(1_048_576, budget.remainingWork() / 8);
+        phase = 6;
+    }
+
     private void startCountSearch() {
         if (quantityDeferred) {
             if (bootstrapTooLarge) {
@@ -558,9 +619,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     }
 
     private void prepareAlternatives() {
+        clearAlternativeOrder();
         if (sourceCore == null) {
             repairs = null;
-            alternatives = graph.selected().keySet().iterator();
+            orderAlternatives();
             return;
         }
         // A solution must differ on at least one explained decision. Directly
@@ -577,14 +639,116 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 })).iterator();
     }
 
+    private void orderAlternatives() {
+        alternatives = graph.selected().keySet().iterator();
+        if (candidate == null || candidate.missingExact().isEmpty()) return;
+        long started = budget.nodes();
+        long allowance = Math.min(262_144, budget.remainingWork() / 16);
+        long scratch = 0;
+        try {
+            Map<K, List<K>> consumers = new LinkedHashMap<>();
+            var counts = candidate.patternTimesExact();
+            for (var entry : graph.selected().entrySet()) {
+                if (budget.nodes() - started >= allowance) return;
+                budget.check();
+                var recipe = entry.getValue();
+                if (!counts.containsKey(recipe.id())) continue;
+                for (K input : recipe.inputs().keySet()) {
+                    if (budget.nodes() - started >= allowance) return;
+                    budget.check();
+                    if (!budget.tryReserve(128)) return;
+                    scratch += 128;
+                    consumers.computeIfAbsent(input, key -> new ArrayList<>()).add(entry.getKey());
+                }
+            }
+            Set<K> visited = new HashSet<>();
+            Deque<K> affected = new ArrayDeque<>();
+            List<K> preferred = new ArrayList<>();
+            for (K key : candidate.missingExact().keySet()) {
+                if (budget.nodes() - started >= allowance) return;
+                budget.check();
+                if (!budget.tryReserve(128)) return;
+                scratch += 128;
+                visited.add(key);
+                affected.add(key);
+            }
+            while (!affected.isEmpty()) {
+                if (budget.nodes() - started >= allowance) return;
+                budget.check();
+                K key = affected.removeFirst();
+                if (graph.selected().containsKey(key) && compiler.producers(key).stream()
+                        .filter(recipe -> !excluded.contains(recipe.id())).limit(2).count() > 1)
+                    preferred.add(key);
+                for (K output : consumers.getOrDefault(key, List.of())) {
+                    if (budget.nodes() - started >= allowance) return;
+                    budget.check();
+                    if (visited.add(output)) {
+                        if (!budget.tryReserve(128)) return;
+                        scratch += 128;
+                        affected.addLast(output);
+                    }
+                }
+            }
+            if (preferred.isEmpty()) return;
+            long retained = 128L * graph.selected().size();
+            // Ranking is optional. Retain the original traversal if its small
+            // workspace or allowance cannot fit in the remaining order budget.
+            if (!budget.tryReserve(retained)) return;
+            alternativeMemory = retained;
+            preferredAlternatives = Set.copyOf(preferred);
+            // These choices go to the front of the frontier. Reverse insertion
+            // keeps the nearest consumers of a deficit first, including repairs
+            // to a previous repair when several source choices must change.
+            Collections.reverse(preferred);
+            Set<K> ordered = new LinkedHashSet<>(preferred);
+            ordered.addAll(graph.selected().keySet());
+            alternatives = ordered.iterator();
+            // A shortage is a scheduling hint, not an infeasibility proof:
+            // shared inventory and byproducts can require unrelated choices.
+            budget.note("source_order", "shortage_related=" + preferred.size() + "; selected=" + graph.selected().size());
+        } finally {
+            budget.release(scratch);
+        }
+    }
+
+    private void clearAlternativeOrder() {
+        alternatives = null;
+        preferredAlternatives = Set.of();
+        budget.release(alternativeMemory);
+        alternativeMemory = 0;
+    }
+
     private void queueChoice(Map<K, Integer> changed) {
+        queueChoice(changed, false);
+    }
+
+    private void queueChoice(Map<K, Integer> changed, boolean preferred) {
         if (seen.contains(changed)) return;
         if (pending.size() >= 4096) {
             frontierTruncated = true;
             return;
         }
         budget.reserve(128L + 48L * changed.size());
-        pending.add(Map.copyOf(changed));
+        if (preferred) pending.addFirst(Map.copyOf(changed));
+        else pending.addLast(Map.copyOf(changed));
+    }
+
+    private boolean retryWithTargetSeed() {
+        if (triedTargetSeedConsumption || preserve || !forceCraft || external.contains(target) || graph == null ||
+                graph.regions().stream().noneMatch(region -> region.cyclic() && region.recipes().size() > 1 &&
+                        region.recipes().stream().anyMatch(recipe -> recipe.executionOutputs().containsKey(target))))
+            return false;
+        // Retain the original net-production attempt, including its bootstrap,
+        // before trying a smaller productive cycle that consumes a target seed.
+        // Otherwise a cheaper but unprovable gross-output candidate can hide a
+        // perfectly executable net-output plan using exactly the same sources.
+        triedTargetSeedConsumption = true;
+        budget.note("region_solve", "retry_with_target_seed; same_sources");
+        solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                .program(compiler.demandProgram(graph, budget))
+                .allowTargetSeedConsumption(true);
+        phase = 2;
+        return true;
     }
 
     private void afterSolve() {
@@ -667,6 +831,11 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         if (countSearch != null) {
             GraphPlan<K> counted = countSearch.result();
             if (counted != null) verified = counted;
+            // A completed root proof can be harvested alongside a sibling that
+            // exhausted the order budget. Retain that conclusion just as we
+            // retain an already verified witness; optional recovery views never
+            // enter this original-domain countSearch slot.
+            if (countSearch.infeasible()) quantityBlocked = true;
             countSearch.close();
         }
         discardQuantityAnalysis();
@@ -693,6 +862,13 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public void close() {
+        if (compiling != null) compiling.close();
+        compiling = null;
+        if (missingAnalysis != null) missingAnalysis.close();
+        missingAnalysis = null;
+        if (productionProof != null) productionProof.close();
+        productionProof = null;
+        clearAlternativeOrder();
         if (countSearch != null) countSearch.close();
         if (parkedCounts != null) parkedCounts.close();
         if (allocating != null) allocating.discard();
@@ -833,7 +1009,9 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 }
                 // Bootstrapping material is newly manufactured, not new stock that
                 // grants another allowance of extra catalysts during the tail solve.
-                restarted = new GraphSolve<>(graph, target, amount, available, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock);
+                restarted = new GraphSolve<>(graph, target, amount, available, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                        .program(compiler.demandProgram(graph, budget))
+                        .allowTargetSeedConsumption(triedTargetSeedConsumption);
                 return false;
             }
             var deficit = deficits.next();

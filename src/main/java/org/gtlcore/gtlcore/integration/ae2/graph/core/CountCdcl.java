@@ -47,6 +47,7 @@ final class CountCdcl implements AutoCloseable {
         final ExactLinearProgram.Constraint source;
         final int proofIndex;
         BigInteger spent = BigInteger.ZERO;
+        int propagated;
 
         Row(int[] literals, BigInteger[] weights, BigInteger capacity, ExactLinearProgram.Constraint source, int proofIndex) {
             this.literals = literals;
@@ -90,7 +91,7 @@ final class CountCdcl implements AutoCloseable {
     private Row weightedConflict;
     private long weightedWork;
     private int repairedReasons;
-    private final long allowance;
+    private long allowance;
     private List<ExactLinearProgram.Constraint> proofScope;
     private int[] conflict;
     private BigInteger[] counts;
@@ -101,6 +102,7 @@ final class CountCdcl implements AutoCloseable {
     private long memory, work;
     private long activityUpdates, materializedReasons;
     private boolean complete, infeasible, memoryLimit;
+    private boolean retaining, paused;
 
     CountCdcl(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
               PlanningBudget budget, long maxWork) {
@@ -160,8 +162,36 @@ final class CountCdcl implements AutoCloseable {
         }
     }
 
+    /** Preserve queues and learned clauses across cooperative portfolio slices. */
+    CountCdcl retained() {
+        retaining = true;
+        return this;
+    }
+
+    boolean paused() {
+        return paused;
+    }
+
+    void resume(long quantum) {
+        if (!retaining || !paused || quantum <= 0) throw new IllegalStateException("Boolean search is not paused");
+        if (budget.remainingWork() == 0) budget.check();
+        allowance = work + Math.min(quantum, budget.remainingWork());
+        paused = false;
+    }
+
+    long progress() {
+        return conflicts + 4L * weightedRows.size();
+    }
+
     boolean step() {
-        if (complete) return true;
+        if (complete || paused) return true;
+        // Local handoffs happen only between complete propagation/analysis
+        // operations. Stopping inside a watched-list update would lose work
+        // and make the retained continuation unsound.
+        if (retaining && work >= allowance) {
+            paused = true;
+            return true;
+        }
         try {
             charge();
             if (conflict != null) {
@@ -379,7 +409,10 @@ final class CountCdcl implements AutoCloseable {
             return;
         }
         BigInteger slack = row.capacity.subtract(row.spent);
-        for (int i = 0; i < row.literals.length; i++) {
+        // With no undo, slack only decreases and the already-visited prefix
+        // contains assigned literals. Resume at its frontier instead of
+        // inspecting those same large coefficients on every wake-up.
+        for (int i = row.propagated; i < row.literals.length; i++) {
             charge();
             if (row.weights[i].compareTo(slack) <= 0) break;
             if (value(row.literals[i]) < 0) {
@@ -387,6 +420,7 @@ final class CountCdcl implements AutoCloseable {
                 lazyReasons[literal / 2] = new LazyReason(row, i, trail.size());
                 assign(literal, null);
             }
+            row.propagated = i + 1;
         }
     }
 
@@ -551,7 +585,9 @@ final class CountCdcl implements AutoCloseable {
      */
     private int resolveWeightedConflict() {
         long available = Math.min(32768, allowance / 32) - weightedWork;
-        if (weightedConflict == null || weightedRows.size() >= 128 || values.length > 256 || available <= 0) return -1;
+        if (weightedConflict == null || weightedRows.size() >= 128 ||
+                weightedConflict.source.terms().size() > 256 || available <= 0)
+            return -1;
         long started = work;
         try {
             return resolveWeightedConflict(available, started);
@@ -721,6 +757,9 @@ final class CountCdcl implements AutoCloseable {
                     row.spent = row.spent.subtract(row.weights[occurrence.term]);
                     activityUpdates++;
                 }
+                // A previously visited literal becomes unassigned again.
+                // Invalidate even when its contribution to spent was zero.
+                row.propagated = 0;
                 enqueue(occurrence.row);
             }
             values[id] = -1;
@@ -800,7 +839,7 @@ final class CountCdcl implements AutoCloseable {
 
     private void charge() {
         budget.check();
-        if (++work > allowance) throw new Stop();
+        if (++work > allowance && !retaining) throw new Stop();
     }
 
     private boolean finish(String detail) {

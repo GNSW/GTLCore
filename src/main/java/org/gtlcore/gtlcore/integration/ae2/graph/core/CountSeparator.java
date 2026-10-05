@@ -47,11 +47,15 @@ final class CountSeparator implements AutoCloseable {
     private boolean prepared, complete, infeasible;
 
     CountSeparator(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget) {
+        this(rows, lower, upper, budget, 262144);
+    }
+
+    CountSeparator(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget, long maxWork) {
         this.original = rows;
         this.lower = lower.clone();
         this.upper = upper.clone();
         this.budget = budget;
-        allowance = Math.min(262144, budget.remainingWork() / 16);
+        allowance = Math.min(maxWork, budget.remainingWork() / 16);
         long terms = rows.stream().mapToLong(row -> row.terms().size()).sum();
         long bytes = 2048 + 384L * lower.length + 192L * terms + 128L * rows.size() + 8L * lower.length * lower.length;
         if (lower.length > 256 || rows.size() > 2048 || allowance < 1024 || !budget.tryReserve(bytes)) complete = true;

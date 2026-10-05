@@ -16,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /** Resumable selected-graph construction and iterative SCC analysis. */
-public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCompiler.Compiled<K>> {
+public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCompiler.Compiled<K>>, AutoCloseable {
 
     private final GraphCompiler<K> compiler;
     private final Map<K, Integer> choices;
@@ -50,6 +50,19 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private List<EdgeBatch> merging;
     private int mergeBatch, mergeNode, mergeEdge;
     private GraphCompiler.Compiled<K> result;
+    private GraphCatalogIndex<K> catalogIndex;
+    private GraphCatalogIndex.Builder<K> indexing;
+    private int catalogCursor, packedInput, packedEdge;
+    private long selectedIncidences, selectedOutputs;
+    private boolean indexedSelection;
+    private long indexedMemory;
+    private final List<GraphCatalogIndex.Ports> ports = new ArrayList<>();
+    private Ints[] packedOutputs;
+    private int[] firstProducers;
+    private int[][] packedTargets;
+    private final Map<Integer, int[]> packedHubs = new HashMap<>();
+    private int[] packedEdges;
+    private static final int[] EMPTY = new int[0];
 
     GraphCompilation(GraphCompiler<K> compiler, K target, Set<K> additional, Map<K, Integer> choices,
                      Set<String> excluded, PlanningBudget budget) {
@@ -57,6 +70,8 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         this.choices = Map.copyOf(choices);
         this.excluded = Set.copyOf(excluded);
         this.budget = budget;
+        catalogIndex = compiler.catalogIndex();
+        indexedSelection = catalogIndex != null;
         pending.add(target);
         pending.addAll(additional);
     }
@@ -64,7 +79,8 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
         while (slice.next()) {
-            if (phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 && edgeInputs == null && edgeProducers == null && merging == null) {
+            if (phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 && edgeInputs == null && edgeProducers == null &&
+                    packedEdges == null && packedInput == 0 && merging == null) {
                 if (parallelEdges == null && cursor < nodes.size()) {
                     List<Supplier<EdgeBatch>> partitions = new ArrayList<>();
                     for (int i = 0; i < slice.parallelism() && cursor < nodes.size(); i++) {
@@ -112,8 +128,10 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 result = new GraphCompiler.Compiled<>(Collections.unmodifiableMap(recipes),
                         Collections.unmodifiableMap(selected), List.copyOf(regions));
                 phase = 7;
+                close();
             }
             case 8 -> registerHubs();
+            case 9 -> indexCatalog();
             default -> {
                 return true;
             }
@@ -134,13 +152,23 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             if (recipes.putIfAbsent(recipe.id(), recipe) == null) {
                 budget.reserve(384);
                 pending.addAll(recipe.inputs().keySet());
+                if (catalogIndex != null) {
+                    var packed = catalogIndex.ports(recipe);
+                    if (packed == null) indexedSelection = false;
+                    else {
+                        selectedIncidences += packed.inputs().length + packed.physicalOutputs().length;
+                        selectedOutputs += packed.physicalOutputs().length;
+                    }
+                }
             }
             candidates = null;
             return;
         }
         if (pending.isEmpty()) {
-            registering = recipes.values().iterator();
-            phase = 1;
+            if (catalogIndex == null && compiler.reuseCatalogIndex() && 4L * recipes.size() >= compiler.catalog().size()) {
+                indexing = new GraphCatalogIndex.Builder<>(compiler.catalog(), budget);
+                phase = 9;
+            } else prepareRegistration();
             return;
         }
         currentKey = pending.removeFirst();
@@ -150,6 +178,54 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         candidateIndex = choices.getOrDefault(currentKey, 0);
     }
 
+    private void indexCatalog() {
+        if (!indexing.declined() && catalogCursor < compiler.catalog().size()) {
+            indexing.add(compiler.catalog().get(catalogCursor), catalogCursor);
+            catalogCursor++;
+            return;
+        }
+        if (!indexing.step()) return;
+        catalogIndex = indexing.result();
+        if (catalogIndex != null) compiler.rememberCatalogIndex(catalogIndex);
+        indexing.close();
+        indexing = null;
+        prepareRegistration();
+    }
+
+    private void prepareRegistration() {
+        if (catalogIndex != null) {
+            if (!indexedSelection) {
+                selectedIncidences = 0;
+                selectedOutputs = 0;
+                for (var recipe : recipes.values()) {
+                    budget.check();
+                    var packed = catalogIndex.ports(recipe);
+                    if (packed == null) {
+                        catalogIndex = null;
+                        break;
+                    }
+                    selectedIncidences += packed.inputs().length + packed.physicalOutputs().length;
+                    selectedOutputs += packed.physicalOutputs().length;
+                }
+            }
+            // A tiny closure should not scan a whole network's resource mask.
+            if (catalogIndex != null && catalogIndex.resourceCount() <= Math.max(256, 4 * selectedIncidences)) {
+                // Most materials have one selected producer. Store it inline;
+                // allocate a growable list only when a second producer appears.
+                long bytes = 1024L + 72L * catalogIndex.resourceCount() + 16L * selectedOutputs;
+                if (bytes <= budget.availableBytes() / 8 && budget.tryReserve(bytes)) {
+                    indexedMemory = bytes;
+                    packedOutputs = new Ints[catalogIndex.resourceCount()];
+                    firstProducers = new int[catalogIndex.resourceCount()];
+                    packedTargets = new int[catalogIndex.resourceCount()][];
+                    budget.note("graph_catalog", "packed_selected_mask; recipes=" + recipes.size() + "; resources=" + catalogIndex.resourceCount());
+                }
+            }
+        }
+        registering = recipes.values().iterator();
+        phase = 1;
+    }
+
     private void register() {
         if (registering.hasNext()) {
             GraphRecipe<K> recipe = registering.next();
@@ -157,6 +233,26 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             nodes.add(recipe);
             out.add(new Ints());
             in.add(new Ints());
+            if (packedTargets != null) {
+                var packed = catalogIndex.ports(recipe);
+                ports.add(packed);
+                for (int key : packed.physicalOutputs()) {
+                    budget.check();
+                    if (firstProducers[key] == 0) firstProducers[key] = nodes.size();
+                    else {
+                        if (packedOutputs[key] == null) {
+                            packedOutputs[key] = new Ints();
+                            packedOutputs[key].add(firstProducers[key] - 1);
+                        }
+                        packedOutputs[key].add(nodes.size() - 1);
+                    }
+                    // Keep the cold traversal's material order without its
+                    // boxed producer lists. Hub order can affect later plan
+                    // heuristics even when the SCC partition is unchanged.
+                    outputIds.putIfAbsent(catalogIndex.resource(key), List.of());
+                }
+                return;
+            }
             for (K key : recipe.executionOutputs().keySet()) {
                 budget.check();
                 budget.reserve(48);
@@ -169,6 +265,23 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     }
 
     private void registerHubs() {
+        if (packedTargets != null && sharedOutputs.hasNext()) {
+            int resource = catalogIndex.resourceId(sharedOutputs.next().getKey());
+            int[] targets = packedOutputs[resource] == null ? new int[] { firstProducers[resource] - 1 } : packedOutputs[resource].array();
+            packedOutputs[resource] = null;
+            if (targets.length > 1) {
+                budget.reserve(160);
+                int id = nodes.size();
+                packedHubs.put(id, targets);
+                nodes.add(null);
+                ports.add(null);
+                out.add(new Ints());
+                in.add(new Ints());
+                targets = new int[] { id };
+            }
+            packedTargets[resource] = targets;
+            return;
+        }
         if (sharedOutputs.hasNext()) {
             var output = sharedOutputs.next();
             if (output.getValue().size() > 1) {
@@ -220,6 +333,10 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             phase = 3;
             return;
         }
+        if (packedTargets != null) {
+            packedEdges();
+            return;
+        }
         if (nodes.get(cursor) == null && edgeProducers == null)
             edgeProducers = resourceHubs.get(cursor).iterator();
         if (edgeProducers != null) {
@@ -248,10 +365,56 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         edgeProducers = outputIds.getOrDefault(edgeInputs.next(), List.of()).iterator();
     }
 
+    private void packedEdges() {
+        if (packedEdges != null) {
+            if (packedEdge < packedEdges.length) {
+                int to = packedEdges[packedEdge++];
+                budget.reserve(24);
+                out.get(cursor).add(to);
+                in.get(to).add(cursor);
+                return;
+            }
+            packedEdges = null;
+            if (nodes.get(cursor) == null) {
+                cursor++;
+                return;
+            }
+        }
+        if (nodes.get(cursor) == null) packedEdges = packedHubs.get(cursor);
+        else {
+            int[] inputs = ports.get(cursor).inputs();
+            if (packedInput == inputs.length) {
+                packedInput = 0;
+                cursor++;
+                return;
+            }
+            packedEdges = packedTargets(inputs[packedInput++]);
+        }
+        packedEdge = 0;
+    }
+
     private EdgeBatch collectEdges(int start, int end) {
         int[][] edges = new int[end - start][];
         for (int index = start; index < end; index++) {
             Ints targets = new Ints();
+            if (packedTargets != null) {
+                if (nodes.get(index) == null) {
+                    for (int producer : packedHubs.get(index)) {
+                        budget.check();
+                        budget.reserve(24);
+                        targets.add(producer);
+                    }
+                } else for (int input : ports.get(index).inputs()) {
+                    budget.check();
+                    for (int producer : packedTargets(input)) {
+                        budget.check();
+                        budget.reserve(24);
+                        targets.add(producer);
+                    }
+                }
+                edges[index - start] = targets.array();
+                continue;
+            }
             if (nodes.get(index) == null) {
                 for (int producer : resourceHubs.get(index)) {
                     budget.check();
@@ -272,6 +435,11 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             edges[index - start] = targets.array();
         }
         return new EdgeBatch(start, edges);
+    }
+
+    private int[] packedTargets(int input) {
+        int[] producers = packedTargets[input];
+        return producers == null ? EMPTY : producers;
     }
 
     private void freezeEdges() {
@@ -360,6 +528,14 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     }
 
     private record EdgeBatch(int start, int[][] edges) {}
+
+    @Override
+    public void close() {
+        if (indexing != null) indexing.close();
+        indexing = null;
+        budget.release(indexedMemory);
+        indexedMemory = 0;
+    }
 
     private static final class Ints {
 

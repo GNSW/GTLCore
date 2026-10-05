@@ -45,7 +45,8 @@ final class OrderProofs<K> implements AutoCloseable {
         // A smaller recipe catalog, a changed target or newly funded inventory
         // invalidates general count clauses. In particular, bootstrap/preview
         // requests never inherit their parent's proofs.
-        return model != null && model.stock.equals(other.stock) && model.goals.equals(other.goals) && model.external.equals(other.external) &&
+        return model != null && model.stock.equals(other.stock) && model.goals.equals(other.goals) &&
+                model.productionGoals.equals(other.productionGoals) && model.external.equals(other.external) &&
                 model.recipes.size() == other.recipes.size() && new HashSet<>(model.recipes).equals(new HashSet<>(other.recipes));
     }
 
@@ -154,7 +155,7 @@ final class OrderProofs<K> implements AutoCloseable {
         long bytes = 128L + 64L * core.size();
         if (sourceCores.size() >= 128 || !budget.tryReserve(bytes)) return;
         memory += bytes;
-        sourceCores.add(Map.copyOf(core));
+        sourceCores.add(Collections.unmodifiableMap(new LinkedHashMap<>(core)));
     }
 
     Map<K, Integer> sourceConflict(Map<K, Integer> assignment) {

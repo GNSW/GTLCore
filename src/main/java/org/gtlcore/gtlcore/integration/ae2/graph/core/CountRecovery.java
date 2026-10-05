@@ -12,6 +12,8 @@ final class CountRecovery<K> implements AutoCloseable {
     private final IntegerCountBranch<K> owner;
     private final Deque<Collection<GraphRecipe<K>>> candidates = new ArrayDeque<>();
     private CountRecoveryFuel<K> fuel;
+    private CountRecoveryTemplates.Template<K> template;
+    private boolean completeRetention;
     private boolean pricedFuel;
     private PlanStep witness;
     private long memory;
@@ -38,6 +40,19 @@ final class CountRecovery<K> implements AutoCloseable {
         if (!budget.tryReserve(bytes)) return;
         memory = bytes;
         Map<String, GraphRecipe<K>> compiled = new LinkedHashMap<>();
+        template = model.recoveryTemplates == null ? null : model.recoveryTemplates.reuse(model);
+        if (template != null) {
+            for (var recipe : template.recipes) {
+                budget.check();
+                compiled.put(recipe.id(), recipe);
+            }
+            bodies.putAll(template.bodies);
+            if (template.retained.size() < template.recipes.size()) candidates.addLast(template.retained);
+            candidates.addLast(template.recipes);
+            budget.note("count_recovery_cache", "reused; recipes=" + compiled.size() + "; macros=" + bodies.size() + "; structural_only");
+            prepareInterfaces(compiled, template.recipes, budget.nodes(), Math.min(262144, budget.remainingWork() / 16));
+            return;
+        }
         Set<Signature<K>> signatures = new HashSet<>();
         int aliases = 0;
         for (var recipe : model.recipes) {
@@ -47,6 +62,7 @@ final class CountRecovery<K> implements AutoCloseable {
         }
         long started = budget.nodes(), allowance = Math.min(262144, budget.remainingWork() / 16);
         int stages = 0;
+        boolean completeDiscovery = false;
         // Contract only private seams. Joint outputs remain on the interface;
         // every consumer/exit is retained, including destructive exits.
         for (int pass = 0; pass < 32 && budget.nodes() - started < allowance; pass++) {
@@ -124,7 +140,10 @@ final class CountRecovery<K> implements AutoCloseable {
                 // Disjoint seams can contract in the same pass. A stale incidence
                 // that mentions a removed recipe is skipped until the next pass.
             }
-            if (!changed) break;
+            if (!changed) {
+                completeDiscovery = budget.nodes() - started < allowance;
+                break;
+            }
         }
         if (bodies.isEmpty() && aliases == 0) return;
         budget.note("count_recovery", "recipes=" + model.recipes.size() + "->" + compiled.size() + "; macros=" + bodies.size() + "; aliases=" + aliases);
@@ -132,12 +151,22 @@ final class CountRecovery<K> implements AutoCloseable {
         // summary retains the real prefix seed requirement. It is a candidate
         // representation only: other interleavings remain in the caller.
         var retained = retainingView(compiled.values());
+        // Never freeze a budget-truncated discovery (including a partial exit
+        // ranking) as the only cached representation for later larger orders.
+        if (completeDiscovery && completeRetention && model.recoveryTemplates != null)
+            template = model.recoveryTemplates.remember(model, compiled.values(), retained, bodies);
+        List<GraphRecipe<K>> complete = template == null ? List.copyOf(compiled.values()) : template.recipes;
+        if (template != null) retained = template.retained;
         if (retained.size() < compiled.size()) candidates.addLast(retained);
-        candidates.addLast(List.copyOf(compiled.values()));
+        candidates.addLast(complete);
+        prepareInterfaces(compiled, complete, started, allowance);
+    }
+
+    private void prepareInterfaces(Map<String, GraphRecipe<K>> compiled, List<GraphRecipe<K>> complete, long started, long allowance) {
         // Optional cross-route calls can obscure the small independent choice
         // model. Keep them in a later view, after complete recovery calls.
         int completeSize = compiled.size();
-        fuel = CountRecoveryFuel.compile(model, List.copyOf(compiled.values()), budget);
+        fuel = CountRecoveryFuel.compile(owner.model, complete, budget);
         addOpenInterfaces(compiled, started, allowance);
         if (compiled.size() > completeSize) candidates.addLast(compiled.values());
         begin(fuel == null ? candidates.removeFirst() : fuel.recipes());
@@ -145,13 +174,17 @@ final class CountRecovery<K> implements AutoCloseable {
 
     /** Prefer equal-cost returning exits, without excluding any original plan. */
     private Collection<GraphRecipe<K>> retainingView(Collection<GraphRecipe<K>> recipes) {
+        completeRetention = true;
         Map<Map<K, Long>, List<GraphRecipe<K>>> groups = new LinkedHashMap<>();
         for (var recipe : recipes) if (ordinary(recipe)) groups.computeIfAbsent(recipe.inputs(), unused -> new ArrayList<>()).add(recipe);
         Set<String> omitted = new HashSet<>();
         long work = 0, allowance = Math.min(32768, budget.remainingWork() / 32);
         for (var group : groups.values()) for (var first : group) for (var other : group) {
             budget.check();
-            if (++work > allowance) return recipes.stream().filter(recipe -> !omitted.contains(recipe.id())).toList();
+            if (++work > allowance) {
+                completeRetention = false;
+                return recipes.stream().filter(recipe -> !omitted.contains(recipe.id())).toList();
+            }
             if (first == other || omitted.contains(other.id()) || first.outputs().equals(other.outputs())) continue;
             if (first.outputs().entrySet().stream().allMatch(e -> other.outputs().getOrDefault(e.getKey(), 0L) >= e.getValue())) {
                 omitted.add(first.id());
@@ -214,7 +247,9 @@ final class CountRecovery<K> implements AutoCloseable {
         viewAllowance = pricedFuel && fuel != null ? Math.min(4_000_000, budget.remainingWork() / 4) :
                 Math.min(1_000_000, budget.remainingWork() / 8);
         viewMaximum = Math.min(4_000_000, budget.remainingWork() / 4);
-        search = new IntegerCountSearch<>(new GraphCompiler<>(List.copyOf(recipes)), owner.target, owner.amount,
+        GraphCompiler<K> compiler = template == null ? null : template.compiler(recipes);
+        if (compiler == null) compiler = new GraphCompiler<>(List.copyOf(recipes));
+        search = new IntegerCountSearch<>(compiler, owner.target, owner.amount,
                 pricedFuel && fuel != null ? fuel.pricedStock() : owner.stock, owner.seeds, owner.external, Set.of(), owner.preserve, owner.force, budget, owner.started, null, false);
         if (fuel == null) search.importProgramConflicts(owner.model, bodies, owner.knownChoices());
     }

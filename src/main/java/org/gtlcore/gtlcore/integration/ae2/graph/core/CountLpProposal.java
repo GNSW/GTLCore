@@ -23,16 +23,22 @@ final class CountLpProposal {
     private final int[] basic, nonbasic;
 
     static int[] propose(int n, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective, PlanningBudget budget) {
+        return propose(n, rows, objective, budget, Math.min(262144, budget.remainingWork() / 16));
+    }
+
+    static int[] propose(int n, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective, PlanningBudget budget, long allowance) {
         if (n < 2 || n > 128 || rows.size() > 256 || budget.remainingWork() < 32768) return null;
         for (var row : rows) {
             budget.check();
-            if (row.upper().bitLength() > 48 || row.terms().values().stream().anyMatch(v -> v.bitLength() > 48)) return null;
+            if (row.upper().bitLength() > 48 || row.terms().values().stream().anyMatch(v -> v.bitLength() > 48))
+                return CountNumericRelaxation.proposeBasis(n, rows, objective, budget, allowance);
         }
-        if (Arrays.stream(objective).anyMatch(v -> v.bitLength() > 48)) return null;
+        if (Arrays.stream(objective).anyMatch(v -> v.bitLength() > 48))
+            return CountNumericRelaxation.proposeBasis(n, rows, objective, budget, allowance);
         long bytes = 2048L + (rows.size() + 2L) * (n + 2L) * 16L;
         if (!budget.tryReserve(bytes)) return null;
         try {
-            var solver = new CountLpProposal(n, rows, objective, budget);
+            var solver = new CountLpProposal(n, rows, objective, budget, allowance);
             int[] result = solver.solve();
             budget.note("count_numeric_proposal", "basis=" + (result != null) + "; work=" + solver.work + "; exact_reconstruction_required");
             return result;
@@ -43,11 +49,11 @@ final class CountLpProposal {
         }
     }
 
-    private CountLpProposal(int n, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective, PlanningBudget budget) {
+    private CountLpProposal(int n, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective, PlanningBudget budget, long allowance) {
         this.n = n;
         m = rows.size();
         this.budget = budget;
-        allowance = Math.min(262144, budget.remainingWork() / 16);
+        this.allowance = Math.max(0, Math.min(allowance, budget.remainingWork() / 4));
         table = new double[m + 2][n + 2];
         basic = new int[m];
         nonbasic = new int[n + 1];
@@ -114,7 +120,7 @@ final class CountLpProposal {
     private void pivot(int row, int column) {
         double pivot = table[row][column];
         if (!Double.isFinite(pivot) || Math.abs(pivot) <= 1e-15) throw new Stop();
-        for (int i = 0; i < m + 2; i++) if (i != row && table[i][column] != 0) for (int j = 0; j < n + 2; j++) if (j != column) {
+        for (int i = 0; i < m + 2; i++) if (i != row && table[i][column] != 0) for (int j = 0; j < n + 2; j++) if (j != column && table[row][j] != 0) {
             charge();
             table[i][j] -= table[row][j] * (table[i][column] / pivot);
             if (!Double.isFinite(table[i][j])) throw new Stop();

@@ -336,7 +336,16 @@ final class AllocationSearch<K> {
         if (labels.stream().anyMatch(old -> PartialOrder.subset(old, sleeping))) return false;
         // Reaching the same marking with fewer sleeping actions can expose a
         // continuation that the old representative was forbidden to explore.
-        labels.removeIf(old -> PartialOrder.subset(sleeping, old));
+        for (var it = labels.iterator(); it.hasNext();) {
+            var old = it.next();
+            if (!PartialOrder.subset(sleeping, old)) continue;
+            it.remove();
+            // Replaced labels are no longer retained. Charging their cumulative
+            // history can exhaust memory while the live cache stays small.
+            long released = 96L + old.toLongArray().length * 8L;
+            memory -= released;
+            budget.release(released);
+        }
         labels.add((BitSet) sleeping.clone());
         reserve(96L + sleeping.toLongArray().length * 8L);
         return true;
@@ -356,6 +365,8 @@ final class AllocationSearch<K> {
     private void finish() {
         if (phase != 3 && orderedAway > 0) budget.note("allocation_partial_order", "sleep_pruned=" + orderedAway);
         phase = 3;
+        if (macros != null) macros.close();
+        macros = null;
         budget.release(memory);
         memory = 0;
     }
@@ -475,6 +486,7 @@ final class AllocationSearch<K> {
         final K target;
         final long amount, started;
         final Map<K, Long> stock;
+        final Map<K, Long> requiredSeeds;
         final Set<K> external;
         final boolean preserve, force, preview;
         final PlanningBudget budget;
@@ -491,14 +503,22 @@ final class AllocationSearch<K> {
         final Set<K> walked = new HashSet<>();
         SummaryComputation<K> computation;
         SequenceSummary<K> summary;
+        CountProgramSummaries<K> sharedSummaries;
         Iterator<K> keys;
         K checkingKey;
         int stage;
         GraphPlan<K> plan;
+        GraphPlan<K> proposed;
+        PlanVerification<K> verifying;
+        ForceCraftProof<K> productionProof;
 
         @Override
         public void close() {
             if (computation != null) computation.close();
+            if (verifying != null) verifying.close();
+            verifying = null;
+            if (productionProof != null) productionProof.close();
+            productionProof = null;
         }
 
         Candidate(PlanStep witness, Map<String, GraphRecipe<K>> relevant, K target, long amount, Map<K, Long> stock,
@@ -509,6 +529,7 @@ final class AllocationSearch<K> {
             this.target = target;
             this.amount = amount;
             this.stock = stock;
+            this.requiredSeeds = Map.copyOf(requiredSeeds);
             this.external = external;
             this.preserve = preserve;
             this.force = force;
@@ -541,13 +562,24 @@ final class AllocationSearch<K> {
                     if (used.putIfAbsent(id, recipe) == null)
                         for (K key : recipe.executionOutputs().keySet()) producers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(recipe);
                 } else {
-                    computation = new SummaryComputation<>(witness, used, budget);
+                    summary = sharedSummaries == null ? null : sharedSummaries.get(witness);
+                    if (summary == null) computation = new SummaryComputation<>(witness, used, budget);
                     stage = 1;
                 }
             } else if (stage == 1) {
-                if (!computation.step()) return false;
-                summary = computation.result();
-                if (force && summary.delta(target).compareTo(BigInteger.valueOf(amount)) < 0) return true;
+                if (summary == null) {
+                    if (!computation.step()) return false;
+                    summary = computation.result();
+                    if (sharedSummaries != null) sharedSummaries.put(witness, summary);
+                }
+                // A productive startup may consume an initial target seed.
+                // Requiring the entire order as NET gain would discard valid
+                // integer schedules after the count model already found them.
+                // Admit positive-gain candidates to the same final production
+                // proof as regional plans; gross turnover alone is insufficient.
+                if (force && summary.delta(target).compareTo(BigInteger.valueOf(amount)) < 0 &&
+                        (preview || external.contains(target) || summary.delta(target).signum() <= 0))
+                    return true;
                 keys = summary.required().keySet().iterator();
                 stage = 2;
             } else if (stage == 2) {
@@ -598,11 +630,27 @@ final class AllocationSearch<K> {
                     }
                     if (required.signum() > 0) initial.put(key, required);
                 } else {
-                    plan = new GraphPlan<>(target, amount, preserve, witness, used, initial, seeds, missing,
+                    proposed = new GraphPlan<>(target, amount, preserve, witness, used, initial, seeds, missing,
                             missing.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : GraphPlan.Result.MISSING_INPUT,
                             budget.nodes(), System.nanoTime() - started);
+                    if (force && !external.contains(target) && summary.delta(target).compareTo(BigInteger.valueOf(amount)) < 0) {
+                        verifying = new PlanVerification<>(proposed, budget);
+                        stage = 5;
+                        return false;
+                    }
+                    plan = proposed;
                     return true;
                 }
+            } else if (stage == 5) {
+                if (!verifying.step()) return false;
+                if (productionProof == null) productionProof = new ForceCraftProof<>(proposed, verifying, requiredSeeds, budget);
+                if (!productionProof.step()) return false;
+                if (productionProof.proved()) plan = proposed;
+                close();
+                stage = 6;
+                return true;
+            } else if (stage == 6) {
+                return true;
             }
             return false;
         }

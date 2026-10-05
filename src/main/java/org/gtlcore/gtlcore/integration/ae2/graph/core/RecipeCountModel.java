@@ -11,10 +11,12 @@ final class RecipeCountModel<K> implements AutoCloseable {
     final Map<K, Integer> ids;
     final Map<K, Long> stock;
     final Map<K, BigInteger> goals;
+    final Map<K, BigInteger> productionGoals = new LinkedHashMap<>();
     final Set<K> external;
     final List<ExactLinearProgram.Constraint> constraints = new ArrayList<>();
     final List<K> rowKeys = new ArrayList<>();
     final PlanningBudget budget;
+    CountRecoveryTemplates<K> recoveryTemplates;
     private long memory;
 
     static <K> RecipeCountModel<K> create(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
@@ -46,6 +48,24 @@ final class RecipeCountModel<K> implements AutoCloseable {
             return null;
         }
         try {
+            var cached = compiler.countCatalog(target, seeds.keySet(), excluded, external);
+            if (cached != null && cached.keys.size() <= maxKeys && cached.recipes.size() <= maxRecipes) {
+                budget.check();
+                long bytes = cached.sparseBytes();
+                if (force && !external.contains(target)) bytes += 128L + 96L * cached.recipes.size();
+                if (!budget.tryReserve(bytes)) {
+                    budget.note("count_model", "skipped; sparse_bytes=" + bytes + "; insufficient memory");
+                    return null;
+                }
+                workspace += bytes;
+                var model = new RecipeCountModel<>(cached, stock, external, budget, goals(target, amount, seeds));
+                model.recoveryTemplates = compiler.recoveryTemplates;
+                if (force && !external.contains(target)) model.requireProduction(target, amount);
+                model.memory = workspace;
+                workspace = 0;
+                budget.note("count_catalog", "reused; recipes=" + cached.recipes.size() + "; materials=" + cached.keys.size());
+                return model;
+            }
             var recipes = new LinkedHashMap<String, GraphRecipe<K>>();
             var keys = new LinkedHashSet<K>();
             var pending = new ArrayDeque<K>();
@@ -72,23 +92,24 @@ final class RecipeCountModel<K> implements AutoCloseable {
             long entries = 0;
             for (GraphRecipe<K> recipe : recipes.values()) entries += recipe.inputs().size() + recipe.outputs().size();
             long sparseBytes = 128L * entries + 128L * (keys.size() + recipes.size());
+            if (force && !external.contains(target)) sparseBytes += 128L + 96L * recipes.size();
             if (!budget.tryReserve(sparseBytes)) {
                 budget.note("count_model", "skipped; sparse_bytes=" + sparseBytes + "; insufficient memory");
                 return null;
             }
             workspace += sparseBytes;
-            var model = new RecipeCountModel<K>(List.copyOf(recipes.values()), List.copyOf(keys), target, amount, stock, seeds, external, force, budget);
+            var model = new RecipeCountModel<>(List.copyOf(recipes.values()), List.copyOf(keys), stock, external, budget, goals(target, amount, seeds), compiler.catalogIndex());
+            model.recoveryTemplates = compiler.recoveryTemplates;
+            if (force && !external.contains(target)) model.requireProduction(target, amount);
+            if (compiler.reuseCountCatalogs() &&
+                    GraphCompiler.cacheableCountCatalog(entries + keys.size() + recipes.size(), seeds.size(), excluded.size(), external.size()))
+                compiler.rememberCountCatalog(target, seeds.keySet(), excluded, external, new CountCatalog<>(model, entries, budget));
             model.memory = workspace;
             workspace = 0;
             return model;
         } finally {
             budget.release(workspace);
         }
-    }
-
-    private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, K target, long amount, Map<K, Long> stock,
-                             Map<K, Long> seeds, Set<K> external, boolean force, PlanningBudget budget) {
-        this(recipes, keys, stock, external, budget, goals(target, amount, stock, seeds, force));
     }
 
     /** Selected region only: upstream inputs are left for backward propagation. */
@@ -120,31 +141,87 @@ final class RecipeCountModel<K> implements AutoCloseable {
         }
     }
 
-    private static <K> Map<K, BigInteger> goals(K target, long amount, Map<K, Long> stock, Map<K, Long> seeds, boolean force) {
+    private static <K> Map<K, BigInteger> goals(K target, long amount, Map<K, Long> seeds) {
         Map<K, BigInteger> goals = new LinkedHashMap<>();
         seeds.forEach((key, value) -> goals.put(key, BigInteger.valueOf(value)));
         BigInteger reserve = BigInteger.valueOf(seeds.getOrDefault(target, 0L));
-        if (force) reserve = reserve.max(BigInteger.valueOf(stock.getOrDefault(target, 0L)));
         goals.put(target, reserve.add(BigInteger.valueOf(amount)));
         return goals;
     }
 
+    /** Optional suffix view; the caller checks restored counts and the original execution. */
+    static <K> RecipeCountModel<K> forShell(List<GraphRecipe<K>> recipes, Map<K, BigInteger> goals,
+                                            Map<K, Long> stock, Set<K> external, PlanningBudget budget) {
+        Set<K> keys = new LinkedHashSet<>(goals.keySet());
+        long entries = 0;
+        for (var recipe : recipes) {
+            budget.check();
+            keys.addAll(recipe.inputs().keySet());
+            keys.addAll(recipe.outputs().keySet());
+            entries += recipe.inputs().size() + recipe.outputs().size();
+        }
+        long bytes = 1024L + 256L * entries + 256L * (keys.size() + recipes.size());
+        for (BigInteger goal : goals.values()) bytes += 64L + (goal.bitLength() + 7L) / 8;
+        if (!budget.tryReserve(bytes)) return null;
+        try {
+            var result = new RecipeCountModel<>(List.copyOf(recipes), List.copyOf(keys), stock, external, budget, goals);
+            result.memory = bytes;
+            bytes = 0;
+            return result;
+        } finally {
+            budget.release(bytes);
+        }
+    }
+
+    /**
+     * Necessary production bound, not permission to execute a turnover loop.
+     * Target stock may fund startup, so retaining all of it in the final goal
+     * would incorrectly prove valid recycling orders impossible. Every count
+     * witness still passes the independent scheduling and candidate checks.
+     */
+    private void requireProduction(K target, long amount) {
+        Map<Integer, BigInteger> terms = new LinkedHashMap<>();
+        for (int i = 0; i < recipes.size(); i++) {
+            budget.check();
+            long output = recipes.get(i).executionOutputs().getOrDefault(target, 0L);
+            if (output != 0) terms.put(i, BigInteger.valueOf(output).negate());
+        }
+        productionGoals.put(target, BigInteger.valueOf(amount));
+        constraints.add(new ExactLinearProgram.Constraint(terms, BigInteger.valueOf(amount).negate()));
+    }
+
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
                              Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals) {
+        this(recipes, keys, stock, external, budget, goals, null);
+    }
+
+    private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
+                             Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals, GraphCatalogIndex<K> index) {
         this.recipes = recipes;
         this.keys = keys;
         this.stock = stock;
         this.external = external;
         this.budget = budget;
-        ids = new LinkedHashMap<>();
         this.goals = new LinkedHashMap<>(goals);
-        for (K key : keys) ids.put(key, ids.size());
+        var indices = new LinkedHashMap<K, Integer>();
+        for (K key : keys) indices.put(key, indices.size());
+        ids = Collections.unmodifiableMap(indices);
         Map<K, Map<Integer, BigInteger>> rows = new LinkedHashMap<>();
         for (K key : keys) if (!external.contains(key)) rows.put(key, new LinkedHashMap<>());
-        // Visit actual incidences instead of every material/recipe pair. The
-        // sparse bound precheck also serves catalogs too large for local LP.
+        // Cold construction and unshared regions keep the original sparse
+        // incidence pass. A completed request may lend its immutable row terms
+        // to the catalog cache; no second matrix is constructed for that cache.
         for (int i = 0; i < recipes.size(); i++) {
             GraphRecipe<K> recipe = recipes.get(i);
+            var ports = index == null ? null : index.ports(recipe);
+            if (ports != null) {
+                for (int p = 0; p < ports.changed().length; p++) {
+                    budget.check();
+                    var terms = rows.get(index.resource(ports.changed()[p]));
+                    if (terms != null) terms.put(i, ports.changes()[p].negate());
+                }
+                continue;
+            }
             Set<K> used = new LinkedHashSet<>(recipe.inputs().keySet());
             used.addAll(recipe.outputs().keySet());
             for (K key : used) {
@@ -158,6 +235,24 @@ final class RecipeCountModel<K> implements AutoCloseable {
         for (var row : rows.entrySet()) {
             K key = row.getKey();
             constraints.add(new ExactLinearProgram.Constraint(row.getValue(), BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
+            rowKeys.add(key);
+        }
+    }
+
+    private RecipeCountModel(CountCatalog<K> structure, Map<K, Long> stock,
+                             Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals) {
+        this.recipes = structure.recipes;
+        this.keys = structure.keys;
+        this.stock = stock;
+        this.external = external;
+        this.budget = budget;
+        ids = structure.ids;
+        this.goals = new LinkedHashMap<>(goals);
+        for (int i = 0; i < keys.size(); i++) {
+            K key = keys.get(i);
+            if (external.contains(key)) continue;
+            budget.charge(1L + (structure.terms.get(i).size() + 3L) / 4);
+            constraints.add(new ExactLinearProgram.Constraint(structure.terms.get(i), BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
             rowKeys.add(key);
         }
     }
@@ -180,6 +275,9 @@ final class RecipeCountModel<K> implements AutoCloseable {
     }
 
     Map<K, BigInteger> certificate(ExactRational[] values) {
+        // A physical-production row is not a conserved material and cannot be
+        // published as a resource-weight certificate for another request.
+        if (values.length != rowKeys.size()) return Map.of();
         BigInteger scale = BigInteger.ONE;
         for (ExactRational value : values) {
             scale = scale.divide(scale.gcd(value.denominator())).multiply(value.denominator());

@@ -23,7 +23,11 @@ final class CountQuickSolve implements AutoCloseable {
     private CountDecisionDiagram diagram;
     private ExactLinearProgram linear;
     private CountLatticeRepair repair;
+    private CountDiving diving;
+    private boolean divingAttempted;
     private CountDiophantine diophantine;
+    private CountStructureSearch structural;
+    private boolean structureAttempted;
     private CountCongruence congruence;
     private boolean congruenceAttempted;
     private boolean equationAttempted;
@@ -151,6 +155,16 @@ final class CountQuickSolve implements AutoCloseable {
                 equationAttempted = true;
                 if (value != null) return finish(value, false);
             }
+            if (!structureAttempted) {
+                if (structural == null) structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, matchingAllowance);
+                if (!structural.step()) return false;
+                var value = structural.counts();
+                boolean impossible = structural.infeasible();
+                structural.close();
+                structural = null;
+                structureAttempted = true;
+                if (value != null || impossible) return finish(value, impossible);
+            }
             if (factor) {
                 if (components == null) components = new CountComponents(reduction.rows(), reduction.lower(), reduction.upper(), budget);
                 if (!components.step()) return false;
@@ -265,6 +279,15 @@ final class CountQuickSolve implements AutoCloseable {
             diagram = null;
             return finish(value, impossible);
         }
+        if (!divingAttempted) {
+            if (diving == null) diving = new CountDiving(reduction.rows(), reduction.lower(), reduction.upper(), point, budget);
+            if (!diving.step()) return false;
+            var value = diving.counts();
+            diving.close();
+            diving = null;
+            divingAttempted = true;
+            if (value != null) return finish(value, false);
+        }
         if (repair == null) repair = new CountLatticeRepair(reduction.rows(), reduction.lower(), reduction.upper(), point, attempts, budget);
         if (!repair.step()) return false;
         var value = repair.counts();
@@ -296,6 +319,8 @@ final class CountQuickSolve implements AutoCloseable {
 
     @Override
     public void close() {
+        if (structural != null) structural.close();
+        structural = null;
         if (diophantine != null) diophantine.close();
         if (bounds != null) bounds.close();
         if (reduction != null) reduction.close();
@@ -309,6 +334,7 @@ final class CountQuickSolve implements AutoCloseable {
         if (diagram != null) diagram.close();
         if (linear != null) linear.close();
         if (repair != null) repair.close();
+        if (diving != null) diving.close();
         if (congruence != null) congruence.close();
         budget.release(memory);
         memory = 0;

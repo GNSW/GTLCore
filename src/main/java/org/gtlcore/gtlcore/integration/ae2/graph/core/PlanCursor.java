@@ -168,13 +168,13 @@ public final class PlanCursor {
                 if (counts.size() < 2) return null;
                 Function<K, BigInteger> available = stock.get();
                 if (available == null) return null;
-                long iterations = LoopBatching.iterations(counts, frame.remaining, recipes, available);
-                if (iterations <= 1) return null;
+                var group = LoopBatching.group(counts, frame.remaining, recipes, available);
+                if (group == null) return null;
                 if (counts.size() > room) return List.of();
                 var batches = new ArrayList<PlanStep.Batch>(counts.size());
-                counts.forEach((recipe, count) -> batches.add(new PlanStep.Batch(recipe,
-                        count.multiply(BigInteger.valueOf(iterations)).longValueExact())));
-                frame.remaining -= iterations;
+                group.counts().forEach((recipe, count) -> batches.add(new PlanStep.Batch(recipe,
+                        count.multiply(BigInteger.valueOf(group.iterations())).longValueExact())));
+                frame.remaining -= group.iterations();
                 return batches;
             } else return null;
         }

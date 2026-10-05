@@ -17,6 +17,24 @@ import java.util.function.LongSupplier;
 /** One request's cumulative limits; a work slice never creates another budget. */
 public final class PlanningBudget {
 
+    // Sixteen ticks per existing work unit. Small literal inspections need not
+    // cost as much as big-integer elimination. Integer ticks keep scheduling
+    // reproducible; wall time, cancellation and memory remain independent caps.
+    static final int WORK_SCALE = 16;
+
+    enum Operation {
+
+        SCAN(4),
+        INTEGER(8),
+        RATIONAL(64);
+
+        final int ticks;
+
+        Operation(int ticks) {
+            this.ticks = ticks;
+        }
+    }
+
     public enum Limit {
         TIMEOUT,
         SEARCH_LIMIT,
@@ -46,7 +64,7 @@ public final class PlanningBudget {
     // Branch quanta run contiguously on one worker. A shared thread counter
     // avoids creating weak ThreadLocal keys for every order on the long-lived
     // worker pool; per-order cumulative limits remain in nodes below.
-    private static final ThreadLocal<long[]> THREAD_NODES = ThreadLocal.withInitial(() -> new long[1]);
+    private static final ThreadLocal<long[]> THREAD_NODES = ThreadLocal.withInitial(() -> new long[2]);
     private volatile boolean countThreadWork;
     private final AtomicLong reservedBytes = new AtomicLong();
     private final AtomicLong peakBytes = new AtomicLong();
@@ -86,6 +104,17 @@ public final class PlanningBudget {
         this.submitted = clock.getAsLong();
     }
 
+    /** Optional, bounded portfolio allowance; all workers still share the resulting cap. */
+    public static long parallelWorkLimit(long base, int workers, boolean expanded) {
+        if (base <= 0 || workers <= 0) throw new IllegalArgumentException("Invalid planning limits");
+        if (!expanded || workers == 1) return base;
+        // Two workers get 1.5x, three 1.75x, and four or more at most 2x.
+        // Extra work is an explicit policy choice, not a discount in accounting.
+        int quarters = Math.min(4, workers);
+        long bonus = base / 4 * quarters + base % 4 * quarters / 4;
+        return base > Long.MAX_VALUE - bonus ? Long.MAX_VALUE : base + bonus;
+    }
+
     public void start() {
         if (started.get() == Long.MIN_VALUE) started.compareAndSet(Long.MIN_VALUE, clock.getAsLong());
     }
@@ -107,24 +136,62 @@ public final class PlanningBudget {
     }
 
     public void check() {
-        checkpoint();
-        if (countThreadWork) THREAD_NODES.get()[0]++;
-        if (nodes.incrementAndGet() > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + nodes.get() + "/" + maxNodes);
+        chargeTicks(WORK_SCALE);
     }
 
     /** Account bounded independent checker work without a second per-unit loop. */
     void charge(long units) {
         if (units < 0) throw new IllegalArgumentException("Negative work");
+        if (units > Long.MAX_VALUE / WORK_SCALE) {
+            checkpoint();
+            nodes.set(Long.MAX_VALUE);
+            throw exhausted(Limit.SEARCH_LIMIT, "work_accounting_overflow");
+        }
+        chargeTicks(units * WORK_SCALE);
+    }
+
+    /** Returns charged ticks so a local continuation uses the same cost model. */
+    int operation(Operation operation, int bits) {
+        int words = (int) Math.max(1, Math.min(32, (Math.max(0, bits) + 63L) / 64));
+        int ticks = operation.ticks * (operation == Operation.SCAN ? 1 : words);
+        chargeTicks(ticks);
+        return ticks;
+    }
+
+    private void chargeTicks(long ticks) {
         checkpoint();
-        if (countThreadWork) THREAD_NODES.get()[0] += units;
-        long total = nodes.addAndGet(units);
-        if (total < 0 || total > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + total + "/" + maxNodes);
+        long previous, total;
+        while (true) {
+            previous = nodes.get();
+            // Reserve one terminal value. Overflow must not publish a negative
+            // count or allow a later addition to reopen the exhausted request.
+            if (previous == Long.MAX_VALUE || ticks >= Long.MAX_VALUE - previous) {
+                if (previous != Long.MAX_VALUE && !nodes.compareAndSet(previous, Long.MAX_VALUE)) continue;
+                throw exhausted(Limit.SEARCH_LIMIT, "work_accounting_overflow");
+            }
+            total = previous + ticks;
+            if (nodes.compareAndSet(previous, total)) break;
+        }
+        if (countThreadWork) {
+            long[] counter = THREAD_NODES.get();
+            long fraction = counter[1] + ticks % WORK_SCALE;
+            // This clock is read only through bounded differences, like
+            // nanoTime. Unit wrap is intentional; fractional ticks never wrap.
+            counter[0] += ticks / WORK_SCALE + fraction / WORK_SCALE;
+            counter[1] = fraction % WORK_SCALE;
+        }
+        if (units(total) > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + units(total) + "/" + maxNodes);
+    }
+
+    static long units(long ticks) {
+        return ticks / WORK_SCALE + (ticks % WORK_SCALE == 0 ? 0 : 1);
     }
 
     /** Per-thread accounting prevents concurrent branches charging one another's work. */
     long threadWork() {
         countThreadWork = true;
-        return THREAD_NODES.get()[0];
+        long[] counter = THREAD_NODES.get();
+        return counter[0] + (counter[1] == 0 ? 0 : 1);
     }
 
     public Exhausted exhausted(Limit limit, String detail) {
@@ -143,7 +210,7 @@ public final class PlanningBudget {
 
     /** A bounded trace of strategy transitions, not a record for every search node. */
     public synchronized void note(String stage, String detail) {
-        String entry = stage + "@" + nodes.get() + ": " + detail;
+        String entry = stage + "@" + nodes() + ": " + detail;
         diagnostics.addLast(entry.length() > 768 ? entry.substring(0, 768) + "..." : entry);
         while (diagnostics.size() > 32) diagnostics.removeFirst();
     }
@@ -163,12 +230,15 @@ public final class PlanningBudget {
 
     public void reserve(long bytes) {
         if (bytes < 0) throw new IllegalArgumentException("Negative memory reservation");
-        long current = reservedBytes.addAndGet(bytes);
-        if (current < 0 || current > maxBytes) {
-            reservedBytes.addAndGet(-bytes);
-            throw exhausted(Limit.MEMORY_LIMIT, "reserved_bytes=" + reservedBytes.get() + "; requested_bytes=" + bytes + "; limit_bytes=" + maxBytes);
-        }
-        peakBytes.accumulateAndGet(current, Math::max);
+        long previous;
+        do {
+            previous = reservedBytes.get();
+            // Failed admission must never publish a temporary overflow or an
+            // over-limit balance to another worker sharing this request.
+            if (bytes > maxBytes - previous)
+                throw exhausted(Limit.MEMORY_LIMIT, "reserved_bytes=" + previous + "; requested_bytes=" + bytes + "; limit_bytes=" + maxBytes);
+        } while (!reservedBytes.compareAndSet(previous, previous + bytes));
+        peakBytes.accumulateAndGet(previous + bytes, Math::max);
     }
 
     /** Optional strategies may decline a workspace without exhausting the order. */
@@ -185,7 +255,12 @@ public final class PlanningBudget {
     }
 
     public void release(long bytes) {
-        if (bytes < 0 || reservedBytes.addAndGet(-bytes) < 0) throw new IllegalStateException("Unbalanced planning memory reservation");
+        if (bytes < 0) throw new IllegalStateException("Unbalanced planning memory reservation");
+        long previous;
+        do {
+            previous = reservedBytes.get();
+            if (bytes > previous) throw new IllegalStateException("Unbalanced planning memory reservation");
+        } while (!reservedBytes.compareAndSet(previous, previous - bytes));
     }
 
     public void cancel() {
@@ -193,11 +268,12 @@ public final class PlanningBudget {
     }
 
     public long nodes() {
-        return nodes.get();
+        return units(nodes.get());
     }
 
     long remainingWork() {
-        return Math.max(0, maxNodes - nodes.get());
+        long ticks = nodes.get();
+        return ticks == Long.MAX_VALUE ? 0 : Math.max(0, maxNodes - units(ticks));
     }
 
     long availableBytes() {

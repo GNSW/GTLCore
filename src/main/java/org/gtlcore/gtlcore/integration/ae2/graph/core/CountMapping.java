@@ -29,6 +29,40 @@ final class CountMapping {
         this.guards = List.copyOf(guards);
     }
 
+    List<Expression> coordinates() {
+        return coordinates;
+    }
+
+    boolean unconditional() {
+        return guards.isEmpty();
+    }
+
+    /** x=f(y), y=g(z): preserve exact constants and every mapping guard. */
+    CountMapping then(CountMapping next, PlanningBudget budget) {
+        List<Expression> result = new ArrayList<>();
+        for (var expression : coordinates) {
+            var mapped = next.row(new ExactLinearProgram.Constraint(expression.terms(), expression.constant().negate()), budget);
+            result.add(new Expression(mapped.terms(), mapped.upper().negate()));
+        }
+        List<ExactLinearProgram.Constraint> conditions = new ArrayList<>(next.guards);
+        for (var guard : guards) conditions.add(next.row(guard, budget));
+        return new CountMapping(result, conditions);
+    }
+
+    BigInteger[] restore(BigInteger[] values, PlanningBudget budget) {
+        BigInteger[] result = new BigInteger[coordinates.size()];
+        for (int i = 0; i < result.length; i++) {
+            var expression = coordinates.get(i);
+            BigInteger value = expression.constant();
+            for (var term : expression.terms().entrySet()) {
+                budget.check();
+                value = value.add(term.getValue().multiply(values[term.getKey()]));
+            }
+            result[i] = value;
+        }
+        return result;
+    }
+
     ExactLinearProgram.Constraint row(ExactLinearProgram.Constraint input, PlanningBudget budget) {
         Map<Integer, BigInteger> terms = new LinkedHashMap<>();
         BigInteger upper = input.upper();

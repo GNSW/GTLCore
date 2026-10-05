@@ -208,7 +208,7 @@ final class CountCoreMinimize implements AutoCloseable {
     }
 
     private void traceCharge(long until) {
-        if (budget.threadWork() >= until) throw new TraceLimit();
+        if (budget.threadWork() - until >= 0) throw new TraceLimit();
         budget.check();
     }
 

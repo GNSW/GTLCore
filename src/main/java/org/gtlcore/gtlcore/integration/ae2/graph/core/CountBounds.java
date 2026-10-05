@@ -71,6 +71,10 @@ final class CountBounds implements AutoCloseable {
             return this;
         }
 
+        long retainedBytes() {
+            return bytes;
+        }
+
         @Override
         public void close() {
             if (owners.decrementAndGet() == 0) budget.release(bytes);

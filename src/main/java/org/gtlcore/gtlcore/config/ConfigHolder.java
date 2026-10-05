@@ -190,6 +190,10 @@ public class ConfigHolder {
     @Configurable.Comment("config.gtlcore.option.multiblockPreview.comment")
     public PreviewOptions multiblockPreview = new PreviewOptions();
 
+    @Configurable
+    @Configurable.Comment("config.gtlcore.option.bloom.comment")
+    public BloomOptions bloom = new BloomOptions();
+
     public static class PreviewOptions {
 
         @Configurable

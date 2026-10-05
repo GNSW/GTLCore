@@ -3,7 +3,18 @@
   "minVersion": "0.8",
   "package": "org.gtlcore.gtlcore.mixin",
   "compatibilityLevel": "JAVA_17",
+  "plugin": "org.gtlcore.gtlcore.client.bloom.BridgeMixinPlugin",
   "client": [
+    "bloom.ClientLevelMixin",
+    "bloom.FusionReactorRendererMixin",
+    "bloom.GameRendererMixin",
+    "bloom.LevelRendererMixin",
+    "bloom.OculusAtlasEmissionMixin",
+    "bloom.OculusEmissionReloadMixin",
+    "bloom.OculusPbrCacheMixin",
+    "bloom.OculusPbrSamplerMixin",
+    "bloom.SpriteSourceListAliasMixin",
+
     "mc.client.AnimationBufferSourceAccessor",
     "ae2.gui.CraftingVisualizationToolbarMixin",
     "ae2ct.CraftingTreeWidgetMixin",

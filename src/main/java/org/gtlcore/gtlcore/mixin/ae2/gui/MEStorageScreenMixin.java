@@ -38,7 +38,7 @@ public abstract class MEStorageScreenMixin<C extends MEStorageMenu> extends AEBa
     @Override
     public void gtlcore$setJeiSearchText(String searchText) {
         this.searchField.setValue(searchText);
-        if (this.config.isUseExternalSearch()) {
+        if (this.config.isUseExternalSearch() || this.config.isSyncWithExternalSearch()) {
             ItemListMod.setSearchText(searchText);
         }
     }

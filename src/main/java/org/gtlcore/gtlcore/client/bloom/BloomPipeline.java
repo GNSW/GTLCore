@@ -20,6 +20,55 @@ public final class BloomPipeline implements AutoCloseable {
     private final Target[] horizontal = new Target[4], vertical = new Target[4];
     private int fullscreenVao;
     private int sceneDepth;
+    private boolean opaqueDepthReady;
+
+    public void beginFrame() {
+        opaqueDepthReady = false;
+    }
+
+    /** Preserve opaque occlusion before glass/water can write a nearer depth. */
+    public void captureOpaqueDepth() throws IOException {
+        if (opaqueDepthReady) return;
+        var main = Minecraft.getInstance().getMainRenderTarget();
+        // Shader renderers may use a different framebuffer during terrain rendering.
+        // Take its depth before init() binds our own framebuffer attachments.
+        int source = glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
+        // Fabulous' depth-copy stage can leave framebuffer 0 bound until the terrain
+        // RenderType is set up. The opaque main target is still valid at this point.
+        if (source == 0 || glGetFramebufferAttachmentParameteri(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE) == GL_NONE) {
+            if (main.getDepthTextureId() <= 0) return;
+            source = main.frameBufferId;
+        }
+        if (mask == null || mask.width != main.width || mask.height != main.height) {
+            try (var state = new GlState()) {
+                state.prepare();
+                init(main.width, main.height);
+            }
+        }
+        // A texture copy changes no program, VAO, viewport, blend/depth state or sampler.
+        // Save only the bindings it touches instead of querying/restoring the entire
+        // render state every frame. Initialization above still uses the full guard.
+        int readFbo = glGetInteger(GL_READ_FRAMEBUFFER_BINDING);
+        int activeTexture = glGetInteger(GL_ACTIVE_TEXTURE);
+        glActiveTexture(GL_TEXTURE5);
+        int previousTexture = glGetInteger(GL_TEXTURE_BINDING_2D);
+        try {
+            copyDepth(source, main.width, main.height);
+            opaqueDepthReady = true;
+        } finally {
+            glBindTexture(GL_TEXTURE_2D, previousTexture);
+            glActiveTexture(activeTexture);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
+        }
+    }
+
+    private void copyDepth(int framebuffer, int width, int height) {
+        // Keep an immutable copy: composite writes to main and cannot sample its attachment.
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
+        texture(5, sceneDepth);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+    }
 
     public void render(SectionMeshes meshes, DynamicRings rings, Matrix4f view, Matrix4f projection,
                        Frustum frustum, Vec3 camera, float fogStart, float fogEnd, int fogShape) throws IOException {
@@ -31,11 +80,9 @@ public final class BloomPipeline implements AutoCloseable {
         try (var state = new GlState()) {
             state.prepare();
             init(main.width, main.height);
-            // Keep an immutable copy: the final composite writes to main, whose depth attachment
-            // must not also be sampled by that draw (an OpenGL framebuffer feedback loop).
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, main.frameBufferId);
-            texture(5, sceneDepth);
-            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, main.width, main.height);
+            // Normally captured before translucent terrain. Fall back only if that render
+            // stage was skipped; never reuse another frame's camera/occlusion snapshot.
+            if (!opaqueDepthReady) copyDepth(main.frameBufferId, main.width, main.height);
             mask.bind();
             glClearColor(0, 0, 0, 0);
             glClear(GL_COLOR_BUFFER_BIT);
@@ -55,10 +102,14 @@ public final class BloomPipeline implements AutoCloseable {
             glCullFace(GL_BACK);
             glFrontFace(GL_CCW);
             glEnable(GL_CULL_FACE);
-            meshes.draw(emission, view, frustum, camera);
+            boolean terrain = meshes.draw(emission, view, frustum, camera);
+            // Dormant casings retain their GPU geometry. An entirely dark mask still needs
+            // no blur/composite passes; closing GlState restores the caller's framebuffer.
+            if (!terrain && !rings.hasMesh()) return;
             // GTM's light-ring RenderType is explicitly double-sided, as are our screen passes.
             glDisable(GL_CULL_FACE);
             emission.integer("Textured", 0);
+            emission.integer("SectionOffsets", 0);
             // Entity vertices already contain the block entity's camera-relative pose transform.
             emission.matrix("ModelView", RenderSystem.getModelViewMatrix());
             emission.vec3("ChunkOffset", 0, 0, 0);
@@ -86,8 +137,8 @@ public final class BloomPipeline implements AutoCloseable {
                 source = vertical[i].texture;
             }
 
-            // Oculus has already drawn its hand here. Include that foreground depth in both
-            // the blur and composite, instead of laying an unoccluded halo over the hand.
+            // Oculus draws its opaque hand before the translucent-terrain capture too,
+            // so foreground hand/wall occlusion is retained without treating glass as solid.
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, main.frameBufferId);
             glViewport(0, 0, main.viewWidth, main.viewHeight);
             composite.use();
@@ -149,6 +200,7 @@ public final class BloomPipeline implements AutoCloseable {
     }
 
     private void closeTargets() {
+        opaqueDepthReady = false;
         if (sceneDepth != 0) {
             glDeleteTextures(sceneDepth);
             sceneDepth = 0;
@@ -201,7 +253,8 @@ public final class BloomPipeline implements AutoCloseable {
             texture = glGenTextures();
             framebuffer = glGenFramebuffers();
             glBindTexture(GL_TEXTURE_2D, texture);
-            // Alpha carries luminance-weighted view distance through filtering, not opacity.
+            // Alpha carries surface distance, not opacity. Depth is tested per texel before
+            // interpolation, independently of how many nearby emitters are currently on.
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, (ByteBuffer) null);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

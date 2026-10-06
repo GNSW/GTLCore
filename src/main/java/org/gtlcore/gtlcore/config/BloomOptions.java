@@ -23,7 +23,7 @@ public class BloomOptions {
 
     @Configurable
     @Configurable.Comment("config.gtlcore.option.bloomMode.comment")
-    public Mode bloomMode = Mode.AUTO;
+    public Mode bloomMode = Mode.OFF;
 
     @Configurable
     public Local local = new Local();

@@ -6,6 +6,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -74,5 +75,11 @@ public abstract class LevelRendererMixin {
     private void gtlcore$bloom$matrices(PoseStack pose, float ticks, long time, boolean outline, Camera camera,
                                         GameRenderer renderer, LightTexture light, Matrix4f projection, CallbackInfo ci) {
         BloomClient.capture(pose.last().pose(), projection, camera.getPosition());
+    }
+
+    @Inject(method = "renderChunkLayer", at = @At("HEAD"))
+    private void gtlcore$bloom$opaqueDepth(RenderType type, PoseStack pose, double x, double y, double z,
+                                           Matrix4f projection, CallbackInfo ci) {
+        if (type == RenderType.translucent()) BloomClient.beforeTranslucent();
     }
 }

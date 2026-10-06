@@ -16,30 +16,58 @@ float gaussianPdf(float x, float sigma) {
 float sceneDistance(vec2 uv) {
     ivec2 size = textureSize(SceneDepth, 0);
     float z = texelFetch(SceneDepth, clamp(ivec2((uv * DepthScale + DepthOffset) * vec2(size)), ivec2(0), size - 1), 0).r;
-    return abs(Projection[2][3]) > 0.5
+    float distance = abs(Projection[2][3]) > 0.5
             ? abs(Projection[3][2] / (2.0 * z - 1.0 + Projection[2][2]))
             : 2.0 * z / max(abs(Projection[2][2]), 0.000001);
+    return min(distance, 65504.0);
 }
-vec4 visibleSample(vec2 uv, float receiver) {
-    vec4 light = texture(Source, uv);
-    float energy = dot(light.rgb, vec3(0.2126, 0.7152, 0.0722));
-    if (energy <= 0.000001) return vec4(0.0);
-    float distance = light.a / energy;
+vec3 visibleTexel(ivec2 pixel, ivec2 size, float receiver) {
+    vec4 light = texelFetch(Source, clamp(pixel, ivec2(0), size - 1), 0);
     // Small continuous allowance for half-float filtering and gently sloped surfaces.
     // This is a post-blur edge treatment; it does not loosen source visibility testing.
     float tolerance = max(0.02, receiver * 0.02);
-    return light * (1.0 - smoothstep(tolerance, tolerance * 2.0, distance - receiver));
+    return light.rgb * (1.0 - smoothstep(tolerance, tolerance * 2.0, light.a - receiver));
+}
+vec3 visibleSample(vec2 uv, float receiver) {
+    ivec2 size = textureSize(Source, 0);
+    vec2 pixel = uv * vec2(size) - 0.5;
+    ivec2 origin = ivec2(floor(pixel));
+    vec2 fraction = fract(pixel);
+    // Test each depth before interpolation. Hardware bilinear filtering mixes unrelated
+    // surfaces first, so one distant source can otherwise reject the whole mixed sample.
+    return mix(mix(visibleTexel(origin, size, receiver),
+                   visibleTexel(origin + ivec2(1, 0), size, receiver), fraction.x),
+               mix(visibleTexel(origin + ivec2(0, 1), size, receiver),
+                   visibleTexel(origin + ivec2(1, 1), size, receiver), fraction.x), fraction.y);
 }
 void main() {
     float sigma = float(Radius);
     float receiver = sceneDistance(texCoord);
     float weights = gaussianPdf(0.0, sigma);
-    vec4 result = visibleSample(texCoord, receiver) * weights;
-    for (int i = 1; i < Radius; ++i) {
-        float w = gaussianPdf(float(i), sigma);
-        vec2 offset = BlurDir / OutSize * float(i);
-        result += (visibleSample(texCoord + offset, receiver) + visibleSample(texCoord - offset, receiver)) * w;
-        weights += 2.0 * w;
+    vec3 result;
+    ivec2 size = textureSize(Source, 0);
+    if (all(equal(size, ivec2(OutSize)))) {
+        // Same-size passes sample exact texel centres. In particular, each vertical
+        // pass needs one depth-tested fetch per tap, not four bilinear neighbours.
+        // Integer coordinates also avoid round-off around texel boundaries.
+        ivec2 pixel = ivec2(gl_FragCoord.xy);
+        result = visibleTexel(pixel, size, receiver) * weights;
+        for (int i = 1; i < Radius; ++i) {
+            float w = gaussianPdf(float(i), sigma);
+            ivec2 offset = ivec2(BlurDir) * i;
+            result += (visibleTexel(pixel + offset, size, receiver) + visibleTexel(pixel - offset, size, receiver)) * w;
+            weights += 2.0 * w;
+        }
+    } else {
+        result = visibleSample(texCoord, receiver) * weights;
+        for (int i = 1; i < Radius; ++i) {
+            float w = gaussianPdf(float(i), sigma);
+            vec2 offset = BlurDir / OutSize * float(i);
+            result += (visibleSample(texCoord + offset, receiver) + visibleSample(texCoord - offset, receiver)) * w;
+            weights += 2.0 * w;
+        }
     }
-    fragColor = result / weights;
+    // The filtered light is now at this receiving surface. Its next visibility test uses
+    // that fixed scene depth, never a depth whose value changes with nearby emitters.
+    fragColor = vec4(result / weights, receiver);
 }

@@ -32,6 +32,7 @@ final class GlProgram implements AutoCloseable {
             glBindAttribLocation(program, 0, "Position");
             glBindAttribLocation(program, 1, "Color");
             glBindAttribLocation(program, 2, "UV0");
+            glBindAttribLocation(program, 3, "SectionOffset");
             glBindFragDataLocation(program, 0, "fragColor");
             glLinkProgram(program);
             if (glGetProgrami(program, GL_LINK_STATUS) == 0) {

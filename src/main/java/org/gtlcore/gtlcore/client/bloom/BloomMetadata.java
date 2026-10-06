@@ -50,6 +50,10 @@ public final class BloomMetadata {
     public static boolean matches(BakedQuad quad) {
         if (quad.getTintIndex() < -100) return true;
         var sprite = quad.getSprite().contents().name();
+        return matchesTexture(sprite);
+    }
+
+    static boolean matchesTexture(ResourceLocation sprite) {
         return sprites.contains(sprite) || BloomRules.texture(sprite);
     }
 

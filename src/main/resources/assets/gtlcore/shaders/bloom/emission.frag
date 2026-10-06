@@ -37,8 +37,7 @@ void main() {
     float distance = abs(Projection[2][3]) > 0.5
             ? abs(Projection[3][2] / (2.0 * gl_FragCoord.z - 1.0 + Projection[2][2]))
             : 2.0 * gl_FragCoord.z / max(abs(Projection[2][2]), 0.000001);
-    // A colour-weighted depth moment survives bilinear filtering and empty (black) texels.
-    // Keep it with the light all the way through the blur; scene depth at a halo pixel
-    // belongs to the background there, not to the light that produced that halo.
-    fragColor = vec4(radiance, dot(radiance, vec3(0.2126, 0.7152, 0.0722)) * distance);
+    // Depth is independent of brightness. Each texel is visibility-tested before filtering;
+    // averaging light-weighted depths would let a blinking distant light hide a steady one.
+    fragColor = vec4(radiance, min(distance, 65504.0));
 }

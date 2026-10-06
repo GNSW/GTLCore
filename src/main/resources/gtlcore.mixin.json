@@ -6,6 +6,8 @@
   "plugin": "org.gtlcore.gtlcore.client.bloom.BridgeMixinPlugin",
   "client": [
     "bloom.ClientLevelMixin",
+    "bloom.ConnectedModelAccessor",
+    "bloom.LevelChunkSectionMixin",
     "bloom.FusionReactorRendererMixin",
     "bloom.GameRendererMixin",
     "bloom.LevelRendererMixin",

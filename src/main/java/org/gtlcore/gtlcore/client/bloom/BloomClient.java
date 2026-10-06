@@ -94,6 +94,7 @@ public final class BloomClient {
 
     public static void beginFrame() {
         if (!initialized) return;
+        PIPELINE.beginFrame();
         ShaderEmissionBridge.update();
         view = null;
         projection = null;
@@ -128,6 +129,15 @@ public final class BloomClient {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) frustum = event.getFrustum();
     }
 
+    public static void beforeTranslucent() {
+        if (!active() || view == null || Minecraft.getInstance().level == null || ShaderCompat.shadowPass()) return;
+        try {
+            PIPELINE.captureOpaqueDepth();
+        } catch (Exception e) {
+            pauseAfterFailure(e);
+        }
+    }
+
     public static void afterLevel() {
         if (!initialized) return;
         // Oculus may prepare the first/dimension pipeline after our frame-head hook.
@@ -145,16 +155,20 @@ public final class BloomClient {
         try {
             MESHES.buildSome(camera, frustum);
             RINGS.finish();
-            if (MESHES.hasMeshes() || RINGS.hasMesh()) {
+            if (RINGS.hasMesh() || MESHES.hasVisibleMeshes(frustum)) {
                 PIPELINE.render(MESHES, RINGS, view, projection, frustum, camera, fogStart, fogEnd, fogShape);
             }
         } catch (Exception e) {
-            unavailable = "泛光初始化或渲染失败；详见 logs/latest.log，F3+T 可重新加载。";
-            GTLCore.LOGGER.error("Bloom paused after rendering failure", e);
-            PIPELINE.close();
+            pauseAfterFailure(e);
         } finally {
-            RINGS.clear();
+            RINGS.endFrame();
         }
+    }
+
+    private static void pauseAfterFailure(Exception e) {
+        unavailable = "泛光初始化或渲染失败；详见 logs/latest.log，F3+T 可重新加载。";
+        GTLCore.LOGGER.error("Bloom paused after rendering failure", e);
+        PIPELINE.close();
     }
 
     private static void chunkLoad(ChunkEvent.Load event) {

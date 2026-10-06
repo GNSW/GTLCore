@@ -2,9 +2,14 @@ package org.gtlcore.gtlcore.client.bloom;
 
 import org.gtlcore.gtlcore.GTLCore;
 
+import com.gregtechceu.gtceu.api.block.ActiveBlock;
+
+import com.lowdragmc.lowdraglib.client.model.custommodel.LDLMetadataSection;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.SimpleBakedModel;
@@ -42,13 +47,16 @@ import java.util.PriorityQueue;
 /** Render-thread owned. No worker shares a BufferBuilder or accesses a live block entity. */
 public final class SectionMeshes {
 
+    private static final byte[] EMPTY = new byte[0];
     private final Long2ObjectOpenHashMap<Entry> entries = new Long2ObjectOpenHashMap<>();
+    private final RegionMeshes regions = new RegionMeshes();
     private static final Comparator<Entry> PRIORITY = Comparator.<Entry>comparingInt(e -> e.sortVisibility)
-            .thenComparingInt(Entry::updatePriority)
+            .thenComparingInt(e -> e.sortPriority)
             .thenComparingLong(e -> e.built ? e.lastServed : 0)
             .thenComparingDouble(e -> e.sortDistance);
-    private final PriorityQueue<Entry> pending = new PriorityQueue<>(PRIORITY);
+    private PriorityQueue<Entry> pending = new PriorityQueue<>(PRIORITY);
     private final Map<BlockState, Boolean> candidates = new IdentityHashMap<>();
+    private final Map<BlockState, BlockState> alternatives = new IdentityHashMap<>();
     private final EmissionTemplates templates = new EmissionTemplates();
     private final RandomSource candidateRandom = RandomSource.create(0);
     private final BufferBuilder workBuffer = new BufferBuilder(32 * 1024);
@@ -156,7 +164,16 @@ public final class SectionMeshes {
 
     private Entry entry(int x, int y, int z) {
         if (level == null || y < level.getMinSection() || y >= level.getMaxSection() || !level.getChunkSource().hasChunk(x, z)) return null;
-        return entries.computeIfAbsent(SectionPos.asLong(x, y, z), key -> new Entry(x, y, z));
+        long key = SectionPos.asLong(x, y, z);
+        Entry existing = entries.get(key);
+        if (existing != null) return existing;
+        // Terrain/light invalidation includes empty neighbouring sections. They cannot
+        // contribute emission and must not fill the initial-build queue in a large base.
+        var chunk = level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
+        if (chunk == null || chunk.getSection(y - level.getMinSection()).hasOnlyAir()) return null;
+        Entry created = new Entry(x, y, z);
+        entries.put(key, created);
+        return created;
     }
 
     public void buildSome(Vec3 camera, Frustum frustum) {
@@ -171,9 +188,11 @@ public final class SectionMeshes {
             for (Entry e : sorted) {
                 e.sortVisibility = frustum.isVisible(e.bounds) ? 0 : 1;
                 e.sortDistance = e.bounds.getCenter().distanceToSqr(camera);
+                e.sortPriority = e.updatePriority();
             }
-            pending.clear();
-            pending.addAll(sorted);
+            // The collection constructor heapifies in linear time. Re-inserting every
+            // dirty section individually made scheduling itself exceed the frame budget.
+            pending = new PriorityQueue<>(sorted);
             sortPending = false;
             lastSortCamera = camera;
             sortFrames = 0;
@@ -277,6 +296,7 @@ public final class SectionMeshes {
     private void queueAgain(Entry e, boolean priorityChanged) {
         if (e.valid && !e.queued) {
             e.queued = true;
+            e.sortPriority = e.updatePriority();
             pending.add(e);
         }
         if (priorityChanged) sortPending = true;
@@ -301,7 +321,7 @@ public final class SectionMeshes {
                 capacity = Math.max(1024, e.capacity);
                 while (capacity < used) capacity = Math.multiplyExact(capacity, 2);
             }
-            RawMesh next = null;
+            RegionMeshes.Slice next = null;
             if (capacity > 0) {
                 var vertices = org.lwjgl.system.MemoryUtil.memCalloc(capacity);
                 try {
@@ -311,7 +331,7 @@ public final class SectionMeshes {
                     }
                     vertices.position(0);
                     vertices.limit(capacity);
-                    next = RawMesh.uploadVertices(vertices, true);
+                    next = regions.upload(e.x, e.y, e.z, vertices);
                     uploadedBytes += capacity;
                     meshAllocations++;
                 } finally {
@@ -370,6 +390,7 @@ public final class SectionMeshes {
         for (Piece p : pieces) e.published.put(p.index, p);
         e.counts = new int[pieces.size()];
         e.offsets = new long[pieces.size()];
+        e.rangesKnown = false;
     }
 
     private boolean isCandidate(BlockState state) {
@@ -377,73 +398,184 @@ public final class SectionMeshes {
         if (BloomRules.fullBlock(state)) return true;
         return candidates.computeIfAbsent(state, value -> {
             var model = EmissionTemplates.localModel(Minecraft.getInstance().getBlockRenderer().getBlockModel(value));
-            // Only the exact vanilla simple model has guaranteed fixed quads. Dynamic models
-            // (LDLib/CTM/weighted/custom) must be evaluated at their actual world position.
-            if (model.getClass() != SimpleBakedModel.class) return true;
+            var fixed = EmissionTemplates.retainedModel(model);
+            // Exact LDLib CTM over a simple model only selects between each base sprite
+            // and its declared connection sprite. Check both without tessellating every
+            // unmarked casing/glass/off variant. Unknown dynamic wrappers remain candidates.
+            if (fixed.getClass() != SimpleBakedModel.class) return true;
+            boolean connected = fixed != model;
             for (Direction side : Direction.values()) {
-                for (var quad : model.getQuads(value, side, candidateRandom, ModelData.EMPTY, null))
-                    if (BloomMetadata.matches(quad)) return true;
+                for (var quad : fixed.getQuads(value, side, candidateRandom, ModelData.EMPTY, null))
+                    if (emits(quad, connected)) return true;
             }
-            for (var quad : model.getQuads(value, null, candidateRandom, ModelData.EMPTY, null))
-                if (BloomMetadata.matches(quad)) return true;
+            for (var quad : fixed.getQuads(value, null, candidateRandom, ModelData.EMPTY, null))
+                if (emits(quad, connected)) return true;
             return false;
         });
     }
 
-    public void draw(GlProgram shader, Matrix4f view, Frustum frustum, Vec3 camera) {
+    private static boolean emits(BakedQuad quad, boolean connected) {
+        if (BloomMetadata.matches(quad)) return true;
+        if (!connected) return false;
+        var connection = LDLMetadataSection.getMetadata(quad.getSprite()).connection;
+        return connection != null && BloomMetadata.matchesTexture(connection);
+    }
+
+    /**
+     * Static active casings, including LDLib CTM over static models, keep both states resident.
+     * Unlike a shared vertex template, these are still tessellated at their actual position,
+     * including connected textures, Forge culling and AO.
+     * Unknown wrappers, tint providers, block entities and offsets retain the ordinary path.
+     */
+    private BlockState alternateState(BlockState state) {
+        if (alternatives.containsKey(state)) return alternatives.get(state);
+        BlockState other = null;
+        if (state.getBlock() instanceof ActiveBlock && state.hasProperty(ActiveBlock.ACTIVE) &&
+                !state.hasBlockEntity() && !state.hasOffsetFunction() && state.getRenderShape() == RenderShape.MODEL) {
+            BlockState candidate = state.cycle(ActiveBlock.ACTIVE);
+            if (!candidate.hasBlockEntity() && !candidate.hasOffsetFunction() && candidate.getRenderShape() == RenderShape.MODEL &&
+                    canRetainState(state) && canRetainState(candidate)) {
+                other = candidate;
+                alternatives.put(other, state);
+            }
+        }
+        alternatives.put(state, other);
+        return other;
+    }
+
+    private boolean canRetainState(BlockState state) {
+        var model = EmissionTemplates.retainedModel(Minecraft.getInstance().getBlockRenderer().getBlockModel(state));
+        if (model.getClass() != SimpleBakedModel.class) return false;
+        boolean full = BloomRules.fullBlock(state);
+        // A custom tint provider can read the live state at pos instead of the state passed
+        // to it. Never precompute its colour while that state is inactive in the world.
+        for (var layer : model.getRenderTypes(state, candidateRandom, ModelData.EMPTY)) {
+            for (int side = 0; side <= 6; side++) {
+                for (var quad : model.getQuads(state, side == 6 ? null : Direction.from3DDataValue(side),
+                        candidateRandom, ModelData.EMPTY, layer))
+                    if (quad.isTinted() && (full || BloomMetadata.matches(quad))) return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isPotentialCandidate(BlockState state) {
+        if (isCandidate(state)) return true;
+        BlockState alternate = alternateState(state);
+        return alternate != null && isCandidate(alternate);
+    }
+
+    public boolean draw(GlProgram shader, Matrix4f view, Frustum frustum, Vec3 camera) {
         lastDraws = 0;
         shader.matrix("ModelView", view);
         stalePositions.clear();
+        regions.beginFrame();
         for (Entry e : entries.values()) {
             if (e.mesh == null || e.uploaded.length == 0 || !e.valid || !frustum.isVisible(e.bounds)) continue;
             LevelChunk chunk = level.getChunkSource().getChunk(e.x, e.z, ChunkStatus.FULL, false);
             if (chunk == null) continue;
             var section = chunk.getSection(e.y - level.getMinSection());
-            int ranges = 0, first = 0, count = 0, end = 0;
-            for (Piece piece : e.uploaded) {
-                int i = piece.index, length = piece.vertices.length / 32 / 4 * 6;
-                int offset = e.slots.offset(i) / 128 * 6;
-                if (section.getBlockState(i & 15, i >> 8, (i >> 4) & 15) != piece.state) {
-                    // The displayed mesh may lag even if a mod bypassed renderer invalidation.
-                    // Suppress just this old block now; do not wait for a rebuild or blank the
-                    // entire section. Unchanged neighbours keep their bloom and one draw batch.
-                    if (count > 0) {
-                        e.counts[ranges] = count;
-                        e.offsets[ranges++] = (long) first * 4;
-                        count = 0;
-                    }
-                    // The current CPU piece may already reflect this change while its
-                    // completed publication waits for budget. Do not dirty it again per draw.
-                    if (e.pieces.get(i) == piece && !e.dirty.get(i) && (e.work == null || !e.work.todo.get(i)))
-                        stalePositions.add(BlockPos.asLong(e.x * 16 + (i & 15), e.y * 16 + (i >> 8), e.z * 16 + ((i >> 4) & 15)));
-                } else {
-                    if (count > 0 && offset != end) {
-                        e.counts[ranges] = count;
-                        e.offsets[ranges++] = (long) first * 4;
-                        count = 0;
-                    }
-                    if (count == 0) first = offset;
-                    count += length;
-                    end = offset + length;
-                }
+            boolean changed = !rangesCurrent(e, section);
+            if (changed) updateRanges(e, section);
+            if (e.ranges > 0) {
+                e.mesh.select(e.counts, e.offsets, e.ranges, changed);
             }
-            if (count > 0) {
-                e.counts[ranges] = count;
-                e.offsets[ranges++] = (long) first * 4;
-            }
-            shader.vec3("ChunkOffset", (float) (e.x * 16.0 - camera.x), (float) (e.y * 16.0 - camera.y), (float) (e.z * 16.0 - camera.z));
-            if (ranges > 0) e.mesh.drawRanges(e.counts, e.offsets, ranges);
-            if (ranges > 0) lastDraws++;
         }
+        lastDraws = regions.draw(shader, camera);
         // Do not insert neighbour entries while iterating the section map.
         for (long packed : stalePositions) {
             int x = BlockPos.getX(packed), y = BlockPos.getY(packed), z = BlockPos.getZ(packed);
             dirtyArea(x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);
         }
+        return lastDraws > 0;
+    }
+
+    private static boolean rangesCurrent(Entry e, LevelChunkSection section) {
+        return e.rangesKnown && e.drawnSection == section && section instanceof SectionRevision revision &&
+                e.drawnRevision == revision.gtlcore$bloomRevision();
+    }
+
+    private static void rememberRanges(Entry e, LevelChunkSection section) {
+        e.drawnSection = section;
+        e.rangesKnown = section instanceof SectionRevision;
+        if (section instanceof SectionRevision revision) e.drawnRevision = revision.gtlcore$bloomRevision();
+    }
+
+    /** Rebuild selection only on a state/storage change; geometry stays resident on the GPU. */
+    private void updateRanges(Entry e, LevelChunkSection section) {
+        int ranges = 0, first = 0, count = 0, end = 0;
+        for (Piece piece : e.uploaded) {
+            int i = piece.index;
+            BlockState current = section.getBlockState(i & 15, i >> 8, (i >> 4) & 15);
+            boolean primary = current == piece.state;
+            boolean known = primary || current == piece.alternate;
+            int bytes = primary ? piece.primaryBytes : known ? piece.vertices.length - piece.primaryBytes : 0;
+            int length = bytes / 128 * 6;
+            int offset = (e.slots.offset(i) + (primary ? 0 : piece.primaryBytes)) / 128 * 6;
+            if (!known || length == 0) {
+                // The displayed mesh may lag even if a mod bypassed renderer invalidation.
+                // Suppress just this old block now; do not wait for a rebuild or blank the
+                // entire section. Unchanged neighbours keep their bloom and one draw batch.
+                if (count > 0) {
+                    e.counts[ranges] = count;
+                    e.offsets[ranges++] = (long) first * 4;
+                    count = 0;
+                }
+                // The current CPU piece may already reflect this change while its
+                // completed publication waits for budget. Do not dirty it again per draw.
+                if (!known && e.pieces.get(i) == piece && !e.dirty.get(i) && (e.work == null || !e.work.todo.get(i)))
+                    stalePositions.add(BlockPos.asLong(e.x * 16 + (i & 15), e.y * 16 + (i >> 8), e.z * 16 + ((i >> 4) & 15)));
+            } else {
+                if (count > 0 && offset != end) {
+                    e.counts[ranges] = count;
+                    e.offsets[ranges++] = (long) first * 4;
+                    count = 0;
+                }
+                if (count == 0) first = offset;
+                count += length;
+                end = offset + length;
+            }
+        }
+        if (count > 0) {
+            e.counts[ranges] = count;
+            e.offsets[ranges++] = (long) first * 4;
+        }
+        e.ranges = ranges;
+        rememberRanges(e, section);
     }
 
     public boolean hasMeshes() {
         for (Entry entry : entries.values()) if (entry.mesh != null && entry.uploaded.length > 0) return true;
+        return false;
+    }
+
+    /** Dormant cached variants must not activate the full-screen bloom pipeline by themselves. */
+    public boolean hasVisibleMeshes(Frustum frustum) {
+        for (Entry e : entries.values()) {
+            if (e.mesh == null || !e.valid || !frustum.isVisible(e.bounds)) continue;
+            LevelChunk chunk = level.getChunkSource().getChunk(e.x, e.z, ChunkStatus.FULL, false);
+            if (chunk == null) continue;
+            var section = chunk.getSection(e.y - level.getMinSection());
+            if (rangesCurrent(e, section)) {
+                if (e.ranges > 0) return true;
+                continue;
+            }
+            for (Piece piece : e.uploaded) {
+                int i = piece.index;
+                BlockState current = section.getBlockState(i & 15, i >> 8, (i >> 4) & 15);
+                if (current == piece.state) {
+                    if (piece.primaryBytes > 0) return true;
+                } else if (current == piece.alternate) {
+                    if (piece.vertices.length > piece.primaryBytes) return true;
+                } else {
+                    // Let draw detect and enqueue unnotified state changes even when there
+                    // are no other emitting blocks. It will skip an empty mask afterwards.
+                    return true;
+                }
+            }
+            e.ranges = 0;
+            rememberRanges(e, section);
+        }
         return false;
     }
 
@@ -472,10 +604,9 @@ public final class SectionMeshes {
     }
 
     public String status() {
-        long bytes = 0;
+        long bytes = regions.bytes();
         int meshes = 0;
         for (Entry e : entries.values()) if (e.mesh != null) {
-            bytes += e.mesh.bytes();
             meshes++;
         }
         return String.format(java.util.Locale.ROOT,
@@ -495,6 +626,7 @@ public final class SectionMeshes {
         entries.clear();
         pending.clear();
         candidates.clear();
+        alternatives.clear();
         templates.clear();
         uploads.clear();
         level = null;
@@ -535,14 +667,19 @@ public final class SectionMeshes {
         e.uploaded = new Piece[0];
         e.counts = new int[0];
         e.offsets = new long[0];
+        e.rangesKnown = false;
+        e.drawnSection = null;
+        e.ranges = 0;
         e.published.clear();
         e.slots = new VertexSlots();
         e.capacity = 0;
     }
 
-    private record Piece(int index, BlockState state, byte[] vertices) {}
+    // Both state variants share one stable slot. A dormant variant can have zero vertices;
+    // it must not evict the other variant or enqueue a rebuild merely because it is selected.
+    private record Piece(int index, BlockState state, BlockState alternate, int primaryBytes, byte[] vertices) {}
 
-    private static final class Entry {
+    private static final class Entry implements Comparable<Entry> {
 
         final int x, y, z;
         final AABB bounds;
@@ -556,12 +693,22 @@ public final class SectionMeshes {
         Piece[] uploaded = new Piece[0];
         int[] counts = new int[0];
         long[] offsets = new long[0];
+        LevelChunkSection drawnSection;
+        long drawnRevision;
+        int ranges;
+        boolean rangesKnown;
         Job work;
         long lastServed, uploadOrder;
         int sortVisibility, uploadVisibility;
+        int sortPriority = 2;
         double sortDistance;
         boolean queued, built, uploadPending, valid = true;
-        RawMesh mesh;
+        RegionMeshes.Slice mesh;
+
+        @Override
+        public int compareTo(Entry other) {
+            return PRIORITY.compare(this, other);
+        }
 
         int updatePriority() {
             if (!directDirty.isEmpty() || work != null && !work.direct.isEmpty()) return 0;
@@ -601,7 +748,7 @@ public final class SectionMeshes {
             entry.dirty.clear();
             entry.urgentDirty.clear();
             entry.directDirty.clear();
-            if (section.hasOnlyAir() || !section.maybeHas(SectionMeshes.this::isCandidate)) {
+            if (section.hasOnlyAir() || !section.maybeHas(SectionMeshes.this::isPotentialCandidate)) {
                 changed = !entry.pieces.isEmpty();
                 entry.pieces.clear();
                 todo.clear();
@@ -643,63 +790,76 @@ public final class SectionMeshes {
                 scannedBlocks++;
                 int x = index & 15, z = (index >> 4) & 15, y = index >> 8;
                 BlockState state = section.getBlockState(x, y, z);
-                if (!isCandidate(state)) {
+                BlockState alternate = alternateState(state);
+                if (alternate != null && !state.getValue(ActiveBlock.ACTIVE)) {
+                    BlockState swap = state;
+                    state = alternate;
+                    alternate = swap;
+                }
+                if (!isCandidate(state) && (alternate == null || !isCandidate(alternate))) {
                     if (entry.pieces.remove(index) != null) changed = true;
                     continue;
                 }
-                tessellatedBlocks++;
                 pos.set(entry.x * 16 + x, entry.y * 16 + y, entry.z * 16 + z);
-                var renderer = Minecraft.getInstance().getBlockRenderer();
-                var original = renderer.getBlockModel(state);
-                byte[] cached = templates.vertices(state, original, level, pos, x, y, z);
-                if (cached != null) {
-                    install(index, state, cached);
-                    return;
+                byte[] primary = vertices(state, x, y, z);
+                byte[] secondary = alternate == null ? EMPTY : vertices(alternate, x, y, z);
+                byte[] combined = primary;
+                if (secondary.length > 0) {
+                    combined = Arrays.copyOf(primary, primary.length + secondary.length);
+                    System.arraycopy(secondary, 0, combined, primary.length, secondary.length);
                 }
-                ModelData data = level.getModelDataManager().getAt(pos);
-                var blockEntity = chunk.getBlockEntity(pos);
-                if (blockEntity != null) data = blockEntity.getModelData();
-                data = original.getModelData(level, pos, state, data == null ? ModelData.EMPTY : data);
-                var model = new EmissionModel(original, BloomRules.fullBlock(state));
-                long seed = state.getSeed(pos);
-                random.setSeed(seed);
-                workBuffer.begin(VertexFormat.Mode.QUADS, EmissionFormat.BLOCK);
-                pose.pushPose();
-                pose.translate(x, y, z);
-                try {
-                    for (RenderType type : original.getRenderTypes(state, random, data)) {
-                        random.setSeed(seed);
-                        renderer.getModelRenderer().tesselateBlock(level, model, state, pos, pose, workBuffer,
-                                true, random, seed, OverlayTexture.NO_OVERLAY, data, type);
-                    }
-                } finally {
-                    pose.popPose();
-                }
-                var result = workBuffer.endOrDiscardIfEmpty();
-                if (result == null) {
-                    if (entry.pieces.remove(index) != null) changed = true;
-                } else {
-                    try {
-                        var vertices = result.vertexBuffer();
-                        byte[] bytes = new byte[vertices.remaining()];
-                        vertices.get(bytes);
-                        install(index, state, bytes);
-                    } finally {
-                        result.release();
-                    }
-                }
+                install(index, state, alternate, primary.length, combined);
                 return;
             }
         }
 
-        private void install(int index, BlockState state, byte[] bytes) {
+        private byte[] vertices(BlockState state, int x, int y, int z) {
+            if (!isCandidate(state)) return EMPTY;
+            tessellatedBlocks++;
+            var renderer = Minecraft.getInstance().getBlockRenderer();
+            var original = EmissionTemplates.localModel(renderer.getBlockModel(state));
+            byte[] cached = templates.vertices(state, original, level, pos, x, y, z);
+            if (cached != null) return cached;
+            ModelData data = level.getModelDataManager().getAt(pos);
+            var blockEntity = chunk.getBlockEntity(pos);
+            if (blockEntity != null) data = blockEntity.getModelData();
+            data = original.getModelData(level, pos, state, data == null ? ModelData.EMPTY : data);
+            var model = new EmissionModel(original, BloomRules.fullBlock(state), level, pos, state);
+            long seed = state.getSeed(pos);
+            random.setSeed(seed);
+            workBuffer.begin(VertexFormat.Mode.QUADS, EmissionFormat.BLOCK);
+            pose.pushPose();
+            pose.translate(x, y, z);
+            try {
+                for (RenderType type : original.getRenderTypes(state, random, data)) {
+                    random.setSeed(seed);
+                    renderer.getModelRenderer().tesselateBlock(level, model, state, pos, pose, workBuffer,
+                            false, random, seed, OverlayTexture.NO_OVERLAY, data, type);
+                }
+            } finally {
+                pose.popPose();
+            }
+            var result = workBuffer.endOrDiscardIfEmpty();
+            if (result == null) return EMPTY;
+            try {
+                var vertices = result.vertexBuffer();
+                byte[] bytes = new byte[vertices.remaining()];
+                vertices.get(bytes);
+                return bytes;
+            } finally {
+                result.release();
+            }
+        }
+
+        private void install(int index, BlockState state, BlockState alternate, int primaryBytes, byte[] bytes) {
             if (bytes.length == 0) {
                 if (entry.pieces.remove(index) != null) changed = true;
                 return;
             }
             Piece previous = entry.pieces.get(index);
-            if (previous == null || previous.state != state || !Arrays.equals(previous.vertices, bytes)) {
-                entry.pieces.put(index, new Piece(index, state, bytes));
+            if (previous == null || previous.state != state || previous.alternate != alternate ||
+                    previous.primaryBytes != primaryBytes || !Arrays.equals(previous.vertices, bytes)) {
+                entry.pieces.put(index, new Piece(index, state, alternate, primaryBytes, bytes));
                 changed = true;
             }
         }

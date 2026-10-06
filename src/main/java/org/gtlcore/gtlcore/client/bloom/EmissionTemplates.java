@@ -1,5 +1,9 @@
 package org.gtlcore.gtlcore.client.bloom;
 
+import org.gtlcore.gtlcore.mixin.bloom.ConnectedModelAccessor;
+
+import com.lowdragmc.lowdraglib.client.model.forge.CustomBakedModelImpl;
+
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
@@ -39,6 +43,17 @@ final class EmissionTemplates {
         // Only our own alias wrapper is transparent on the local path. Other wrappers may
         // implement connected textures, model data or position-dependent geometry.
         while (model instanceof EmissiveAliases.Model alias) model = alias.localDelegate();
+        return model;
+    }
+
+    static BakedModel retainedModel(BakedModel model) {
+        model = localModel(model);
+        // LDLib's exact CTM wrapper derives its quads from this delegate and neighbouring
+        // appearances. It is safe to retain each state at its own position, but must never
+        // enter the position-independent template path below. Unknown wrappers still fail
+        // the caller's exact SimpleBakedModel check.
+        if (model.getClass() == CustomBakedModelImpl.class && model instanceof ConnectedModelAccessor connected)
+            return localModel(connected.gtlcore$bloomParent());
         return model;
     }
 

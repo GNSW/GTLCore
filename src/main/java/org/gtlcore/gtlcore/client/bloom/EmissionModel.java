@@ -3,8 +3,11 @@ package org.gtlcore.gtlcore.client.bloom;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.client.model.BakedModelWrapper;
 import net.minecraftforge.client.model.data.ModelData;
@@ -19,10 +22,38 @@ import java.util.RandomAccess;
 final class EmissionModel extends BakedModelWrapper<BakedModel> {
 
     private final boolean fullBlock;
+    @Nullable
+    private final BlockAndTintGetter level;
+    @Nullable
+    private final BlockPos pos;
+    @Nullable
+    private final BlockState state;
+    private final BlockPos.MutableBlockPos neighbour = new BlockPos.MutableBlockPos();
+    private int checkedSides, visibleSides;
 
     EmissionModel(BakedModel model, boolean fullBlock) {
+        this(model, fullBlock, null, null, null);
+    }
+
+    /** One tessellation only: the mask must not outlive this position's current neighbours. */
+    EmissionModel(BakedModel model, boolean fullBlock, @Nullable BlockAndTintGetter level,
+                  @Nullable BlockPos pos, @Nullable BlockState state) {
         super(model);
         this.fullBlock = fullBlock;
+        this.level = level;
+        this.pos = pos;
+        this.state = state;
+    }
+
+    private boolean visible(@Nullable Direction side) {
+        if (side == null || level == null || pos == null || state == null) return true;
+        int bit = 1 << side.ordinal();
+        if ((checkedSides & bit) == 0) {
+            checkedSides |= bit;
+            if (Block.shouldRenderFace(state, level, pos, side, neighbour.setWithOffset(pos, side)))
+                visibleSides |= bit;
+        }
+        return (visibleSides & bit) != 0;
     }
 
     private List<BakedQuad> filter(List<BakedQuad> input, @Nullable RenderType layer) {
@@ -62,12 +93,17 @@ final class EmissionModel extends BakedModelWrapper<BakedModel> {
 
     @Override
     public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random) {
+        if (!visible(side)) return List.of();
         return filter(originalModel.getQuads(state, side, random), null);
     }
 
     @Override
     public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random,
                                     ModelData data, @Nullable RenderType layer) {
+        // Forge normally creates connected/dynamic quads before checking their cull face.
+        // Move that same test ahead of model generation; unculled quads (side == null)
+        // still run normally, and each render layer uses Forge's independently reset seed.
+        if (!visible(side)) return List.of();
         return filter(originalModel.getQuads(state, side, random, data, layer), layer);
     }
 }

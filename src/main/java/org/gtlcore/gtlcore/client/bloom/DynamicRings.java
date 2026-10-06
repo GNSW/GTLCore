@@ -10,12 +10,12 @@ import java.util.Arrays;
 public final class DynamicRings {
 
     private final BufferBuilder builder = new BufferBuilder(32 * 1024);
-    private boolean collecting;
+    private boolean collecting, ready;
     private RawMesh mesh;
     private int lastVertexCount;
 
     public void begin() {
-        clear();
+        endFrame();
         builder.begin(VertexFormat.Mode.TRIANGLES, EmissionFormat.BLOCK);
         collecting = true;
     }
@@ -38,7 +38,9 @@ public final class DynamicRings {
         lastVertexCount = result == null ? 0 : result.drawState().vertexCount();
         if (result != null) {
             try {
-                mesh = RawMesh.upload(result, false);
+                if (mesh == null) mesh = RawMesh.upload(result, false);
+                else mesh.streamTriangles(result.vertexBuffer());
+                ready = true;
             } finally {
                 result.release();
             }
@@ -46,7 +48,7 @@ public final class DynamicRings {
     }
 
     public boolean hasMesh() {
-        return mesh != null;
+        return ready && mesh != null;
     }
 
     public int lastVertexCount() {
@@ -54,16 +56,22 @@ public final class DynamicRings {
     }
 
     void draw() {
-        if (mesh != null) mesh.draw();
+        if (hasMesh()) mesh.draw();
     }
 
-    public void clear() {
+    /** Drop frame contents while keeping the GPU objects for the next animated frame. */
+    void endFrame() {
+        ready = false;
         if (collecting) {
             var discarded = builder.endOrDiscardIfEmpty();
             if (discarded != null) discarded.release();
             builder.discard();
             collecting = false;
         }
+    }
+
+    public void clear() {
+        endFrame();
         if (mesh != null) {
             mesh.close();
             mesh = null;

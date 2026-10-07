@@ -23,6 +23,7 @@ final class CountDiving implements AutoCloseable {
     private List<ExactLinearProgram.Constraint> problem;
     private CountBounds propagating;
     private ExactLinearProgram linear;
+    private ExactLinearProgram.Basis basis;
     private BigInteger[] lower, upper, counts;
     private ExactRational[] point;
     private int visited, relaxations, reversals;
@@ -118,7 +119,17 @@ final class CountDiving implements AutoCloseable {
                 if (relaxations >= 12) return finish("relaxation_limit");
                 BigInteger[] objective = new BigInteger[lower.length];
                 Arrays.fill(objective, BigInteger.ZERO);
-                linear = new ExactLinearProgram(lower.length, problem, objective, budget);
+                // A completed feasibility basis can seed a deeper dive. The
+                // LP independently checks that this branch retains every
+                // ancestor assumption, so reversal to a sibling is safe too.
+                long bytes = (problem.size() + 2L) * (lower.length + 2L) * 768L +
+                        64L * (problem.size() + lower.length + 2L);
+                boolean retain = bytes <= Math.min(4L << 20, budget.availableBytes() / 8);
+                // Keep the short cold dive's choices stable. Once that dive
+                // reverses or needs repeated repairs, reuse an eligible basis
+                // instead of paying for every feasibility LP from scratch.
+                var ancestor = relaxations < 3 && reversals == 0 ? null : basis;
+                linear = new ExactLinearProgram(lower.length, problem, objective, budget, ancestor, retain);
                 relaxations++;
                 nodeStart = work;
                 return false;
@@ -130,6 +141,11 @@ final class CountDiving implements AutoCloseable {
                 }
                 var status = linear.result();
                 point = linear.point();
+                var nextBasis = linear.takeBasis();
+                if (nextBasis != null) {
+                    if (basis != null) basis.close();
+                    basis = nextBasis;
+                }
                 linear.close();
                 linear = null;
                 if (status != ExactLinearProgram.Result.OPTIMAL || point == null) {
@@ -263,6 +279,8 @@ final class CountDiving implements AutoCloseable {
     @Override
     public void close() {
         discard();
+        if (basis != null) basis.close();
+        basis = null;
         pending.clear();
         budget.release(memory);
         memory = 0;

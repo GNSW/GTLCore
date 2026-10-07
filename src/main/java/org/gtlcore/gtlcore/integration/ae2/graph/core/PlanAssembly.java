@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Derives exact initial inventory and diagnostics from a concrete witness. */
-final class PlanAssembly<K> {
+final class PlanAssembly<K> implements AutoCloseable {
 
     private final K target;
     private final long amount, started;
@@ -158,5 +158,10 @@ final class PlanAssembly<K> {
     GraphPlan<K> result() {
         if (result == null) throw new IllegalStateException("Plan assembly incomplete");
         return result;
+    }
+
+    @Override
+    public void close() {
+        computation.close();
     }
 }

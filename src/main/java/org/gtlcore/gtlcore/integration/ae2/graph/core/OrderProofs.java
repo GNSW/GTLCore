@@ -28,14 +28,17 @@ final class OrderProofs<K> implements AutoCloseable {
     }
 
     void publish(RecipeCountModel<K> from, Collection<CountConflict> learned) {
+        if (learned.isEmpty()) return;
         if (!compatible(from)) return;
-        List<CountConflict> mapped = translate(learned, from, ids);
+        Collection<CountConflict> mapped = from == model ? learned : translate(learned, from, ids);
         imported += mapped.size();
         conflicts.add(mapped);
     }
 
     List<CountConflict> forModel(RecipeCountModel<K> to) {
+        if (conflicts.isEmpty()) return List.of();
         if (!compatible(to)) return List.of();
+        if (to == model) return conflicts.snapshot();
         Map<String, Integer> positions = new HashMap<>();
         for (int i = 0; i < to.recipes.size(); i++) positions.put(to.recipes.get(i).id(), i);
         return translate(conflicts.snapshot(), model, positions);
@@ -45,9 +48,9 @@ final class OrderProofs<K> implements AutoCloseable {
         // A smaller recipe catalog, a changed target or newly funded inventory
         // invalidates general count clauses. In particular, bootstrap/preview
         // requests never inherit their parent's proofs.
-        return model != null && model.stock.equals(other.stock) && model.goals.equals(other.goals) &&
+        return model != null && (model == other || model.stock.equals(other.stock) && model.goals.equals(other.goals) &&
                 model.productionGoals.equals(other.productionGoals) && model.external.equals(other.external) &&
-                model.recipes.size() == other.recipes.size() && new HashSet<>(model.recipes).equals(new HashSet<>(other.recipes));
+                model.recipes.size() == other.recipes.size() && new HashSet<>(model.recipes).equals(new HashSet<>(other.recipes)));
     }
 
     private List<CountConflict> translate(Collection<CountConflict> values, RecipeCountModel<K> from, Map<String, Integer> to) {

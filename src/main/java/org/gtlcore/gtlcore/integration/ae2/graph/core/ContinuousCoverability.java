@@ -75,11 +75,11 @@ final class ContinuousCoverability<K> implements AutoCloseable {
     }
 
     boolean step() {
-        long before = budget.nodes();
+        long before = budget.threadWork();
         try {
             return advance();
         } finally {
-            work += budget.nodes() - before;
+            work += budget.threadWork() - before;
         }
     }
 

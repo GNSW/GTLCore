@@ -28,6 +28,15 @@ final class GraphDemandProgram<K> {
         return regions[id];
     }
 
+    GraphDemandProgram<K> forGraph(GraphCompiler.Compiled<K> next) {
+        if (next == graph) return this;
+        if (next.regions() != graph.regions()) throw new IllegalArgumentException("Different demand topology");
+        // A shared immutable partition contains the same recipes, quantities
+        // and instruction order. Selected sources and every numeric demand
+        // remain owned by the new graph/request, never by these port arrays.
+        return new GraphDemandProgram<>(next, resources, regions, weight);
+    }
+
     static <K> GraphDemandProgram<K> create(GraphCompiler.Compiled<K> graph, PlanningBudget budget) {
         int size = graph.regions().size();
         if (size == 0 || size > 8192) return null;
@@ -41,7 +50,7 @@ final class GraphDemandProgram<K> {
             int ordinary = 0;
             for (int i = 0; i < size; i++) {
                 if (budget.threadWork() - started >= allowance) return null;
-                budget.check();
+                budget.compilationCheck();
                 var region = graph.regions().get(i);
                 if (region.cyclic() || region.recipes().size() != 1) continue;
                 var recipe = region.recipes().get(0);
@@ -58,7 +67,7 @@ final class GraphDemandProgram<K> {
                     var values = phase == 0 ? recipe.inputs() : recipe.outputs();
                     for (var entry : values.entrySet()) {
                         if (budget.threadWork() - started >= allowance) return null;
-                        budget.check();
+                        budget.compilationCheck();
                         int key = keys.computeIfAbsent(entry.getKey(), ignored -> keys.size());
                         (phase == 0 ? inputs : outputs)[at] = key;
                         (phase == 0 ? inputAmounts : outputAmounts)[at++] = BigInteger.valueOf(entry.getValue());

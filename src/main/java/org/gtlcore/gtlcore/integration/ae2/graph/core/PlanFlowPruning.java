@@ -38,7 +38,8 @@ final class PlanFlowPruning<K> {
     private PlanFlowPruning(Map<String, GraphRecipe<K>> recipes, PlanningBudget budget) {
         this.recipes = recipes;
         this.budget = budget;
-        started = budget.nodes();
+        // The rewrite is synchronous, including summaries, on one count worker.
+        started = budget.threadWork();
         allowance = Math.min(32_768, budget.remainingWork() / 32);
     }
 
@@ -104,7 +105,7 @@ final class PlanFlowPruning<K> {
             memo.put(frame.step, result);
             stack.pop();
         }
-        if (pruned > 0) budget.note("plan_flow_pruning", "proven_reductions=" + pruned + "; work=" + (budget.nodes() - started));
+        if (pruned > 0) budget.note("plan_flow_pruning", "proven_reductions=" + pruned + "; work=" + (budget.threadWork() - started));
         return memo.get(original);
     }
 
@@ -198,7 +199,7 @@ final class PlanFlowPruning<K> {
 
     private void charge() {
         budget.check();
-        if (budget.nodes() - started >= allowance) throw new Stop();
+        if (budget.threadWork() - started >= allowance) throw new Stop();
     }
 
     private void reserve(long bytes) {

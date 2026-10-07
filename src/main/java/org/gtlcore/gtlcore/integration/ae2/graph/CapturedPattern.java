@@ -136,7 +136,7 @@ public final class CapturedPattern {
         /** At most 256 variants per pattern; callers yield between variants. */
         public CapturedPatternCatalog.Recipe next() {
             if (!hasNext()) throw new NoSuchElementException();
-            budget.check();
+            budget.compilationCheck();
             if (selections.isEmpty() && !inputs.isEmpty()) {
                 for (int slot = 0; slot < inputs.size(); slot++) {
                     Input input = inputs.get(slot);
@@ -180,7 +180,7 @@ public final class CapturedPattern {
                               List<List<Picked>> out, PlanningBudget budget) {
         for (int at = start; at < candidates.size() && out.size() < MAX_VARIANTS; at++) {
             for (long count = left; count > 0 && out.size() < MAX_VARIANTS; count--) {
-                budget.check();
+                budget.compilationCheck();
                 selected.add(new Picked(candidates.get(at), count));
                 if (count == left) {
                     if (selected.size() > 1) out.add(List.copyOf(selected));

@@ -117,6 +117,9 @@ final class CountLcg implements AutoCloseable {
     private double[] relaxationPoint;
     private Set<ExactLinearProgram.Constraint> relaxationKnown;
     private final List<CountProof.Combination> derivedRows = new ArrayList<>();
+    private final Set<ExactLinearProgram.Constraint> cycleRows = new HashSet<>();
+    private int cycleDecisions = -1, cycleConflicts = -1;
+    private long cycleNext, cycleWork;
     private CountLpLearning.Session lpSession;
     private CountLcgReliability reliability;
     private CountLcgRowPool rowPool;
@@ -151,7 +154,7 @@ final class CountLcg implements AutoCloseable {
     }
 
     private CountLcg enableLearnedRelaxation() {
-        if (learnedRelaxation || !importedRows.isEmpty() || complete || low.length < 2 || low.length > 128 || rows.size() > 512) return this;
+        if (learnedRelaxation || !importedRows.isEmpty() || !cycleRows.isEmpty() || complete || low.length < 2 || low.length > 128 || rows.size() > 512) return this;
         for (int i = 0; i < low.length; i++) {
             charge();
             if (low[i].signum() < 0 || high[i] == null || high[i].compareTo(BigInteger.ONE) > 0) return this;
@@ -290,6 +293,7 @@ final class CountLcg implements AutoCloseable {
                 return complete;
             }
             if (!queue.isEmpty()) {
+                if (cutPropagationCycle()) return false;
                 int id = queue.removeFirst();
                 queued.clear(id);
                 if (rowPool == null || rowPool.active(id)) {
@@ -409,6 +413,124 @@ final class CountLcg implements AutoCloseable {
         } catch (Stop stopped) {
             return finish("workspace_limit");
         }
+    }
+
+    /**
+     * Bound propagation can walk forever around an unbounded integer cycle.
+     * Combine recently active original rows instead of spending the remaining
+     * budget increasing those bounds one batch at a time. Current domains only
+     * select a useful consequence; every admitted row is an unconditional,
+     * exactly replayable positive combination of original model rows.
+     */
+    private boolean cutPropagationCycle() {
+        if (cycleDecisions != decisions || cycleConflicts != conflicts) {
+            cycleDecisions = decisions;
+            cycleConflicts = conflicts;
+            cycleNext = lazyReasons + 128;
+        }
+        if (lazyReasons < cycleNext || cycleRows.size() >= 64 || cycleWork >= 32768 ||
+                learnedRelaxation && rows.size() >= rowActivity.length)
+            return false;
+        cycleNext = lazyReasons + 256;
+        long scratch = 32768;
+        if (scratch > budget.availableBytes() / 8 || !budget.tryReserve(scratch)) return false;
+        long started = work;
+        try {
+            var recent = new ArrayList<Integer>();
+            for (int i = trail.size() - 1, end = Math.max(0, trail.size() - 64); i >= end && recent.size() < 8; i--) {
+                charge();
+                LinearReason reason = trail.get(i).linear;
+                if (reason == null || reason.rowId >= originalRows || recent.contains(reason.rowId)) continue;
+                var row = rows.get(reason.rowId);
+                if (row.terms().size() >= 2 && row.terms().size() <= 16 && row.upper().bitLength() <= 2048 &&
+                        row.terms().values().stream().allMatch(v -> v.bitLength() <= 2048))
+                    recent.add(reason.rowId);
+            }
+            for (int a = 0; a < recent.size(); a++) for (int b = a + 1; b < recent.size(); b++) {
+                int first = recent.get(a), second = recent.get(b);
+                var left = rows.get(first);
+                var right = rows.get(second);
+                for (var pivot : left.terms().entrySet()) {
+                    charge();
+                    if (work - started >= 4096) return false;
+                    BigInteger other = right.terms().get(pivot.getKey());
+                    if (other == null || pivot.getValue().signum() * other.signum() >= 0) continue;
+                    BigInteger gcd = pivot.getValue().gcd(other);
+                    BigInteger lm = other.abs().divide(gcd), rm = pivot.getValue().abs().divide(gcd);
+                    var terms = new TreeMap<Integer, BigInteger>();
+                    for (var term : left.terms().entrySet()) {
+                        charge();
+                        integerCost(term.getValue(), lm);
+                        terms.put(term.getKey(), term.getValue().multiply(lm));
+                    }
+                    for (var term : right.terms().entrySet()) {
+                        charge();
+                        integerCost(term.getValue(), rm);
+                        terms.merge(term.getKey(), term.getValue().multiply(rm), BigInteger::add);
+                    }
+                    terms.values().removeIf(value -> value.signum() == 0);
+                    if (terms.size() >= Math.max(left.terms().size(), right.terms().size())) continue;
+                    BigInteger upper = left.upper().multiply(lm).add(right.upper().multiply(rm));
+                    BigInteger divisor = BigInteger.ZERO;
+                    boolean admitted = upper.bitLength() <= 2048;
+                    for (var value : terms.values()) {
+                        charge();
+                        admitted &= value.bitLength() <= 2048;
+                        divisor = divisor.gcd(value);
+                    }
+                    if (!admitted) continue;
+                    if (divisor.signum() == 0) divisor = BigInteger.ONE;
+                    BigInteger scale = divisor;
+                    terms.replaceAll((id, value) -> value.divide(scale));
+                    upper = floor(upper, divisor);
+                    BigInteger minimum = BigInteger.ZERO;
+                    for (var term : terms.entrySet()) {
+                        charge();
+                        BigInteger bound = term.getValue().signum() > 0 ? low[term.getKey()] : high[term.getKey()];
+                        if (bound == null) {
+                            admitted = false;
+                            break;
+                        }
+                        integerCost(term.getValue(), bound);
+                        minimum = minimum.add(term.getValue().multiply(bound));
+                    }
+                    if (!admitted || minimum.compareTo(upper) <= 0) continue;
+                    var row = new ExactLinearProgram.Constraint(terms, upper);
+                    if (cycleRows.contains(row)) continue;
+                    var cut = new CountLpLearning.Cut(row, Map.of(first, lm, second, rm), divisor);
+                    return admitCycleCut(cut);
+                }
+            }
+            return false;
+        } finally {
+            cycleWork += work - started;
+            budget.release(scratch);
+        }
+    }
+
+    private boolean admitCycleCut(CountLpLearning.Cut cut) {
+        var row = cut.row();
+        boolean copy = cycleRows.isEmpty() && importedRows.isEmpty() && !learnedRelaxation;
+        int capacity = rows.size() >= rowActivity.length ? rows.size() + 16 : rowActivity.length;
+        long bytes = 2048L + 1024L * row.terms().size() + (copy ? 16L * rows.size() : 0) +
+                8L * (capacity - rowActivity.length);
+        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
+        memory += bytes;
+        if (copy) rows = new ArrayList<>(rows);
+        if (capacity != rowActivity.length) rowActivity = Arrays.copyOf(rowActivity, capacity);
+        int id = rows.size();
+        rows.add(row);
+        cycleRows.add(row);
+        if (relaxationKnown != null) relaxationKnown.add(row);
+        if (rowPool != null) rowPool.added(id, decisions);
+        for (var term : row.terms().entrySet()) {
+            charge();
+            incident.get(boundKey(term.getKey(), term.getValue().signum() > 0)).add(new Incidence(id, term.getValue()));
+        }
+        if (retainProof) derivedRows.add(new CountProof.Combination(cut.parents(), cut.divisor(), CountProof.row(row)));
+        if (shareRows && sharedRows.size() < 64) sharedRows.add(cut);
+        enqueue(id);
+        return true;
     }
 
     private void finiteHint() {
@@ -1030,6 +1152,7 @@ final class CountLcg implements AutoCloseable {
                 "; explained_reasons=" + explainedReasons + "; work=" + work);
         if (learnedRelaxation) budget.note("count_lp_learning", "calls=" + relaxationCalls + "; cuts=" + relaxationCuts +
                 "; proposal_misses=" + relaxationMisses + "; numerical_work=" + relaxationNumericalWork);
+        if (!cycleRows.isEmpty()) budget.note("count_lcg_cycles", "cuts=" + cycleRows.size() + "; work=" + cycleWork);
         if (reliability != null) budget.note("count_lcg_reliability", reliability.diagnostic());
         if (rowPool != null) budget.note("count_lcg_pool", rowPool.diagnostic());
         return true;

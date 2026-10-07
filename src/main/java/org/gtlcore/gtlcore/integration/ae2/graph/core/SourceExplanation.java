@@ -12,7 +12,8 @@ final class SourceExplanation<K> implements AutoCloseable {
     private final Set<K> additional;
     private final Set<String> excluded;
     private final PlanningBudget budget;
-    private final long started, allowance;
+    private final long allowance;
+    private long work, stepStarted;
     private final Map<K, Integer> core = new LinkedHashMap<>();
     private final List<ExactLinearProgram.Constraint> assumptions = new ArrayList<>();
     private CountBounds checking;
@@ -31,7 +32,7 @@ final class SourceExplanation<K> implements AutoCloseable {
         this.additional = additional;
         this.excluded = excluded;
         this.budget = budget;
-        started = budget.nodes();
+        stepStarted = budget.threadWork();
         allowance = Math.min(32768, budget.remainingWork() / 16);
         for (K key : graph.selected().keySet()) {
             if (compiler.producers(key).stream().filter(r -> !excluded.contains(r.id())).limit(2).count() > 1)
@@ -45,6 +46,7 @@ final class SourceExplanation<K> implements AutoCloseable {
                 assumptions.add(new ExactLinearProgram.Constraint(Map.of(i, BigInteger.ONE), BigInteger.ZERO));
             check(assumptions);
         }
+        work = budget.threadWork() - stepStarted;
     }
 
     private void check(List<ExactLinearProgram.Constraint> assumptions) {
@@ -55,9 +57,22 @@ final class SourceExplanation<K> implements AutoCloseable {
     }
 
     boolean step() {
+        stepStarted = budget.threadWork();
+        try {
+            return advance();
+        } finally {
+            work += budget.threadWork() - stepStarted;
+        }
+    }
+
+    private long usedWork() {
+        return work + budget.threadWork() - stepStarted;
+    }
+
+    private boolean advance() {
         if (complete) return true;
         budget.check();
-        if (budget.nodes() - started >= allowance) return finish(null);
+        if (usedWork() >= allowance) return finish(null);
         if (checking != null) {
             if (!checking.step()) return false;
             boolean blocked = checking.blocked();
@@ -117,7 +132,7 @@ final class SourceExplanation<K> implements AutoCloseable {
         pending.addAll(additional);
         while (!pending.isEmpty()) {
             budget.check();
-            if (budget.nodes() - started >= allowance) return false;
+            if (usedWork() >= allowance) return false;
             K key = pending.removeFirst();
             if (!seen.add(key)) continue;
             int index = 0;

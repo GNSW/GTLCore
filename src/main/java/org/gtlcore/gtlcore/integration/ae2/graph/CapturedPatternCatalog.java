@@ -90,8 +90,8 @@ public final class CapturedPatternCatalog {
                 return true;
             }
             budget.phase(PlanningBudget.Phase.BUILD);
-            while (indexing == null && slice.next()) {
-                budget.check();
+            while (indexing == null && slice.nextCompilation()) {
+                budget.compilationCheck();
                 if (parallel != null) {
                     if (!parallel.isDone()) return false;
                     batches = parallel.join().iterator();
@@ -157,7 +157,7 @@ public final class CapturedPatternCatalog {
             var context = new PatternFingerprint.Context();
             List<Encoded> result = new ArrayList<>(end - start);
             for (int index = start; index < end; index++) {
-                budget.check();
+                budget.compilationCheck();
                 long began = System.nanoTime();
                 Entry entry = capturedEntries.get(index);
                 String binding = context.of(entry.values());

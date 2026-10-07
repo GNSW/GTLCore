@@ -43,6 +43,9 @@ final class CountJump implements AutoCloseable {
     private final boolean[] binaryDomains, cacheGains;
     private final List<List<Term>> neighbors = new ArrayList<>();
     private final BitSet movable = new BitSet();
+    private final BitSet relevant = new BitSet();
+    private final int[] violatedIncidences;
+    private boolean wideDomains;
     private long cachedGainBytes;
     private final List<List<Term>> affected = new ArrayList<>();
     private final BitSet dirty = new BitSet(), violated = new BitSet();
@@ -63,7 +66,7 @@ final class CountJump implements AutoCloseable {
         this.allowance = Math.min(allowance, budget.remainingWork() / 8);
         pairAfter = this.allowance * 3 / 4;
         long entries = rows.stream().mapToLong(row -> row.terms().size()).sum();
-        long bytes = 2048 + 256L * lower.length + 288L * rows.size() + 112L * entries;
+        long bytes = 2048 + 260L * lower.length + 288L * rows.size() + 112L * entries;
         boolean admitted = lower.length <= 1024 && rows.size() <= 4096 && entries <= 65536 &&
                 this.allowance >= 1024 && CountModelViews.admissible(lower.length, rows.size(), entries, budget) &&
                 budget.tryReserve(bytes);
@@ -72,6 +75,7 @@ final class CountJump implements AutoCloseable {
             this.lower = admitted ? lower.clone() : new BigInteger[0];
             this.upper = admitted ? upper.clone() : new BigInteger[0];
             values = this.lower.clone();
+            violatedIncidences = new int[this.lower.length];
             residual = new BigInteger[admitted ? rows.size() : 0];
             scales = new BigInteger[residual.length];
             weights = new double[residual.length];
@@ -86,7 +90,10 @@ final class CountJump implements AutoCloseable {
             compoundEligible = lower.length <= 128 && entries <= 8192;
             for (int i = 0; i < lower.length; i++) {
                 charge();
-                if (upper[i] == null || upper[i].subtract(lower[i]).compareTo(BigInteger.ONE) > 0) compoundEligible = false;
+                if (upper[i] == null || upper[i].subtract(lower[i]).compareTo(BigInteger.ONE) > 0) {
+                    compoundEligible = false;
+                    wideDomains = true;
+                }
                 affected.add(new ArrayList<>());
                 binaryDomains[i] = upper[i] != null && upper[i].subtract(lower[i]).equals(BigInteger.ONE);
             }
@@ -143,6 +150,8 @@ final class CountJump implements AutoCloseable {
             cachedGainBytes = 0;
             Arrays.fill(cacheGains, false);
             movable.clear();
+            relevant.clear();
+            Arrays.fill(violatedIncidences, 0);
             dirty.clear();
             violated.clear();
             initialized = 0;
@@ -193,6 +202,10 @@ final class CountJump implements AutoCloseable {
             scales[r] = scale;
             violation += ratio(value.max(BigInteger.ZERO), scale);
             violated.set(r, value.signum() > 0);
+            if (wideDomains && value.signum() > 0) for (Term term : neighbors.get(r)) {
+                charge();
+                if (violatedIncidences[term.variable]++ == 0) relevant.set(term.variable);
+            }
             if (initialized == rows.size()) dirty.or(movable);
             return false;
         }
@@ -221,11 +234,23 @@ final class CountJump implements AutoCloseable {
         int next = dirty.nextSetBit(0);
         if (next >= 0) {
             dirty.clear(next);
-            recompute(next);
+            // A coordinate outside every violated row cannot improve the
+            // weighted violation. Keep its expensive integer hinge sweep lazy;
+            // touching an affected row makes the coordinate dirty again.
+            if (!retained || !wideDomains || relevant.get(next)) recompute(next);
+            else {
+                // A later binary delta update must not reuse a score that was
+                // left stale while this coordinate was outside the frontier.
+                jumps[next] = null;
+                scores[next] = Double.POSITIVE_INFINITY;
+            }
             return false;
         }
         int best = -1;
-        for (int i = movable.nextSetBit(0); i >= 0; i = movable.nextSetBit(i + 1)) {
+        // Retain the existing Boolean/compound trajectory. For general integer
+        // walks this smaller frontier contains every improving single move.
+        BitSet scan = retained && wideDomains ? relevant : movable;
+        for (int i = scan.nextSetBit(0); i >= 0; i = scan.nextSetBit(i + 1)) {
             charge();
             if (jumps[i] != null && (best < 0 || scores[i] < scores[best] || scores[i] == scores[best] && i != last && best == last)) best = i;
         }
@@ -354,6 +379,10 @@ final class CountJump implements AutoCloseable {
             for (Term entry : neighbors.get(r)) {
                 charge();
                 int id = entry.variable;
+                if (wideDomains && (old.signum() > 0) != (residual[r].signum() > 0)) {
+                    violatedIncidences[id] += residual[r].signum() > 0 ? 1 : -1;
+                    relevant.set(id, violatedIncidences[id] > 0);
+                }
                 if (dirty.get(id)) continue;
                 if (binary(id) && jumps[id] != null) {
                     BigInteger change = entry.coefficient.multiply(jumps[id].subtract(values[id]));
@@ -434,7 +463,7 @@ final class CountJump implements AutoCloseable {
         List<Integer> variables = new ArrayList<>();
         for (int id : rows.get(row).terms().keySet()) {
             charge();
-            if (!lower[id].equals(upper[id])) variables.add(id);
+            if (!lower[id].equals(upper[id]) && rows.get(row).terms().get(id).signum() != 0) variables.add(id);
         }
         if (variables.isEmpty()) return;
         int id = variables.get(random.nextInt(variables.size()));

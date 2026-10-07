@@ -61,10 +61,14 @@ public final class PlanningBudget {
     private final long submitted;
     private final AtomicLong started = new AtomicLong(Long.MIN_VALUE);
     private final AtomicLong nodes = new AtomicLong();
+    // Structural compilation and search have separate allowances. Both are
+    // cumulative across every worker, share memory/time/cancellation, and feed
+    // the same local work clock so compilation still yields fairly.
+    private final AtomicLong compilationNodes = new AtomicLong();
     // Branch quanta run contiguously on one worker. A shared thread counter
     // avoids creating weak ThreadLocal keys for every order on the long-lived
     // worker pool; per-order cumulative limits remain in nodes below.
-    private static final ThreadLocal<long[]> THREAD_NODES = ThreadLocal.withInitial(() -> new long[2]);
+    private static final ThreadLocal<long[]> THREAD_NODES = ThreadLocal.withInitial(() -> new long[4]);
     private volatile boolean countThreadWork;
     private final AtomicLong reservedBytes = new AtomicLong();
     private final AtomicLong peakBytes = new AtomicLong();
@@ -139,6 +143,25 @@ public final class PlanningBudget {
         chargeTicks(WORK_SCALE);
     }
 
+    public void compilationCheck() {
+        chargeTicks(WORK_SCALE, true);
+    }
+
+    int compilationScan() {
+        chargeTicks(Operation.SCAN.ticks, true);
+        return Operation.SCAN.ticks;
+    }
+
+    void compilationCharge(long units) {
+        if (units < 0) throw new IllegalArgumentException("Negative work");
+        if (units > Long.MAX_VALUE / WORK_SCALE) {
+            checkpoint();
+            compilationNodes.set(Long.MAX_VALUE);
+            throw exhausted(Limit.SEARCH_LIMIT, "compilation_work_accounting_overflow");
+        }
+        chargeTicks(units * WORK_SCALE, true);
+    }
+
     /** Account bounded independent checker work without a second per-unit loop. */
     void charge(long units) {
         if (units < 0) throw new IllegalArgumentException("Negative work");
@@ -159,18 +182,23 @@ public final class PlanningBudget {
     }
 
     private void chargeTicks(long ticks) {
+        chargeTicks(ticks, false);
+    }
+
+    private void chargeTicks(long ticks, boolean compilation) {
         checkpoint();
+        AtomicLong account = compilation ? compilationNodes : nodes;
         long previous, total;
         while (true) {
-            previous = nodes.get();
+            previous = account.get();
             // Reserve one terminal value. Overflow must not publish a negative
             // count or allow a later addition to reopen the exhausted request.
             if (previous == Long.MAX_VALUE || ticks >= Long.MAX_VALUE - previous) {
-                if (previous != Long.MAX_VALUE && !nodes.compareAndSet(previous, Long.MAX_VALUE)) continue;
-                throw exhausted(Limit.SEARCH_LIMIT, "work_accounting_overflow");
+                if (previous != Long.MAX_VALUE && !account.compareAndSet(previous, Long.MAX_VALUE)) continue;
+                throw exhausted(Limit.SEARCH_LIMIT, compilation ? "compilation_work_accounting_overflow" : "work_accounting_overflow");
             }
             total = previous + ticks;
-            if (nodes.compareAndSet(previous, total)) break;
+            if (account.compareAndSet(previous, total)) break;
         }
         if (countThreadWork) {
             long[] counter = THREAD_NODES.get();
@@ -179,8 +207,14 @@ public final class PlanningBudget {
             // nanoTime. Unit wrap is intentional; fractional ticks never wrap.
             counter[0] += ticks / WORK_SCALE + fraction / WORK_SCALE;
             counter[1] = fraction % WORK_SCALE;
+            if (!compilation) {
+                long searchFraction = counter[3] + ticks % WORK_SCALE;
+                counter[2] += ticks / WORK_SCALE + searchFraction / WORK_SCALE;
+                counter[3] = searchFraction % WORK_SCALE;
+            }
         }
-        if (units(total) > maxNodes) throw exhausted(Limit.SEARCH_LIMIT, "cumulative_work=" + units(total) + "/" + maxNodes);
+        if (units(total) > maxNodes) throw exhausted(Limit.SEARCH_LIMIT,
+                (compilation ? "compilation_work=" : "search_work=") + units(total) + "/" + maxNodes);
     }
 
     static long units(long ticks) {
@@ -192,6 +226,13 @@ public final class PlanningBudget {
         countThreadWork = true;
         long[] counter = THREAD_NODES.get();
         return counter[0] + (counter[1] == 0 ? 0 : 1);
+    }
+
+    /** Search continuation quotas exclude structural cache misses as well. */
+    long threadSearchWork() {
+        countThreadWork = true;
+        long[] counter = THREAD_NODES.get();
+        return counter[2] + (counter[3] == 0 ? 0 : 1);
     }
 
     public Exhausted exhausted(Limit limit, String detail) {
@@ -268,7 +309,16 @@ public final class PlanningBudget {
     }
 
     public long nodes() {
+        long search = nodes.get(), compilation = compilationNodes.get();
+        return units(search > Long.MAX_VALUE - compilation ? Long.MAX_VALUE : search + compilation);
+    }
+
+    public long searchWork() {
         return units(nodes.get());
+    }
+
+    public long compilationWork() {
+        return units(compilationNodes.get());
     }
 
     long remainingWork() {
@@ -342,13 +392,15 @@ public final class PlanningBudget {
             wall.put(value, phaseNanos.get(value.ordinal()));
             cpu.put(value, supported ? phaseCpuNanos.get(value.ordinal()) : -1L);
         }
-        return new Metrics(Map.copyOf(wall), Map.copyOf(cpu), peakWorkers.get(), maxSlice.get(), peakBytes(), strategies());
+        return new Metrics(Map.copyOf(wall), Map.copyOf(cpu), peakWorkers.get(), maxSlice.get(), peakBytes(), strategies(),
+                searchWork(), compilationWork(), maxNodes);
     }
 
     public record StrategyMetrics(long chargedWork, long activeNanos, long steps) {}
 
     public record Metrics(Map<Phase, Long> activeNanos, Map<Phase, Long> cpuNanos, long peakActiveWorkers,
-                          long maxWorkSliceNanos, long peakReservedBytes, Map<String, StrategyMetrics> strategies) {}
+                          long maxWorkSliceNanos, long peakReservedBytes, Map<String, StrategyMetrics> strategies,
+                          long searchWork, long compilationWork, long workLimitPerAccount) {}
 
     public final class WorkScope implements AutoCloseable {
 

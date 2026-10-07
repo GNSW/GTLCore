@@ -44,11 +44,11 @@ final class DemandExpansion<K> {
     }
 
     boolean step() {
-        long before = budget.nodes(), summariesBefore = summaryWork;
+        long before = budget.threadWork(), summariesBefore = summaryWork;
         try {
             return advance();
         } finally {
-            expansionWork += budget.nodes() - before - (summaryWork - summariesBefore);
+            expansionWork += budget.threadWork() - before - (summaryWork - summariesBefore);
         }
     }
 
@@ -98,9 +98,9 @@ final class DemandExpansion<K> {
         }
         Frame frame = frames.peek();
         if (frame.summary != null) {
-            long before = budget.nodes();
+            long before = budget.threadWork();
             boolean complete = frame.summary.step();
-            summaryWork += budget.nodes() - before;
+            summaryWork += budget.threadWork() - before;
             if (!complete) return false;
             SequenceSummary<K> summary = frame.summary.result();
             frame.summary = null;

@@ -564,13 +564,13 @@ final class CountBounds implements AutoCloseable {
         // A large surrounding DAG must not hide a small conversion cycle.
         // Bound the sparse elimination work, rather than rejecting every
         // pending component as soon as their combined variable count is large.
-        long started = budget.nodes();
+        long started = budget.threadWork();
         Set<ExactLinearProgram.Constraint> known = new HashSet<>(rows);
         int added = 0;
         for (int round = 0; round < 3; round++) {
             int before = added;
             for (int variable : variables) {
-                if (budget.nodes() - started >= 65_536) return added > 0;
+                if (budget.threadWork() - started >= 65_536) return added > 0;
                 List<Integer> positive = new ArrayList<>(), negative = new ArrayList<>();
                 for (int row : affected.get(variable)) {
                     budget.check();

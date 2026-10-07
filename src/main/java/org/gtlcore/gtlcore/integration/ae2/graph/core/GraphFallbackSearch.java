@@ -78,6 +78,17 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
         return false;
     }
 
+    /** One optional funded-witness attempt, charging all work to the caller. */
+    boolean findByCost(long maximumWork) {
+        budget.checkpoint();
+        if (maximumWork <= 0) return false;
+        workLimit = Math.min(maximumWork, budget.remainingWork());
+        sourceOrder = GraphFallbackSources.create(compiler, stock, external, target, force, budget);
+        if (sourceOrder == null || budget.nodes() - started >= workLimit) return false;
+        byCost = true;
+        return search();
+    }
+
     private void reset() {
         budget.release(memory);
         memory = 0;

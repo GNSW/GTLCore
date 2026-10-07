@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -21,6 +22,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private final GraphCompiler<K> compiler;
     private final Map<K, Integer> choices;
     private final Set<String> excluded;
+    private final Set<K> stockLeaves;
     private final PlanningBudget budget;
     private final Map<K, GraphRecipe<K>> selected = new LinkedHashMap<>();
     private final Map<String, GraphRecipe<K>> recipes = new LinkedHashMap<>();
@@ -50,12 +52,16 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private List<EdgeBatch> merging;
     private int mergeBatch, mergeNode, mergeEdge;
     private GraphCompiler.Compiled<K> result;
+    private GraphTopology<K> topology;
+    private List<GraphCompiler.Region<K>> sharedRegions;
     private GraphCatalogIndex<K> catalogIndex;
     private GraphCatalogIndex.Builder<K> indexing;
     private int catalogCursor, packedInput, packedEdge;
     private long selectedIncidences, selectedOutputs;
     private boolean indexedSelection;
     private long indexedMemory;
+    private long memory;
+    private boolean closed;
     private final List<GraphCatalogIndex.Ports> ports = new ArrayList<>();
     private Ints[] packedOutputs;
     private int[] firstProducers;
@@ -66,19 +72,25 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
 
     GraphCompilation(GraphCompiler<K> compiler, K target, Set<K> additional, Map<K, Integer> choices,
                      Set<String> excluded, PlanningBudget budget) {
+        this(compiler, target, additional, choices, excluded, Set.of(), budget);
+    }
+
+    GraphCompilation(GraphCompiler<K> compiler, K target, Set<K> additional, Map<K, Integer> choices,
+                     Set<String> excluded, Set<K> stockLeaves, PlanningBudget budget) {
         this.compiler = compiler;
         this.choices = Map.copyOf(choices);
         this.excluded = Set.copyOf(excluded);
+        this.stockLeaves = Set.copyOf(stockLeaves);
         this.budget = budget;
         catalogIndex = compiler.catalogIndex();
         indexedSelection = catalogIndex != null;
-        pending.add(target);
-        pending.addAll(additional);
+        enqueue(target);
+        for (K key : additional) enqueue(key);
     }
 
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
-        while (slice.next()) {
+        while (slice.nextCompilation()) {
             if (phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 && edgeInputs == null && edgeProducers == null &&
                     packedEdges == null && packedInput == 0 && merging == null) {
                 if (parallelEdges == null && cursor < nodes.size()) {
@@ -116,7 +128,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
 
     /** One bounded traversal operation, also used by the synchronous test/reference path. */
     public boolean step() {
-        budget.check();
+        budget.compilationCheck();
         switch (phase) {
             case 0 -> discover();
             case 1 -> register();
@@ -125,8 +137,10 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             case 4 -> finishOrder();
             case 5 -> components();
             case 6 -> {
+                var partition = sharedRegions == null ? List.copyOf(regions) : sharedRegions;
                 result = new GraphCompiler.Compiled<>(Collections.unmodifiableMap(recipes),
-                        Collections.unmodifiableMap(selected), List.copyOf(regions));
+                        Collections.unmodifiableMap(selected), partition);
+                if (sharedRegions == null) compiler.rememberTopology(topology, partition);
                 phase = 7;
                 close();
             }
@@ -150,8 +164,8 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             if (excluded.contains(recipe.id()) || candidateIndex-- > 0) return;
             selected.put(currentKey, recipe);
             if (recipes.putIfAbsent(recipe.id(), recipe) == null) {
-                budget.reserve(384);
-                pending.addAll(recipe.inputs().keySet());
+                reserve(384);
+                for (K key : recipe.inputs().keySet()) enqueue(key);
                 if (catalogIndex != null) {
                     var packed = catalogIndex.ports(recipe);
                     if (packed == null) indexedSelection = false;
@@ -165,6 +179,23 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             return;
         }
         if (pending.isEmpty()) {
+            // Equal selected recipe order has exactly the same edges and SCC
+            // traversal. Material/source choices remain private to this graph;
+            // stock boundaries can only reuse the immutable partition.
+            if (recipes.size() >= 2 && recipes.size() <= 16384) {
+                long bytes = 128L + 16L * recipes.size();
+                if (budget.tryReserve(bytes)) {
+                    memory += bytes;
+                    topology = new GraphTopology<>(recipes, budget);
+                    sharedRegions = compiler.topology(topology);
+                    if (sharedRegions != null) {
+                        budget.phase(PlanningBudget.Phase.ANALYSE);
+                        budget.note("graph_topology", "reused; recipes=" + recipes.size() + "; regions=" + sharedRegions.size());
+                        phase = 6;
+                        return;
+                    }
+                }
+            }
             if (catalogIndex == null && compiler.reuseCatalogIndex() && 4L * recipes.size() >= compiler.catalog().size()) {
                 indexing = new GraphCatalogIndex.Builder<>(compiler.catalog(), budget);
                 phase = 9;
@@ -172,10 +203,22 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             return;
         }
         currentKey = pending.removeFirst();
-        if (!seen.add(currentKey)) return;
-        budget.reserve(64);
-        candidates = compiler.producers(currentKey).iterator();
+        reserve(64);
+        if (stockLeaves.contains(currentKey)) return;
+        var sources = compiler.producers(currentKey);
         candidateIndex = choices.getOrDefault(currentKey, 0);
+        if (excluded.isEmpty()) {
+            // The normal branch changes one source ordinal. Indexed lookup
+            // avoids rescanning all earlier alternatives on every compilation.
+            candidates = sources.listIterator(Math.min(sources.size(), Math.max(0, candidateIndex)));
+            candidateIndex = 0;
+        } else candidates = sources.iterator();
+    }
+
+    private void enqueue(K key) {
+        if (seen.add(key)) {
+            pending.addLast(key);
+        }
     }
 
     private void indexCatalog() {
@@ -198,7 +241,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 selectedIncidences = 0;
                 selectedOutputs = 0;
                 for (var recipe : recipes.values()) {
-                    budget.check();
+                    budget.compilationCheck();
                     var packed = catalogIndex.ports(recipe);
                     if (packed == null) {
                         catalogIndex = null;
@@ -237,7 +280,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 var packed = catalogIndex.ports(recipe);
                 ports.add(packed);
                 for (int key : packed.physicalOutputs()) {
-                    budget.check();
+                    budget.compilationCheck();
                     if (firstProducers[key] == 0) firstProducers[key] = nodes.size();
                     else {
                         if (packedOutputs[key] == null) {
@@ -254,8 +297,8 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 return;
             }
             for (K key : recipe.executionOutputs().keySet()) {
-                budget.check();
-                budget.reserve(48);
+                budget.compilationCheck();
+                reserve(48);
                 outputIds.computeIfAbsent(key, ignored -> new ArrayList<>()).add(nodes.size() - 1);
             }
         } else {
@@ -270,7 +313,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             int[] targets = packedOutputs[resource] == null ? new int[] { firstProducers[resource] - 1 } : packedOutputs[resource].array();
             packedOutputs[resource] = null;
             if (targets.length > 1) {
-                budget.reserve(160);
+                reserve(160);
                 int id = nodes.size();
                 packedHubs.put(id, targets);
                 nodes.add(null);
@@ -287,7 +330,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             if (output.getValue().size() > 1) {
                 // Factor consumer -> producer cross products through one
                 // material node instead of allocating a quadratic set of edges.
-                budget.reserve(160);
+                reserve(160);
                 int id = nodes.size();
                 resourceHubs.put(id, output.getValue());
                 output.setValue(List.of(id));
@@ -342,7 +385,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         if (edgeProducers != null) {
             if (edgeProducers.hasNext()) {
                 int to = edgeProducers.next();
-                budget.reserve(24);
+                reserve(24);
                 out.get(cursor).add(to);
                 in.get(to).add(cursor);
                 return;
@@ -369,7 +412,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         if (packedEdges != null) {
             if (packedEdge < packedEdges.length) {
                 int to = packedEdges[packedEdge++];
-                budget.reserve(24);
+                reserve(24);
                 out.get(cursor).add(to);
                 in.get(to).add(cursor);
                 return;
@@ -400,15 +443,15 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             if (packedTargets != null) {
                 if (nodes.get(index) == null) {
                     for (int producer : packedHubs.get(index)) {
-                        budget.check();
-                        budget.reserve(24);
+                        budget.compilationCheck();
+                        reserve(24);
                         targets.add(producer);
                     }
                 } else for (int input : ports.get(index).inputs()) {
-                    budget.check();
+                    budget.compilationCheck();
                     for (int producer : packedTargets(input)) {
-                        budget.check();
-                        budget.reserve(24);
+                        budget.compilationCheck();
+                        reserve(24);
                         targets.add(producer);
                     }
                 }
@@ -417,18 +460,18 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             }
             if (nodes.get(index) == null) {
                 for (int producer : resourceHubs.get(index)) {
-                    budget.check();
-                    budget.reserve(24);
+                    budget.compilationCheck();
+                    reserve(24);
                     targets.add(producer);
                 }
                 edges[index - start] = targets.array();
                 continue;
             }
             for (K input : nodes.get(index).inputs().keySet()) {
-                budget.check();
+                budget.compilationCheck();
                 for (int producer : outputIds.getOrDefault(input, List.of())) {
-                    budget.check();
-                    budget.reserve(24);
+                    budget.compilationCheck();
+                    reserve(24);
                     targets.add(producer);
                 }
             }
@@ -530,11 +573,22 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private record EdgeBatch(int start, int[][] edges) {}
 
     @Override
-    public void close() {
+    public synchronized void close() {
+        if (closed) return;
+        closed = true;
         if (indexing != null) indexing.close();
         indexing = null;
-        budget.release(indexedMemory);
+        budget.release(indexedMemory + memory);
         indexedMemory = 0;
+        memory = 0;
+    }
+
+    private synchronized void reserve(long bytes) {
+        // Edge partitions may still be unwinding after their owner is closed.
+        // Do not let them add reservations after the final release.
+        if (closed) throw new CancellationException("Graph compilation closed");
+        budget.reserve(bytes);
+        memory += bytes;
     }
 
     private static final class Ints {

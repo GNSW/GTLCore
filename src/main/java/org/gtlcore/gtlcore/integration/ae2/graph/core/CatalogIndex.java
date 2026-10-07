@@ -16,7 +16,7 @@ public final class CatalogIndex<K> {
     }
 
     public boolean step(PlanningBudget budget) {
-        budget.check();
+        budget.compilationCheck();
         if (cursor < catalog.size()) {
             GraphRecipe<K> recipe = catalog.get(cursor++);
             for (K output : recipe.executionOutputs().keySet()) producers.computeIfAbsent(output, ignored -> new ArrayList<>()).add(recipe);

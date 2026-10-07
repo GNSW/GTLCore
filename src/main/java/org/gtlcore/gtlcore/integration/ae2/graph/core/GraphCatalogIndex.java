@@ -63,23 +63,27 @@ final class GraphCatalogIndex<K> {
         private final List<GraphRecipe<K>> catalog;
         private final PlanningBudget budget;
         private final long allowance;
-        private final long started, workAllowance;
+        private final long workAllowance;
         private Map<K, Integer> resources = new LinkedHashMap<>();
         private Map<GraphRecipe<K>, Ports> ports = new IdentityHashMap<>();
         private final List<List<Integer>> consumers = new ArrayList<>(), producers = new ArrayList<>();
         private int[][] frozenConsumers, frozenProducers;
         private GraphCatalogIndex<K> result;
         private int recipes, entries, freezing;
-        private long memory;
+        private long memory, work, operationStarted;
         private boolean declined;
 
         Builder(List<GraphRecipe<K>> catalog, PlanningBudget budget) {
             this.catalog = catalog;
             this.budget = budget;
-            started = budget.nodes();
-            workAllowance = Math.min(262144, budget.remainingWork() / 16);
-            allowance = Math.min(8L << 20, budget.availableBytes() / 8);
-            if (catalog.size() > 8192 || workAllowance < 1024 || !reserve(256L + 32L * catalog.size())) decline();
+            long before = budget.threadWork();
+            try {
+                workAllowance = Math.min(262144, budget.remainingWork() / 16);
+                allowance = Math.min(8L << 20, budget.availableBytes() / 8);
+                if (catalog.size() > 8192 || workAllowance < 1024 || !reserve(256L + 32L * catalog.size())) decline();
+            } finally {
+                work += budget.threadWork() - before;
+            }
         }
 
         boolean declined() {
@@ -87,11 +91,11 @@ final class GraphCatalogIndex<K> {
         }
 
         private boolean scan() {
-            if (budget.nodes() - started >= workAllowance) {
+            if (work + budget.threadWork() - operationStarted >= workAllowance) {
                 decline();
                 return false;
             }
-            budget.check();
+            budget.compilationCheck();
             return true;
         }
 
@@ -110,6 +114,15 @@ final class GraphCatalogIndex<K> {
         }
 
         void add(GraphRecipe<K> recipe, int id) {
+            operationStarted = budget.threadWork();
+            try {
+                append(recipe, id);
+            } finally {
+                work += budget.threadWork() - operationStarted;
+            }
+        }
+
+        private void append(GraphRecipe<K> recipe, int id) {
             if (declined) return;
             if (id != recipes || recipe != catalog.get(id)) throw new IllegalArgumentException("Catalog indexing order changed");
             recipes++;
@@ -157,6 +170,18 @@ final class GraphCatalogIndex<K> {
         }
 
         boolean step() {
+            // A compilation can be parked while other source views run, or
+            // resume on another worker. Only this call's work belongs to the
+            // builder; nested resource/freeze scans share this same interval.
+            operationStarted = budget.threadWork();
+            try {
+                return advance();
+            } finally {
+                work += budget.threadWork() - operationStarted;
+            }
+        }
+
+        private boolean advance() {
             if (declined || result != null) return true;
             if (!scan()) return true;
             if (recipes != catalog.size()) throw new IllegalStateException("Incomplete catalog index");

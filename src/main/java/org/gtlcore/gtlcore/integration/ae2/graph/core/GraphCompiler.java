@@ -1,8 +1,10 @@
 package org.gtlcore.gtlcore.integration.ae2.graph.core;
 
 import java.math.BigInteger;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,9 +16,15 @@ public final class GraphCompiler<K> {
     private final Map<K, List<GraphRecipe<K>>> producers;
     private final Map<CacheKey<K>, Compiled<K>> cache = new LinkedHashMap<>(16, 0.75f, true);
     private final Map<CountKey<K>, CountCatalog<K>> countCatalogs = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<ClosureKey<K>, CountClosure<K>> countClosures = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<ClosureKey<K>, ClosureSize> countClosureLimits = new LinkedHashMap<>(16, 0.75f, true);
+    private final Map<GraphTopology<K>, List<Region<K>>> topologies = new LinkedHashMap<>(16, 0.75f, true);
+    private long topologyWeight;
+    private long countClosureWeight;
     private long countCatalogWeight;
     private boolean countCatalogRequested, countCatalogReusable;
     private GraphCatalogIndex<K> catalogIndex;
+    private GraphSourceIndex<K> sourceIndex;
     private boolean catalogIndexRequested, catalogIndexReusable;
     private final List<QuantityCertificate<K>> quantityCertificates = new ArrayList<>();
     final CountSessions countSessions = new CountSessions();
@@ -29,7 +37,7 @@ public final class GraphCompiler<K> {
     GraphDemandProgram<K> demandProgram(Compiled<K> graph, PlanningBudget budget) {
         synchronized (this) {
             int found = -1;
-            for (int i = 0; i < demandPrograms.size(); i++) if (demandPrograms.get(i).graph == graph) {
+            for (int i = 0; i < demandPrograms.size(); i++) if (demandPrograms.get(i).graph.regions() == graph.regions()) {
                 found = i;
                 break;
             }
@@ -40,12 +48,12 @@ public final class GraphCompiler<K> {
             }
             var entry = demandPrograms.remove(found);
             demandPrograms.add(0, entry);
-            if (entry.program != null) return entry.program;
+            if (entry.program != null) return entry.program.forGraph(graph);
         }
         var program = GraphDemandProgram.create(graph, budget);
         if (program == null) return null;
         synchronized (this) {
-            demandPrograms.removeIf(entry -> entry.graph == graph);
+            demandPrograms.removeIf(entry -> entry.graph.regions() == graph.regions());
             demandPrograms.add(0, new DemandEntry<>(graph, program));
             trimDemandPrograms();
         }
@@ -83,6 +91,118 @@ public final class GraphCompiler<K> {
     public List<GraphRecipe<K>> catalog() {
         return catalog;
     }
+
+    synchronized List<Region<K>> topology(GraphTopology<K> key) {
+        return topologies.get(key);
+    }
+
+    synchronized void rememberTopology(GraphTopology<K> key, List<Region<K>> regions) {
+        if (key == null) return;
+        var previous = topologies.put(key, regions);
+        if (previous != null) topologyWeight -= key.recipes.size() + previous.size();
+        topologyWeight += key.recipes.size() + regions.size();
+        while (topologies.size() > 16 || topologyWeight > 32768) {
+            var first = topologies.entrySet().iterator().next();
+            topologyWeight -= first.getKey().recipes.size() + first.getValue().size();
+            topologies.remove(first.getKey());
+        }
+    }
+
+    synchronized GraphSourceIndex<K> sourceIndex() {
+        return sourceIndex;
+    }
+
+    synchronized void rememberSourceIndex(GraphSourceIndex<K> index) {
+        if (sourceIndex == null && index.recipes == catalog) sourceIndex = index;
+    }
+
+    /**
+     * Inventory-independent backward closure, in the same source order as a cold
+     * traversal. A structural size cutoff only declines this optional model; it
+     * is never a missing-material result or an infeasibility certificate.
+     */
+    CountClosure<K> countClosure(K target, Set<K> additional, Set<String> excluded,
+                                 int maxKeys, int maxRecipes, PlanningBudget budget) {
+        var scope = new ClosureKey<>(target, List.copyOf(additional), Set.copyOf(excluded));
+        boolean cacheable = additional.size() <= 256 && excluded.size() <= 256;
+        CountClosure<K> known = null;
+        ClosureSize limit = null;
+        if (cacheable) synchronized (this) {
+            known = countClosures.get(scope);
+            limit = countClosureLimits.get(scope);
+        }
+        if (known != null) {
+            budget.compilationCheck();
+            if (known.keys().size() > maxKeys || known.recipes().size() > maxRecipes) return null;
+            budget.note("count_closure", "reused; recipes=" + known.recipes().size() + "; materials=" + known.keys().size());
+            return known;
+        }
+        if (limit != null && (limit.keys() > maxKeys || limit.recipes() > maxRecipes)) {
+            budget.compilationCheck();
+            budget.note("count_closure", "known structural cutoff; recipes_at_least=" + limit.recipes() + "; materials_at_least=" + limit.keys());
+            return null;
+        }
+        var found = new LinkedHashMap<String, GraphRecipe<K>>();
+        var keys = new LinkedHashSet<K>();
+        var queued = new LinkedHashSet<K>();
+        var pending = new ArrayDeque<K>();
+        queued.add(target);
+        pending.add(target);
+        for (K key : additional) if (queued.add(key)) pending.addLast(key);
+        long incidences = 0;
+        while (!pending.isEmpty()) {
+            budget.compilationCheck();
+            K key = pending.removeFirst();
+            keys.add(key);
+            if (keys.size() > maxKeys) {
+                rememberClosureLimit(scope, cacheable, keys.size(), found.size());
+                budget.note("count_model", "skipped; closure_keys=" + keys.size() + "; local_limit=" + maxKeys);
+                return null;
+            }
+            for (var recipe : producers(key)) {
+                budget.compilationCheck();
+                if (excluded.contains(recipe.id()) || found.putIfAbsent(recipe.id(), recipe) != null) continue;
+                if (found.size() > maxRecipes) {
+                    rememberClosureLimit(scope, cacheable, keys.size(), found.size());
+                    budget.note("count_model", "skipped; closure_recipes=" + found.size() + "; local_limit=" + maxRecipes);
+                    return null;
+                }
+                incidences += recipe.inputs().size() + recipe.outputs().size();
+                for (K input : recipe.inputs().keySet()) if (queued.add(input)) pending.addLast(input);
+            }
+        }
+        var result = new CountClosure<K>(List.copyOf(found.values()), List.copyOf(keys), incidences);
+        long weight = incidences + keys.size() + found.size();
+        if (cacheable && weight <= 32_768) synchronized (this) {
+            var previous = countClosures.put(scope, result);
+            countClosureWeight += weight - (previous == null ? 0 : previous.weight());
+            while (countClosures.size() > 16 || countClosureWeight > 32_768) {
+                var removed = countClosures.remove(countClosures.keySet().iterator().next());
+                countClosureWeight -= removed.weight();
+            }
+            countClosureLimits.remove(scope);
+        }
+        return result;
+    }
+
+    private synchronized void rememberClosureLimit(ClosureKey<K> scope, boolean cacheable, int keys, int recipes) {
+        if (!cacheable) return;
+        var previous = countClosureLimits.get(scope);
+        countClosureLimits.put(scope, new ClosureSize(Math.max(keys, previous == null ? 0 : previous.keys()),
+                Math.max(recipes, previous == null ? 0 : previous.recipes())));
+        while (countClosureLimits.size() > 32) countClosureLimits.remove(countClosureLimits.keySet().iterator().next());
+    }
+
+    record CountClosure<K>(List<GraphRecipe<K>> recipes, List<K> keys, long incidences) {
+
+        long weight() {
+            return incidences + recipes.size() + keys.size();
+        }
+    }
+
+    private record ClosureKey<K>(K target, List<K> additional, Set<String> excluded) {}
+
+    private record ClosureSize(int keys, int recipes) {}
 
     synchronized GraphCatalogIndex<K> catalogIndex() {
         catalogIndexReusable |= catalogIndexRequested;
@@ -173,12 +293,22 @@ public final class GraphCompiler<K> {
         return new GraphCompilation<>(this, target, additional, choices, excluded, budget);
     }
 
+    /**
+     * Positive-witness proposal only. Stock leaves are request-local assumptions:
+     * an insufficient leaf must be reopened, and a failure says nothing about
+     * the full catalog. These views never enter the inventory-independent cache.
+     */
+    GraphCompilation<K> beginStockView(K target, Set<K> additional, Map<K, Integer> choices, Set<String> excluded,
+                                       Set<K> stockLeaves, PlanningBudget budget) {
+        return new GraphCompilation<>(this, target, additional, choices, excluded, stockLeaves, budget);
+    }
+
     public synchronized Compiled<K> cached(K target, Map<K, Integer> choices, Set<String> excluded) {
         return cached(target, Set.of(), choices, excluded);
     }
 
     public synchronized Compiled<K> cached(K target, Set<K> additional, Map<K, Integer> choices, Set<String> excluded) {
-        return cache.get(new CacheKey<>(target, additional, choices, excluded));
+        return cache.get(new CacheKey<>(target, List.copyOf(additional), choices, excluded));
     }
 
     public synchronized void publish(K target, Map<K, Integer> choices, Set<String> excluded, Compiled<K> result) {
@@ -188,7 +318,7 @@ public final class GraphCompiler<K> {
     public synchronized void publish(K target, Set<K> additional, Map<K, Integer> choices, Set<String> excluded, Compiled<K> result) {
         // Do not serialize entire calculations under the cache monitor. Only fully
         // constructed immutable results become visible to other orders.
-        cache.put(new CacheKey<>(target, Set.copyOf(additional), Map.copyOf(choices), Set.copyOf(excluded)), result);
+        cache.put(new CacheKey<>(target, List.copyOf(additional), Map.copyOf(choices), Set.copyOf(excluded)), result);
         long retainedNodes = 0;
         for (Compiled<K> entry : cache.values()) retainedNodes += entry.recipes().size() + entry.selected().size();
         // A single successfully compiled graph has already passed request limits.
@@ -203,9 +333,15 @@ public final class GraphCompiler<K> {
 
     /** Regions are consumers first, for backward requirement propagation. */
     public record Compiled<K>(Map<String, GraphRecipe<K>> recipes, Map<K, GraphRecipe<K>> selected,
-                              List<Region<K>> regions) {}
+                              List<Region<K>> regions) {
 
-    private record CacheKey<K>(K target, Set<K> additional, Map<K, Integer> choices, Set<String> excluded) {}
+        /** Recipe objects belong to the catalog; this view owns only indexes and region lists. */
+        public long estimatedBytes() {
+            return 256L + 72L * recipes.size() + 64L * selected.size() + 64L * regions.size();
+        }
+    }
+
+    private record CacheKey<K>(K target, List<K> additional, Map<K, Integer> choices, Set<String> excluded) {}
 
     private record CountKey<K>(K target, List<K> seeds, Set<String> excluded, Set<K> external) {}
 }

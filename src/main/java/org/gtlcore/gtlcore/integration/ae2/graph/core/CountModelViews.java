@@ -397,6 +397,11 @@ final class CountModelViews implements AutoCloseable {
         return conflicts.transfer(view, after, origin, solver::learn);
     }
 
+    int importConflicts(View view, int after, Object origin, CountCdcl solver) {
+        if (conflicts == null || after >= conflicts.version() || !sharesBounds(view)) return 0;
+        return conflicts.transfer(view, after, origin, solver::learn);
+    }
+
     private static BigInteger floor(BigInteger n, BigInteger positive) {
         var qr = n.divideAndRemainder(positive);
         return qr[1].signum() < 0 ? qr[0].subtract(BigInteger.ONE) : qr[0];

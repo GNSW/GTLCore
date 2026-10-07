@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Resumable local sequence/ratio search; feasibility is checked by a separate witness verifier. */
-public final class RegionSelection<K> {
+public final class RegionSelection<K> implements AutoCloseable {
 
     public record Choice<K>(PlanStep body, SequenceSummary<K> summary, BigInteger runs, Map<K, Long> seeds) {}
 
@@ -48,15 +48,21 @@ public final class RegionSelection<K> {
     private int workingCopies = 1;
     private RegionOrder<K> ordering;
     private List<GraphRecipe<K>> preferredOrder;
-    private final long searchStarted;
+    private long work, stepStarted;
     private RegionCounts<K> counts;
-    private long countWork;
+    private long countWork, countsStarted;
     private RegionSelection<K> single;
     private boolean triedSingles;
     private boolean triedPartialCounts;
-    private long partialCountsStarted;
     private RegionBootstrap<K> bootstrap;
     private boolean triedBootstrap;
+    private boolean regionScout;
+
+    RegionSelection<K> scoutRegions(boolean enabled) {
+        if (phase != 0 || index != 0) throw new IllegalStateException("Region search already started");
+        regionScout = enabled;
+        return this;
+    }
 
     public RegionSelection(GraphCompiler.Region<K> region, Map<K, BigInteger> demand, Map<K, Long> stock,
                            K target, long amount, boolean preserve, boolean forceTarget, Set<K> external, PlanningBudget budget, CatalystPolicy policy, Map<K, Long> catalystStock) {
@@ -72,6 +78,7 @@ public final class RegionSelection<K> {
 
     public RegionSelection(GraphCompiler.Region<K> region, Map<K, BigInteger> demand, Map<K, Long> stock,
                            K target, long amount, boolean preserve, boolean forceTarget, Set<K> external, PlanningBudget budget) {
+        long before = budget.threadWork();
         this.region = region;
         this.demand = demand;
         this.stock = stock;
@@ -82,7 +89,7 @@ public final class RegionSelection<K> {
         this.forceTarget = forceTarget;
         this.budget = budget;
         this.external = external;
-        searchStarted = budget.nodes();
+        work = budget.threadWork() - before;
     }
 
     RegionSelection<K> allowTargetSeedConsumption(boolean allow) {
@@ -92,6 +99,19 @@ public final class RegionSelection<K> {
     }
 
     public boolean step() {
+        stepStarted = budget.threadWork();
+        try {
+            return advance();
+        } finally {
+            work += budget.threadWork() - stepStarted;
+        }
+    }
+
+    private long currentWork() {
+        return work + budget.threadWork() - stepStarted;
+    }
+
+    private boolean advance() {
         budget.check();
         budget.phase(PlanningBudget.Phase.SOLVE);
         List<GraphRecipe<K>> recipes = region.recipes();
@@ -99,7 +119,7 @@ public final class RegionSelection<K> {
         // Keep a concrete candidate even when this local search is cut short.
         // Its deficits do not prove that stock is missing: the caller must still
         // try other allocations or independently prove that no plan can start.
-        if (phase != 8 && phase != 10 && phase != 11 && phase != 12 && phase != 13 && region.cyclic() && budget.nodes() - searchStarted - countWork > 32_768L + 128L * recipes.size()) {
+        if (phase != 8 && phase != 10 && phase != 11 && phase != 12 && phase != 13 && region.cyclic() && currentWork() - countWork > 32_768L + 128L * recipes.size()) {
             if (ordering != null) {
                 ordering.close();
                 ordering = null;
@@ -117,8 +137,8 @@ public final class RegionSelection<K> {
                     produced.addAll(recipe.outputs().keySet());
                 } else {
                     if (region.cyclic() && recipes.size() > 6) {
-                        counts = new RegionCounts<>(recipes, demand, stock, external, target, amount, forceTarget, preserve, budget);
-                        countWork = budget.nodes();
+                        countsStarted = currentWork();
+                        counts = new RegionCounts<>(recipes, demand, stock, external, target, amount, forceTarget, preserve, budget).scoutRegions(regionScout);
                         phase = 10;
                         return false;
                     }
@@ -149,6 +169,12 @@ public final class RegionSelection<K> {
                     index++;
                 } else {
                     body = children.size() == 1 ? children.get(0) : new PlanStep.Sequence(children);
+                    // Net production is independent of execution order. Test
+                    // it before computing exact prefix and peak inventories.
+                    if (region.cyclic() && recipes.size() <= 6 && !ratioCanAdvance()) {
+                        nextTrial();
+                        return complete();
+                    }
                     computation = new SummaryComputation<>(body, byId, budget);
                     phase = 3;
                 }
@@ -292,7 +318,7 @@ public final class RegionSelection<K> {
                 best = counts.result();
                 counts.close();
                 counts = null;
-                countWork = budget.nodes() - countWork;
+                countWork += currentWork() - countsStarted;
                 if (best != null) phase = 8;
                 else {
                     ordering = new RegionOrder<>(recipes, produced, stock, external, budget);
@@ -308,10 +334,11 @@ public final class RegionSelection<K> {
                     GraphRecipe<K> recipe = recipes.get(index);
                     single = new RegionSelection<>(new GraphCompiler.Region<>(List.of(recipe),
                             !Collections.disjoint(recipe.inputs().keySet(), recipe.outputs().keySet())), demand, stock,
-                            target, amount, preserve, forceTarget, external, budget, catalystPolicy, catalystStock);
+                            target, amount, preserve, forceTarget, external, budget, catalystPolicy, catalystStock).scoutRegions(regionScout);
                 }
                 if (!single.step()) return false;
                 Choice<K> choice = single.result();
+                single.close();
                 single = null;
                 index++;
                 if (choice != null && choice.runs().signum() > 0 &&
@@ -338,7 +365,7 @@ public final class RegionSelection<K> {
                 Choice<K> choice = counts.result();
                 counts.close();
                 counts = null;
-                countWork += budget.nodes() - partialCountsStarted;
+                countWork += currentWork() - countsStarted;
                 // Inputs outside this SCC are propagated to their producers
                 // afterwards. Prefer closing its internal deficits to asking
                 // the player for a craftable intermediate merely because its
@@ -373,8 +400,8 @@ public final class RegionSelection<K> {
                 (best == null || !regionFunded(best) && best.seeds().entrySet().stream()
                         .allMatch(e -> external.contains(e.getKey()) || e.getValue() <= stock.getOrDefault(e.getKey(), 0L)))) {
             triedPartialCounts = true;
-            partialCountsStarted = budget.nodes();
-            counts = new RegionCounts<>(region.recipes(), demand, stock, external, target, amount, forceTarget, preserve, budget);
+            countsStarted = currentWork();
+            counts = new RegionCounts<>(region.recipes(), demand, stock, external, target, amount, forceTarget, preserve, budget).scoutRegions(regionScout);
             phase = 13;
         }
         // Parallel working copies are a separate, deliberate recovery contract.
@@ -452,6 +479,32 @@ public final class RegionSelection<K> {
         phase = 6;
     }
 
+    private BigInteger ratioGain(K key) {
+        BigInteger value = BigInteger.ZERO;
+        for (var child : children) {
+            budget.operation(PlanningBudget.Operation.SCAN, 1);
+            var batch = (PlanStep.Batch) child;
+            var recipe = byId.get(batch.recipe());
+            long delta = recipe.outputs().getOrDefault(key, 0L) - recipe.inputs().getOrDefault(key, 0L);
+            value = value.add(BigInteger.valueOf(delta).multiply(BigInteger.valueOf(batch.runs())));
+        }
+        return value;
+    }
+
+    private boolean ratioCanAdvance() {
+        if (forceTarget && produced.contains(target) && ratioGain(target).signum() <= 0) return false;
+        boolean deficient = false;
+        for (K key : produced) {
+            budget.operation(PlanningBudget.Operation.SCAN, 1);
+            if (demand.getOrDefault(key, BigInteger.ZERO).compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) <= 0) continue;
+            deficient = true;
+            if (ratioGain(key).signum() > 0) return true;
+        }
+        // Otherwise the original trial chooses zero repetitions and rejects
+        // the still-outstanding demand. Singles and exact counts stay eligible.
+        return !deficient;
+    }
+
     private void nextTrial() {
         if (++order == region.recipes().size() + permutations.size() + (preferredOrder == null ? 0 : 1)) {
             order = 0;
@@ -479,5 +532,19 @@ public final class RegionSelection<K> {
     public Choice<K> result() {
         if (phase != 8) throw new IllegalStateException("Region search is incomplete");
         return best;
+    }
+
+    @Override
+    public void close() {
+        if (computation != null) computation.close();
+        computation = null;
+        if (ordering != null) ordering.close();
+        ordering = null;
+        if (counts != null) counts.close();
+        counts = null;
+        if (single != null) single.close();
+        single = null;
+        if (bootstrap != null) bootstrap.close();
+        bootstrap = null;
     }
 }

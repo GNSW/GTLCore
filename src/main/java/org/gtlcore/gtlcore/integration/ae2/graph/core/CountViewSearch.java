@@ -67,7 +67,7 @@ final class CountViewSearch implements AutoCloseable {
         long publishedRoots;
         long importedBounds;
         int publishedConflicts, importedConflicts;
-        int importedCuts;
+        int importedCuts, publishedCuts;
         CountModelViews.Domains scope;
         boolean done, batchPending, integerJump;
 
@@ -97,12 +97,16 @@ final class CountViewSearch implements AutoCloseable {
             } else if (engine == Engine.PB) {
                 if (cdcl == null) cdcl = new CountCdcl(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
                 else cdcl.resume(quantum);
+                int imported = models.importConflicts(view, importedConflicts, this, cdcl);
+                importedConflicts = models.conflictVersion();
+                if (imported > 0) budget.note("count_view_conflicts", "destination=" + view.name() + "; engine=" + engine + "; imported=" + imported);
             } else if (engine == Engine.JUMP) {
                 if (jump == null) jump = new CountJump(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
                 else jump.resume(quantum);
             } else {
                 if (solver == null) {
                     solver = new CountLcg(view.rows(), domains.lower(), domains.upper(), budget, quantum);
+                    if (models.sharesBounds(view)) solver.shareRows();
                     if (engine == Engine.LOCKS) solver.lockBranching();
                 } else solver.resume(quantum);
                 int bounds = models.importProofBounds(view, importedBounds, solver);
@@ -121,6 +125,11 @@ final class CountViewSearch implements AutoCloseable {
             var learned = solver != null ? solver.learnedConflicts() : cdcl != null ? cdcl.learnedConflicts() : List.<CountConflict>of();
             models.publishConflicts(view, scope, learned, publishedConflicts, this);
             publishedConflicts = learned.size();
+            if (solver != null) {
+                var cuts = solver.sharedRows();
+                models.publishCuts(view, cuts, publishedCuts, this);
+                publishedCuts = cuts.size();
+            }
         }
 
         void close() {

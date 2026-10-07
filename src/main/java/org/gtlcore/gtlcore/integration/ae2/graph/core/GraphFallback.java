@@ -29,6 +29,34 @@ public final class GraphFallback {
         }
     }
 
+    /** A bounded positive proposal. Failure never produces a missing-material claim. */
+    static <K> GraphPlan<K> witnessByCost(GraphCompiler<K> compiler, K target, long amount,
+                                          Map<K, Long> stock, Set<K> external, Map<K, Long> seeds,
+                                          boolean preserve, boolean forceCraft, PlanningBudget budget, long maximumWork) {
+        budget.checkpoint();
+        if (maximumWork <= 0) return null;
+        long start = budget.nodes();
+        String previousFailure = budget.failureDetail();
+        var previousPhase = budget.phase();
+        try (var work = new Expansion<>(compiler, target, amount, stock, external, seeds, preserve, forceCraft, budget)) {
+            work.witnessAllowance = Math.min(maximumWork, budget.remainingWork());
+            if (work.witnessAllowance == 0) budget.check();
+            while (budget.nodes() - start < maximumWork) {
+                if (work.step()) return work.result != null && work.result.feasible() ? work.result : null;
+            }
+            return null;
+        } catch (PlanningBudget.Exhausted failure) {
+            if (failure.limit() != PlanningBudget.Limit.MEMORY_LIMIT) throw failure;
+            // An optional witness must not abort the retained search just
+            // because its independent workspace or final summary did not fit.
+            budget.failureDetail(previousFailure);
+            budget.note("source_witness", "workspace_declined; original_frontier_retained");
+            return null;
+        } finally {
+            budget.phase(previousPhase);
+        }
+    }
+
     private static final class Expansion<K> implements AutoCloseable {
 
         private static final int MAX_FRAMES = 1024, MAX_EXPANSIONS = 4096, MAX_SOURCES = 16;
@@ -54,6 +82,7 @@ public final class GraphFallback {
         private int expansions;
         private long memory;
         private boolean rootsDone, searched;
+        private long witnessAllowance;
 
         Expansion(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external,
                   Map<K, Long> seeds, boolean preserve, boolean forceCraft, PlanningBudget budget) {
@@ -108,13 +137,13 @@ public final class GraphFallback {
             if (!searched) {
                 searched = true;
                 try (var search = new GraphFallbackSearch<>(compiler, target, amount, stock, external, seeds, forceCraft, budget)) {
-                    if (search.find()) {
+                    if (witnessAllowance > 0 ? search.findByCost(witnessAllowance) : search.find()) {
                         reserve(256L * search.size());
                         search.copyTo(steps, recipes);
                         while (!pending.isEmpty()) pop();
                         rootsDone = true;
                         seedGoals = java.util.Collections.emptyIterator();
-                    }
+                    } else if (witnessAllowance > 0) return true;
                 }
                 return false;
             }

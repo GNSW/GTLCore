@@ -154,7 +154,7 @@ public final class GtlPatternCatalog {
 
         public boolean step(long deadline) {
             if (!level.getServer().isSameThread()) throw new IllegalStateException("Graph snapshot escaped server thread");
-            budget.check();
+            budget.compilationCheck();
             budget.phase(PlanningBudget.Phase.SNAPSHOT);
             if (!prepareSources()) return false;
             switch (phase) {
@@ -263,7 +263,7 @@ public final class GtlPatternCatalog {
                     while (keys.hasNext() && scanned < 32) {
                         if (scanned > 0) {
                             if (deadline != Long.MAX_VALUE && System.nanoTime() - deadline >= 0) return false;
-                            budget.check();
+                            budget.compilationCheck();
                         }
                         scanned++;
                         AEKey resource = keys.next();
@@ -445,7 +445,7 @@ public final class GtlPatternCatalog {
         }
 
         boolean step() {
-            budget.check();
+            budget.compilationCheck();
             if (result != null) return true;
             if (inputSlot == inputs.length) {
                 result = new CapturedPattern(capturedInputs, values.outputs(), values.external(), bounded);

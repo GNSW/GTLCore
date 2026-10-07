@@ -50,7 +50,7 @@ final class CountRecovery<K> implements AutoCloseable {
             if (template.retained.size() < template.recipes.size()) candidates.addLast(template.retained);
             candidates.addLast(template.recipes);
             budget.note("count_recovery_cache", "reused; recipes=" + compiled.size() + "; macros=" + bodies.size() + "; structural_only");
-            prepareInterfaces(compiled, template.recipes, budget.nodes(), Math.min(262144, budget.remainingWork() / 16));
+            prepareInterfaces(compiled, template.recipes, budget.threadWork(), Math.min(262144, budget.remainingWork() / 16));
             return;
         }
         Set<Signature<K>> signatures = new HashSet<>();
@@ -60,12 +60,14 @@ final class CountRecovery<K> implements AutoCloseable {
             if (ordinary(recipe) && !signatures.add(new Signature<>(recipe.inputs(), recipe.outputs()))) aliases++;
             else compiled.put(recipe.id(), recipe);
         }
-        long started = budget.nodes(), allowance = Math.min(262144, budget.remainingWork() / 16);
+        // Preparation stays on this branch's worker; unrelated workers still
+        // consume the shared order budget, but not this optional view's quota.
+        long started = budget.threadWork(), allowance = Math.min(262144, budget.remainingWork() / 16);
         int stages = 0;
         boolean completeDiscovery = false;
         // Contract only private seams. Joint outputs remain on the interface;
         // every consumer/exit is retained, including destructive exits.
-        for (int pass = 0; pass < 32 && budget.nodes() - started < allowance; pass++) {
+        for (int pass = 0; pass < 32 && budget.threadWork() - started < allowance; pass++) {
             Map<K, List<GraphRecipe<K>>> producers = new HashMap<>(), consumers = new HashMap<>();
             for (var recipe : compiled.values()) {
                 budget.check();
@@ -80,7 +82,7 @@ final class CountRecovery<K> implements AutoCloseable {
             forwardStages.sort(Comparator.comparingInt(recipe -> recipe.outputs().size()));
             for (var start : forwardStages) {
                 budget.check();
-                if (budget.nodes() - started >= allowance) break;
+                if (budget.threadWork() - started >= allowance) break;
                 if (!ordinary(start) || !compiled.containsKey(start.id())) continue;
                 for (K pending : start.outputs().keySet()) {
                     budget.check();
@@ -141,7 +143,7 @@ final class CountRecovery<K> implements AutoCloseable {
                 // that mentions a removed recipe is skipped until the next pass.
             }
             if (!changed) {
-                completeDiscovery = budget.nodes() - started < allowance;
+                completeDiscovery = budget.threadWork() - started < allowance;
                 break;
             }
         }
@@ -210,7 +212,7 @@ final class CountRecovery<K> implements AutoCloseable {
                 if (first.inputs().containsKey(seam)) continue;
                 for (var last : consumers.getOrDefault(seam, List.of())) {
                     budget.check();
-                    if (pairs.size() >= 32 || budget.nodes() - started >= allowance) return;
+                    if (pairs.size() >= 32 || budget.threadWork() - started >= allowance) return;
                     if (last == first || !ordinary(last) || last.outputs().containsKey(seam) ||
                             last.outputs().keySet().stream().noneMatch(first.inputs()::containsKey) || !pairs.add(first.id() + "\n" + last.id()))
                         continue;

@@ -85,6 +85,8 @@ final class CountCdcl implements AutoCloseable {
     private final Deque<Integer> pending = new ArrayDeque<>();
     private final BitSet queued = new BitSet();
     private final List<CountConflict> learned = new ArrayList<>(), proofSteps = new ArrayList<>();
+    private final Set<CountConflict> imported = new HashSet<>();
+    private final Deque<Clause> incoming = new ArrayDeque<>();
     private final List<CountProof.Combination> weightedSteps = new ArrayList<>();
     private final List<ExactLinearProgram.Constraint> weightedRows = new ArrayList<>();
     private final Set<ExactLinearProgram.Constraint> knownRows = new HashSet<>();
@@ -197,6 +199,14 @@ final class CountCdcl implements AutoCloseable {
             if (conflict != null) {
                 analyze();
                 return complete;
+            }
+            if (!incoming.isEmpty()) {
+                // A clause attached under a decision can become unit only
+                // after that decision is undone. Attach shared facts at the
+                // root so the ordinary watch queues cannot miss that unit.
+                if (level > 0) backtrack(0);
+                attach(incoming.removeFirst(), true);
+                return false;
             }
             if (cursor < original.size()) {
                 compile(original.get(cursor), cursor++);
@@ -872,6 +882,50 @@ final class CountCdcl implements AutoCloseable {
 
     List<CountConflict> learnedConflicts() {
         return List.copyOf(learned);
+    }
+
+    /** Accept only the owner's proved, guarded clauses in this immutable domain. */
+    boolean learn(CountConflict value) {
+        if (!retaining || complete || imported.size() >= 64 || imported.contains(value) || value.assumptions().size() > 16)
+            return false;
+        BitSet literals = new BitSet(2 * values.length);
+        for (var row : value.assumptions()) {
+            charge();
+            if (row.terms().size() != 1) return false;
+            var term = row.terms().entrySet().iterator().next();
+            int id = term.getKey();
+            if (id < 0 || id >= values.length || !term.getValue().abs().equals(BigInteger.ONE)) return false;
+            boolean minimum = term.getValue().signum() < 0;
+            BigInteger endpoint = minimum ? row.upper().negate() : row.upper();
+            // Simplification uses only the constructor's domain. Current
+            // assignments (including their decision guards) are not axioms.
+            if (minimum ? endpoint.compareTo(upper[id]) > 0 : endpoint.compareTo(lower[id]) < 0) return false;
+            if (minimum ? endpoint.compareTo(lower[id]) <= 0 : endpoint.compareTo(upper[id]) >= 0) continue;
+            int literal = 2 * id + (minimum ? 0 : 1);
+            if (literals.get(literal ^ 1)) return false;
+            literals.set(literal);
+        }
+        if (proofScope != null) {
+            if (Arrays.stream(lower).anyMatch(v -> v.signum() < 0)) return false;
+            var axioms = new ArrayList<>(original.stream().map(CountProof::row).toList());
+            for (int i = 0; i < lower.length; i++) {
+                axioms.add(CountProof.row(bound(i, lower[i], true)));
+                axioms.add(CountProof.row(bound(i, upper[i], false)));
+            }
+            long before = budget.threadWork();
+            var proof = CountAffineConflictProof.clause(values.length, axioms,
+                    value.assumptions().stream().map(CountProof::row).toList());
+            var verdict = CountProof.verify(proof, Math.min(16384, budget.remainingWork() / 32), budget::charge);
+            work += budget.threadWork() - before;
+            if (verdict != CountProof.Verdict.VERIFIED) return false;
+        }
+        long bytes = 256L + 512L * value.assumptions().size();
+        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
+        memory += bytes;
+        imported.add(value);
+        if (proofScope != null) proofSteps.add(value);
+        incoming.addLast(new Clause(literals.stream().toArray(), true, 0));
+        return true;
     }
 
     @Override

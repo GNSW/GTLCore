@@ -33,7 +33,8 @@ final class BackwardCoverability<K> implements AutoCloseable {
     private final List<BigInteger> initial, goal;
     private final Map<K, Integer> positions = new HashMap<>();
     private final BitSet unbounded = new BitSet();
-    private final long started, allowance;
+    private final long allowance;
+    private long work, stepStarted;
     private Node active;
     private int cursor, verifyNode, verifyRecipe;
     private boolean verifying;
@@ -54,7 +55,7 @@ final class BackwardCoverability<K> implements AutoCloseable {
         this.recipes = List.copyOf(recipes);
         this.budget = budget;
         this.allowance = allowance;
-        started = budget.nodes();
+        stepStarted = budget.threadWork();
         Set<K> all = new LinkedHashSet<>(stock.keySet());
         all.addAll(goals.keySet());
         for (var recipe : recipes) {
@@ -76,10 +77,25 @@ final class BackwardCoverability<K> implements AutoCloseable {
             remember(new Node(goal, null, null, 0));
         } catch (LocalLimit limit) {
             finish(Result.UNKNOWN);
+        } finally {
+            work += budget.threadWork() - stepStarted;
         }
     }
 
     boolean step() {
+        stepStarted = budget.threadWork();
+        try {
+            return advance();
+        } finally {
+            work += budget.threadWork() - stepStarted;
+        }
+    }
+
+    private long usedWork() {
+        return work + budget.threadWork() - stepStarted;
+    }
+
+    private boolean advance() {
         if (result != null) return true;
         if (forward != null) {
             if (!forward.step()) return false;
@@ -259,8 +275,9 @@ final class BackwardCoverability<K> implements AutoCloseable {
 
     private void charge() {
         budget.check();
-        // A continuation may resume on a different scheduler worker.
-        if (budget.nodes() - started >= allowance) throw new LocalLimit();
+        // Accumulate only active calls; parked time and other workers belong
+        // to the request's global budget, not this algorithm's local quota.
+        if (usedWork() >= allowance) throw new LocalLimit();
     }
 
     static <K> SequenceSummary<K> repeat(SequenceSummary<K> unit, BigInteger times) {
@@ -305,7 +322,7 @@ final class BackwardCoverability<K> implements AutoCloseable {
             induction = null;
         }
         result = value;
-        budget.note("backward_cover", "result=" + value + "; antichain=" + basis.size() + "; expanded=" + expanded + "; work=" + (budget.nodes() - started));
+        budget.note("backward_cover", "result=" + value + "; antichain=" + basis.size() + "; expanded=" + expanded + "; work=" + usedWork());
         close();
         return true;
     }

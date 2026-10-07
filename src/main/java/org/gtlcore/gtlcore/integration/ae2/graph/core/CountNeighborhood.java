@@ -196,21 +196,31 @@ final class CountNeighborhood implements AutoCloseable {
 
     private boolean repairFailure() {
         if (failureSearch == null) {
+            long started = budget.threadWork();
             if (repairMove >= Math.min(16, repairMoves.size()) || repairCandidates >= 4 || allowance - work < 1024)
                 return finish("failure_region_unresolved; moves=" + repairMove);
             BigInteger[] low = lower.clone(), high = upper.clone();
+            BitSet fixed = new BitSet(low.length);
             for (int i = 0; i < low.length; i++) {
                 budget.check();
                 if (point[i].numerator().compareTo(low[i]) < 0 || high[i] != null && point[i].numerator().compareTo(high[i]) > 0)
                     return finish("point_outside_domain");
-                if (!failureRegion.get(i)) low[i] = high[i] = point[i].numerator();
+                if (!failureRegion.get(i)) {
+                    low[i] = high[i] = point[i].numerator();
+                    fixed.set(i);
+                }
             }
             int move = repairMoves.get(repairMove++), id = Math.abs(move) - 1;
             // This speculative bound guarantees a DIFFERENT candidate, without
             // learning an exclusion for the old vector or the original request.
             if (move > 0) low[id] = point[id].numerator().add(BigInteger.ONE);
             else high[id] = point[id].numerator().subtract(BigInteger.ONE);
-            failureSearch = new CountLcg(rows, low, high, budget, Math.min(8192, allowance - work));
+            int released = CountRepairDomains.widen(rows, lower, upper, low, high, fixed, budget,
+                    Math.min(8192, Math.max(0, allowance - work) / 8));
+            if (released != 0) budget.note("count_repair_domains", "released=" + released + "; scope=restricted_candidate");
+            long remaining = allowance - work - (budget.threadWork() - started);
+            if (remaining < 1024) return finish("failure_region_repair_limit");
+            failureSearch = new CountLcg(rows, low, high, budget, Math.min(8192, remaining));
         }
         if (!failureSearch.step()) return false;
         counts = failureSearch.counts();

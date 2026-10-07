@@ -29,10 +29,19 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private final int nesting;
     private final Deque<Map<K, Integer>> pending = new ArrayDeque<>();
     private final Set<Map<K, Integer>> seen = new HashSet<>();
+    private final Set<Map<K, Integer>> queued = new HashSet<>();
+    private long frontierMemory;
     private Map<K, Integer> choices;
     private GraphCompilation<K> compiling;
     private GraphCompiler.Compiled<K> graph;
+    private long graphMemory;
     private GraphSolve<K> solving;
+    private GraphStockViewPortfolio<K> stockView;
+    private boolean stockViewTried, stockViewDelayed;
+    private Boolean cheapCountView;
+    private long firstGraphStarted, firstGraphWork, stockDelayStarted, stockDelayAllowance;
+    private long stockPausedAt, stockSpareMemory;
+    private int stockResumePhase = -1;
     private Bootstrap bootstrap;
     private PlanVerification<K> verifying;
     private ForceCraftProof<K> productionProof;
@@ -62,6 +71,9 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private boolean allocationAttempted, countAttempted, frontierTruncated;
     private boolean bootstrapTooLarge;
     private boolean triedTargetSeedConsumption;
+    private boolean stockWitnessTried;
+    private boolean sourceScoutTried;
+    private final long stockWitnessAfter;
     private Iterator<K> alternatives;
     private Set<K> preferredAlternatives = Set.of();
     private long alternativeMemory;
@@ -105,6 +117,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         this.preserve = preserve;
         this.forceCraft = forceCraft;
         this.budget = budget;
+        stockWitnessAfter = budget.searchWork() + Math.min(16384, budget.remainingWork() / 8);
         this.excluded = Set.copyOf(excluded);
         this.nesting = nesting;
         pending.add(Map.of());
@@ -113,7 +126,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
-        while (slice.next()) {
+        while (compilationActive() ? slice.nextCompilation() : slice.next()) {
             if (step(slice)) return true;
             if (waitingFor() != null) return false;
         }
@@ -127,7 +140,48 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     private boolean step(PlanningScheduler.Slice slice) {
         try {
-            budget.check();
+            if (compilationActive()) budget.compilationCheck();
+            else budget.check();
+            // A cheap ordinary alternative gets a bounded turn, not ownership
+            // of the remaining order budget. Keep its partial compile/solve
+            // alive while stock views run, then resume the same state.
+            if (stockViewDelayed && budget.searchWork() - stockDelayStarted >= stockDelayAllowance &&
+                    phase != 4 && phase != 8 && phase != 10 && phase != 17 &&
+                    !(phase == 3 && candidate.feasible())) {
+                int resume = phase;
+                if (startStockView()) {
+                    stockResumePhase = resume;
+                    budget.note("stock_view", "ordinary_source_headstart_limit; work=" + (budget.searchWork() - stockDelayStarted));
+                }
+            }
+            if (stockView != null && stockView.paused()) {
+                // Optional retained proposals cannot crowd out the full model.
+                // Evict before the next primary step, never retry a partially
+                // mutated search after a memory-limit exception.
+                if (budget.availableBytes() < stockSpareMemory) {
+                    stockView.close();
+                    stockView = null;
+                    budget.note("stock_view", "evicted_parked_frontier; memory_pressure");
+                } else if (!Boolean.TRUE.equals(quantityBlocked) && !Boolean.TRUE.equals(stockBlocked) &&
+                        // Recursive seed repair retains its continuation too.
+                        // It must not own the rest of an order while a stock
+                        // view waits. Finish an ordinary region candidate before
+                        // switching so source choices retain their fair turn.
+                        (phase == 0 || phase == 3 && !candidate.feasible() ||
+                                phase == 5 || phase == 6 || phase == 9 || phase == 12) &&
+                        // At the final handoff both retained frontiers remain
+                        // eligible. Run the older one rather than letting this
+                        // earlier hook continually preempt integer search.
+                        !(parkedCounts != null && (phase == 9 || phase == 0 && pending.isEmpty()) &&
+                                stockPausedAt >= countPausedAt) &&
+                        // A fixed wait larger than the remaining budget would
+                        // permanently strand this continuation near the limit.
+                        (budget.searchWork() - stockPausedAt >= stockResumeWait() || phase == 0 && pending.isEmpty() || phase == 9)) {
+                            stockResumePhase = phase;
+                            stockView.resume(Math.max(1, Math.min(2_097_152, budget.remainingWork() / 4)));
+                            phase = 19;
+                        }
+            }
             // Retained integer views can finish without the expensive rational
             // precheck. Interleave the two continuations instead of requiring
             // the relaxation to finish before another integer-search slice.
@@ -137,16 +191,18 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             if (parkedCounts != null && (phase == 0 || phase == 5 || phase == 6 || phase == 9 ||
                     phase == 12 && quantities != null && quantities.heavyAnalysisActive() &&
                             (parkedCounts.hasScaledProgress() || parkedCounts.hasRetainedViews())) &&
-                    (budget.nodes() - countPausedAt >= (phase == 12 ? 131_072 : phase == 6 || !pending.isEmpty() ? 1_048_576 : 32_768) || phase == 0 && pending.isEmpty() || phase == 9)) {
+                    (budget.searchWork() - countPausedAt >= Math.min(
+                            phase == 12 ? 131_072 : phase == 6 || !pending.isEmpty() ? 1_048_576 : 32_768,
+                            Math.max(4096, budget.remainingWork() / 8)) || phase == 0 && pending.isEmpty() || phase == 9)) {
                 countResumePhase = phase;
                 countSearch = parkedCounts;
                 parkedCounts = null;
                 countSearch.resume();
                 phase = 14;
             }
-            if (quantityDeferred && phase != 4 && phase != 8 && phase != 10 && phase != 18 &&
+            if (quantityDeferred && phase != 4 && phase != 8 && phase != 10 && phase != 18 && phase != 19 &&
                     !(phase == 3 && candidate.feasible()) &&
-                    (phase == 9 || budget.nodes() - quickSearchStarted >= quickSearchAllowance)) {
+                    (phase == 9 || budget.searchWork() - quickSearchStarted >= quickSearchAllowance)) {
                 if (!countAttempted && quantities.readyForHeavyAnalysis() &&
                         (catalystPolicy.maxExtraCopies() == 0 || candidate.seeds().isEmpty())) {
                     // Feasibility scouts also help medium and unbounded count
@@ -165,6 +221,12 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             }
             switch (phase) {
                 case 0 -> {
+                    if (stockViewDelayed && pending.isEmpty()) {
+                        if (startStockView()) {
+                            stockResumePhase = 0;
+                            return false;
+                        }
+                    }
                     if (bootstrapTooLarge && !countAttempted) {
                         budget.note("source_dispatch", "bootstrap_range_limit; trying_exact_counts");
                         startCountSearch();
@@ -220,6 +282,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         return false;
                     }
                     choices = pending.removeFirst();
+                    queued.remove(choices);
                     if (!seen.add(choices)) return false;
                     // Source explanations were checked with all unmentioned
                     // choices free. Reusing one does not require rebuilding the
@@ -231,6 +294,9 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         phase = 5;
                         return false;
                     }
+                    budget.release(graphMemory);
+                    graphMemory = 0;
+                    if (sourceAttempts == 0) firstGraphStarted = budget.searchWork();
                     graph = compiler.cached(target, requiredSeeds.keySet(), choices, excluded);
                     if (graph == null) compiling = compiler.begin(target, requiredSeeds.keySet(), choices, excluded, budget);
                     phase = 1;
@@ -243,6 +309,9 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         compiler.publish(target, requiredSeeds.keySet(), choices, excluded, graph);
                         compiling = null;
                     }
+                    long bytes = graph.estimatedBytes();
+                    budget.reserve(bytes);
+                    graphMemory = bytes;
                     sourceCore = proofs == null ? null : proofs.sourceConflict(assignment());
                     if (sourceCore != null && best != null) {
                         prepareAlternatives();
@@ -261,8 +330,13 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 case 2 -> {
                     if (!solving.step()) return false;
                     candidate = solving.result();
+                    if (sourceAttempts == 1) firstGraphWork = budget.searchWork() - firstGraphStarted;
                     budget.note("region_solve", candidate.result() + "; missing_keys=" + candidate.missingExact().size());
+                    solving.close();
                     solving = null;
+                    if (!candidate.feasible() && !stockViewTried && !stock.isEmpty() && !cheapCountView()) {
+                        if (startStockView()) return false;
+                    }
                     if (seen.size() >= 2 && !candidate.feasible() && graph.selected().keySet().stream().anyMatch(key -> compiler.producers(key).size() > 1)) {
                         ensureProofs();
                         if (proofs != null && proofs.model != null) {
@@ -327,22 +401,22 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         if (repairs.hasNext()) queueChoice(repairs.next());
                         else {
                             repairs = null;
-                            phase = 0;
+                            scoutSources();
+                            phase = stockWitness() ? 4 : 0;
                         }
                         return false;
                     }
                     if (!alternatives.hasNext()) {
                         clearAlternativeOrder();
-                        phase = 0;
+                        scoutSources();
+                        phase = stockWitness() ? 4 : 0;
                         return false;
                     }
                     K key = alternatives.next();
                     int next = choices.getOrDefault(key, 0) + 1;
                     long count = compiler.producers(key).stream().filter(recipe -> !excluded.contains(recipe.id())).count();
                     if (next < count) {
-                        Map<K, Integer> changed = new LinkedHashMap<>(choices);
-                        changed.put(key, next);
-                        queueChoice(changed, preferredAlternatives.contains(key));
+                        queueChoice(GraphSourceChoices.changed(choices, key, next), preferredAlternatives.contains(key));
                     }
                 }
                 case 6 -> {
@@ -350,7 +424,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     // also return to untried source combinations. Otherwise an
                     // unlucky first batch can consume the entire order budget
                     // while a cheap executable source graph is still queued.
-                    if (!pending.isEmpty() && budget.nodes() - allocationTurnStarted >= allocationTurnAllowance) {
+                    if (!pending.isEmpty() && budget.searchWork() - allocationTurnStarted >= allocationTurnAllowance) {
                         budget.note("allocation_handoff", "pending_sources=" + pending.size() + "; seen=" + seen.size());
                         phase = 0;
                         return false;
@@ -417,7 +491,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     }
                     if (quantityResumePhase < 0 && quantities.readyForHeavyAnalysis()) {
                         quantityDeferred = true;
-                        quickSearchStarted = budget.nodes();
+                        quickSearchStarted = budget.searchWork();
                         quickSearchAllowance = Math.min(16_384L, budget.remainingWork() / 8);
                         budget.note("quantity", "bounds_inconclusive; deferred_exact_analysis");
                         afterSolve();
@@ -436,7 +510,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 }
                 case 13 -> {
                     GraphPlan<K> preview = null;
-                    if (budget.nodes() - previewStarted < previewAllowance) {
+                    if (budget.searchWork() - previewStarted < previewAllowance) {
                         if (!allocating.step()) return false;
                         preview = allocating.result();
                     } else {
@@ -456,7 +530,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     budget.note("integer_counts", "witness=" + (counted != null) + "; proven_infeasible=" + proved);
                     if (countSearch.paused()) {
                         parkedCounts = countSearch;
-                        countPausedAt = budget.nodes();
+                        countPausedAt = budget.searchWork();
                     }
                     countSearch = null;
                     if (counted != null) {
@@ -502,20 +576,37 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     phase = 8;
                 }
                 case 18 -> {
-                    if (budget.nodes() - allocationScoutStarted < allocationScoutAllowance) {
+                    if (budget.searchWork() - allocationScoutStarted < allocationScoutAllowance) {
                         if (!allocating.step()) return false;
                         var allocated = allocating.result();
                         allocating = null;
                         if (allocated != null) {
-                            budget.note("allocation_scout", "witness; work=" + (budget.nodes() - allocationScoutStarted));
+                            budget.note("allocation_scout", "witness; work=" + (budget.searchWork() - allocationScoutStarted));
                             candidate = allocated;
                             verifying = new PlanVerification<>(candidate, budget);
                             phase = 4;
                             return false;
                         }
                     }
-                    budget.note("allocation_scout", "handoff; work=" + (budget.nodes() - allocationScoutStarted) + "; frontier_retained=" + (allocating != null));
+                    budget.note("allocation_scout", "handoff; work=" + (budget.searchWork() - allocationScoutStarted) + "; frontier_retained=" + (allocating != null));
                     phase = allocationResumePhase == 6 && allocating == null ? 0 : allocationResumePhase;
+                }
+                case 19 -> {
+                    if (!stockView.step()) return false;
+                    var proposal = stockView.result();
+                    if (stockView.paused()) stockPausedAt = budget.searchWork();
+                    else {
+                        stockView.close();
+                        stockView = null;
+                    }
+                    if (proposal != null) {
+                        candidate = proposal;
+                        verifying = new PlanVerification<>(candidate, budget);
+                        phase = 4;
+                    } else if (stockResumePhase >= 0) {
+                        phase = stockResumePhase;
+                        stockResumePhase = -1;
+                    } else afterSolve();
                 }
                 default -> {
                     return true;
@@ -532,9 +623,23 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     private void beginAllocationTurn() {
         allocationAfterSources = sourceAttempts + 8;
-        allocationTurnStarted = budget.nodes();
+        allocationTurnStarted = budget.searchWork();
         allocationTurnAllowance = Math.min(1_048_576, budget.remainingWork() / 8);
         phase = 6;
+    }
+
+    private boolean compilationActive() {
+        return phase == 1 && compiling != null || phase == 19 && stockView != null && stockView.compilationActive();
+    }
+
+    private long stockResumeWait() {
+        int currentMissing = candidate == null || candidate.missingExact().isEmpty() ?
+                Integer.MAX_VALUE : candidate.missingExact().size();
+        // Residuals only guide scheduling. A promising ordinary route must
+        // keep its turn too: unconditional aggressive tail resumption merely
+        // moves starvation from stock views to the source frontier.
+        int share = stockView.missingKeys() < currentMissing ? 8 : 2;
+        return Math.min(1_048_576, Math.max(4096, budget.remainingWork() / share));
     }
 
     private void startCountSearch() {
@@ -571,7 +676,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         allocating = new AllocationSearch<>(compiler, target, amount, stock, external, requiredSeeds,
                 preserve, forceCraft, excluded, budget, started).proofs(proofs);
         allocationResumePhase = phase;
-        allocationScoutStarted = budget.nodes();
+        allocationScoutStarted = budget.searchWork();
         allocationScoutAllowance = Math.min(1_048_576, budget.remainingWork() / 8);
         budget.note("allocation_scout", "start; allowance=" + allocationScoutAllowance);
         phase = 18;
@@ -581,7 +686,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         discardQuantityAnalysis();
         countBeforeQuantity = false;
         if (allocating != null) allocating.discard();
-        previewStarted = budget.nodes();
+        previewStarted = budget.searchWork();
         previewAllowance = Math.min(262_144, budget.remainingWork() / 8);
         allocating = new AllocationSearch<>(compiler, target, amount, stock, external, requiredSeeds,
                 preserve, forceCraft, excluded, budget, started, true);
@@ -632,29 +737,26 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 (int) compiler.producers(key).stream().filter(r -> !excluded.contains(r.id())).count())
                 .filter(i -> i != choices.getOrDefault(key, 0)).mapToObj(i -> {
                     budget.check();
-                    Map<K, Integer> changed = new LinkedHashMap<>(choices);
-                    if (i == 0) changed.remove(key);
-                    else changed.put(key, i);
-                    return Map.copyOf(changed);
+                    return GraphSourceChoices.changed(choices, key, i);
                 })).iterator();
     }
 
     private void orderAlternatives() {
         alternatives = graph.selected().keySet().iterator();
         if (candidate == null || candidate.missingExact().isEmpty()) return;
-        long started = budget.nodes();
+        long started = budget.threadWork();
         long allowance = Math.min(262_144, budget.remainingWork() / 16);
         long scratch = 0;
         try {
             Map<K, List<K>> consumers = new LinkedHashMap<>();
             var counts = candidate.patternTimesExact();
             for (var entry : graph.selected().entrySet()) {
-                if (budget.nodes() - started >= allowance) return;
+                if (budget.threadWork() - started >= allowance) return;
                 budget.check();
                 var recipe = entry.getValue();
                 if (!counts.containsKey(recipe.id())) continue;
                 for (K input : recipe.inputs().keySet()) {
-                    if (budget.nodes() - started >= allowance) return;
+                    if (budget.threadWork() - started >= allowance) return;
                     budget.check();
                     if (!budget.tryReserve(128)) return;
                     scratch += 128;
@@ -665,7 +767,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             Deque<K> affected = new ArrayDeque<>();
             List<K> preferred = new ArrayList<>();
             for (K key : candidate.missingExact().keySet()) {
-                if (budget.nodes() - started >= allowance) return;
+                if (budget.threadWork() - started >= allowance) return;
                 budget.check();
                 if (!budget.tryReserve(128)) return;
                 scratch += 128;
@@ -673,14 +775,14 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 affected.add(key);
             }
             while (!affected.isEmpty()) {
-                if (budget.nodes() - started >= allowance) return;
+                if (budget.threadWork() - started >= allowance) return;
                 budget.check();
                 K key = affected.removeFirst();
                 if (graph.selected().containsKey(key) && compiler.producers(key).stream()
                         .filter(recipe -> !excluded.contains(recipe.id())).limit(2).count() > 1)
                     preferred.add(key);
                 for (K output : consumers.getOrDefault(key, List.of())) {
-                    if (budget.nodes() - started >= allowance) return;
+                    if (budget.threadWork() - started >= allowance) return;
                     budget.check();
                     if (visited.add(output)) {
                         if (!budget.tryReserve(128)) return;
@@ -718,19 +820,54 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         alternativeMemory = 0;
     }
 
+    private void scoutSources() {
+        if (sourceScoutTried || nesting != 0 || !excluded.isEmpty()) return;
+        sourceScoutTried = true;
+        // One-at-a-time repairs can require thousands of intermediate graphs
+        // when several stock-backed sources need to change together. These
+        // assignments only propose candidates: the original frontier remains,
+        // and every proposal uses the same cycle solve and exact verification.
+        var proposals = GraphSourceScout.choices(compiler, target, stock, external, requiredSeeds.keySet(), forceCraft, budget);
+        for (var proposal : proposals) queueChoice(proposal, true);
+        budget.note("source_scout", "grouped_assignments=" + proposals.size());
+    }
+
+    private boolean stockWitness() {
+        if (stockWitnessTried || budget.searchWork() < stockWitnessAfter || !excluded.isEmpty() || graph == null || candidate == null || candidate.missingExact().isEmpty() ||
+                graph.regions().stream().anyMatch(GraphCompiler.Region::cyclic))
+            return false;
+        stockWitnessTried = true;
+        long allowance = Math.min(32768, budget.remainingWork() / 8);
+        if (allowance < 8192) return false;
+        var proposal = GraphFallback.witnessByCost(compiler, target, amount, stock, external, requiredSeeds,
+                preserve, forceCraft, budget, allowance);
+        budget.note("source_witness", "stock_cost; verified=" + (proposal != null) + "; original_frontier_retained");
+        if (proposal == null) return false;
+        candidate = proposal;
+        verifying = new PlanVerification<>(candidate, budget);
+        return true;
+    }
+
     private void queueChoice(Map<K, Integer> changed) {
         queueChoice(changed, false);
     }
 
     private void queueChoice(Map<K, Integer> changed, boolean preferred) {
-        if (seen.contains(changed)) return;
+        if (seen.contains(changed) || queued.contains(changed)) return;
         if (pending.size() >= 4096) {
             frontierTruncated = true;
             return;
         }
-        budget.reserve(128L + 48L * changed.size());
-        if (preferred) pending.addFirst(Map.copyOf(changed));
-        else pending.addLast(Map.copyOf(changed));
+        var retained = GraphSourceChoices.retain(changed);
+        long bytes = retained.retainedBytes();
+        if (!budget.tryReserve(bytes)) {
+            frontierTruncated = true;
+            return;
+        }
+        frontierMemory += bytes;
+        queued.add(retained);
+        if (preferred) pending.addFirst(retained);
+        else pending.addLast(retained);
     }
 
     private boolean retryWithTargetSeed() {
@@ -777,18 +914,63 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 verifyMissing();
                 return;
             }
+            if (startStockView()) return;
             // Ordinary DAG propagation already accounts for every selected
             // input. Recursively crafting its missing leaves cannot improve
             // that source selection; compile the alternatives instead.
             if (graph.regions().stream().anyMatch(GraphCompiler.Region::cyclic)) bootstrap = new Bootstrap(candidate);
         }
+        if (!candidate.feasible() && candidate.missing().isEmpty() && startStockView()) return;
         phase = 3;
+    }
+
+    private boolean cheapCountView() {
+        if (cheapCountView != null) return cheapCountView;
+        // Reuse the bound model's actual supported closure, rather than gate
+        // on the whole catalog's size. If it cannot be built, demand views
+        // keep their early turn; this is no infeasibility conclusion.
+        long workspace = 524_288;
+        if (!budget.tryReserve(workspace)) return cheapCountView = false;
+        try {
+            cheapCountView = compiler.countClosure(target, requiredSeeds.keySet(), excluded, 8192, 8192, budget) != null;
+            return cheapCountView;
+        } finally {
+            budget.release(workspace);
+        }
+    }
+
+    private boolean startStockView() {
+        if (stockViewTried || stock.isEmpty() || Boolean.TRUE.equals(quantityBlocked) || Boolean.TRUE.equals(stockBlocked)) return false;
+        if (Boolean.TRUE.equals(cheapCountView) && sourceAttempts == 1 && !stockViewDelayed) {
+            for (K key : graph.selected().keySet()) {
+                budget.check();
+                int alternatives = 0;
+                for (var source : compiler.producers(key)) {
+                    budget.check();
+                    if (!excluded.contains(source.id()) && ++alternatives >= 2) {
+                        stockViewDelayed = true;
+                        stockDelayStarted = budget.searchWork();
+                        stockDelayAllowance = Math.max(1, Math.min(2_097_152,
+                                Math.min(Math.max(32_768, Math.min(1_048_576, firstGraphWork) * 2), budget.remainingWork() / 8)));
+                        budget.note("stock_view", "ordinary_source_headstart; allowance=" + stockDelayAllowance);
+                        return false;
+                    }
+                }
+            }
+        }
+        stockViewDelayed = false;
+        stockViewTried = true;
+        stockSpareMemory = Math.min(33_554_432, budget.availableBytes() / 4);
+        stockView = new GraphStockViewPortfolio<>(compiler, target, amount, stock, external, requiredSeeds,
+                excluded, preserve, forceCraft, catalystPolicy, budget, started);
+        phase = 19;
+        return true;
     }
 
     private void resumeQuantityAnalysis(int resumePhase) {
         quantityDeferred = false;
         quantityResumePhase = resumePhase;
-        budget.note("quantity", "resume_exact_analysis; quick_work=" + (budget.nodes() - quickSearchStarted));
+        budget.note("quantity", "resume_exact_analysis; quick_work=" + (budget.searchWork() - quickSearchStarted));
         phase = 12;
     }
 
@@ -862,8 +1044,20 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public void close() {
+        budget.release(graphMemory);
+        graphMemory = 0;
+        graph = null;
+        pending.clear();
+        queued.clear();
+        seen.clear();
+        budget.release(frontierMemory);
+        frontierMemory = 0;
         if (compiling != null) compiling.close();
         compiling = null;
+        if (solving != null) solving.close();
+        solving = null;
+        if (stockView != null) stockView.close();
+        stockView = null;
         if (missingAnalysis != null) missingAnalysis.close();
         missingAnalysis = null;
         if (productionProof != null) productionProof.close();
@@ -908,7 +1102,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private final class Bootstrap implements AutoCloseable {
 
         private final GraphPlan<K> original;
-        private final long searchStarted = budget.nodes();
+        private final long searchStarted = budget.searchWork();
         private final Iterator<Map.Entry<K, Long>> deficits;
         private final List<PlanStep> prefix = new ArrayList<>();
         private final Map<String, GraphRecipe<K>> recipes;
@@ -932,7 +1126,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             // intermediate as if it were an external seed. Do not spend the
             // whole request manufacturing that speculative prefix before the
             // allocator can construct and verify a different execution order.
-            if (budget.nodes() - searchStarted > 32_768L + 128L * graph.recipes().size()) {
+            if (budget.searchWork() - searchStarted > 32_768L + 128L * graph.recipes().size()) {
                 result = original;
                 return true;
             }
@@ -947,6 +1141,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             if (restarted != null) {
                 if (!restarted.step()) return false;
                 GraphPlan<K> tail = restarted.result();
+                restarted.close();
+                restarted = null;
                 recipes.putAll(tail.recipes());
                 prefix.add(tail.steps());
                 assembly = new PlanAssembly<>(target, amount, preserve, new PlanStep.Sequence(prefix), recipes,
@@ -1037,6 +1233,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             seedWork = null;
             if (summary != null) summary.close();
             summary = null;
+            if (restarted != null) restarted.close();
+            restarted = null;
+            if (assembly != null) assembly.close();
+            assembly = null;
         }
     }
 }

@@ -11,7 +11,9 @@ import java.util.Set;
 
 /**
  * Monotone over-approximation of every allowed producer, including alternatives.
- * Inputs are never consumed and one available unit can supply any input count.
+ * Inputs are never consumed. A recipe needs one full input batch, then every
+ * resource it can increase is allowed to grow without bound. Finite components
+ * keep their initial stock, giving an inductive optimistic inventory box.
  * Failure even in this relaxed model proves a missing starting resource; success
  * says nothing about quantities, ordering or seed recovery.
  */
@@ -19,6 +21,7 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
 
     private final GraphCompiler<K> compiler;
     private final GraphCatalogIndex<K> sharedIndex;
+    private final GraphSourceIndex<K> sharedSources;
     private GraphCatalogIndex.Builder<K> building;
     private final Map<K, Long> stock;
     private final Set<K> external, required;
@@ -31,8 +34,10 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
     private int indexing;
     private final Map<K, List<Integer>> consumers = new HashMap<>();
     private final Set<K> produced = new HashSet<>();
+    private final Set<K> unbounded = new HashSet<>();
     private final ArrayDeque<Integer> ready = new ArrayDeque<>();
     private Iterator<K> outputs;
+    private GraphRecipe<K> firing;
     private Iterator<Integer> waking;
     private int[] indexedWaking;
     private int wakeCursor;
@@ -44,6 +49,7 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
         this.compiler = compiler;
         recipes = compiler.catalog();
         sharedIndex = compiler.catalogIndex();
+        sharedSources = sharedIndex == null ? compiler.sourceIndex() : null;
         this.target = target;
         this.stock = stock;
         this.external = external;
@@ -54,13 +60,13 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
     }
 
     boolean step() {
-        budget.check();
+        budget.operation(PlanningBudget.Operation.SCAN, 1);
         if (complete) return true;
         if (closed) throw new IllegalStateException("Missing stock analysis is closed");
         if (waiting == null) {
             reserve(16L + 4L * recipes.size());
             waiting = new int[recipes.size()];
-            if (sharedIndex == null && compiler.reuseCatalogIndex()) building = new GraphCatalogIndex.Builder<>(recipes, budget);
+            if (sharedIndex == null && sharedSources == null && compiler.reuseCatalogIndex()) building = new GraphCatalogIndex.Builder<>(recipes, budget);
         }
         if (indexing < recipes.size()) {
             int id = indexing++;
@@ -72,10 +78,11 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
             }
             int count = 0;
             reserve(64);
-            for (K key : recipe.inputs().keySet()) {
-                budget.check();
-                if (!available(key)) {
-                    if (sharedIndex == null) {
+            for (var input : recipe.inputs().entrySet()) {
+                budget.operation(PlanningBudget.Operation.SCAN, 1);
+                K key = input.getKey();
+                if (!available(key, input.getValue())) {
+                    if (sharedIndex == null && sharedSources == null) {
                         reserve(80);
                         consumers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(id);
                     }
@@ -104,14 +111,17 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
         waking = null;
         if (outputs != null && outputs.hasNext()) {
             K key = outputs.next();
-            if (produced.add(key)) {
+            if (firing.executionOutputs().containsKey(key) && produced.add(key)) reserve(64);
+            long consumed = firing.inputs().getOrDefault(key, 0L) - firing.configurationInputs().getOrDefault(key, 0L) + firing.reusableInputs().getOrDefault(key, 0L);
+            if (firing.outputs().get(key) > consumed && unbounded.add(key)) {
                 reserve(64);
-                // A stored/readable resource was already paid for at indexing.
-                // Producing it again must not decrement the same wait twice.
-                if (stock.getOrDefault(key, 0L) == 0 && !external.contains(key)) {
-                    if (sharedIndex == null) waking = consumers.getOrDefault(key, List.of()).iterator();
+                // Only previously deficient ports wait for this transition.
+                // A finite initial stock may satisfy some, but not all, consumers.
+                if (!external.contains(key)) {
+                    wakingKey = key;
+                    if (sharedIndex == null && sharedSources == null) waking = consumers.getOrDefault(key, List.of()).iterator();
                     else {
-                        indexedWaking = sharedIndex.consumers(key);
+                        indexedWaking = sharedIndex != null ? sharedIndex.consumers(key) : sharedSources.consumers.get(key);
                         wakeCursor = 0;
                     }
                 }
@@ -120,24 +130,32 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
         }
         outputs = null;
         if (!ready.isEmpty()) {
-            outputs = recipes.get(ready.removeFirst()).outputs().keySet().iterator();
+            firing = recipes.get(ready.removeFirst());
+            outputs = firing.outputs().keySet().iterator();
             return false;
         }
-        blocked = force ? !produced.contains(target) && !external.contains(target) : !available(target);
+        blocked = force ? !produced.contains(target) && !external.contains(target) : !available(target, 1);
         for (K key : required) {
-            budget.check();
-            if (!available(key)) blocked = true;
+            budget.operation(PlanningBudget.Operation.SCAN, 1);
+            if (!available(key, 1)) blocked = true;
         }
         complete = true;
         return true;
     }
 
     private void wake(int id) {
-        if (waiting[id] > 0 && --waiting[id] == 0) ready.add(id);
+        if (waiting[id] > 0) {
+            // The shared index includes already funded ports. The private
+            // index contains only deficient ports and needs no second test.
+            if ((sharedIndex != null || sharedSources != null) && stock.getOrDefault(wakingKey, 0L) >= recipes.get(id).inputs().get(wakingKey)) return;
+            if (--waiting[id] == 0) ready.add(id);
+        }
     }
 
-    private boolean available(K key) {
-        return stock.getOrDefault(key, 0L) > 0 || external.contains(key) || produced.contains(key);
+    private K wakingKey;
+
+    private boolean available(K key, long amount) {
+        return stock.getOrDefault(key, 0L) >= amount || external.contains(key) || unbounded.contains(key);
     }
 
     private void reserve(long bytes) {
@@ -153,7 +171,10 @@ final class MissingStockAnalysis<K> implements AutoCloseable {
     Set<String> unreachableRecipes() {
         if (!complete) throw new IllegalStateException("Missing stock analysis is incomplete");
         Set<String> result = new HashSet<>();
-        for (int i = 0; i < recipes.size(); i++) if (waiting[i] > 0) result.add(recipes.get(i).id());
+        for (int i = 0; i < recipes.size(); i++) {
+            budget.operation(PlanningBudget.Operation.SCAN, 1);
+            if (waiting[i] > 0) result.add(recipes.get(i).id());
+        }
         return Set.copyOf(result);
     }
 

@@ -36,16 +36,22 @@ final class CountCardinalitySearch implements AutoCloseable {
     private final List<ExactLinearProgram.Constraint> original;
     private final BigInteger[] lower, upper;
     private final PlanningBudget budget;
-    private final long allowance;
+    private long allowance;
     private final List<Row> rows = new ArrayList<>();
     private final List<Weighted> weighted = new ArrayList<>();
     private final Deque<Node> open = new ArrayDeque<>();
     private final Deque<CliqueNode> cliques = new ArrayDeque<>();
     private int[] variables;
     private long[] compatible;
+    private long[] conditionalConflicts;
+    private long boundVariables;
+    private int boundRequired;
+    private boolean boundOnes;
+    private long coloringPrunes;
     private long all, memory, work, nodes;
     private int goal;
     private boolean complete, infeasible;
+    private boolean retaining, paused;
     private BigInteger[] counts;
 
     CountCardinalitySearch(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
@@ -163,6 +169,7 @@ final class CountCardinalitySearch implements AutoCloseable {
             if (goal > 0 && edges > 0) cliques.push(new CliqueNode(goalVariables, 0));
             else {
                 compatible = null;
+                prepareConditionalBound();
                 open.push(new Node(0, 0));
             }
         } catch (Stop stopped) {
@@ -174,7 +181,8 @@ final class CountCardinalitySearch implements AutoCloseable {
     }
 
     boolean step() {
-        if (complete) return true;
+        if (complete || paused) return true;
+        if (retaining && work >= allowance) return paused = true;
         try {
             charge();
             return compatible == null ? cardinalityStep() : cliqueStep();
@@ -229,6 +237,11 @@ final class CountCardinalitySearch implements AutoCloseable {
             changed = before != (one | zero);
         } while (changed);
         if ((one | zero) == all) return witness(one);
+        if (conditionalConflicts != null && conditionalBound(one, zero)) {
+            coloringPrunes++;
+            open.pop();
+            return false;
+        }
         int[] score = new int[variables.length];
         for (Row row : rows) {
             charge();
@@ -249,9 +262,76 @@ final class CountCardinalitySearch implements AutoCloseable {
         // Remove a frontier node only after all interruptible work has completed.
         open.pop();
         long bit = 1L << best;
-        open.push(new Node(one, zero | bit));
-        open.push(new Node(one | bit, zero));
+        if (conditionalConflicts != null && !boundOnes) {
+            open.push(new Node(one | bit, zero));
+            open.push(new Node(one, zero | bit));
+        } else {
+            open.push(new Node(one, zero | bit));
+            open.push(new Node(one | bit, zero));
+        }
         return false;
+    }
+
+    private void prepareConditionalBound() {
+        // A covering row also bounds the number of complementary choices.
+        // Prefer a goal whose literals participate in small restrictive rows:
+        // after assignments, a hyperedge can become a pairwise conflict even
+        // when there was no conflict graph at the root.
+        long best = 0;
+        for (Row candidate : rows) {
+            charge();
+            if (candidate.positive != 0 && candidate.negative != 0) continue;
+            boolean ones = candidate.positive == 0;
+            long members = candidate.positive | candidate.negative;
+            int size = Long.bitCount(members), required = size - candidate.capacity;
+            if (size < 8 || required < 3) continue;
+            long score = 0;
+            for (Row row : rows) {
+                charge();
+                int shared = Long.bitCount(members & (ones ? row.positive : row.negative));
+                if (shared >= 2 && row.capacity > 0 && row.capacity < shared && shared <= 8)
+                    score += shared - row.capacity;
+            }
+            if (score > best && score >= size) {
+                best = score;
+                boundVariables = members;
+                boundRequired = required;
+                boundOnes = ones;
+            }
+        }
+        if (best > 0) conditionalConflicts = new long[variables.length];
+    }
+
+    private boolean conditionalBound(long one, long zero) {
+        int required = boundRequired - Long.bitCount(boundVariables & (boundOnes ? one : zero));
+        if (required <= 1) return false;
+        long free = boundVariables & ~(one | zero);
+        Arrays.fill(conditionalConflicts, 0);
+        for (Row row : rows) {
+            charge();
+            int used = Long.bitCount(row.positive & one) + Long.bitCount(row.negative & zero);
+            if (row.capacity - used != 1) continue;
+            long members = free & (boundOnes ? row.positive : row.negative);
+            for (long rest = members; rest != 0; rest &= rest - 1) {
+                charge();
+                int id = Long.numberOfTrailingZeros(rest);
+                conditionalConflicts[id] |= members & ~(1L << id);
+            }
+        }
+        // Partition the remaining goal literals into conflict cliques. At most
+        // one literal in each clique can be true under THIS node's assignments.
+        // These conditional edges never escape the node or become root facts.
+        int colors = 0;
+        for (long left = free; left != 0;) {
+            if (++colors >= required) return false;
+            for (long rest = left; rest != 0;) {
+                charge();
+                int id = Long.numberOfTrailingZeros(rest);
+                left &= ~(1L << id);
+                rest &= conditionalConflicts[id];
+            }
+        }
+        return true;
     }
 
     private boolean cliqueStep() {
@@ -324,7 +404,7 @@ final class CountCardinalitySearch implements AutoCloseable {
     }
 
     private void charge() {
-        if (work >= allowance) throw new Stop();
+        if (!retaining && work >= allowance) throw new Stop();
         budget.check();
         work++;
     }
@@ -332,7 +412,7 @@ final class CountCardinalitySearch implements AutoCloseable {
     private boolean finish(boolean impossible, String reason) {
         complete = true;
         infeasible = impossible;
-        budget.note("count_cardinality_search", reason + "; nodes=" + nodes + "; work=" + work);
+        budget.note("count_cardinality_search", reason + "; nodes=" + nodes + "; work=" + work + "; conditional_color_prunes=" + coloringPrunes);
         return true;
     }
 
@@ -342,6 +422,22 @@ final class CountCardinalitySearch implements AutoCloseable {
 
     boolean infeasible() {
         return infeasible;
+    }
+
+    CountCardinalitySearch retained() {
+        retaining = true;
+        return this;
+    }
+
+    boolean paused() {
+        return paused;
+    }
+
+    void resume(long quantum) {
+        if (!retaining || complete || quantum <= 0) throw new IllegalStateException("Cardinality search cannot resume");
+        if (budget.remainingWork() == 0) budget.check();
+        allowance = work + Math.min(quantum, budget.remainingWork());
+        paused = false;
     }
 
     @Override

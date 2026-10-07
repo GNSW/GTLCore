@@ -14,7 +14,8 @@ final class SeedOptimization<K> implements AutoCloseable {
     private final Set<String> excluded;
     private final boolean force;
     private final PlanningBudget budget;
-    private final long started, allowance;
+    private final long allowance;
+    private long work, stepStarted;
     private final Map<String, GraphRecipe<K>> recipes = new LinkedHashMap<>();
     private final Deque<K> pending = new ArrayDeque<>();
     private final Set<K> discovered = new HashSet<>(), produced = new LinkedHashSet<>();
@@ -69,7 +70,6 @@ final class SeedOptimization<K> implements AutoCloseable {
         this.excluded = excluded;
         this.force = force;
         this.budget = budget;
-        started = budget.nodes();
         allowance = Math.min(262_144, budget.remainingWork() / 8);
         pending.add(plan.target());
         pending.addAll(mandatory.keySet());
@@ -77,9 +77,22 @@ final class SeedOptimization<K> implements AutoCloseable {
     }
 
     boolean step() {
+        stepStarted = budget.threadWork();
+        try {
+            return advance();
+        } finally {
+            work += budget.threadWork() - stepStarted;
+        }
+    }
+
+    private long usedWork() {
+        return work + budget.threadWork() - stepStarted;
+    }
+
+    private boolean advance() {
         if (complete) return true;
         budget.check();
-        if (budget.nodes() - started >= allowance) return finish("budget");
+        if (usedWork() >= allowance) return finish("budget");
         switch (phase) {
             case 0 -> {
                 if (!pending.isEmpty()) {
@@ -338,7 +351,7 @@ final class SeedOptimization<K> implements AutoCloseable {
         if (force) targetReserve = targetReserve.max(supplied.getOrDefault(original.target(), BigInteger.ZERO));
         goals.put(original.target(), targetReserve.add(BigInteger.valueOf(original.amount())));
         searching = new BackwardCoverability<>(List.copyOf(recipes.values()), supplied, goals, searchExternal(), macros,
-                budget, Math.min(32_768, allowance - (budget.nodes() - started)));
+                budget, Math.max(0, Math.min(32_768, allowance - usedWork())));
         trials++;
         phase = 3;
     }
@@ -465,7 +478,7 @@ final class SeedOptimization<K> implements AutoCloseable {
                 best.seeds().size(), cardinalityProven, amountsProven, !original.feasible(), flexibleMaterials));
         budget.note("global_seeds", detail + "; types=" + original.seeds().size() + "->" + best.seeds().size() +
                 "; lower_bound=" + lowerBound + "; cardinality_proven=" + cardinalityProven + "; amounts_proven=" + amountsProven +
-                "; all_source_recipes=" + recipes.size() + "; trials=" + trials + "; work=" + (budget.nodes() - started));
+                "; all_source_recipes=" + recipes.size() + "; trials=" + trials + "; work=" + usedWork());
         budget.note("seed_support", "checked_cuts=" + supportCuts.size() + "; startup_prunes=" + supportPrunes + "; pricing_work=" + supportPricingWork + "; enumerating=" + enumerateSupports);
         close();
         return true;

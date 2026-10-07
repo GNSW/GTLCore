@@ -22,12 +22,13 @@ final class CountBinPackingSearch implements AutoCloseable {
     private final List<ExactLinearProgram.Constraint> original;
     private final BigInteger[] lower, upper;
     private final PlanningBudget budget;
-    private final long allowance;
+    private long allowance;
     private final Deque<Node> open = new ArrayDeque<>();
     private final Map<State, Long> reached = new HashMap<>();
     private Item[] items;
     private long goal, work, memory, nodes, dominated;
     private boolean complete, infeasible;
+    private boolean retaining, paused;
     private BigInteger[] counts;
 
     CountBinPackingSearch(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
@@ -199,7 +200,8 @@ final class CountBinPackingSearch implements AutoCloseable {
     }
 
     boolean step() {
-        if (complete) return true;
+        if (complete || paused) return true;
+        if (retaining && work >= allowance) return paused = true;
         try {
             charge();
             if (open.isEmpty()) return finish(true, "exhausted");
@@ -284,7 +286,7 @@ final class CountBinPackingSearch implements AutoCloseable {
     }
 
     private void charge() {
-        if (work >= allowance) throw new Stop();
+        if (!retaining && work >= allowance) throw new Stop();
         budget.check();
         work++;
     }
@@ -302,6 +304,22 @@ final class CountBinPackingSearch implements AutoCloseable {
 
     boolean infeasible() {
         return infeasible;
+    }
+
+    CountBinPackingSearch retained() {
+        retaining = true;
+        return this;
+    }
+
+    boolean paused() {
+        return paused;
+    }
+
+    void resume(long quantum) {
+        if (!retaining || complete || quantum <= 0) throw new IllegalStateException("Packing search cannot resume");
+        if (budget.remainingWork() == 0) budget.check();
+        allowance = work + Math.min(quantum, budget.remainingWork());
+        paused = false;
     }
 
     @Override

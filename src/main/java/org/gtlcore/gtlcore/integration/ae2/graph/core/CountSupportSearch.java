@@ -22,6 +22,7 @@ final class CountSupportSearch<K> implements AutoCloseable {
     private final BitSet exits = new BitSet();
     private final long allowance;
     private final int stateLimit;
+    private final List<K> productionKeys;
     private BigInteger[][] inputs, changes;
     private BigInteger[] goals;
     private BigInteger[] gains;
@@ -51,6 +52,10 @@ final class CountSupportSearch<K> implements AutoCloseable {
     private CountSupportSearch(RecipeCountModel<K> model, BigInteger[] candidate, PlanningBudget budget, boolean full) {
         this.model = model;
         this.budget = budget;
+        // Support repair must satisfy physical production as well as final
+        // stock. Otherwise a stocked target returns an empty "witness" and
+        // permanently finishes this arm before it explores any firing.
+        productionKeys = List.copyOf(model.productionGoals.keySet());
         allowance = Math.min(full ? 65_536 : 16_384, budget.remainingWork() / 16);
         stateLimit = full ? 4096 : 1024;
         for (int i = 0; i < candidate.length; i++) if (candidate[i].signum() > 0) support.add(i);
@@ -59,16 +64,18 @@ final class CountSupportSearch<K> implements AutoCloseable {
             result = Result.UNKNOWN;
             return;
         }
-        long bytes = (long) stateLimit * (256 + 96L * model.keys.size());
+        int dimensions = model.keys.size() + productionKeys.size();
+        long bytes = (long) stateLimit * (256 + 96L * dimensions);
         if (!budget.tryReserve(bytes)) {
             result = Result.UNKNOWN;
             return;
         }
         memory = bytes;
+        long preparationStarted = budget.threadWork();
         try {
-            inputs = new BigInteger[support.size()][model.keys.size()];
-            changes = new BigInteger[support.size()][model.keys.size()];
-            goals = new BigInteger[model.keys.size()];
+            inputs = new BigInteger[support.size()][dimensions];
+            changes = new BigInteger[support.size()][dimensions];
+            goals = new BigInteger[dimensions];
             var stock = new ArrayList<BigInteger>();
             for (int k = 0; k < model.keys.size(); k++) {
                 K key = model.keys.get(k);
@@ -82,6 +89,16 @@ final class CountSupportSearch<K> implements AutoCloseable {
                     changes[i][k] = supplied ? BigInteger.ZERO : RecipeCountModel.delta(recipe, key);
                 }
             }
+            for (K key : productionKeys) {
+                int k = stock.size();
+                goals[k] = model.productionGoals.get(key);
+                for (int i = 0; i < support.size(); i++) {
+                    budget.check();
+                    inputs[i][k] = BigInteger.ZERO;
+                    changes[i][k] = BigInteger.valueOf(model.recipes.get(support.get(i)).executionOutputs().getOrDefault(key, 0L));
+                }
+                stock.add(BigInteger.ZERO);
+            }
             initial = List.copyOf(stock);
             Node root = new Node(initial, null, -1, BigInteger.ZERO, 0);
             reached.put(initial, root);
@@ -90,6 +107,8 @@ final class CountSupportSearch<K> implements AutoCloseable {
         } catch (RuntimeException | Error failure) {
             close();
             throw failure;
+        } finally {
+            work += budget.threadWork() - preparationStarted;
         }
     }
 
@@ -109,9 +128,14 @@ final class CountSupportSearch<K> implements AutoCloseable {
                         return finish(Result.CLOSED);
                     }
                     active = validating.next();
-                    if (goal(active.marking())) throw new IllegalStateException("Invalid support certificate goal");
+                    if (materialGoal(active.marking())) throw new IllegalStateException("Invalid support certificate goal");
                 } else {
                     if (pending.isEmpty()) {
+                        // Capped production progress is not a material arc.
+                        // Only project it away when the resulting material set
+                        // still excludes every goal; then independently check
+                        // closure using the original recipe inputs/outputs.
+                        if (!productionKeys.isEmpty() && !projectMaterials()) return finish(Result.UNKNOWN);
                         // A second pass checks the certificate independently of
                         // discovery order and the candidate recipe counts.
                         if (!reached.containsKey(initial)) throw new IllegalStateException("Invalid support certificate initial");
@@ -161,10 +185,11 @@ final class CountSupportSearch<K> implements AutoCloseable {
 
     private List<BigInteger> successor(List<BigInteger> marking, int recipe) {
         var next = new ArrayList<BigInteger>();
-        for (int k = 0; k < model.keys.size(); k++) {
+        for (int k = 0; k < goals.length; k++) {
             budget.check();
             if (marking.get(k).compareTo(inputs[recipe][k]) < 0) return null;
-            next.add(marking.get(k).add(changes[recipe][k]));
+            BigInteger value = marking.get(k).add(changes[recipe][k]);
+            next.add(k < model.keys.size() ? value : value.min(goals[k]));
         }
         return List.copyOf(next);
     }
@@ -199,9 +224,9 @@ final class CountSupportSearch<K> implements AutoCloseable {
         repairing = true;
         support.clear();
         for (int i = 0; i < model.recipes.size(); i++) support.add(i);
-        inputs = new BigInteger[support.size()][model.keys.size()];
-        changes = new BigInteger[support.size()][model.keys.size()];
-        gains = new BigInteger[model.keys.size()];
+        inputs = new BigInteger[support.size()][goals.length];
+        changes = new BigInteger[support.size()][goals.length];
+        gains = new BigInteger[goals.length];
         Arrays.fill(gains, BigInteger.ONE);
         for (int i = 0; i < support.size(); i++) for (int k = 0; k < model.keys.size(); k++) {
             budget.check();
@@ -209,6 +234,24 @@ final class CountSupportSearch<K> implements AutoCloseable {
             inputs[i][k] = model.external.contains(key) ? BigInteger.ZERO : BigInteger.valueOf(model.recipes.get(i).inputs().getOrDefault(key, 0L));
             changes[i][k] = model.external.contains(key) ? BigInteger.ZERO : RecipeCountModel.delta(model.recipes.get(i), key);
             gains[k] = gains[k].max(changes[i][k]);
+        }
+        for (int i = 0; i < support.size(); i++) for (int p = 0; p < productionKeys.size(); p++) {
+            budget.check();
+            int k = model.keys.size() + p;
+            inputs[i][k] = BigInteger.ZERO;
+            changes[i][k] = BigInteger.valueOf(model.recipes.get(i).executionOutputs().getOrDefault(productionKeys.get(p), 0L));
+            gains[k] = gains[k].max(changes[i][k]);
+        }
+        for (int p = 0; p < productionKeys.size(); p++) {
+            int k = model.keys.size() + p;
+            budget.check();
+            // This aid explores individual firings, with at most stateLimit-1
+            // edges in a simple witness path. Huge repeated orders belong to
+            // the batched solvers, not an inevitably exhausted marking search.
+            if (goals[k].compareTo(gains[k].multiply(BigInteger.valueOf(stateLimit - 1L))) > 0) {
+                result = Result.UNKNOWN;
+                return;
+            }
         }
         reached.clear();
         pending = new PriorityQueue<>(Comparator.<Node, BigInteger>comparing(Node::gap).thenComparingInt(Node::depth));
@@ -280,6 +323,28 @@ final class CountSupportSearch<K> implements AutoCloseable {
         return true;
     }
 
+    private boolean materialGoal(List<BigInteger> marking) {
+        for (int k = 0; k < model.keys.size(); k++) {
+            budget.check();
+            if (marking.get(k).compareTo(goals[k]) < 0) return false;
+        }
+        return true;
+    }
+
+    private boolean projectMaterials() {
+        for (Node node : reached.values()) if (materialGoal(node.marking())) return false;
+        var projected = new LinkedHashMap<List<BigInteger>, Node>();
+        for (Node node : reached.values()) {
+            budget.charge(1 + model.keys.size());
+            var marking = List.copyOf(node.marking().subList(0, model.keys.size()));
+            projected.putIfAbsent(marking, new Node(marking, null, -1, BigInteger.ZERO, 0));
+        }
+        reached.clear();
+        reached.putAll(projected);
+        initial = List.copyOf(initial.subList(0, model.keys.size()));
+        return true;
+    }
+
     private boolean finish(Result value) {
         if (value == Result.CLOSED && budget.proofJournal() != null) {
             List<List<BigInteger>> originalInputs = new ArrayList<>(), originalOutputs = new ArrayList<>();
@@ -288,7 +353,7 @@ final class CountSupportSearch<K> implements AutoCloseable {
                 originalOutputs.add(model.keys.stream().map(key -> model.external.contains(key) ? BigInteger.ZERO : BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L))).toList());
             }
             budget.proofJournal().add(new ExecutionProof.Certificate("execution_support:requires_boundary_recipe", ExecutionProof.Kind.FORWARD_BOUNDARY,
-                    initial, List.of(goals), originalInputs, originalOutputs, reached.keySet().stream().toList(), exits.stream().boxed().collect(java.util.stream.Collectors.toSet())));
+                    initial, List.of(Arrays.copyOf(goals, model.keys.size())), originalInputs, originalOutputs, reached.keySet().stream().toList(), exits.stream().boxed().collect(java.util.stream.Collectors.toSet())));
         }
         result = value;
         budget.note("count_support", "result=" + value + "; recipes=" + support.size() + "; states=" + reached.size() +

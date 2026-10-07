@@ -12,7 +12,8 @@ final class RegionCounts<K> implements AutoCloseable {
     private final Set<K> external;
     private final boolean preserve;
     private final PlanningBudget budget;
-    private final long started, allowance;
+    private long allowance;
+    private long work, stepStarted;
     private final Map<String, GraphRecipe<K>> byId = new LinkedHashMap<>();
     private final Map<K, Long> reserve = new LinkedHashMap<>();
     private RecipeCountModel<K> model;
@@ -27,8 +28,15 @@ final class RegionCounts<K> implements AutoCloseable {
     private BigInteger[] counts;
     private PlanStep body;
 
+    /** Small-SCC ratio recovery keeps its full quota, including sparse propagation-cycle elimination. */
+    RegionCounts<K> scoutRegions(boolean enabled) {
+        if (enabled && recipes.size() > 6) allowance = Math.min(allowance, 32_768);
+        return this;
+    }
+
     RegionCounts(List<GraphRecipe<K>> recipes, Map<K, BigInteger> demand, Map<K, Long> stock,
                  Set<K> external, K target, long amount, boolean force, boolean preserve, PlanningBudget budget) {
+        long before = budget.threadWork();
         this.recipes = recipes;
         this.demand = new LinkedHashMap<>(demand);
         if (force && recipes.stream().anyMatch(recipe -> recipe.outputs().containsKey(target)))
@@ -38,15 +46,28 @@ final class RegionCounts<K> implements AutoCloseable {
         this.external = external;
         this.preserve = preserve;
         this.budget = budget;
-        started = budget.nodes();
         allowance = Math.min(262_144, budget.remainingWork() / 4);
         recipes.forEach(recipe -> byId.put(recipe.id(), recipe));
+        work = budget.threadWork() - before;
     }
 
     boolean step() {
+        stepStarted = budget.threadWork();
+        try {
+            return advance();
+        } finally {
+            work += budget.threadWork() - stepStarted;
+        }
+    }
+
+    private long currentWork() {
+        return work + budget.threadWork() - stepStarted;
+    }
+
+    private boolean advance() {
         budget.check();
         if (complete) return true;
-        if (budget.nodes() - started >= allowance) return finish("work_limit");
+        if (currentWork() >= allowance) return finish("work_limit");
         if (model == null) {
             model = RecipeCountModel.region(recipes, goals, stock, external, budget);
             if (model == null) return finish("model_limit");
@@ -128,7 +149,7 @@ final class RegionCounts<K> implements AutoCloseable {
 
     private boolean finish(String detail) {
         complete = true;
-        budget.note("region_counts", detail + "; recipes=" + recipes.size() + "; work=" + (budget.nodes() - started));
+        budget.note("region_counts", detail + "; recipes=" + recipes.size() + "; work=" + currentWork());
         close();
         return true;
     }

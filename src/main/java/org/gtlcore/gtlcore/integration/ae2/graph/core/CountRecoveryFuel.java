@@ -26,7 +26,7 @@ final class CountRecoveryFuel<K> {
     }
 
     private boolean prepare(Collection<GraphRecipe<K>> programs) {
-        long started = budget.nodes(), allowance = Math.min(65536, budget.remainingWork() / 16);
+        long started = budget.threadWork(), allowance = Math.min(65536, budget.remainingWork() / 16);
         Set<K> produced = new HashSet<>();
         Map<Map<K, Long>, List<GraphRecipe<K>>> byInputs = new HashMap<>();
         for (var recipe : programs) {
@@ -46,7 +46,7 @@ final class CountRecoveryFuel<K> {
                 long costUnits = inputs.remove(cost);
                 for (var burned : byInputs.getOrDefault(inputs, List.of())) {
                     budget.check();
-                    if (budget.nodes() - started >= allowance) return false;
+                    if (budget.threadWork() - started >= allowance) return false;
                     if (taken.contains(burned.id())) continue;
                     Map<K, Long> difference = new LinkedHashMap<>(returned.outputs());
                     if (burned.outputs().entrySet().stream().anyMatch(e -> !e.getValue().equals(difference.remove(e.getKey()))) || difference.size() != 1) continue;
@@ -224,9 +224,9 @@ final class CountRecoveryFuel<K> {
         List<ExactLinearProgram.Constraint> rows = new ArrayList<>();
         catalysts.forEach((key, terms) -> rows.add(new ExactLinearProgram.Constraint(terms, available.get(key))));
         fuels.forEach((key, terms) -> rows.add(new ExactLinearProgram.Constraint(terms, need.get(key).negate())));
-        long started = budget.nodes(), allowance = Math.min(131072, budget.remainingWork() / 32);
+        long started = budget.threadWork(), allowance = Math.min(131072, budget.remainingWork() / 32);
         try (var work = new CountQuickSolve(rows, lower, upper, budget, false, false, allowance / 2)) {
-            while (budget.nodes() - started < allowance && !work.step()) { /* bounded optional allocation */ }
+            while (budget.threadWork() - started < allowance && !work.step()) { /* bounded optional allocation */ }
             BigInteger[] values = work.counts();
             if (values == null) return null; // Even a local proof applies only to these fixed program counts.
             for (int i = 0; i < values.length; i++) if (values[i].signum() < 0 || values[i].compareTo(upper[i]) > 0) return null;
@@ -237,7 +237,7 @@ final class CountRecoveryFuel<K> {
             }
             Map<String, BigInteger> result = new HashMap<>();
             for (int i = 0; i < values.length; i++) result.put(routes.get(i).id, values[i]);
-            budget.note("count_recovery_fuel", "exact_account_allocation; variables=" + values.length + "; work=" + (budget.nodes() - started));
+            budget.note("count_recovery_fuel", "exact_account_allocation; variables=" + values.length + "; work=" + (budget.threadWork() - started));
             return result;
         }
     }

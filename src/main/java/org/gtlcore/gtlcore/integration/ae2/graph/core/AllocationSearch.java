@@ -51,6 +51,7 @@ final class AllocationSearch<K> {
     private final boolean preview;
     private final List<GraphCompiler.QuantityCertificate<K>> certificates;
     private long allocationStarted;
+    private long work, stepStarted;
     private OrderProofs<K> proofs;
 
     AllocationSearch<K> proofs(OrderProofs<K> value) {
@@ -85,6 +86,29 @@ final class AllocationSearch<K> {
     }
 
     boolean step() {
+        stepStarted = budget.threadWork();
+        String previousFailure = budget.failureDetail();
+        try {
+            return advance();
+        } catch (PlanningBudget.Exhausted failure) {
+            if (failure.limit() != PlanningBudget.Limit.MEMORY_LIMIT) throw failure;
+            // This is an optional executable-prefix strategy, not the owner
+            // of the order. Release its retained closure and summaries before
+            // handing back to source/count search. No failure proof is learned.
+            discard();
+            budget.failureDetail(previousFailure);
+            budget.note("allocation", "workspace_exhausted; other_frontiers_retained");
+            return true;
+        } finally {
+            work += budget.threadWork() - stepStarted;
+        }
+    }
+
+    private long usedWork() {
+        return work + budget.threadWork() - stepStarted;
+    }
+
+    private boolean advance() {
         budget.check();
         budget.phase(PlanningBudget.Phase.SOLVE);
         if (phase == 0) {
@@ -157,7 +181,7 @@ final class AllocationSearch<K> {
                 expansion = null;
             }
             phase = 2;
-            allocationStarted = budget.nodes();
+            allocationStarted = usedWork();
             return false;
         }
         if (checking != null) {
@@ -173,7 +197,7 @@ final class AllocationSearch<K> {
                 return true;
             }
         }
-        if (preview && budget.nodes() - allocationStarted > 32_768L + 512L * recipes.size()) {
+        if (preview && usedWork() - allocationStarted > 32_768L + 512L * recipes.size()) {
             finish();
             return true;
         }

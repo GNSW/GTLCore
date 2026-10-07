@@ -51,6 +51,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     CountScale scaling;
     CountDiophantine diophantine;
     CountStructureSearch structural;
+    CountStructureSearch parkedStructural;
+    boolean structureScouted, structureEarly, structureResuming, preferStructureResume;
     CountCongruence congruence;
     CountPacking packing;
     CountJump jumping;
@@ -473,7 +475,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             diophantine.close();
             diophantine = null;
             if (counts != null) beginScheduling();
-            else if (current.isEmpty()) structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 4_500_000);
+            else if (current.isEmpty() && !structureScouted) structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 4_500_000);
+            else if (current.isEmpty()) afterStructure();
             else dispatchCompiledStrategies();
             return;
         }
@@ -481,7 +484,11 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (!structural.step()) return;
             counts = reduction.expand(structural.counts());
             boolean impossible = structural.infeasible();
-            structural.close();
+            if (structural.paused()) {
+                parkedStructural = structural;
+                preferStructureResume = !structureResuming;
+                budget.note("count_structure", "frontier_retained; same_rows_and_domains");
+            } else structural.close();
             structural = null;
             if (counts != null) {
                 structuralCandidate = true;
@@ -489,11 +496,13 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             } else if (impossible) {
                 learnedChoices.add(new CountConflict(current));
                 state = State.DEAD;
-            } else {
-                sourceFace = CountQuickSolve.sourceFace(reduction.rows(), reduction.lower(), reduction.upper(), budget, false);
-                sourceFaceAttempt = 1;
-                if (sourceFace == null) packing = new CountPacking(reduction.rows(), reduction.lower(), reduction.upper(), budget);
-            }
+            } else if (parkedStructural != null && structureEarly) state = State.UNRESOLVED;
+            else if (structureEarly) {
+                structureEarly = false;
+                structureResuming = false;
+                beginCompiledPortfolio();
+            } else if (structureResuming) state = State.UNRESOLVED;
+            else afterStructure();
             return;
         }
         if (sourceFace != null) {
@@ -613,6 +622,9 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                     else upper[id] = upper[id] == null ? row.upper() : upper[id].min(row.upper());
                 }
                 closeViews();
+                if (parkedStructural != null) parkedStructural.close();
+                parkedStructural = null;
+                structureScouted = structureEarly = structureResuming = false;
                 reduction.close();
                 reduction = new CountReduction(linearConstraints, lower, upper, budget);
                 compiled = false;
@@ -1101,9 +1113,12 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     private void resumeSpeculativeCandidate() {
         if (structuralCandidate) {
             structuralCandidate = false;
-            sourceFace = CountQuickSolve.sourceFace(reduction.rows(), reduction.lower(), reduction.upper(), budget, false);
-            sourceFaceAttempt = 1;
-            if (sourceFace == null) packing = new CountPacking(reduction.rows(), reduction.lower(), reduction.upper(), budget);
+            if (structureEarly) {
+                structureEarly = false;
+                structureResuming = false;
+                beginCompiledPortfolio();
+            } else if (structureResuming) state = State.UNRESOLVED;
+            else afterStructure();
             return;
         }
         if (viewCandidateStage != 0) {
@@ -1149,6 +1164,11 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void beginCompiledPortfolio() {
+        if (!structureScouted && current.isEmpty()) {
+            structureScouted = structureEarly = true;
+            structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 262144).retained();
+            return;
+        }
         if (!lpTried && current.isEmpty()) {
             lpTried = true;
             lpSearch = CountLpSearch.create(reduction, model.recipes.size(), budget);
@@ -1170,6 +1190,12 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             }
         }
         congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
+    }
+
+    private void afterStructure() {
+        sourceFace = CountQuickSolve.sourceFace(reduction.rows(), reduction.lower(), reduction.upper(), budget, false);
+        sourceFaceAttempt = 1;
+        if (sourceFace == null) packing = new CountPacking(reduction.rows(), reduction.lower(), reduction.upper(), budget);
     }
 
     private void dispatchCompiledStrategies() {
@@ -1531,6 +1557,20 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             state = State.OPEN;
             return true;
         }
+        if (limit == null && parkedStructural != null &&
+                (preferStructureResume || (lpSearch == null || !lpSearch.retained()) && (viewSearch == null || !viewSearch.retained()))) {
+            clearCandidate();
+            jumpCandidate = neighborhoodCandidate = domainCandidate = separatorCandidate = structuralCandidate = false;
+            counts = null;
+            viewCandidateStage = 0;
+            structural = parkedStructural;
+            parkedStructural = null;
+            structural.resume(262144);
+            structureResuming = true;
+            preferStructureResume = false;
+            state = State.OPEN;
+            return true;
+        }
         if (limit == null && lpSearch != null && lpSearch.retained() &&
                 (preferLpResume || viewSearch == null || !viewSearch.retained())) {
             clearCandidate();
@@ -1540,6 +1580,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             lpSearch.resume(262144);
             lpActive = lpResuming = true;
             preferLpResume = false;
+            preferStructureResume = true;
             state = State.OPEN;
             return true;
         }
@@ -1554,6 +1595,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             viewSearch.resume(262144);
             viewStage = 4;
             preferLpResume = true;
+            preferStructureResume = true;
             state = State.OPEN;
             return true;
         }
@@ -1623,6 +1665,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         diophantine = null;
         if (structural != null) structural.close();
         structural = null;
+        if (parkedStructural != null) parkedStructural.close();
+        parkedStructural = null;
         if (repair != null) repair.close();
         repair = null;
         repairPoint = null;
@@ -1699,37 +1743,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             branch(condition);
             return true;
         }
-        Set<K> reachable = new HashSet<>(external);
-        stock.forEach((key, value) -> { if (value > 0) reachable.add(key); });
-        BitSet fired = new BitSet();
-        boolean changed;
-        do {
-            changed = false;
-            for (int i = 0; i < counts.length; i++) {
-                budget.check();
-                if (counts[i].signum() == 0 || fired.get(i)) continue;
-                GraphRecipe<K> recipe = model.recipes.get(i);
-                if (consumedKeys(recipe).stream().anyMatch(key -> !reachable.contains(key))) continue;
-                reachable.addAll(recipe.outputs().keySet());
-                fired.set(i);
-                changed = true;
-            }
-        } while (changed);
-        for (int blocked = 0; blocked < counts.length; blocked++) if (counts[blocked].signum() > 0 && !fired.get(blocked)) {
-            // If this transition is used, a first producer must introduce an
-            // initially absent place without itself requiring an absent place.
-            // Keep both possibilities: avoid the transition, or include a repair.
-            Map<Integer, BigInteger> repairs = new LinkedHashMap<>();
-            for (int i = 0; i < counts.length; i++) {
-                budget.check();
-                GraphRecipe<K> recipe = model.recipes.get(i);
-                if (consumedKeys(recipe).stream().allMatch(reachable::contains) &&
-                        recipe.outputs().keySet().stream().anyMatch(key -> model.ids.containsKey(key) && !reachable.contains(key)))
-                    repairs.put(i, BigInteger.ONE.negate());
-            }
-            CountGuard conflict = new CountGuard(blocked, new ExactLinearProgram.Constraint(repairs, BigInteger.ONE.negate()));
-            learn(conflict);
-            branch(conflict);
+        var startup = CountStartup.separateAll(model, counts, budget);
+        if (!startup.isEmpty()) {
+            for (var proof : startup) learn(proof.guard());
+            branch(startup.get(0).guard());
             return true;
         }
         return false;
@@ -1752,12 +1769,6 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             }
         }
         return false;
-    }
-
-    private Set<K> consumedKeys(GraphRecipe<K> recipe) {
-        Set<K> keys = new LinkedHashSet<>(recipe.inputs().keySet());
-        keys.removeIf(key -> recipe.inputs().get(key).longValue() == recipe.configurationInputs().getOrDefault(key, 0L));
-        return keys;
     }
 
     private void partitionCounts() {

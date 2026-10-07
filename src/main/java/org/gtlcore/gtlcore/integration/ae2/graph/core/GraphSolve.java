@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Retains demand propagation and the current region's search across work slices. */
-final class GraphSolve<K> {
+final class GraphSolve<K> implements AutoCloseable {
 
     private final GraphCompiler.Compiled<K> graph;
     private final K target;
@@ -26,6 +26,7 @@ final class GraphSolve<K> {
     private final List<PlanStep> reversed = new ArrayList<>();
     private boolean targetProduced;
     private boolean consumeTargetSeed;
+    private boolean regionScout;
     private int regionIndex;
     private RegionSelection<K> selection;
     private RegionSelection.Choice<K> selected;
@@ -61,6 +62,13 @@ final class GraphSolve<K> {
         seeds.putAll(requiredSeeds);
     }
 
+    /** Optional stock views scout complex regions; the full graph retains its normal quotas. */
+    GraphSolve<K> scoutRegions() {
+        if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
+        regionScout = true;
+        return this;
+    }
+
     GraphSolve<K> allowTargetSeedConsumption(boolean allow) {
         if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
         consumeTargetSeed = allow;
@@ -79,7 +87,11 @@ final class GraphSolve<K> {
         budget.phase(PlanningBudget.Phase.SOLVE);
         if (result != null) return true;
         if (assembly != null) {
-            if (assembly.step()) result = assembly.result();
+            if (assembly.step()) {
+                result = assembly.result();
+                assembly.close();
+                assembly = null;
+            }
             return result != null;
         }
         if (ordinary != null) {
@@ -112,6 +124,7 @@ final class GraphSolve<K> {
         if (selection != null) {
             if (!selection.step()) return false;
             selected = selection.result();
+            selection.close();
             selection = null;
             if (selected == null) {
                 var region = graph.regions().get(regionIndex - 1);
@@ -141,7 +154,7 @@ final class GraphSolve<K> {
                 ordinaryPhase = 0;
             } else selection = new RegionSelection<>(region, demand, stock, target, amount,
                     preserve, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock)
-                    .allowTargetSeedConsumption(consumeTargetSeed);
+                    .allowTargetSeedConsumption(consumeTargetSeed).scoutRegions(regionScout);
         } else if (!targetProduced) {
             budget.note("selected_graph", "target_not_produced; target=" + target + "; recipes=" + graph.recipes().size() + "; force_craft=" + forceCraft);
             result = failure(GraphPlan.Result.UNKNOWN);
@@ -204,5 +217,13 @@ final class GraphSolve<K> {
     GraphPlan<K> result() {
         if (result == null) throw new IllegalStateException("Solve incomplete");
         return result;
+    }
+
+    @Override
+    public void close() {
+        if (selection != null) selection.close();
+        selection = null;
+        if (assembly != null) assembly.close();
+        assembly = null;
     }
 }

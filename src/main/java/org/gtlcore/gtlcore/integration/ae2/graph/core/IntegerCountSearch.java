@@ -188,7 +188,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         // Keep their search grain serial; the scheduler still runs other orders
         // and larger independent models on the shared worker pool.
         int width = slice == null || model.recipes.size() <= 16 ? 1 : Math.min(16, slice.parallelism());
-        if (!scouting && best == null && !portfolioScheduled && work >= 131072 && width > 1)
+        if (!scouting && best == null && !portfolioScheduled && work >= 131072 && width > 1 && !hasSpecializedWork())
             enqueuePortfolio();
         if (best == null && !repairScheduled && work >= 32_768) enqueueRepair();
         int batchWidth = width == 1 ? 1 : width * 2;
@@ -250,8 +250,18 @@ final class IntegerCountSearch<K> implements AutoCloseable {
 
     boolean hasRetainedViews() {
         if (running != null) return false;
-        return pending.stream().anyMatch(branch -> branch.viewSearch != null && branch.viewSearch.retained()) ||
+        return hasSpecializedWork() || pending.stream().anyMatch(branch -> branch.viewSearch != null && branch.viewSearch.retained()) ||
                 deferred.stream().anyMatch(branch -> branch.viewSearch != null && branch.viewSearch.retained());
+    }
+
+    private boolean hasSpecializedWork() {
+        // Structural and weighted-LP frontiers already alternate with owned
+        // generic views. Duplicating generic root workers here can starve those
+        // frontiers under the shared work limit even with spare CPU threads.
+        return pending.stream().anyMatch(branch -> branch.structural != null || branch.parkedStructural != null ||
+                branch.lpSearch != null && branch.lpSearch.retained()) ||
+                deferred.stream().anyMatch(branch -> branch.structural != null || branch.parkedStructural != null ||
+                        branch.lpSearch != null && branch.lpSearch.retained());
     }
 
     /** A short first attempt keeps its full frontier for the normal continuation. */

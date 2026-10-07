@@ -66,31 +66,11 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 budget.note("count_catalog", "reused; recipes=" + cached.recipes.size() + "; materials=" + cached.keys.size());
                 return model;
             }
-            var recipes = new LinkedHashMap<String, GraphRecipe<K>>();
-            var keys = new LinkedHashSet<K>();
-            var pending = new ArrayDeque<K>();
-            pending.add(target);
-            pending.addAll(seeds.keySet());
-            while (!pending.isEmpty()) {
-                budget.check();
-                K key = pending.removeFirst();
-                if (!keys.add(key)) continue;
-                if (keys.size() > maxKeys) {
-                    budget.note("count_model", "skipped; closure_keys=" + keys.size() + "; local_limit=" + maxKeys);
-                    return null;
-                }
-                for (GraphRecipe<K> recipe : compiler.producers(key)) {
-                    budget.check();
-                    if (excluded.contains(recipe.id()) || recipes.putIfAbsent(recipe.id(), recipe) != null) continue;
-                    if (recipes.size() > maxRecipes) {
-                        budget.note("count_model", "skipped; closure_recipes=" + recipes.size() + "; local_limit=" + maxRecipes);
-                        return null;
-                    }
-                    pending.addAll(recipe.inputs().keySet());
-                }
-            }
-            long entries = 0;
-            for (GraphRecipe<K> recipe : recipes.values()) entries += recipe.inputs().size() + recipe.outputs().size();
+            var closure = compiler.countClosure(target, seeds.keySet(), excluded, maxKeys, maxRecipes, budget);
+            if (closure == null) return null;
+            var recipes = closure.recipes();
+            var keys = closure.keys();
+            long entries = closure.incidences();
             long sparseBytes = 128L * entries + 128L * (keys.size() + recipes.size());
             if (force && !external.contains(target)) sparseBytes += 128L + 96L * recipes.size();
             if (!budget.tryReserve(sparseBytes)) {
@@ -98,7 +78,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 return null;
             }
             workspace += sparseBytes;
-            var model = new RecipeCountModel<>(List.copyOf(recipes.values()), List.copyOf(keys), stock, external, budget, goals(target, amount, seeds), compiler.catalogIndex());
+            var model = new RecipeCountModel<>(recipes, keys, stock, external, budget, goals(target, amount, seeds), compiler.catalogIndex());
             model.recoveryTemplates = compiler.recoveryTemplates;
             if (force && !external.contains(target)) model.requireProduction(target, amount);
             if (compiler.reuseCountCatalogs() &&

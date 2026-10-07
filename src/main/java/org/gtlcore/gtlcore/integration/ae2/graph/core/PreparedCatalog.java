@@ -44,9 +44,9 @@ public final class PreparedCatalog<K> {
                 return true;
             }
             budget.phase(PlanningBudget.Phase.BUILD);
-            while (slice.next()) {
+            while (slice.nextCompilation()) {
                 for (int batch = 0; batch < 32; batch++) {
-                    budget.check();
+                    budget.compilationCheck();
                     if (cursor < recipes.size()) {
                         var recipe = recipes.get(cursor++);
                         buckets.computeIfAbsent(priorities.getOrDefault(recipe.binding(), Integer.MIN_VALUE), ignored -> new ArrayList<>()).add(recipe);

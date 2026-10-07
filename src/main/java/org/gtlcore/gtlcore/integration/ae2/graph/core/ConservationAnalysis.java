@@ -47,13 +47,13 @@ final class ConservationAnalysis<K> implements AutoCloseable {
     }
 
     boolean step() {
-        long before = budget.nodes();
+        long before = budget.threadWork();
         boolean eliminating = phase >= 2 && phase <= 5;
         try {
             if (eliminating && eliminationWork >= allowance) return finish(false);
             return advance();
         } finally {
-            if (eliminating) eliminationWork += budget.nodes() - before;
+            if (eliminating) eliminationWork += budget.threadWork() - before;
         }
     }
 

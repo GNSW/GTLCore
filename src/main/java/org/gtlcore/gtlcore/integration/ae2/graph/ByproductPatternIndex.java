@@ -41,7 +41,7 @@ final class ByproductPatternIndex {
         }
 
         boolean step(PlanningBudget budget) {
-            budget.check();
+            budget.compilationCheck();
             if (result != null) return true;
             if (freezing == null && patterns.hasNext()) {
                 var pattern = patterns.next();
@@ -53,7 +53,7 @@ final class ByproductPatternIndex {
                 Set<AEKey> keys = new HashSet<>();
                 var primary = pattern.getPrimaryOutput().what();
                 for (var output : values) {
-                    budget.check();
+                    budget.compilationCheck();
                     if (output.amount() <= 0 || output.what().equals(primary) || !keys.add(output.what())) continue;
                     budget.reserve(96);
                     outputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);

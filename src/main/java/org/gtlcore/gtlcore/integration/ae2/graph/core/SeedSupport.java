@@ -45,8 +45,8 @@ final class SeedSupport<K> {
         // seed enabled. This checks the scope of the clause, not just the
         // failed assignment that suggested it.
         if (!verified(cut)) throw new IllegalStateException("Invalid startup support explanation");
-        long started = budget.nodes();
-        for (int i = cut.nextSetBit(0); i >= 0 && budget.nodes() - started < 8192; i = cut.nextSetBit(i + 1)) {
+        long started = budget.threadWork();
+        for (int i = cut.nextSetBit(0); i >= 0 && budget.threadWork() - started < 8192; i = cut.nextSetBit(i + 1)) {
             cut.clear(i);
             if (!verified(cut)) cut.set(i);
         }

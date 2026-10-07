@@ -1,9 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import org.gtlcore.gtlcore.config.ConfigHolder;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.CraftingCostModel;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.ExactAmounts;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphPlan;
 
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.crafting.ICraftingPlan;
@@ -11,6 +8,9 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.crafting.CraftingPlan;
+import org.cgse.core.CraftingCostModel;
+import org.cgse.core.ExactAmounts;
+import org.cgse.core.GraphPlan;
 
 import java.math.BigInteger;
 import java.util.Collections;

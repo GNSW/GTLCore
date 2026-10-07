@@ -1,12 +1,12 @@
 package org.gtlcore.gtlcore.config;
 
 import org.gtlcore.gtlcore.GTLCore;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.CraftingCostModel;
 
 import dev.toma.configuration.Configuration;
 import dev.toma.configuration.config.Config;
 import dev.toma.configuration.config.Configurable;
 import dev.toma.configuration.config.format.ConfigFormats;
+import org.cgse.core.CraftingCostModel;
 
 @Config(id = GTLCore.MOD_ID)
 public class ConfigHolder {

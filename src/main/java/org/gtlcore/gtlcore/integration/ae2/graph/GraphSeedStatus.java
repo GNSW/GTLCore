@@ -1,9 +1,9 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphPlan;
-
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+
+import org.cgse.core.GraphPlan;
 
 import java.util.ArrayList;
 import java.util.List;

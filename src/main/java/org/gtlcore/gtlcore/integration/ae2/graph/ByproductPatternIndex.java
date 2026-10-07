@@ -1,9 +1,8 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningBudget;
-
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEKey;
+import org.cgse.core.PlanningBudget;
 
 import java.util.*;
 

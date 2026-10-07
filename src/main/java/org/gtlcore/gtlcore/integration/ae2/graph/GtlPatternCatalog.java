@@ -2,8 +2,6 @@ package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphRecipe;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningBudget;
 
 import net.minecraft.world.level.Level;
 
@@ -18,6 +16,8 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.core.AEConfig;
 import appeng.me.service.CraftingService;
+import org.cgse.core.GraphRecipe;
+import org.cgse.core.PlanningBudget;
 
 import java.util.*;
 

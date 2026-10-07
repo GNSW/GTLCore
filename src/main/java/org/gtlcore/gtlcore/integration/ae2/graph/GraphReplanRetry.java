@@ -1,39 +1,29 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
+import org.cgse.core.ReplanRetry;
+
 /** Tick-based backoff for one failed suffix; storage events never shorten its quiet period. */
 final class GraphReplanRetry {
 
-    private int failures;
-    private long retryTick;
-    private long nextLogTick;
-    private String loggedFailure = "";
+    private final ReplanRetry retry = new ReplanRetry();
 
     int failed(long tick) {
-        if (failures < Integer.MAX_VALUE) failures++;
-        int delay = Math.min(600, 40 << Math.min(4, failures - 1));
-        retryTick = tick + delay;
-        return delay;
+        return retry.failed(tick);
     }
 
     boolean ready(long tick) {
-        return tick >= retryTick;
+        return retry.ready(tick);
     }
 
     boolean shouldLog(long tick, String failure) {
-        if (failure.equals(loggedFailure) && tick < nextLogTick) return false;
-        loggedFailure = failure;
-        nextLogTick = tick + 600;
-        return true;
+        return retry.shouldLog(tick, failure);
     }
 
     int failures() {
-        return failures;
+        return retry.failures();
     }
 
     void reset() {
-        failures = 0;
-        retryTick = 0;
-        nextLogTick = 0;
-        loggedFailure = "";
+        retry.reset();
     }
 }

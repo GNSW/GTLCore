@@ -4,7 +4,6 @@ import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.crafting.CraftingDispatchReason;
 import org.gtlcore.gtlcore.integration.ae2.crafting.transfinite.MissingCraftingPlan;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.*;
 import org.gtlcore.gtlcore.mixin.ae2.logic.ElapsedTimeTrackerAccessor;
 
 import net.minecraft.nbt.CompoundTag;
@@ -29,6 +28,9 @@ import appeng.crafting.execution.CraftingSubmitResult;
 import appeng.crafting.execution.ElapsedTimeTracker;
 import appeng.hooks.ticking.TickHandler;
 import appeng.me.service.CraftingService;
+import org.cgse.core.*;
+import org.cgse.core.PlanningInventory;
+import org.cgse.core.ReplanCoordinator;
 
 import java.util.*;
 
@@ -51,14 +53,12 @@ public final class GraphCpuController {
     private String lastDiagnostic = "";
     private long progressVersion = -1, progressNanos, waitingLogNanos;
     private final GtlPatternCatalog replanCatalog = new GtlPatternCatalog();
-    private GraphPlanningRequest replanRequest;
-    private GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint;
+    private final ReplanCoordinator<AEKey, ICraftingPlan> replanning = new ReplanCoordinator<>();
+    private final ReplanHost replanHost = new ReplanHost();
     private GraphStorageWatch.Subscription dependencyWatch;
     private Map<AEKey, List<String>> failedBindings = Map.of();
     private long providerGeneration = Long.MIN_VALUE;
-    private boolean dependencyChanged;
     private Iterator<String> bindingsToCheck;
-    private final GraphReplanRetry replanRetry = new GraphReplanRetry();
     private String replanOrigin = "";
 
     public GraphCpuController(GraphCpuHost host) {
@@ -457,16 +457,12 @@ public final class GraphCpuController {
     }
 
     private void clearReplan(boolean resetFailures) {
-        if (replanRequest != null) replanRequest.cancel(false);
-        replanRequest = null;
-        checkpoint = null;
+        replanning.clear(resetFailures);
         if (dependencyWatch != null) dependencyWatch.close();
         dependencyWatch = null;
         failedBindings = Map.of();
-        dependencyChanged = false;
         bindingsToCheck = null;
         if (resetFailures) {
-            replanRetry.reset();
             replanOrigin = "";
         }
     }
@@ -482,66 +478,30 @@ public final class GraphCpuController {
         if (generation != providerGeneration) {
             providerGeneration = generation;
             bindingsToCheck = runtime.pendingRuns().keySet().iterator();
-            if (checkpoint != null && replanRequest == null && !bindingSignatures(service, failedBindings.keySet()).equals(failedBindings))
-                dependencyChanged = true;
+            if (replanning.waitingForDependency() && !bindingSignatures(service, failedBindings.keySet()).equals(failedBindings))
+                replanning.dependencyChanged();
         }
-        if (replanRequest != null) {
-            if (!replanRequest.isDone()) return;
-            GraphPlanningRequest request = replanRequest;
-            replanRequest = null;
-            if (!runtime.replanCurrent(checkpoint.epoch())) {
+        replanHost.service = service;
+        ReplanCoordinator.Update update = replanning.update(runtime, tick, replanHost);
+        switch (update) {
+            case INSTALLED -> {
+                clearReplan();
+                publish(true);
+                return;
+            }
+            case STALE -> {
                 clearReplan();
                 return;
             }
-            String failure = "REPLAN_UNKNOWN";
-            try {
-                AeGraphPlan selected = (AeGraphPlan) request.join();
-                if (!selected.graph().feasible()) failure = "REPLAN_" + selected.graph().result();
-                else if (!selected.fitsStorage(host.cpu().getAvailableStorage(), host.unboundedJobStorage())) failure = "REPLAN_CPU_TOO_SMALL";
-                else if (installReplan(selected)) {
-                    if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging)
-                        GTLCore.LOGGER.info("[Graph Crafting] job={} replan=installed committed_recipes={} remaining_recipes={}",
-                                link.getCraftingID(), runtime.committedRuns().size(), runtime.pendingRuns().size());
-                    clearReplan();
-                    publish(true);
-                    return;
-                } else failure = "REPLAN_RESOURCES_OR_PROVIDER_CHANGED";
-            } catch (RuntimeException e) {
-                Throwable cause = e;
-                while (cause.getCause() != null) cause = cause.getCause();
-                failure = "REPLAN_" + cause.getClass().getSimpleName() + ": " + cause.getMessage();
+            case RETRY -> {
+                clearReplan(false);
+                startReplan(service);
+                return;
             }
-            Set<AEKey> dependencies = new LinkedHashSet<>(request.dependencies());
-            // A completed snapshot includes the new suffix and recovery roots.
-            // Retired/committed recipes from the old plan must not keep waking it.
-            // Failed snapshot collection still needs a conservative fallback.
-            if (dependencies.isEmpty()) for (String id : runtime.pendingRuns().keySet()) {
-                var recipe = runtime.plan().recipes().get(id);
-                dependencies.addAll(recipe.inputs().keySet());
-                dependencies.addAll(recipe.outputs().keySet());
+            case WAITING, FAILED -> {
+                return;
             }
-            dependencies.add(runtime.plan().target());
-            dependencies.addAll(checkpoint.recoverySeeds().keySet());
-            failedBindings = bindingSignatures(service, dependencies);
-            if (dependencyWatch != null) dependencyWatch.close();
-            dependencyChanged = false;
-            dependencyWatch = ((GraphStorageWatch) host.grid().getStorageService())
-                    .gtlcore$watchGraphResources(dependencies, () -> dependencyChanged = true);
-            runtime.waitForReplanDependency(checkpoint.epoch(), failure);
-            int delay = replanRetry.failed(tick);
-            if (replanRetry.shouldLog(tick, failure)) GTLCore.LOGGER.info(
-                    "[Graph Crafting] job={} {}; failures={} retry_after_ticks={} watched_keys={} origin={}; waiting for relevant storage/provider change",
-                    link.getCraftingID(), failure, replanRetry.failures(), delay, dependencies.size(), replanOrigin);
-            return;
-        }
-        if (checkpoint != null) {
-            // Keep the event latched while cooling down, including provider repairs.
-            // One notification is sufficient; a busy network cannot force one solve per tick.
-            if (runtime.suspended() || !dependencyChanged || !replanRetry.ready(tick)) return;
-            runtime.abortReplan(checkpoint.epoch(), "");
-            clearReplan(false);
-            startReplan(service);
-            return;
+            case IDLE -> {}
         }
         if (runtime.suspended() || bindingsToCheck == null) return;
         long deadline = System.nanoTime() + 1_000_000L;
@@ -562,10 +522,42 @@ public final class GraphCpuController {
         if (!bindingsToCheck.hasNext()) bindingsToCheck = null;
     }
 
+    private final class ReplanHost implements ReplanCoordinator.Host<AEKey, ICraftingPlan> {
+
+        private CraftingService service;
+        private int watchedKeys;
+
+        @Override
+        public String install(ICraftingPlan plan) {
+            AeGraphPlan selected = (AeGraphPlan) plan;
+            if (!selected.graph().feasible()) return "REPLAN_" + selected.graph().result();
+            if (!selected.fitsStorage(host.cpu().getAvailableStorage(), host.unboundedJobStorage())) return "REPLAN_CPU_TOO_SMALL";
+            if (!installReplan(selected)) return "REPLAN_RESOURCES_OR_PROVIDER_CHANGED";
+            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging)
+                GTLCore.LOGGER.info("[Graph Crafting] job={} replan=installed committed_recipes={} remaining_recipes={}",
+                        link.getCraftingID(), runtime.committedRuns().size(), runtime.pendingRuns().size());
+            return null;
+        }
+
+        @Override
+        public void watch(Set<AEKey> dependencies, Runnable changed) {
+            watchedKeys = dependencies.size();
+            failedBindings = bindingSignatures(service, dependencies);
+            if (dependencyWatch != null) dependencyWatch.close();
+            dependencyWatch = ((GraphStorageWatch) host.grid().getStorageService())
+                    .gtlcore$watchGraphResources(dependencies, changed);
+        }
+
+        @Override
+        public void failed(String diagnostic, ReplanCoordinator.Failure failure) {
+            if (failure.shouldLog()) GTLCore.LOGGER.info(
+                    "[Graph Crafting] job={} {}; failures={} retry_after_ticks={} watched_keys={} origin={}; waiting for relevant storage/provider change",
+                    link.getCraftingID(), diagnostic, failure.attempts(), failure.delay(), watchedKeys, replanOrigin);
+        }
+    }
+
     private void startReplan(CraftingService service) {
-        if (runtime.remainingDelivery() <= 0) return;
-        checkpoint = runtime.beginReplan();
-        replanRequest = CraftingEngineRouter.replan(replanCatalog, host, service, checkpoint, runtime.plan().preserveSeeds());
+        replanning.begin(runtime, checkpoint -> CraftingEngineRouter.replan(replanCatalog, host, service, checkpoint, runtime.plan().preserveSeeds()));
     }
 
     private boolean installReplan(AeGraphPlan selected) {
@@ -576,14 +568,8 @@ public final class GraphCpuController {
             return false;
         }
         for (String id : replacement.patternTimes().keySet()) if (adapter.resolve(replacement.recipes().get(id)) == null) return false;
-        Map<AEKey, Long> forecast = runtime.forecastInventory();
-        Map<AEKey, Long> needed = new LinkedHashMap<>(), emitted = new LinkedHashMap<>();
-        replacement.initial().forEach((key, count) -> {
-            long extra = Math.max(0, count - forecast.getOrDefault(key, 0L));
-            long external = Math.min(extra, selected.emitted().getOrDefault(key, 0L));
-            if (external > 0) emitted.put(key, external);
-            if (extra > external) needed.put(key, extra - external);
-        });
+        var funding = PlanningInventory.requirements(replacement.initial(), runtime.forecastInventory(), selected.emitted());
+        Map<AEKey, Long> needed = funding.needed(), emitted = funding.emitted();
         var storage = host.grid().getStorageService().getInventory();
         for (var entry : needed.entrySet())
             if (storage.extract(entry.getKey(), entry.getValue(), Actionable.SIMULATE, host.source()) < entry.getValue()) return false;
@@ -596,7 +582,7 @@ public final class GraphCpuController {
                 if (actual > 0) taken.put(entry.getKey(), actual);
                 if (actual != entry.getValue()) return false;
             }
-            committed = runtime.replaceSuffix(checkpoint.epoch(), replacement, taken, emitted);
+            committed = runtime.replaceSuffix(replanning.checkpoint().epoch(), replacement, taken, emitted);
             if (committed) {
                 tracker = new ElapsedTimeTracker();
                 var time = (ElapsedTimeTrackerAccessor) tracker;

@@ -1,13 +1,12 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphCompiler;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphRecipe;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningBudget;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningScheduler;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PreparedCatalog;
-
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEKey;
+import org.cgse.core.GraphCompiler;
+import org.cgse.core.GraphRecipe;
+import org.cgse.core.PlanningBudget;
+import org.cgse.core.PlanningScheduler;
+import org.cgse.core.PreparedCatalog;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;

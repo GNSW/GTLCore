@@ -1,7 +1,5 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.*;
-
 import appeng.api.config.Actionable;
 import appeng.api.config.PowerMultiplier;
 import appeng.api.crafting.IPatternDetails;
@@ -13,6 +11,7 @@ import appeng.crafting.CraftingLink;
 import appeng.crafting.execution.CraftingCpuHelper;
 import appeng.crafting.pattern.AEProcessingPattern;
 import appeng.me.service.CraftingService;
+import org.cgse.core.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;

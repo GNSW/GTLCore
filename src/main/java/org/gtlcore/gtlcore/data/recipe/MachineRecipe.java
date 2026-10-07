@@ -821,6 +821,15 @@ public class MachineRecipe {
                         .CWUt(512))
                 .duration(400).EUt(V[UXV]).save(provider);
 
+        ASSEMBLER_RECIPES.recipeBuilder("me_recipe_pattern_buffer")
+                .inputItems(ME_EXTEND_PATTERN_BUFFER)
+                .inputItems(EMITTER_UHV, 4)
+                .inputItems(SENSOR_UHV, 4)
+                .inputItems(CIRCUIT.getIngredient(UEV), 4)
+                .inputFluids(SolderingAlloy.getFluid(1152))
+                .outputItems(ME_RECIPE_PATTERN_BUFFER)
+                .EUt(VA[UHV]).duration(600).save(provider);
+
         if (ModList.get().isLoaded("wildcard_pattern")) {
             ASSEMBLY_LINE_RECIPES.recipeBuilder("me_wildcard_pattern_buffer")
                     .inputItems(ME_EXTEND_PATTERN_BUFFER)

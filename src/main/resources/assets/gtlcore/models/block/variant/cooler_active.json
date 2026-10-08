@@ -1,6 +1,234 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "gtlcore:block/cooler_active"
-  }
+    "all": "gtlcore:block/cooler_active",
+    "bloom": "gtlcore:block/gtlbloom_masks/cooler_active"
+  },
+  "render_type": "minecraft:cutout_mipped",
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "down": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#all",
+          "cullface": "down"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#all",
+          "cullface": "up"
+        },
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#all",
+          "cullface": "north"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#all",
+          "cullface": "south"
+        },
+        "west": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#all",
+          "cullface": "west"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#all",
+          "cullface": "east"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        -0.001,
+        0
+      ],
+      "to": [
+        16,
+        -0.001,
+        16
+      ],
+      "shade": true,
+      "faces": {
+        "down": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#bloom",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        16.001,
+        0
+      ],
+      "to": [
+        16,
+        16.001,
+        16
+      ],
+      "shade": true,
+      "faces": {
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#bloom",
+          "cullface": "up"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        -0.001
+      ],
+      "to": [
+        16,
+        16,
+        -0.001
+      ],
+      "shade": true,
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#bloom",
+          "cullface": "north"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        16.001
+      ],
+      "to": [
+        16,
+        16,
+        16.001
+      ],
+      "shade": true,
+      "faces": {
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#bloom",
+          "cullface": "south"
+        }
+      }
+    },
+    {
+      "from": [
+        -0.001,
+        0,
+        0
+      ],
+      "to": [
+        -0.001,
+        16,
+        16
+      ],
+      "shade": true,
+      "faces": {
+        "west": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#bloom",
+          "cullface": "west"
+        }
+      }
+    },
+    {
+      "from": [
+        16.001,
+        0,
+        0
+      ],
+      "to": [
+        16.001,
+        16,
+        16
+      ],
+      "shade": true,
+      "faces": {
+        "east": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#bloom",
+          "cullface": "east"
+        }
+      }
+    }
+  ]
 }

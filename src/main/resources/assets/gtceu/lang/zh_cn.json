@@ -234,7 +234,7 @@
   "block.gtceu.me_molecular_assembler_io": "分子操纵者端口",
   "block.gtceu.me_stocking_pattern_buffer": "库存ME样板总成",
   "block.gtceu.me_wildcard_pattern_buffer": "通配符ME样板总成",
-  "block.gtceu.me_recipe_pattern_buffer": "ME配方通配样板总成",
+  "block.gtceu.me_recipe_pattern_buffer": "ME配方类型统合样板总成",
   "block.gtceu.me_stocking_wildcard_pattern_buffer": "库存通配符ME样板总成",
   "block.gtceu.mega_alloy_blast_smelter": "巨型合金冶炼炉",
   "block.gtceu.mega_canner": "特大装罐机",

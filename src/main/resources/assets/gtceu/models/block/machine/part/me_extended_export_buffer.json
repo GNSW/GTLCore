@@ -1,6 +1,36 @@
 {
-	"parent": "gtceu:block/overlay/front",
-	"textures": {
-		"overlay": "gtceu:block/overlay/appeng/me_extended_export_buffer"
-	}
+  "credit": "Made with Blockbench",
+  "parent": "block/block",
+  "textures": {
+    "particle": "#overlay_fluid_hatch",
+    "overlay_fluid_hatch": "gtceu:block/overlay/appeng/me_extended_export_buffer"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        0
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#overlay_fluid_hatch",
+          "cullface": "north",
+          "tintindex": -101,
+          "emissivity": 15
+        }
+      }
+    }
+  ]
 }

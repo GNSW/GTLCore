@@ -234,7 +234,7 @@
   "block.gtceu.me_molecular_assembler_io": "ME Molecular Assembler Matrix I/O",
   "block.gtceu.me_stocking_pattern_buffer": "ME Stocking Pattern Buffer",
   "block.gtceu.me_wildcard_pattern_buffer": "Wildcard ME Pattern Buffer",
-  "block.gtceu.me_recipe_pattern_buffer": "ME Recipe Wildcard Pattern Buffer",
+  "block.gtceu.me_recipe_pattern_buffer": "ME Recipe Type Integrated Pattern Buffer",
   "block.gtceu.me_stocking_wildcard_pattern_buffer": "Stocking Wildcard ME Pattern Buffer",
   "block.gtceu.mega_alloy_blast_smelter": "Mega Alloy Blast Smelter",
   "block.gtceu.mega_canner": "Mega Canner",

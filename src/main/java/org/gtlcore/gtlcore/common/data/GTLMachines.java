@@ -802,7 +802,7 @@ public class GTLMachines {
 
         public static final MachineDefinition ME_RECIPE_PATTERN_BUFFER = REGISTRATE
                 .machine("me_recipe_pattern_buffer", holder -> new MERecipePatternBufferPartMachine(holder, IO.BOTH))
-                .tier(UHV)
+                .tier(UXV)
                 .rotationState(RotationState.ALL)
                 .abilities(PartAbility.IMPORT_ITEMS, PartAbility.IMPORT_FLUIDS, PartAbility.EXPORT_ITEMS, PartAbility.EXPORT_FLUIDS)
                 .overlayTieredHullRenderer("me_pattern_buffer")

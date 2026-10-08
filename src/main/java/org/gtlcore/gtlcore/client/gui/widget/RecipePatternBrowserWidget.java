@@ -361,10 +361,10 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
                     if (registryId < 0) continue;
                     if ((registryId & 1) == 0) {
                         var item = BuiltInRegistries.ITEM.byId(registryId >>> 1);
-                        if (item != null) ids.add(BuiltInRegistries.ITEM.getKey(item).toString());
+                        ids.add(BuiltInRegistries.ITEM.getKey(item).toString());
                     } else {
                         var fluid = BuiltInRegistries.FLUID.byId(registryId >>> 1);
-                        if (fluid != null) ids.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
+                        ids.add(BuiltInRegistries.FLUID.getKey(fluid).toString());
                     }
                 }
                 localizedMaterials = ids;
@@ -569,10 +569,10 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
             GenericStack stack = GenericStack.readBuffer(buffer);
             int y = row * 28;
             Widget entry = new ButtonWidget(0, y, 136, 27,
-                    new ColorRectTexture(id.equals(selectedId) ? RecipePatternUiTextures.SELECTED_COLOR : row % 2 == 0 ? RecipePatternUiTextures.ROW_COLOR : PANEL_COLOR),
+                    id.equals(selectedId) ? RecipePatternUiTextures.ROW_SELECTED : RecipePatternUiTextures.ROW,
                     click -> {
                         if (click.isRemote) send(SELECT, packet -> packet.writeUtf(id, 1024));
-                    }).setHoverTexture(new ColorRectTexture(RecipePatternUiTextures.HOVER_COLOR))
+                    }).setHoverTexture(RecipePatternUiTextures.ROW_HOVER)
                     .setHoverTooltips(Component.literal(id), Component.translatable(PREFIX + "status." + status));
             recipeRows.addWidget(entry);
             recipeRows.addWidget(new ImageWidget(0, y, 2, 27, new ColorRectTexture(status == 0 ? RecipePatternUiTextures.COUNTER_PUBLISHED_COLOR : RecipePatternUiTextures.COUNTER_ERROR_COLOR)));
@@ -609,7 +609,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         for (int row = 0; row < rules; row++) {
             Rule rule = new Rule(buffer.readEnum(Target.class), buffer.readUtf());
             int y = row * 28;
-            ruleRows.addWidget(new ImageWidget(0, y, 148, 27, new ColorRectTexture(row % 2 == 0 ? RecipePatternUiTextures.ROW_COLOR : PANEL_COLOR)));
+            ruleRows.addWidget(new ImageWidget(0, y, 148, 27, RecipePatternUiTextures.RULE_BACKGROUND));
             ruleRows.addWidget(line(4, y + 2, 124, 12, () -> Component.translatable(rule.target().translationKey()).getString(), TEXT_COLOR));
             ruleRows.addWidget(line(4, y + 15, 124, 10, rule::expression, MUTED_COLOR)
                     .setHoverTooltips(Component.literal(rule.expression())));

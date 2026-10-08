@@ -9,6 +9,10 @@ public final class RecipePatternUiTextures {
     public static final IGuiTexture BUTTON = toolbarButton();
     public static final IGuiTexture BUTTON_HOVER = new ColorBorderTexture(1, 0xFFFFFFFF);
     public static final IGuiTexture SLOT = new ResourceTexture("ae2:textures/guis/states.png").getSubTexture(192 / 256.0, 192 / 256.0, 18 / 256.0, 18 / 256.0);
+    public static final IGuiTexture ROW = new ResourceBorderTexture("gtlcore:textures/gui/wireless/button_normal.png", 80, 20, 2, 2);
+    public static final IGuiTexture ROW_SELECTED = new ResourceBorderTexture("gtlcore:textures/gui/wireless/button_selected.png", 80, 20, 2, 2);
+    public static final IGuiTexture ROW_HOVER = new ResourceBorderTexture("gtlcore:textures/gui/wireless/button_hover.png", 80, 20, 2, 2);
+    public static final IGuiTexture RULE_BACKGROUND = new ResourceBorderTexture("gtlcore:textures/gui/wireless/inset_panel.png", 120, 52, 4, 4);
     public static final IGuiTexture INPUT_BACKGROUND = new GuiTextureGroup(new ColorRectTexture(0xFF373737), new ColorBorderTexture(1, 0xFF7E7E7E));
     public static final int TEXT_COLOR = 0xFF404040;
     public static final int BUTTON_TEXT_COLOR = 0xFFFFFFFF;

@@ -1,8 +1,11 @@
 {
-    "ldlib": {
-        "emissive": true
-    },
-    "shimmer": {
-        "bloom": true
-    }
+  "ldlib": {
+    "emissive": true
+  },
+  "shimmer": {
+    "bloom": true
+  },
+  "gtlbloom": {
+    "emission_category": "core"
+  }
 }

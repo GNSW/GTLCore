@@ -1,11 +1,14 @@
 {
-   "animation":{
-      "frametime":8
-   },
-   "ldlib": {
-        "emissive": true
-    },
-    "shimmer": {
-        "bloom": true
-    }
+  "animation": {
+    "frametime": 8
+  },
+  "ldlib": {
+    "emissive": true
+  },
+  "shimmer": {
+    "bloom": true
+  },
+  "gtlbloom": {
+    "emission_category": "indicator"
+  }
 }

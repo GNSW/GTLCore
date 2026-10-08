@@ -62,6 +62,7 @@ import appeng.crafting.pattern.AEProcessingPattern;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.ints.*;
 import it.unimi.dsi.fastutil.objects.*;
+import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -91,6 +92,7 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
     private final List<Rule> whitelistRules = new ArrayList<>();
     private final Set<String> ruleAllowed = new HashSet<>();
     private final Map<String, AEKey> primaryOverrides = new HashMap<>();
+    @Getter
     private long configurationRevision;
     @Persisted
     private boolean keepByProduct = false;
@@ -145,14 +147,14 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
     }
 
     @Override
-    public void addedToController(IMultiController controller) {
+    public void addedToController(@NotNull IMultiController controller) {
         super.addedToController(controller);
         // GT finishes forming the controller after attaching its parts; inspect it on the next server tick.
         reloadGeneration = -1;
     }
 
     @Override
-    public void removedFromController(IMultiController controller) {
+    public void removedFromController(@NotNull IMultiController controller) {
         super.removedFromController(controller);
         if (!isRemote()) refreshPatterns();
     }
@@ -251,7 +253,7 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         if (grid != null && !recipePatterns.isEmpty()) {
             var storage = grid.getStorageService();
             // AE2's fuzzy index visits only virtual wrappers, regardless of the number of ordinary network items.
-            var wrappers = storage.getCachedInventory().findFuzzy(AEItemKey.of(GTLItems.VIRTUAL_INGREDIENT.asStack()), FuzzyMode.IGNORE_ALL);
+            var wrappers = storage.getCachedInventory().findFuzzy(Objects.requireNonNull(AEItemKey.of(GTLItems.VIRTUAL_INGREDIENT.asStack())), FuzzyMode.IGNORE_ALL);
             for (var entry : wrappers) {
                 if (entry.getLongValue() <= 0 || !(entry.getKey() instanceof AEItemKey wrapper)) continue;
                 ItemStack canonical = VirtualIngredientBehavior.canonicalStack(wrapper.getReadOnlyStack());
@@ -295,10 +297,6 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
             if (filterRules.stream().anyMatch(rule -> rule.matches(metadata))) ruleExcluded.add(id);
             if (whitelistRules.stream().anyMatch(rule -> rule.matches(metadata))) ruleAllowed.add(id);
         });
-    }
-
-    public long getConfigurationRevision() {
-        return configurationRevision;
     }
 
     public RecipeStatistics getRecipeStatistics() {

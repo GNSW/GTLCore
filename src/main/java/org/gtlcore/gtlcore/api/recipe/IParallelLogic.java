@@ -12,7 +12,6 @@ import com.gregtechceu.gtceu.api.capability.recipe.*;
 import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.content.Content;
-import com.gregtechceu.gtceu.api.recipe.content.ContentModifier;
 import com.gregtechceu.gtceu.api.recipe.ingredient.FluidIngredient;
 import com.gregtechceu.gtceu.api.recipe.ingredient.SizedIngredient;
 import com.gregtechceu.gtceu.utils.FluidStackHashStrategy;
@@ -315,8 +314,9 @@ public interface IParallelLogic {
             long mid = left + (right - left + 1) / 2;
 
             List<T> copied = new ObjectArrayList<>(ingredients.size());
+            var modifier = IAdvancedContentModifier.preciseMultiplier(mid);
             for (var ing : ingredients) {
-                copied.add(capability.copyWithModifier(ing, ContentModifier.multiplier((double) mid)));
+                copied.add(capability.copyWithModifier(ing, modifier));
             }
 
             boolean canHandle = false;

@@ -80,7 +80,7 @@ public abstract class ItemRecipeCapabilityMixin extends RecipeCapability<Ingredi
         } else if (content instanceof IntProviderIngredient intProviderIngredient) {
             return new IntProviderIngredient(intProviderIngredient.getInner(), new FlooredInt(new AddedFloat(new MultipliedFloat(new CastedFloat(intProviderIngredient.getCountProvider()), ConstantFloat.of((float) modifier.getMultiplier())), ConstantFloat.of((float) modifier.getAddition()))));
         } else {
-            return LongIngredient.create(content, modifier.apply(1).longValue());
+            return LongIngredient.create(content, modifier.apply(1L).longValue());
         }
     }
 

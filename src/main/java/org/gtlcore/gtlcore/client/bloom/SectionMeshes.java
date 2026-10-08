@@ -402,7 +402,7 @@ public final class SectionMeshes {
             // Exact LDLib CTM over a simple model only selects between each base sprite
             // and its declared connection sprite. Check both without tessellating every
             // unmarked casing/glass/off variant. Unknown dynamic wrappers remain candidates.
-            if (fixed.getClass() != SimpleBakedModel.class) return true;
+            if (fixed.getClass() != SimpleBakedModel.class && !(fixed instanceof FrameOcclusionModels.Model)) return true;
             boolean connected = fixed != model;
             for (Direction side : Direction.values()) {
                 for (var quad : fixed.getQuads(value, side, candidateRandom, ModelData.EMPTY, null))

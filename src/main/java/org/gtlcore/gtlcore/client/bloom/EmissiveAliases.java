@@ -254,7 +254,7 @@ public final class EmissiveAliases {
     }
 
     static boolean shouldWrap(BakedModel model) {
-        if (model.getClass() != SimpleBakedModel.class) return true;
+        if (model.getClass() != SimpleBakedModel.class && !(model instanceof FrameOcclusionModels.Model)) return true;
         // SectionMeshes deliberately prunes ordinary SimpleBakedModel blocks. Keep their exact
         // class identity unless a fixed face can actually use one of this reload's aliases.
         Set<ResourceLocation> candidates = discovered;

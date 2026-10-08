@@ -20,7 +20,8 @@ vec3 toneMap(vec3 c) {
 }
 vec3 visibleTexel(sampler2D source, ivec2 pixel, ivec2 size, float receiver) {
     vec4 light = texelFetch(source, clamp(pixel, ivec2(0), size - 1), 0);
-    float tolerance = max(0.02, receiver * 0.02);
+    // Match the half-float rounding allowance used by the blur passes.
+    float tolerance = max(0.002, receiver * 0.001);
     return light.rgb * (1.0 - smoothstep(tolerance, tolerance * 2.0, light.a - receiver));
 }
 vec3 visibleBloom(sampler2D source, float receiver) {

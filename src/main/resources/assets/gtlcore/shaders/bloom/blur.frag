@@ -23,9 +23,9 @@ float sceneDistance(vec2 uv) {
 }
 vec3 visibleTexel(ivec2 pixel, ivec2 size, float receiver) {
     vec4 light = texelFetch(Source, clamp(pixel, ivec2(0), size - 1), 0);
-    // Small continuous allowance for half-float filtering and gently sloped surfaces.
-    // This is a post-blur edge treatment; it does not loosen source visibility testing.
-    float tolerance = max(0.02, receiver * 0.02);
+    // Allow half-float depth rounding, not a percentage of the scene's geometry.
+    // A 2% allowance lets light behind nearby frame rails cross them at a distance.
+    float tolerance = max(0.002, receiver * 0.001);
     return light.rgb * (1.0 - smoothstep(tolerance, tolerance * 2.0, light.a - receiver));
 }
 vec3 visibleSample(vec2 uv, float receiver) {

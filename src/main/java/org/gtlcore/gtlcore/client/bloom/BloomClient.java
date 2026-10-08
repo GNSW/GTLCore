@@ -43,6 +43,7 @@ public final class BloomClient {
         }
         initialized = true;
         var modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modBus.addListener(net.minecraftforge.eventbus.api.EventPriority.HIGH, FrameOcclusionModels::modifyModels);
         modBus.addListener(BloomClient::reload);
         modBus.addListener(PoweredCraftingLights::modifyModels);
         modBus.addListener(PoweredCraftingLights::bakingCompleted);

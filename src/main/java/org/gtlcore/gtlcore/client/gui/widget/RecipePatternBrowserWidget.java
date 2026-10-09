@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.client.gui.widget;
 
+import org.gtlcore.gtlcore.api.gui.RecipePatternLabelWidget;
 import org.gtlcore.gtlcore.api.gui.RecipePatternUiTextures;
 import org.gtlcore.gtlcore.client.ae2.wireless.UniversalSearch;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MERecipePatternBufferPartMachine;
@@ -143,20 +144,17 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         addCounter(view, 0, "published_label", () -> publishedCount, RecipePatternUiTextures.COUNTER_PUBLISHED_COLOR);
         addCounter(view, 80, "blocked_label", () -> blockedCount, RecipePatternUiTextures.COUNTER_ERROR_COLOR);
         addCounter(view, 160, "skipped_label", () -> skippedCount, RecipePatternUiTextures.COUNTER_MUTED_COLOR);
-        view.addWidget(line(0, 48, 232, 14, this::blockedCounts, 0xFF616978)
-                .setHoverTooltips(Component.translatable(PREFIX + "counts_hint")));
+        view.addWidget(line(0, 48, 232, 14, this::blockedCounts, 0xFF616978));
         view.addWidget(line(0, 68, 232, 14, () -> text("navigation_hint"), 0xFF616978));
         return view;
     }
 
     private void addCounter(WidgetGroup view, int x, String label, Supplier<Integer> count, int color) {
         view.addWidget(new ImageWidget(x, 0, 72, 40, RecipePatternUiTextures.COUNTER_BACKGROUND));
-        view.addWidget(new ImageWidget(x + 6, 4, 60, 12,
-                new TextTexture(() -> text(label)).setColor(RecipePatternUiTextures.COUNTER_TEXT_COLOR).setDropShadow(false)
-                        .setWidth(60).setType(TextTexture.TextType.LEFT_ROLL)));
+        view.addWidget(line(x + 6, 4, 60, 12, () -> text(label), RecipePatternUiTextures.COUNTER_TEXT_COLOR));
         view.addWidget(new ImageWidget(x + 6, 19, 60, 16,
                 new TextTexture(() -> Integer.toString(count.get())).setColor(color).setDropShadow(false).setWidth(60))
-                .setHoverTooltips(Component.translatable(PREFIX + "counts_hint")));
+                .setHoverTooltips(Component.translatable(PREFIX + label)));
     }
 
     private WidgetGroup createSearchPage() {
@@ -248,8 +246,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
                         .setColor(TEXT_COLOR).setDropShadow(false).setWidth(284))
                 .setHoverTooltips(Component.translatable(PREFIX + "lists_hint")));
         view.addWidget(line(4, 18, 324, 12,
-                () -> isWhitelistMode() ? text(whitelistActive ? "whitelist_active" : "whitelist_inactive", whitelistFilteredCount) : blockedCounts(), MUTED_COLOR)
-                .setHoverTooltips(Component.translatable(PREFIX + "lists_hint"), Component.translatable(PREFIX + "counts_hint")));
+                () -> isWhitelistMode() ? text(whitelistActive ? "whitelist_active" : "whitelist_inactive", whitelistFilteredCount) : blockedCounts(), MUTED_COLOR));
         view.addWidget(button(4, 32, 74, 18, () -> Component.translatable(ruleTarget.translationKey()).getString(),
                 () -> ruleTarget = Target.values()[(ruleTarget.ordinal() + 1) % Target.values().length]));
         TextFieldWidget field = new TextFieldWidget(82, 32, 206, 18, () -> ruleExpression, value -> ruleExpression = value)
@@ -306,13 +303,11 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     }
 
     private static ImageWidget line(int x, int y, int width, int height, Supplier<String> label, int color) {
-        return new ImageWidget(x, y, width, height,
-                new TextTexture(label).setColor(color).setDropShadow(false).setWidth(width).setType(TextTexture.TextType.LEFT_ROLL));
+        return new RecipePatternLabelWidget(x, y, width, height, label, color, false);
     }
 
     private void addFooter(WidgetGroup view) {
-        view.addWidget(line(4, 211, 324, 12, () -> text("recipe_counts", publishedCount, blockedCount, skippedCount), MUTED_COLOR)
-                .setHoverTooltips(Component.translatable(PREFIX + "counts_hint")));
+        view.addWidget(line(4, 211, 324, 12, () -> text("recipe_counts", publishedCount, blockedCount, skippedCount), MUTED_COLOR));
     }
 
     private void addPager(WidgetGroup view, int x, int y, int width, Supplier<Integer> current, Supplier<Integer> total, Consumer<Integer> change) {
@@ -324,10 +319,24 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
 
     private Widget button(int x, int y, int width, int height, Supplier<String> label, Runnable action) {
         return new ButtonWidget(x, y, width, height,
-                new GuiTextureGroup(RecipePatternUiTextures.BUTTON, new TextTexture(label).setColor(RecipePatternUiTextures.BUTTON_TEXT_COLOR).setDropShadow(true).setWidth(width - 4).setType(TextTexture.TextType.ROLL)),
+                new GuiTextureGroup(RecipePatternUiTextures.BUTTON, new TextTexture(label).setColor(RecipePatternUiTextures.BUTTON_TEXT_COLOR).setDropShadow(true).setWidth(width - 4).setType(TextTexture.TextType.HIDE)),
                 click -> {
                     if (click.isRemote) action.run();
-                }).setHoverTexture(RecipePatternUiTextures.BUTTON_HOVER);
+                }) {
+
+            @Override
+            protected void drawTooltipTexts(int mouseX, int mouseY) {
+                if (!isMouseOverElement(mouseX, mouseY) || getHoverElement(mouseX, mouseY) != this ||
+                        gui == null || gui.getModularUIGui() == null)
+                    return;
+                List<Component> hints = new ArrayList<>(tooltipTexts);
+                String fullText = label.get();
+                if (!fullText.isBlank() && hints.stream().noneMatch(hint -> hint.getString().equals(fullText))) {
+                    hints.add(0, Component.literal(fullText));
+                }
+                if (!hints.isEmpty()) gui.getModularUIGui().setHoverTooltip(List.copyOf(hints), ItemStack.EMPTY, null, null);
+            }
+        }.setHoverTexture(RecipePatternUiTextures.BUTTON_HOVER);
     }
 
     private void enableMaterialDrop(TextFieldWidget field, Consumer<String> responder) {

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -12,6 +15,7 @@ final class CountHall implements AutoCloseable {
     private final List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] lower, upper;
     private final List<ExactLinearProgram.Constraint> cuts = new ArrayList<>();
+    private final List<ExactLinearProgram.Constraint> capacityCuts = new ArrayList<>();
     private final List<Integer> demands = new ArrayList<>(), capacities = new ArrayList<>();
     private final List<List<Edge>> graph = new ArrayList<>();
     private final List<CountProof.Row> axioms = new ArrayList<>();
@@ -218,6 +222,7 @@ final class CountHall implements AutoCloseable {
             finish();
             return;
         }
+        compilePairCapacities();
         for (int r = 0; r < rows.size(); r++) {
             charge();
             var row = rows.get(r);
@@ -260,6 +265,95 @@ final class CountHall implements AutoCloseable {
             }
         }
         matched = new int[capacities.size()];
+    }
+
+    /** Disjoint complete conflict components are certified unit-capacity resources. */
+    private void compilePairCapacities() {
+        int n = lower.length;
+        long bytes = 1024L + 96L * n + 5L * n * n;
+        // Leave room for the original matching and its row-sum certificate.
+        // The request and this propagator's existing allowance do not increase.
+        long remainingProof = 512L + rows.size() + 4L * n +
+                2L * rows.stream().mapToLong(row -> row.terms().size()).sum();
+        long capacityLimit = Math.max(0, allowance - remainingProof);
+        if (work >= capacityLimit || !budget.tryReserve(bytes)) return;
+        try {
+            var adjacent = new BitSet[n];
+            var reasons = new int[n][n];
+            for (int i = 0; i < n; i++) adjacent[i] = new BitSet(n);
+            for (int r = 0; r < rows.size(); r++) {
+                charge();
+                if (work >= capacityLimit) return;
+                var row = rows.get(r);
+                if (!row.upper().equals(BigInteger.ONE) || row.terms().size() != 2 ||
+                        row.terms().values().stream().anyMatch(c -> !c.equals(BigInteger.ONE))) continue;
+                var ids = row.terms().keySet().iterator();
+                int a = ids.next(), b = ids.next();
+                if (owner[a] < 0 || owner[b] < 0 || owner[a] == owner[b] ||
+                        lower[a].signum() != 0 || lower[b].signum() != 0 ||
+                        !BigInteger.ONE.equals(upper[a]) || !BigInteger.ONE.equals(upper[b])) continue;
+                adjacent[a].set(b);
+                adjacent[b].set(a);
+                reasons[a][b] = reasons[b][a] = r;
+            }
+            var visited = new BitSet(n);
+            for (int root = 0; root < n && work < capacityLimit; root++) {
+                if (visited.get(root) || adjacent[root].isEmpty()) continue;
+                var component = new ArrayList<Integer>();
+                var pending = new ArrayDeque<Integer>();
+                visited.set(root);
+                pending.add(root);
+                while (!pending.isEmpty()) {
+                    int id = pending.removeFirst();
+                    component.add(id);
+                    for (int next = adjacent[id].nextSetBit(0); next >= 0; next = adjacent[id].nextSetBit(next + 1)) {
+                        charge();
+                        if (work >= capacityLimit) return;
+                        if (!visited.get(next)) { visited.set(next); pending.add(next); }
+                    }
+                }
+                // A connected component alone is not a capacity. Every pair
+                // must conflict; a single missing edge leaves the old relaxation.
+                if (component.size() < 3 || component.size() > 128 ||
+                        component.stream().anyMatch(id -> adjacent[id].cardinality() != component.size() - 1)) continue;
+                certifyCapacity(component, reasons, capacityLimit);
+            }
+        } finally { budget.release(bytes); }
+    }
+
+    private void certifyCapacity(List<Integer> component, int[][] reasons, long capacityLimit) {
+        long pairs = (long) component.size() * (component.size() - 1) / 2;
+        // Account for the compact pair premises, domain axioms and independent
+        // replay. Do not charge a copy of the unrelated full row catalog here.
+        long checks = 128L + 4L * lower.length + 8L * pairs;
+        long bytes = 1024L + 512L * lower.length + 512L * pairs;
+        if (work + checks > capacityLimit || !budget.tryReserve(bytes)) return;
+        try {
+            var premises = new ArrayList<CountProof.Row>();
+            var witnesses = new ArrayList<Integer>();
+            for (int i = 0; i < component.size(); i++) for (int j = i + 1; j < component.size(); j++) {
+                witnesses.add(premises.size());
+                premises.add(axioms.get(reasons[component.get(i)][component.get(j)]));
+            }
+            for (int id = 0; id < lower.length; id++) {
+                premises.add(new CountProof.Row(Map.of(id, BigInteger.ONE.negate()), lower[id].negate()));
+                premises.add(new CountProof.Row(Map.of(id, BigInteger.ONE), upper[id]));
+            }
+            var terms = new TreeMap<Integer, BigInteger>();
+            component.forEach(id -> terms.put(id, BigInteger.ONE));
+            var cut = new ExactLinearProgram.Constraint(terms, BigInteger.ONE);
+            var proof = new CountProof.Clique("hall_pair_capacity", lower.length, premises, Arrays.asList(lower),
+                    Arrays.asList(upper), component.stream().map(id -> 2 * id + 1).toList(), witnesses, CountProof.row(cut));
+            budget.charge(checks);
+            work += checks;
+            if (CountProof.verify(proof, checks) != CountProof.Verdict.VERIFIED) return;
+            if (budget.proofJournal() != null) budget.proofJournal().add(proof);
+            int resourceId = capacities.size();
+            capacities.add(axioms.size());
+            axioms.add(proof.consequence());
+            capacityCuts.add(cut);
+            component.forEach(id -> resource[id] = resourceId);
+        } finally { budget.release(bytes); }
     }
 
     private boolean augment(int g, int forbidden, BitSet left, BitSet right) {
@@ -336,13 +430,16 @@ final class CountHall implements AutoCloseable {
     private boolean finish() {
         complete = true;
         if (!demands.isEmpty()) budget.note("count_hall", "groups=" + demands.size() + "; attempts=" + attempts + "; cuts=" + cuts.size() +
+                "; pair_capacities=" + capacityCuts.size() +
                 "; matching_builds=" + matchingBuilds + "; augmentations=" + augmentations + "; supported=" + supported +
                 "; repairs=" + repairs + "; proof_work=" + proofWork + "; work=" + work);
         return true;
     }
 
     List<ExactLinearProgram.Constraint> cuts() {
-        return List.copyOf(cuts);
+        var result = new ArrayList<>(capacityCuts);
+        result.addAll(cuts);
+        return List.copyOf(result);
     }
 
     @Override

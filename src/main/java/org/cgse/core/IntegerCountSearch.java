@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -42,6 +45,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private boolean complete, infeasible, unresolved, rootProved, repairScheduled, paused;
     private boolean scouting;
     private boolean repairScoutExtended;
+    private boolean finiteTailAttempted;
     private boolean portfolioScheduled;
     private CountShellCompilation<K> shell;
     private CountShellSearch<K> shellSearch;
@@ -119,6 +123,8 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         return step(null);
     }
 
+    boolean admitted() { return model != null; }
+
     /** Pull original order clauses into an optional program view. No reverse inference is made. */
     void importProgramConflicts(RecipeCountModel<K> original, Map<String, PlanStep> programs, List<CountConflict> conflicts) {
         if (model == null || conflicts.isEmpty() || work != 0) return;
@@ -164,6 +170,16 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         }
         if (!scouting && work >= allowance && best == null && pending.size() == 1 && pending.peekFirst().matching != null)
             allowance = preprocessingAllowance;
+        if (!scouting && !finiteTailAttempted && work >= allowance && best == null &&
+                pending.size() == 1 && deferred.isEmpty() && pending.peekFirst().finiteProbing()) {
+            // Once a table is built, allow one small probing tail before paying
+            // another outer strategy's setup. Never grant this to construction,
+            // renew it within the same turn, or increase the shared order cap.
+            finiteTailAttempted = true;
+            long extra = Math.min(262144, Math.min(allowance / 16, budget.remainingWork() / 16));
+            allowance += Math.min(extra, Long.MAX_VALUE - allowance);
+            budget.note("integer_counts_tail", "completed_signature_table; allowance=" + allowance);
+        }
         if (work >= allowance || work >= improvementUntil) {
             if (best == null && (!pending.isEmpty() || !deferred.isEmpty())) {
                 paused = true;
@@ -194,6 +210,10 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         int batchWidth = width == 1 ? 1 : width * 2;
         int residentLimit = Math.max(4, batchWidth);
         List<IntegerCountBranch<K>> wave = take(batchWidth, residentLimit);
+        // take() transfers ownership out of the frontier. Register it before
+        // any deadline/cancellation check in shared-conflict snapshots, so
+        // close() can release even a wave that never reaches its first worker.
+        dispatched = wave;
         if (wave.isEmpty()) return finish(false);
         peakWidth = Math.max(peakWidth, wave.size());
         long quantum = Math.max(1, Math.min(4096, (Math.min(allowance, improvementUntil) - work) / wave.size()));
@@ -214,7 +234,6 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                     branch.proofTask ? CountPortfolioPolicy.Mode.PROOF : goal, stopped::get);
             return branch;
         });
-        dispatched = wave;
         rounds++;
         if (slice != null && wave.size() > 1) {
             running = slice.forkStealing(PlanningBudget.Phase.SOLVE, partitions);
@@ -277,6 +296,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         if (!paused || complete) throw new IllegalStateException("Count search is not suspended");
         allowance = work + Math.max(1, Math.min(2_000_000, budget.remainingWork() / 2));
         scouting = false;
+        finiteTailAttempted = false;
         paused = false;
         if (proofs != null) choiceConflicts.add(proofs.forModel(model));
         budget.note("integer_counts_resume", "work=" + work + "; allowance=" + allowance + "; branches=" + branches);
@@ -333,7 +353,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         // Inspect every completed sibling before optional conflict caches or
         // resumed workspaces can encounter the shared limit. An earlier sibling
         // exhausting during merge must not hide a later closed root proof.
-        for (var branch : wave) if (branch.proofTask && branch.proofContradiction &&
+        for (var branch : wave) if (branch.proofContradiction &&
                 branch.state == IntegerCountBranch.State.DEAD && branch.current.isEmpty() && branch.model == model) {
                     rootProved = true;
                     budget.note("count_proof_task", "scope=full_root; outcome=PROVEN_INFEASIBLE; work=" + branch.auxiliaryWork);
@@ -392,12 +412,21 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                     retain(branch);
                     branch.close();
                 }
+                case SPLIT -> {
+                    // Keep owned root searches across the split. Children keep
+                    // complete coverage; local cutoffs of this optional parent
+                    // neither remove children nor open another domain.
+                    if (branch.retainSplitWitness()) {
+                        suspensions++;
+                        deferred.addLast(branch);
+                    } else branch.close();
+                }
                 case UNRESOLVED -> {
                     if (branch.resume()) {
                         suspensions++;
                         deferred.addLast(branch);
                     } else {
-                        if (branch.auxiliaryMode == 0) unresolved = true;
+                        if (branch.auxiliaryMode == 0 && !branch.splitWitness) unresolved = true;
                         branch.close();
                     }
                 }

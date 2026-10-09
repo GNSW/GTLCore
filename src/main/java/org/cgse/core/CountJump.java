@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -61,6 +64,12 @@ final class CountJump implements AutoCloseable {
 
     CountJump(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
               PlanningBudget budget, long allowance) {
+        this(rows, lower, upper, budget, allowance, null);
+    }
+
+    CountJump(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
+              PlanningBudget budget, long allowance, BigInteger[] initial) {
+        if (initial != null && initial.length != lower.length) throw new IllegalArgumentException("Initial point dimensions");
         this.rows = rows;
         this.budget = budget;
         this.allowance = Math.min(allowance, budget.remainingWork() / 8);
@@ -90,6 +99,10 @@ final class CountJump implements AutoCloseable {
             compoundEligible = lower.length <= 128 && entries <= 8192;
             for (int i = 0; i < lower.length; i++) {
                 charge();
+                if (initial != null) {
+                    values[i] = initial[i].max(lower[i]);
+                    if (upper[i] != null) values[i] = values[i].min(upper[i]);
+                }
                 if (upper[i] == null || upper[i].subtract(lower[i]).compareTo(BigInteger.ONE) > 0) {
                     compoundEligible = false;
                     wideDomains = true;

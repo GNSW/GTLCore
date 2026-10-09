@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -27,6 +30,98 @@ final class CountLcg implements AutoCloseable {
     private record Incidence(int row, BigInteger coefficient) {}
 
     private record LinearReason(ExactLinearProgram.Constraint row, int except, BigInteger slack, int prefix, int rowId) {}
+
+    private static final class ExplainedLiteral {
+
+        final Literal literal;
+        final int source;
+        int heapIndex;
+
+        ExplainedLiteral(Literal literal, int source, int heapIndex) {
+            this.literal = literal;
+            this.source = source;
+            this.heapIndex = heapIndex;
+        }
+    }
+
+    /** Sources are stable during one analysis; no trail change crosses this cache. */
+    private final class ConflictFrontier {
+
+        final Map<Integer, ExplainedLiteral> terms = new LinkedHashMap<>();
+        final List<ExplainedLiteral> latest = new ArrayList<>();
+
+        void addAll(Collection<Literal> literals) {
+            for (Literal literal : literals) {
+                charge();
+                if (rootTrue(literal)) continue;
+                int key = boundKey(literal.variable, literal.minimum);
+                ExplainedLiteral old = terms.get(key);
+                if (old != null && (literal.minimum ? literal.value.compareTo(old.literal.value) <= 0 :
+                        literal.value.compareTo(old.literal.value) >= 0)) continue;
+                var explained = new ExplainedLiteral(literal, source(literal), old == null ? latest.size() : old.heapIndex);
+                terms.put(key, explained);
+                if (old == null) latest.add(explained);
+                else latest.set(old.heapIndex, explained);
+                // A stronger bound can only move its earliest implication later
+                // on the unchanged trail. Preserve insertion order separately
+                // for the learned clause and its subsequent watched literals.
+                siftUp(explained);
+            }
+        }
+
+        private void siftUp(ExplainedLiteral value) {
+            int position = value.heapIndex;
+            while (position > 0) {
+                charge();
+                int parent = (position - 1) >>> 1;
+                ExplainedLiteral before = latest.get(parent);
+                if (before.source >= value.source) break;
+                latest.set(position, before);
+                before.heapIndex = position;
+                position = parent;
+            }
+            latest.set(position, value);
+            value.heapIndex = position;
+        }
+
+        int highestLevel() {
+            charge();
+            return latest.isEmpty() ? 0 : trail.get(latest.get(0).source).level;
+        }
+
+        boolean asserting() {
+            charge();
+            if (latest.size() <= 1) return true;
+            int second = latest.size() > 2 && latest.get(2).source > latest.get(1).source ? 2 : 1;
+            return trail.get(latest.get(second).source).level < trail.get(latest.get(0).source).level;
+        }
+
+        int removeLatest() {
+            charge();
+            ExplainedLiteral removed = latest.get(0);
+            terms.remove(boundKey(removed.literal.variable, removed.literal.minimum));
+            ExplainedLiteral value = latest.remove(latest.size() - 1);
+            if (latest.isEmpty()) return removed.source;
+            int position = 0;
+            while (2 * position + 1 < latest.size()) {
+                charge();
+                int child = 2 * position + 1;
+                if (child + 1 < latest.size() && latest.get(child + 1).source > latest.get(child).source) child++;
+                ExplainedLiteral after = latest.get(child);
+                if (value.source >= after.source) break;
+                latest.set(position, after);
+                after.heapIndex = position;
+                position = child;
+            }
+            latest.set(position, value);
+            value.heapIndex = position;
+            return removed.source;
+        }
+
+        List<Literal> literals() {
+            return terms.values().stream().map(value -> value.literal).toList();
+        }
+    }
 
     private static final class Change {
 
@@ -59,12 +154,25 @@ final class CountLcg implements AutoCloseable {
         final List<Literal> terms;
         final int lbd;
         long used;
+        final Watch first = new Watch(this), second = new Watch(this);
+        Nogood pendingPrevious, pendingNext;
+        boolean pending;
 
         Nogood(List<Literal> terms, int lbd, long used) {
             this.terms = terms;
             this.lbd = lbd;
             this.used = used;
         }
+    }
+
+    /** Intrusive subscriptions avoid allocating a new list entry when a watch moves. */
+    private static final class Watch {
+
+        final Nogood clause;
+        int term = -1;
+        Watch previous, next;
+
+        Watch(Nogood clause) { this.clause = clause; }
     }
 
     private static final class RowActivity {
@@ -90,6 +198,8 @@ final class CountLcg implements AutoCloseable {
     private final BitSet queued = new BitSet();
     private final List<Change> trail = new ArrayList<>();
     private final List<Nogood> clauses = new ArrayList<>();
+    private final Watch[] watches;
+    private Nogood pendingClause, lastPendingClause;
     private final List<CountConflict> learned = new ArrayList<>(), proofSteps = new ArrayList<>();
     private final Set<CountConflict> imported = new LinkedHashSet<>();
     private final Set<ExactLinearProgram.Constraint> importedRows = new LinkedHashSet<>();
@@ -98,10 +208,10 @@ final class CountLcg implements AutoCloseable {
     private long allowance;
     private List<Literal> conflict;
     private BigInteger[] counts;
-    private int level, scan, decisions, conflicts, jumps, restarts, nextRestart = 64;
+    private int level, decisions, conflicts, jumps, restarts, nextRestart = 64;
     private long work, workTicks, memory, rootProgress, learnedProgress, relaxedReasons, lazyReasons, explainedReasons;
     private double increment = 1;
-    private boolean complete, infeasible, rescan, paused, differenceChecked;
+    private boolean complete, infeasible, paused, differenceChecked;
     private final boolean retainProof;
     private CountProof.Certificate certificate;
     private CountProof.Certificate differenceProof;
@@ -223,7 +333,7 @@ final class CountLcg implements AutoCloseable {
         allowance = Math.min(maximumWork, budget.remainingWork() / 8);
         long terms = rows.stream().mapToLong(r -> r.terms().size()).sum();
         boolean admitted = allowance >= 1024 && CountModelViews.admissible(lower.length, rows.size(), terms, budget);
-        long bytes = admitted ? 2048 + 544L * lower.length + 112L * terms + 256L * rows.size() : 0;
+        long bytes = admitted ? 2112 + 552L * lower.length + 112L * terms + 256L * rows.size() : 0;
         admitted = admitted && budget.tryReserve(bytes);
         memory = admitted ? bytes : 0;
         try {
@@ -235,6 +345,7 @@ final class CountLcg implements AutoCloseable {
             levelZeroHigh = rootHigh.clone();
             activity = new double[low.length];
             rowActivity = new RowActivity[admitted ? rows.size() : 0];
+            watches = new Watch[low.length];
             if (!admitted) {
                 complete = true;
                 return;
@@ -304,12 +415,10 @@ final class CountLcg implements AutoCloseable {
                 }
                 return false;
             }
-            if (rescan) {
-                scan = 0;
-                rescan = false;
-            }
-            if (scan < clauses.size()) {
-                propagate(clauses.get(scan++));
+            if (pendingClause != null) {
+                Nogood clause = pendingClause;
+                unschedule(clause);
+                propagate(clause);
                 return false;
             }
             observeDecision(false);
@@ -726,11 +835,12 @@ final class CountLcg implements AutoCloseable {
             return;
         }
         if (infinities > 1) return;
+        BigInteger residual = row.upper().subtract(sum);
         // No variable can cross its opposite domain endpoint while the row
         // has at least this much slack. In particular, wide sparse rows need
         // not scan all their terms after every unrelated integer split.
         if (infinities == 0 && cached.maximumChange != null &&
-                row.upper().subtract(sum).compareTo(cached.maximumChange) >= 0)
+                residual.compareTo(cached.maximumChange) >= 0)
             return;
         if (infinities == 0 && cached.booleanOrder != null) {
             BigInteger maximumChange = BigInteger.ZERO;
@@ -744,7 +854,7 @@ final class CountLcg implements AutoCloseable {
             // Every unfixed domain in this mode is [0,1]. Re-read it after
             // backtracking: a bound can tighten only if its exact one-step
             // contribution exceeds the row's remaining slack.
-            if (row.upper().subtract(sum).compareTo(maximumChange) >= 0) return;
+            if (residual.compareTo(maximumChange) >= 0) return;
         }
         // Propagate using a frozen set of bounds; new implications are placed
         // on the queue, so none of their explanations can refer to themselves.
@@ -756,15 +866,24 @@ final class CountLcg implements AutoCloseable {
             int id = term.getKey();
             BigInteger a = term.getValue();
             if (a.signum() == 0 || infinities == 1 && id != infinite) continue;
+            BigInteger magnitude = a.abs();
+            // A finite row's residual is nonnegative. If this variable's
+            // entire domain fits, its implied bound is already true. Keep
+            // the same scan charge, but do not divide or allocate a literal.
+            if (infinities == 0 && high[id] != null &&
+                    (low[id].equals(high[id]) || residual.compareTo(magnitude.multiply(high[id].subtract(low[id]))) >= 0))
+                continue;
             BigInteger endpoint = a.signum() > 0 ? low[id] : high[id];
-            BigInteger other = endpoint == null ? sum : sum.subtract(a.multiply(endpoint));
-            Literal next = a.signum() > 0 ? new Literal(id, false, floor(row.upper().subtract(other), a)) :
-                    new Literal(id, true, floor(row.upper().subtract(other), a.negate()).negate());
+            // floor((b - (sum - a*x))/|a|) is x +/- floor(residual/|a|).
+            // Reuse the frozen residual, even when x is far beyond 64 bits.
+            BigInteger distance = floor(residual, magnitude);
+            Literal next = a.signum() > 0 ? new Literal(id, false, endpoint.add(distance)) :
+                    new Literal(id, true, endpoint == null ? distance.negate() : endpoint.subtract(distance));
             if (truth(next) != 1) {
                 candidates.add(next);
                 // The opposite bound must violate this integer row by at
                 // least one. Spend only the surplus on relaxing its reason.
-                BigInteger slack = other.add(a.multiply(next.opposite().value)).subtract(row.upper()).subtract(BigInteger.ONE);
+                BigInteger slack = magnitude.multiply(distance.add(BigInteger.ONE)).subtract(residual).subtract(BigInteger.ONE);
                 explanations.add(new LinearReason(row, id, slack, prefix, rowId));
             }
         }
@@ -833,24 +952,96 @@ final class CountLcg implements AutoCloseable {
     }
 
     private void propagate(Nogood clause) {
-        Literal remaining = null;
-        for (Literal literal : clause.terms) {
+        // A forbidden conjunction is inactive while two terms are not true.
+        // Test its existing watches first; unrelated bounds never enqueue it.
+        int first = -1, second = -1;
+        if (clause.first.term >= 0) {
             charge();
-            int truth = truth(literal);
-            if (truth == 0) return;
-            if (truth < 0) {
-                if (remaining != null) return;
-                remaining = literal;
+            if (truth(clause.terms.get(clause.first.term)) != 1) first = clause.first.term;
+        }
+        if (clause.second.term >= 0) {
+            charge();
+            if (truth(clause.terms.get(clause.second.term)) != 1) {
+                if (first < 0) first = clause.second.term;
+                else second = clause.second.term;
             }
         }
+        if (second >= 0) return;
+        for (int i = 0; i < clause.terms.size() && second < 0; i++) {
+            if (i == clause.first.term || i == clause.second.term) continue;
+            charge();
+            if (truth(clause.terms.get(i)) != 1) {
+                if (first < 0) first = i;
+                else second = i;
+            }
+        }
+        // With fewer than two non-true terms, retain a true anchor as the
+        // second watch. Undo events also wake watches: general integer bounds
+        // can change a false term into an unknown one on backtrack.
+        watch(clause.first, first >= 0 ? first : clause.terms.isEmpty() ? -1 : 0);
+        watch(clause.second, second >= 0 ? second : clause.terms.size() < 2 ? -1 : first <= 0 ? 1 : 0);
+        if (second >= 0) return;
         clause.used = conflicts;
-        if (remaining == null) {
+        if (first < 0) {
             conflict = clause.terms;
             return;
         }
+        Literal remaining = clause.terms.get(first);
+        if (truth(remaining) == 0) return;
         var why = new ArrayList<>(clause.terms);
-        why.remove(remaining);
+        why.remove(first);
         tighten(remaining.opposite(), why);
+    }
+
+    private void watch(Watch watch, int term) {
+        if (watch.term == term) return;
+        charge();
+        if (watch.term >= 0) {
+            int variable = watch.clause.terms.get(watch.term).variable;
+            if (watch.previous == null) watches[variable] = watch.next;
+            else watch.previous.next = watch.next;
+            if (watch.next != null) watch.next.previous = watch.previous;
+        }
+        watch.term = term;
+        watch.previous = watch.next = null;
+        if (term >= 0) {
+            int variable = watch.clause.terms.get(term).variable;
+            watch.next = watches[variable];
+            if (watch.next != null) watch.next.previous = watch;
+            watches[variable] = watch;
+        }
+    }
+
+    private void changed(int variable) {
+        for (Watch watch = watches[variable]; watch != null; watch = watch.next) {
+            charge();
+            schedule(watch.clause);
+        }
+    }
+
+    private void schedule(Nogood clause) {
+        if (clause.pending) return;
+        clause.pending = true;
+        clause.pendingPrevious = lastPendingClause;
+        if (lastPendingClause == null) pendingClause = clause;
+        else lastPendingClause.pendingNext = clause;
+        lastPendingClause = clause;
+    }
+
+    private void unschedule(Nogood clause) {
+        if (!clause.pending) return;
+        if (clause.pendingPrevious == null) pendingClause = clause.pendingNext;
+        else clause.pendingPrevious.pendingNext = clause.pendingNext;
+        if (clause.pendingNext == null) lastPendingClause = clause.pendingPrevious;
+        else clause.pendingNext.pendingPrevious = clause.pendingPrevious;
+        clause.pending = false;
+        clause.pendingPrevious = clause.pendingNext = null;
+    }
+
+    private void addClause(List<Literal> terms, int lbd) {
+        Nogood clause = new Nogood(List.copyOf(terms), lbd, conflicts);
+        clauses.add(clause);
+        schedule(clause);
     }
 
     private void tighten(Literal literal, List<Literal> reason) {
@@ -896,36 +1087,37 @@ final class CountLcg implements AutoCloseable {
         // Only the endpoint contributing to a row's minimum can strengthen
         // propagation. Waking both directions used to rescan unrelated rows.
         updateEndpoint(literal.variable, literal.minimum, old, literal.value);
-        rescan = true;
+        changed(literal.variable);
     }
 
     private void analyze() {
+        // At most one strongest literal per variable and bound direction. The
+        // cache is request-private and never consulted after a backjump/restart.
+        long bytes = 256L + 384L * low.length;
+        reserve(bytes);
+        try {
+            analyze(new ConflictFrontier());
+        } finally {
+            memory -= bytes;
+            budget.release(bytes);
+        }
+    }
+
+    private void analyze(ConflictFrontier frontier) {
         conflicts++;
-        List<Literal> frontier = normalize(conflict);
+        frontier.addAll(conflict);
         int highest;
         while (true) {
-            highest = 0;
-            int number = 0, last = -1;
-            for (Literal literal : frontier) {
-                int index = source(literal);
-                int at = index < 0 ? 0 : trail.get(index).level;
-                if (at > highest) {
-                    highest = at;
-                    number = 1;
-                    last = index;
-                } else if (at == highest && at > 0) {
-                    number++;
-                    last = Math.max(last, index);
-                }
-            }
-            if (highest == 0 || number <= 1) break;
+            highest = frontier.highestLevel();
+            if (highest == 0 || frontier.asserting()) break;
+            // Trail levels are monotone and each source changes one bound.
+            // With one strongest literal per direction, only this one frontier
+            // entry can originate at the latest implication being resolved.
+            int last = frontier.removeLatest();
             Change change = trail.get(last);
             List<Literal> reason = reason(change);
             if (reason == null) throw new IllegalStateException("Integer conflict has multiple unresolved decisions");
-            int position = last;
-            frontier.removeIf(literal -> source(literal) == position);
             frontier.addAll(reason);
-            frontier = normalize(frontier);
         }
         if (highest == 0) {
             remember(List.of());
@@ -935,15 +1127,18 @@ final class CountLcg implements AutoCloseable {
         }
         int back = 0;
         BitSet levels = new BitSet();
-        for (Literal literal : frontier) {
-            int at = trail.get(source(literal)).level;
+        for (ExplainedLiteral explained : frontier.terms.values()) {
+            charge();
+            Literal literal = explained.literal;
+            int at = trail.get(explained.source).level;
             levels.set(at);
             if (at != highest) back = Math.max(back, at);
             activity[literal.variable] += increment;
         }
-        remember(frontier);
-        reserve(128L + 96L * frontier.size());
-        clauses.add(new Nogood(List.copyOf(frontier), levels.cardinality(), conflicts));
+        List<Literal> literals = frontier.literals();
+        remember(literals);
+        reserve(320L + 96L * literals.size());
+        addClause(literals, levels.cardinality());
         learnedProgress++;
         if (back + 1 < level) jumps++;
         backtrack(back);
@@ -958,27 +1153,17 @@ final class CountLcg implements AutoCloseable {
             var discard = clauses.stream().filter(c -> c.lbd > 2).sorted(Comparator.comparingLong(c -> c.used)).limit(clauses.size() / 4).toList();
             for (Nogood clause : discard) {
                 clauses.remove(clause);
-                long bytes = 128L + 96L * clause.terms.size();
+                watch(clause.first, -1);
+                watch(clause.second, -1);
+                unschedule(clause);
+                long bytes = 320L + 96L * clause.terms.size();
                 memory -= bytes;
                 budget.release(bytes);
             }
         }
     }
 
-    private List<Literal> normalize(Collection<Literal> literals) {
-        Map<Integer, Literal> result = new LinkedHashMap<>();
-        for (Literal literal : literals) {
-            charge();
-            if (rootTrue(literal)) continue;
-            int key = literal.variable * 2 + (literal.minimum ? 1 : 0);
-            Literal old = result.get(key);
-            if (old == null || (literal.minimum ? literal.value.compareTo(old.value) > 0 : literal.value.compareTo(old.value) < 0)) result.put(key, literal);
-        }
-        return new ArrayList<>(result.values());
-    }
-
     private int source(Literal literal) {
-        if (rootTrue(literal)) return -1;
         // Bounds tighten monotonically along each live trail. Find the first
         // implication that entailed even a relaxed literal, not the latest one
         // (which could create a circular explanation).
@@ -1011,12 +1196,11 @@ final class CountLcg implements AutoCloseable {
             if (change.literal.minimum) low[change.literal.variable] = change.old;
             else high[change.literal.variable] = change.old;
             updateEndpoint(change.literal.variable, change.literal.minimum, change.literal.value, change.old);
+            changed(change.literal.variable);
             memory -= change.bytes;
             budget.release(change.bytes);
         }
         level = to;
-        rescan = true;
-        scan = 0;
     }
 
     private boolean rootTrue(Literal literal) {
@@ -1084,6 +1268,9 @@ final class CountLcg implements AutoCloseable {
     }
 
     private static BigInteger floor(BigInteger n, BigInteger d) {
+        if (d.equals(BigInteger.ONE)) return n;
+        if (n.bitLength() <= 63 && d.bitLength() <= 63)
+            return BigInteger.valueOf(Math.floorDiv(n.longValue(), d.longValue()));
         BigInteger[] qr = n.divideAndRemainder(d);
         return qr[1].signum() < 0 ? qr[0].subtract(BigInteger.ONE) : qr[0];
     }
@@ -1192,13 +1379,12 @@ final class CountLcg implements AutoCloseable {
             if (!rootTrue(literal)) literals.add(literal);
         }
         if (retainProof && !checkImportedClause(value.assumptions().stream().map(CountProof::row).toList())) return false;
-        long bytes = 256L + 512L * value.assumptions().size();
+        long bytes = 448L + 512L * value.assumptions().size();
         if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
         memory += bytes;
         imported.add(value);
         if (retainProof) proofSteps.add(value);
-        clauses.add(new Nogood(List.copyOf(literals), 0, conflicts));
-        rescan = true;
+        addClause(literals, 0);
         return true;
     }
 

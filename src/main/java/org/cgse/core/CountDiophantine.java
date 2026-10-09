@@ -1,20 +1,23 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
 import java.util.*;
 
 /** Integer equation candidates: coupled affine lattices and bounded low-dimensional faces. */
-final class CountDiophantine implements AutoCloseable {
+final class CountDiophantine implements CountContinuation {
 
     private final List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] lower, upper;
     private final PlanningBudget budget;
-    private final long allowance;
+    private long allowance;
     private BigInteger[] counts;
     private BigInteger a, b, c, rhs, next, end, stride;
     private int x, y, z = -1;
-    private long work;
-    private boolean complete;
+    private long work, memory;
+    private boolean complete, retaining, paused, prepared;
     private CountDiophantine face;
     private BigInteger[] faceBase;
     private int[] faceChoices;
@@ -24,11 +27,16 @@ final class CountDiophantine implements AutoCloseable {
 
     CountDiophantine(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
                      BigInteger[] upper, PlanningBudget budget) {
+        this(rows, lower, upper, budget, 131_072);
+    }
+
+    CountDiophantine(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
+                     BigInteger[] upper, PlanningBudget budget, long maximumWork) {
         this.rows = rows;
         this.lower = lower;
         this.upper = upper;
         this.budget = budget;
-        allowance = Math.min(131_072, budget.remainingWork() / 32);
+        allowance = Math.min(maximumWork, Math.min(131_072, budget.remainingWork() / 32));
         if (lower.length > 256 || rows.size() > 512 || allowance < 256) {
             complete = true;
             return;
@@ -45,10 +53,10 @@ final class CountDiophantine implements AutoCloseable {
             complete = true;
             return;
         }
-        if (free.size() > 3) {
-            freeVariables = free;
-            affine = new CountAffineLattice(rows, lower, upper, budget);
-        } else prepareEquation(free);
+        long bytes = 4096L + 256L * lower.length + 64L * rows.size();
+        if (!budget.tryReserve(bytes)) { complete = true; return; }
+        memory = bytes;
+        freeVariables = free;
     }
 
     private void prepareEquation(List<Integer> free) {
@@ -119,10 +127,31 @@ final class CountDiophantine implements AutoCloseable {
         if (next.compareTo(end) > 0) complete = true;
     }
 
-    boolean step() {
-        if (complete) return true;
+    @Override public boolean step() {
+        if (complete || paused) return true;
+        budget.checkpoint();
+        if (work >= allowance) {
+            if (retaining) return paused = true;
+            return complete = true;
+        }
+        long before = budget.threadWork();
+        try { return advance(); }
+        finally { work += budget.threadWork() - before; }
+    }
+
+    private boolean advance() {
+        if (!prepared) {
+            prepared = true;
+            if (freeVariables.size() > 3) {
+                affine = new CountAffineLattice(rows, lower, upper, budget,
+                        retaining ? Math.max(1024, allowance - work) : allowance - work);
+                if (retaining) affine.retained();
+            } else prepareEquation(freeVariables);
+            return complete;
+        }
         if (affine != null) {
             if (!affine.step()) return false;
+            if (affine.paused()) return paused = true;
             counts = affine.counts();
             affine.close();
             affine = null;
@@ -132,7 +161,7 @@ final class CountDiophantine implements AutoCloseable {
             return complete;
         }
         if (faceChoices != null) return stepFaces();
-        if (work >= allowance || next.compareTo(end) > 0) {
+        if (next.compareTo(end) > 0) {
             complete = true;
             budget.note("count_diophantine", "unresolved; work=" + work + "; original_domain_retained");
             return true;
@@ -188,7 +217,7 @@ final class CountDiophantine implements AutoCloseable {
     private void prepareFaces(ExactLinearProgram.Constraint equation, List<Integer> free) {
         Map<Integer, BigInteger> shape = shape(equation);
         for (var row : rows) {
-            if (work >= allowance) {
+            if (!retaining && work >= allowance) {
                 complete = true;
                 return;
             }
@@ -253,41 +282,38 @@ final class CountDiophantine implements AutoCloseable {
     }
 
     private boolean stepFaces() {
-        if (work >= allowance || faceAttempt >= Math.min(16, faceChoices.length)) {
+        if (faceAttempt >= Math.min(16, faceChoices.length)) {
             complete = true;
             budget.note("count_diophantine", "faces_unresolved; work=" + work + "; original_domain_retained");
             return true;
         }
-        long before = budget.threadWork();
-        try {
-            if (face == null) {
-                BigInteger[] lo = faceBase.clone(), hi = faceBase.clone();
-                for (int j = 0; j < Math.min(3, faceChoices.length); j++) {
-                    int offset = j == 0 ? 0 : j == 1 ? -faceAttempt - 1 : faceAttempt + 1;
-                    int id = faceChoices[Math.floorMod(faceCenter + offset, faceChoices.length)];
-                    lo[id] = lower[id];
-                    hi[id] = upper[id];
-                }
-                face = new CountDiophantine(rows, lo, hi, budget);
+        if (face == null) {
+            BigInteger[] lo = faceBase.clone(), hi = faceBase.clone();
+            for (int j = 0; j < Math.min(3, faceChoices.length); j++) {
+                int offset = j == 0 ? 0 : j == 1 ? -faceAttempt - 1 : faceAttempt + 1;
+                int id = faceChoices[Math.floorMod(faceCenter + offset, faceChoices.length)];
+                lo[id] = lower[id];
+                hi[id] = upper[id];
             }
-            if (!face.step()) return false;
-            counts = face.counts();
-            face.close();
-            face = null;
-            faceAttempt++;
-            if (counts != null) {
-                complete = true;
-                budget.note("count_diophantine", "face_witness; original_variables=" + lower.length + "; attempt=" + faceAttempt);
-            }
-            return complete;
-        } finally {
-            work += budget.threadWork() - before;
+            face = new CountDiophantine(rows, lo, hi, budget,
+                    retaining ? Math.max(256, allowance - work) : allowance - work);
+            if (retaining) face.retained();
         }
+        if (!face.step()) return false;
+        if (face.paused()) return paused = true;
+        counts = face.counts();
+        face.close();
+        face = null;
+        faceAttempt++;
+        if (counts != null) {
+            complete = true;
+            budget.note("count_diophantine", "face_witness; original_variables=" + lower.length + "; attempt=" + faceAttempt);
+        }
+        return complete;
     }
 
     private void charge() {
         budget.check();
-        work++;
     }
 
     private static BigInteger floor(BigInteger a, BigInteger b) {
@@ -299,13 +325,36 @@ final class CountDiophantine implements AutoCloseable {
         return floor(a.negate(), b).negate();
     }
 
-    BigInteger[] counts() {
+    @Override public BigInteger[] counts() {
         return counts;
+    }
+
+    CountDiophantine retained() { retaining = true; return this; }
+    @Override public boolean paused() { return paused; }
+    @Override public long work() { return work; }
+    @Override public long progress() {
+        return affine != null ? affine.progress() : faceAttempt;
+    }
+    @Override public boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper) {
+        return this.rows.equals(rows) && Arrays.equals(this.lower, lower) && Arrays.equals(this.upper, upper);
+    }
+    @Override public void resume(long quantum) {
+        if (!retaining || !paused || complete) throw new IllegalStateException("Diophantine search is not paused");
+        allowance = CountContinuation.deadline(work, quantum, budget);
+        if (affine != null && affine.paused()) affine.resume(allowance - work);
+        if (face != null && face.paused()) face.resume(allowance - work);
+        paused = false;
     }
 
     @Override
     public void close() {
         if (affine != null) affine.close();
         if (face != null) face.close();
+        affine = null;
+        face = null;
+        budget.release(memory);
+        memory = 0;
+        complete = true;
+        paused = false;
     }
 }

@@ -1,10 +1,13 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
 import java.util.*;
 
 /** Reduced multi-valued decision diagram with exact residual-state subsumption. */
-final class CountDecisionDiagram implements AutoCloseable {
+final class CountDecisionDiagram implements CountContinuation {
 
     private record Node(List<BigInteger> residual, Node parent, int value) {}
 
@@ -18,7 +21,8 @@ final class CountDecisionDiagram implements AutoCloseable {
     private final List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] lower, upper;
     private final PlanningBudget budget;
-    private final long allowance;
+    private long allowance;
+    private final long retentionLimit;
     private int[] order, widths;
     private BigInteger[][] minimum, maximum, coefficients;
     private List<Node> frontier = new ArrayList<>();
@@ -34,6 +38,7 @@ final class CountDecisionDiagram implements AutoCloseable {
         this.lower = lower;
         this.upper = upper;
         this.budget = budget;
+        retentionLimit = budget.availableBytes() / 8;
         allowance = Math.min(maximumWork, budget.remainingWork() / 16);
         int n = lower.length, m = rows.size();
         if (n > 128 || m > 512 || allowance < 2048 || (long) n * m > 32768) {
@@ -65,6 +70,12 @@ final class CountDecisionDiagram implements AutoCloseable {
             return;
         }
         memory = bytes;
+    }
+
+    private boolean prepared;
+
+    private void prepare() {
+        int n = lower.length, m = rows.size();
         try {
             var ids = new ArrayList<Integer>();
             int[] degree = new int[n];
@@ -104,10 +115,17 @@ final class CountDecisionDiagram implements AutoCloseable {
         }
     }
 
-    boolean step() {
-        if (complete) return true;
+    public boolean step() {
+        if (complete || paused) return true;
+        budget.checkpoint();
+        if (retaining && work >= allowance) return paused = true;
         try {
             charge();
+            if (!prepared) {
+                prepared = true;
+                prepare();
+                return complete;
+            }
             if (frontier.isEmpty()) {
                 infeasible = true;
                 return finish("proven_infeasible");
@@ -126,7 +144,7 @@ final class CountDecisionDiagram implements AutoCloseable {
                 infeasible = true;
                 return finish("proven_infeasible");
             }
-            for (int sliced = 0; sliced < 32 && parent < frontier.size(); sliced++) {
+            for (int sliced = 0; sliced < 32 && parent < frontier.size() && (!retaining || work < allowance); sliced++) {
                 Node previous = frontier.get(parent);
                 List<BigInteger> residual = new ArrayList<>();
                 boolean blocked = false;
@@ -210,15 +228,15 @@ final class CountDecisionDiagram implements AutoCloseable {
 
     private void charge() {
         budget.check();
-        if (++work > allowance) throw new Stop();
+        if (++work > allowance && !retaining) throw new Stop();
     }
 
     private void reserve(long bytes) {
-        if (!budget.tryReserve(bytes)) throw new Stop();
+        if (retaining && bytes > retentionLimit - memory || !budget.tryReserve(bytes)) throw new Stop();
         memory += bytes;
     }
 
-    BigInteger[] counts() {
+    public BigInteger[] counts() {
         return counts == null ? null : counts.clone();
     }
 
@@ -226,8 +244,27 @@ final class CountDecisionDiagram implements AutoCloseable {
         return infeasible;
     }
 
+    private boolean retaining, paused;
+
+    CountDecisionDiagram retained() { retaining = true; return this; }
+    public boolean paused() { return paused; }
+    public long work() { return work; }
+    // Growing a frontier is paid work, not evidence that a witness is nearer.
+    // Reward completed layers rather than exponential state accumulation.
+    public long progress() { return layer; }
+    public boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
+        return this.rows.equals(rows) && Arrays.equals(lower, low) && Arrays.equals(upper, high);
+    }
+    public void resume(long quantum) {
+        if (!paused || complete) throw new IllegalStateException("CountDecisionDiagram is not paused");
+        allowance = CountContinuation.deadline(work, quantum, budget);
+        paused = false;
+    }
+
     @Override
     public void close() {
+        complete = true;
+        paused = false;
         budget.release(memory);
         memory = 0;
     }

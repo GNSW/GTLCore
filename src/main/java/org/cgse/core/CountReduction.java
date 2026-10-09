@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -34,7 +37,7 @@ final class CountReduction implements AutoCloseable {
     private CountHermite hermite;
     private CountHall hall;
     private CountBounds finalBounds;
-    private boolean compiled, hermiteDone, hallDone, residuesDone;
+    private boolean compiled, hermiteDone, hallDone, residuesDone, capacityStrengthening;
     private final boolean strengthening;
 
     CountReduction(List<ExactLinearProgram.Constraint> source, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget) {
@@ -83,11 +86,16 @@ final class CountReduction implements AutoCloseable {
         return stride;
     }
 
+    /** The root can expose joint capacities before generic branch search. */
+    void strengthenCapacities() {
+        capacityStrengthening = true;
+    }
+
     boolean step() {
         if (complete) return true;
         budget.check();
         if (compiled) {
-            if (!strengthening) {
+            if (!strengthening && !capacityStrengthening) {
                 complete = true;
                 return true;
             }
@@ -95,7 +103,7 @@ final class CountReduction implements AutoCloseable {
                 if (hall == null) hall = new CountHall(rows, lower, upper, budget);
                 if (!hall.step()) return false;
                 var extra = hall.cuts();
-                long bytes = 384L * extra.size();
+                long bytes = 192L * extra.size() + 192L * extra.stream().mapToLong(r -> r.terms().size()).sum();
                 if (!extra.isEmpty() && budget.tryReserve(bytes)) {
                     memory += bytes;
                     rows.addAll(extra);
@@ -103,6 +111,10 @@ final class CountReduction implements AutoCloseable {
                 hall.close();
                 hall = null;
                 hallDone = true;
+            }
+            if (!strengthening) {
+                complete = true;
+                return true;
             }
             if (!hermiteDone) {
                 if (hermite == null) hermite = new CountHermite(rows, lower.length, budget);

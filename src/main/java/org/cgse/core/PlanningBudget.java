@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.lang.management.ManagementFactory;
@@ -53,6 +56,13 @@ public final class PlanningBudget {
         COMPLETE
     }
 
+    /** Origin of an execution witness submitted to the outer plan validator. */
+    public enum CandidateOrigin {
+        SOURCE_GRAPH, BOOTSTRAP, STOCK_VIEW, SUPPORT_NEIGHBORHOOD, ALLOCATION, INTEGER_COUNTS, STOCK_WITNESS
+    }
+
+    public enum CandidateOutcome { ACCEPTED, REJECTED, INCONCLUSIVE, ABANDONED, INVALID }
+
     private final long timeoutNanos;
     private final long maxNodes;
     private final long maxBytes;
@@ -84,6 +94,8 @@ public final class PlanningBudget {
     private volatile boolean measuring;
     private volatile CountProof.Journal proofJournal;
     private final Map<String, long[]> strategyTotals = new LinkedHashMap<>();
+    private final Map<CandidateOrigin, long[]> candidateTotals = new EnumMap<>(CandidateOrigin.class);
+    private long firstVerifiedSearch = -1, firstVerifiedCompilation = -1, firstVerifiedNanos = -1;
 
     /** Optional bounded certificate export; normal planning does not allocate proof archives. */
     public void proofJournal(CountProof.Journal journal) {
@@ -108,7 +120,7 @@ public final class PlanningBudget {
         this.submitted = clock.getAsLong();
     }
 
-    /** Optional, bounded portfolio allowance; all workers still share the resulting cap. */
+    /** Expanded cap for EACH of search and compilation; workers share both accounts. */
     public static long parallelWorkLimit(long base, int workers, boolean expanded) {
         if (base <= 0 || workers <= 0) throw new IllegalArgumentException("Invalid planning limits");
         if (!expanded || workers == 1) return base;
@@ -397,6 +409,66 @@ public final class PlanningBudget {
     }
 
     public record StrategyMetrics(long chargedWork, long activeNanos, long steps) {}
+
+    /** Bounded aggregates only: no plans, stock keys or per-candidate archives are retained. */
+    public record CandidateCounts(long proposed, long accepted, long rejected, long inconclusive,
+                                  long abandoned, long invalid, long validationWork, long validationNanos) {}
+
+    public record CandidateMetrics(Map<CandidateOrigin, CandidateCounts> origins,
+                                   long firstVerifiedSearchWork, long firstVerifiedCompilationWork,
+                                   long firstVerifiedElapsedNanos) {}
+
+    public synchronized CandidateMetrics candidates() {
+        Map<CandidateOrigin, CandidateCounts> result = new EnumMap<>(CandidateOrigin.class);
+        candidateTotals.forEach((origin, a) -> result.put(origin,
+                new CandidateCounts(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7])));
+        return new CandidateMetrics(Map.copyOf(result), firstVerifiedSearch, firstVerifiedCompilation, firstVerifiedNanos);
+    }
+
+    synchronized CandidateObservation observeCandidate(CandidateOrigin origin) {
+        if (!measuring) return null;
+        candidateTotals.computeIfAbsent(origin, ignored -> new long[8])[0]++;
+        return new CandidateObservation(origin);
+    }
+
+    final class CandidateObservation {
+        private final CandidateOrigin origin;
+        private boolean finished;
+        private long finishedWork, finishedNanos;
+
+        private CandidateObservation(CandidateOrigin origin) {
+            this.origin = origin;
+        }
+
+        void step(long beforeWork, long beforeNanos) {
+            synchronized (PlanningBudget.this) {
+                long work = (finished ? finishedWork : threadWork()) - beforeWork;
+                long nanos = (finished ? finishedNanos : System.nanoTime()) - beforeNanos;
+                long[] totals = candidateTotals.get(origin);
+                totals[6] = saturatedAdd(totals[6], work);
+                totals[7] = saturatedAdd(totals[7], nanos);
+            }
+        }
+
+        void finish(CandidateOutcome outcome) {
+            synchronized (PlanningBudget.this) {
+                if (finished) return;
+                finished = true;
+                finishedWork = threadWork();
+                finishedNanos = System.nanoTime();
+                candidateTotals.get(origin)[1 + outcome.ordinal()]++;
+                if (outcome == CandidateOutcome.ACCEPTED && firstVerifiedSearch < 0) {
+                    firstVerifiedSearch = searchWork();
+                    firstVerifiedCompilation = compilationWork();
+                    firstVerifiedNanos = elapsedNanos();
+                }
+            }
+        }
+    }
+
+    private static long saturatedAdd(long a, long b) {
+        return a > Long.MAX_VALUE - b ? Long.MAX_VALUE : a + b;
+    }
 
     public record Metrics(Map<Phase, Long> activeNanos, Map<Phase, Long> cpuNanos, long peakActiveWorkers,
                           long maxWorkSliceNanos, long peakReservedBytes, Map<String, StrategyMetrics> strategies,

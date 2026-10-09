@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -8,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.IdentityHashMap;
 
 /** Immutable catalog index. Inventory changes do not invalidate the compiled structure. */
 public final class GraphCompiler<K> {
@@ -30,6 +34,104 @@ public final class GraphCompiler<K> {
     final CountSessions countSessions = new CountSessions();
     final CountRecoveryTemplates<K> recoveryTemplates = new CountRecoveryTemplates<>();
     private final List<DemandEntry<K>> demandPrograms = new ArrayList<>();
+    private final Map<String, long[]> cacheCounters = new LinkedHashMap<>();
+    private long activeSearches;
+
+    /** Logical residency estimates, not an object census or a JVM heap limit. */
+    public record CacheEntry(long entries, long weight, long estimatedBytes, long hits, long misses, long evictions) {
+        CacheEntry plus(CacheEntry other) {
+            return new CacheEntry(sum(entries, other.entries), sum(weight, other.weight), sum(estimatedBytes, other.estimatedBytes),
+                    sum(hits, other.hits), sum(misses, other.misses), sum(evictions, other.evictions));
+        }
+    }
+
+    /** Includes retained macro compilers once by identity. Concurrent observations are not atomic across compilers. */
+    public record CacheMetrics(int compilers, long activeSearches, Map<String, CacheEntry> caches) {
+        public CacheMetrics { caches = Map.copyOf(caches); }
+        public long estimatedBytes() {
+            return caches.values().stream().mapToLong(CacheEntry::estimatedBytes).reduce(0, GraphCompiler::sum);
+        }
+    }
+
+    private static long sum(long a, long b) { return a > Long.MAX_VALUE - b ? Long.MAX_VALUE : a + b; }
+
+    private <T> T lookup(String name, T value) {
+        long[] counters = cacheCounters.computeIfAbsent(name, ignored -> new long[3]);
+        int at = value == null ? 1 : 0;
+        counters[at] = sum(counters[at], 1);
+        return value;
+    }
+
+    private void evicted(String name) {
+        long[] counters = cacheCounters.computeIfAbsent(name, ignored -> new long[3]);
+        counters[2] = sum(counters[2], 1);
+    }
+
+    private CacheEntry entry(String name, long entries, long weight, long bytes) {
+        long[] counters = cacheCounters.get(name);
+        return new CacheEntry(entries, weight, bytes, counters == null ? 0 : counters[0],
+                counters == null ? 0 : counters[1], counters == null ? 0 : counters[2]);
+    }
+
+    synchronized void searchOpened() { activeSearches++; }
+    synchronized void searchClosed() {
+        if (activeSearches == 0) throw new IllegalStateException("Unbalanced compiler search lifetime");
+        activeSearches--;
+    }
+
+    private synchronized CacheMetrics localCacheMetrics() {
+        Map<String, CacheEntry> values = new LinkedHashMap<>();
+        long graphWeight = 0, graphBytes = 0;
+        for (var graph : cache.values()) {
+            graphWeight += graph.recipes().size() + graph.selected().size();
+            graphBytes += graph.estimatedBytes();
+        }
+        values.put("compiled", entry("compiled", cache.size(), graphWeight, graphBytes));
+        values.put("topology", entry("topology", topologies.size(), topologyWeight, 64L * topologyWeight));
+        values.put("count_catalog", entry("count_catalog", countCatalogs.size(), countCatalogWeight, 128L * countCatalogWeight));
+        values.put("count_closure", entry("count_closure", countClosures.size(), countClosureWeight, 64L * countClosureWeight));
+        long cutoffWeight = countClosureLimits.keySet().stream().mapToLong(k -> 1L + k.additional.size() + k.excluded.size()).sum();
+        values.put("closure_cutoff", entry("closure_cutoff", countClosureLimits.size(), cutoffWeight, 128L * cutoffWeight));
+        values.put("source_index", entry("source_index", sourceIndex == null ? 0 : 1,
+                sourceIndex == null ? 0 : sourceIndex.recipes.size(), sourceIndex == null ? 0 : sourceIndex.bytes));
+        long packedBytes = catalogIndex == null ? 0 : catalogIndex.estimatedBytes();
+        values.put("catalog_index", entry("catalog_index", catalogIndex == null ? 0 : 1,
+                catalogIndex == null ? 0 : catalogIndex.resourceCount(), packedBytes));
+        long demandWeight = 0, demandBytes = 0;
+        for (var demand : demandPrograms) {
+            demandWeight += demand.graph.recipes().size() + (demand.program == null ? 0 : demand.program.weight);
+            demandBytes += demand.graph.estimatedBytes() + (demand.program == null ? 0 : 64L * demand.program.weight);
+        }
+        values.put("demand_program", entry("demand_program", demandPrograms.size(), demandWeight, demandBytes));
+        long certificateWeight = quantityCertificates.stream().mapToLong(c -> c.weights.size() + c.excluded.size()).sum();
+        values.put("quantity_certificate", entry("quantity_certificate", quantityCertificates.size(), certificateWeight, 192L * certificateWeight));
+        // Catalog recipes and user keys are shared immutable inputs. Count the
+        // index containers here, not arbitrary host objects reachable from them.
+        long catalogWeight = catalog.size() + producers.size() + producers.values().stream().mapToLong(List::size).sum();
+        values.put("catalog", new CacheEntry(1, catalogWeight, 64L * catalogWeight, 0, 0, 0));
+        return new CacheMetrics(1, activeSearches, values);
+    }
+
+    public CacheMetrics cacheMetrics() {
+        Map<String, CacheEntry> aggregate = new LinkedHashMap<>();
+        var seen = new IdentityHashMap<GraphCompiler<?>, Boolean>();
+        var pending = new ArrayDeque<GraphCompiler<?>>();
+        pending.add(this);
+        long active = 0;
+        while (!pending.isEmpty()) {
+            var compiler = pending.removeFirst();
+            if (seen.put(compiler, true) != null) continue;
+            // Never hold a parent cache monitor while entering a child compiler.
+            var local = compiler.localCacheMetrics();
+            active = sum(active, local.activeSearches);
+            local.caches.forEach((name, value) -> aggregate.merge(name, value, CacheEntry::plus));
+            aggregate.merge("count_session", compiler.countSessions.cacheMetrics(), CacheEntry::plus);
+            var recovery = compiler.recoveryTemplates.cacheMetrics();
+            aggregate.merge("recovery_template", recovery.entry(), CacheEntry::plus);
+            pending.addAll(recovery.compilers());
+        }
+        return new CacheMetrics(seen.size(), active, aggregate);
+    }
 
     private record DemandEntry<K>(Compiled<K> graph, GraphDemandProgram<K> program) {}
 
@@ -42,13 +144,14 @@ public final class GraphCompiler<K> {
                 break;
             }
             if (found < 0) {
+                lookup("demand_program", null);
                 demandPrograms.add(0, new DemandEntry<>(graph, null));
                 trimDemandPrograms();
                 return null;
             }
             var entry = demandPrograms.remove(found);
             demandPrograms.add(0, entry);
-            if (entry.program != null) return entry.program.forGraph(graph);
+            if (lookup("demand_program", entry.program) != null) return entry.program.forGraph(graph);
         }
         var program = GraphDemandProgram.create(graph, budget);
         if (program == null) return null;
@@ -66,6 +169,7 @@ public final class GraphCompiler<K> {
         for (var entry : demandPrograms) weight += entry.graph.recipes().size() + (entry.program == null ? 0 : entry.program.weight);
         while (demandPrograms.size() > 1 && (demandPrograms.size() > 8 || weight > 65536)) {
             var removed = demandPrograms.remove(demandPrograms.size() - 1);
+            evicted("demand_program");
             weight -= removed.graph.recipes().size() + (removed.program == null ? 0 : removed.program.weight);
         }
     }
@@ -93,7 +197,7 @@ public final class GraphCompiler<K> {
     }
 
     synchronized List<Region<K>> topology(GraphTopology<K> key) {
-        return topologies.get(key);
+        return lookup("topology", topologies.get(key));
     }
 
     synchronized void rememberTopology(GraphTopology<K> key, List<Region<K>> regions) {
@@ -105,11 +209,12 @@ public final class GraphCompiler<K> {
             var first = topologies.entrySet().iterator().next();
             topologyWeight -= first.getKey().recipes.size() + first.getValue().size();
             topologies.remove(first.getKey());
+            evicted("topology");
         }
     }
 
     synchronized GraphSourceIndex<K> sourceIndex() {
-        return sourceIndex;
+        return lookup("source_index", sourceIndex);
     }
 
     synchronized void rememberSourceIndex(GraphSourceIndex<K> index) {
@@ -128,8 +233,8 @@ public final class GraphCompiler<K> {
         CountClosure<K> known = null;
         ClosureSize limit = null;
         if (cacheable) synchronized (this) {
-            known = countClosures.get(scope);
-            limit = countClosureLimits.get(scope);
+            known = lookup("count_closure", countClosures.get(scope));
+            limit = lookup("closure_cutoff", countClosureLimits.get(scope));
         }
         if (known != null) {
             budget.compilationCheck();
@@ -179,6 +284,7 @@ public final class GraphCompiler<K> {
             while (countClosures.size() > 16 || countClosureWeight > 32_768) {
                 var removed = countClosures.remove(countClosures.keySet().iterator().next());
                 countClosureWeight -= removed.weight();
+                evicted("count_closure");
             }
             countClosureLimits.remove(scope);
         }
@@ -190,7 +296,10 @@ public final class GraphCompiler<K> {
         var previous = countClosureLimits.get(scope);
         countClosureLimits.put(scope, new ClosureSize(Math.max(keys, previous == null ? 0 : previous.keys()),
                 Math.max(recipes, previous == null ? 0 : previous.recipes())));
-        while (countClosureLimits.size() > 32) countClosureLimits.remove(countClosureLimits.keySet().iterator().next());
+        while (countClosureLimits.size() > 32) {
+            countClosureLimits.remove(countClosureLimits.keySet().iterator().next());
+            evicted("closure_cutoff");
+        }
     }
 
     record CountClosure<K>(List<GraphRecipe<K>> recipes, List<K> keys, long incidences) {
@@ -207,7 +316,7 @@ public final class GraphCompiler<K> {
     synchronized GraphCatalogIndex<K> catalogIndex() {
         catalogIndexReusable |= catalogIndexRequested;
         catalogIndexRequested = true;
-        return catalogIndex;
+        return lookup("catalog_index", catalogIndex);
     }
 
     synchronized boolean reuseCatalogIndex() {
@@ -224,10 +333,9 @@ public final class GraphCompiler<K> {
         if (!cacheableCountCatalog(0, seeds.size(), excluded.size(), external.size())) return null;
         countCatalogReusable |= countCatalogRequested;
         countCatalogRequested = true;
-        if (countCatalogs.isEmpty()) return null;
         // Preserve seed traversal order as well as membership: recipe ordering
         // affects bounded heuristics even when the feasible set is unchanged.
-        return countCatalogs.get(new CountKey<>(target, List.copyOf(seeds), excluded, external));
+        return lookup("count_catalog", countCatalogs.get(new CountKey<>(target, List.copyOf(seeds), excluded, external)));
     }
 
     synchronized boolean reuseCountCatalogs() {
@@ -249,6 +357,7 @@ public final class GraphCompiler<K> {
         while (countCatalogs.size() > 32 || countCatalogWeight > 32_768) {
             var removed = countCatalogs.remove(countCatalogs.keySet().iterator().next());
             countCatalogWeight -= removed.weight();
+            evicted("count_catalog");
         }
     }
 
@@ -257,7 +366,9 @@ public final class GraphCompiler<K> {
     }
 
     synchronized List<QuantityCertificate<K>> quantityCertificates(Set<String> excluded) {
-        return quantityCertificates.stream().filter(certificate -> certificate.excluded().equals(excluded)).toList();
+        var matches = quantityCertificates.stream().filter(certificate -> certificate.excluded().equals(excluded)).toList();
+        lookup("quantity_certificate", matches.isEmpty() ? null : matches);
+        return matches;
     }
 
     synchronized void rememberQuantityCertificate(Set<String> excluded, Map<K, BigInteger> weights) {
@@ -267,7 +378,10 @@ public final class GraphCompiler<K> {
         var entry = new QuantityCertificate<K>(Set.copyOf(excluded), Map.copyOf(weights));
         quantityCertificates.remove(entry);
         quantityCertificates.add(0, entry);
-        while (quantityCertificates.size() > 16) quantityCertificates.remove(quantityCertificates.size() - 1);
+        while (quantityCertificates.size() > 16) {
+            quantityCertificates.remove(quantityCertificates.size() - 1);
+            evicted("quantity_certificate");
+        }
     }
 
     record QuantityCertificate<K>(Set<String> excluded, Map<K, BigInteger> weights) {}
@@ -308,7 +422,7 @@ public final class GraphCompiler<K> {
     }
 
     public synchronized Compiled<K> cached(K target, Set<K> additional, Map<K, Integer> choices, Set<String> excluded) {
-        return cache.get(new CacheKey<>(target, List.copyOf(additional), choices, excluded));
+        return lookup("compiled", cache.get(new CacheKey<>(target, List.copyOf(additional), choices, excluded)));
     }
 
     public synchronized void publish(K target, Map<K, Integer> choices, Set<String> excluded, Compiled<K> result) {
@@ -326,6 +440,7 @@ public final class GraphCompiler<K> {
         while (cache.size() > 1 && (cache.size() > 128 || retainedNodes > 32_768)) {
             Compiled<K> removed = cache.remove(cache.keySet().iterator().next());
             retainedNodes -= removed.recipes().size() + removed.selected().size();
+            evicted("compiled");
         }
     }
 

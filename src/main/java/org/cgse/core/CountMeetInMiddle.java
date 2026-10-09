@@ -1,10 +1,13 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
 import java.util.*;
 
 /** Exact finite-domain matching. Every signature includes every remaining constraint. */
-final class CountMeetInMiddle implements AutoCloseable {
+final class CountMeetInMiddle implements CountContinuation {
 
     private static final int MAX_STATES = 1_048_576;
 
@@ -54,15 +57,38 @@ final class CountMeetInMiddle implements AutoCloseable {
 
     private record Entry(BigInteger[] values, int code) {}
 
+    /** Immutable stored keys; query keys borrow a prefix only for the lookup. */
+    private static final class LongSignature {
+
+        final long[] values;
+        final int hash;
+
+        LongSignature(long[] values) {
+            this.values = values;
+            hash = Arrays.hashCode(values);
+        }
+
+        @Override
+        public int hashCode() { return hash; }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof LongSignature signature && Arrays.equals(values, signature.values);
+        }
+    }
+
     private final List<ExactLinearProgram.Constraint> original;
     private final Map<Map<Integer, BigInteger>, BigInteger> rows = new LinkedHashMap<>();
     private final Map<List<BigInteger>, Integer> left = new HashMap<>();
+    private final Map<LongSignature, Integer> compactLeft = new HashMap<>();
     private final PlanningBudget budget;
     private final BigInteger[] lower, upper;
     private final List<Domain> domains = new ArrayList<>();
     private long allowance;
     private boolean costProbe;
     private BigInteger[][][] coefficients;
+    private long[][][] compactCoefficients;
+    private long[] compactGoalLow, compactGoalHigh, compactQuery;
     private BigInteger[] goalLow, goalHigh, sum, counts;
     private Enumeration enumeratingLeft, enumeratingRight;
     private long entryBytes;
@@ -70,7 +96,7 @@ final class CountMeetInMiddle implements AutoCloseable {
     private BigInteger[] queryLow, queryHigh;
     private int[] pointWidths;
     private int pointStates, pointCursor;
-    private long memory, work;
+    private long memory, work, signatures, probes;
     private int phase, rowIndex, split, leftStates, rightStates, trials, rangeCursor = -1;
     private boolean complete, infeasible, equalities;
 
@@ -175,8 +201,13 @@ final class CountMeetInMiddle implements AutoCloseable {
         else memory = bytes;
     }
 
-    boolean step() {
-        if (complete) return true;
+    public boolean step() {
+        if (complete || paused) return true;
+        budget.checkpoint();
+        if (retaining && work >= allowance) {
+            if (costProbe) return finish(false, "estimated_cost_probe_limit");
+            return paused = true;
+        }
         try {
             charge();
             switch (phase) {
@@ -217,11 +248,22 @@ final class CountMeetInMiddle implements AutoCloseable {
                         }
                         phase = 2;
                     } else {
-                        List<BigInteger> signature = List.of(enumeratingLeft.values.clone());
-                        if (!left.containsKey(signature)) {
-                            if (!budget.tryReserve(entryBytes)) return finish(false, "memory_limit");
-                            memory += entryBytes;
-                            left.put(signature, enumeratingLeft.code);
+                        if (compactCoefficients != null) {
+                            var query = new LongSignature(enumeratingLeft.compactValues);
+                            if (!compactLeft.containsKey(query)) {
+                                if (!budget.tryReserve(entryBytes)) return finish(false, "memory_limit");
+                                memory += entryBytes;
+                                compactLeft.put(new LongSignature(query.values.clone()), enumeratingLeft.code);
+                                signatures++;
+                            }
+                        } else {
+                            List<BigInteger> signature = List.of(enumeratingLeft.values.clone());
+                            if (!left.containsKey(signature)) {
+                                if (!budget.tryReserve(entryBytes)) return finish(false, "memory_limit");
+                                memory += entryBytes;
+                                left.put(signature, enumeratingLeft.code);
+                                signatures++;
+                            }
                         }
                         enumeratingLeft.consume();
                     }
@@ -231,7 +273,18 @@ final class CountMeetInMiddle implements AutoCloseable {
                     if (enumeratingRight.done) return finish(true, "exhaustive_infeasible");
                     sum = enumeratingRight.values;
                     Integer matched;
-                    if (equalities || pointWidths != null) {
+                    if (compactCoefficients != null) {
+                        int option = pointCursor;
+                        for (int d = 0; d < compactQuery.length; d++) {
+                            charge();
+                            compactQuery[d] = (pointWidths == null ? compactGoalHigh[d] :
+                                    compactGoalLow[d] + option % pointWidths[d]) - enumeratingRight.compactValues[d];
+                            if (pointWidths != null) option /= pointWidths[d];
+                        }
+                        matched = compactLeft.get(new LongSignature(compactQuery));
+                        if (pointWidths != null && matched == null && ++pointCursor < pointStates) return false;
+                        pointCursor = 0;
+                    } else if (equalities || pointWidths != null) {
                         BigInteger[] complement = new BigInteger[sum.length];
                         int option = pointCursor;
                         for (int d = 0; d < sum.length; d++) {
@@ -264,6 +317,7 @@ final class CountMeetInMiddle implements AutoCloseable {
                     } else {
                         rangeCursor = -1;
                         enumeratingRight.consume();
+                        probes++;
                     }
                 }
                 case 3 -> {
@@ -446,7 +500,10 @@ final class CountMeetInMiddle implements AutoCloseable {
         budget.note("count_match_admission", "left=" + leftStates + "; right=" + rightStates +
                 "; dimensions=" + dims + "; coefficient_bits=" + bits + "; estimated_bytes=" + estimatedBytes +
                 "; estimated_work=" + estimatedWork + "; allowance=" + allowance + "; scout=" + costProbe);
-        long bytes = 48L * dims * width + 256L * dims * domains.size();
+        // Prefix snapshots retain each depth's partial sums. Restoring the
+        // parent then needs no inverse BigInteger arithmetic on every row.
+        long prefixBytes = (domains.size() + 2L) * (32L + dims * (88L + (bits + 31L) / 8));
+        long bytes = 48L * dims * width + 256L * dims * domains.size() + prefixBytes;
         if (!budget.tryReserve(bytes)) return finish(false, "memory_limit");
         memory += bytes;
         coefficients = new BigInteger[domains.size()][][];
@@ -459,12 +516,57 @@ final class CountMeetInMiddle implements AutoCloseable {
         goalHigh = highs.toArray(BigInteger[]::new);
         equalities = Arrays.equals(goalLow, goalHigh);
         if (!equalities) preparePointRange();
+        prepareCompact();
         sum = new BigInteger[dims];
         Arrays.fill(sum, BigInteger.ZERO);
         enumeratingLeft = new Enumeration(0, split, split, domains.size());
         enumeratingRight = new Enumeration(split, domains.size(), 0, split);
         phase = 1;
         return false;
+    }
+
+    /**
+     * Prove bounds on ALL prefixes, suffixes and complement intermediates before
+     * selecting primitive arithmetic. Large coordinates keep the BigInteger
+     * path; a successful primitive match still passes the original-row check.
+     */
+    private void prepareCompact() {
+        if (!equalities && pointWidths == null) return;
+        BigInteger limit = BigInteger.valueOf(Long.MAX_VALUE / 4);
+        for (int d = 0; d < goalHigh.length; d++) {
+            if (goalHigh[d].abs().compareTo(limit) > 0 || goalLow[d].abs().compareTo(limit) > 0) return;
+            BigInteger mass = BigInteger.ZERO;
+            for (var domain : coefficients) {
+                BigInteger largest = BigInteger.ZERO;
+                for (var option : domain) {
+                    charge();
+                    largest = largest.max(option[d].abs());
+                }
+                mass = mass.add(largest);
+            }
+            // |prefix|, |suffix| <= mass; |goal - prefix - suffix| <= 3*limit.
+            if (mass.compareTo(limit) > 0) return;
+        }
+        long bytes = 128L + 48L * goalHigh.length;
+        for (var domain : coefficients) bytes += 32L + domain.length * (32L + 8L * goalHigh.length);
+        bytes += (domains.size() + 2L) * (96L + 24L * goalHigh.length);
+        if (!budget.tryReserve(bytes)) return;
+        memory += bytes;
+        compactCoefficients = new long[coefficients.length][][];
+        for (int i = 0; i < coefficients.length; i++) {
+            compactCoefficients[i] = new long[coefficients[i].length][goalHigh.length];
+            for (int option = 0; option < coefficients[i].length; option++) for (int d = 0; d < goalHigh.length; d++)
+                compactCoefficients[i][option][d] = coefficients[i][option][d].longValueExact();
+        }
+        compactGoalLow = new long[goalHigh.length];
+        compactGoalHigh = new long[goalHigh.length];
+        compactQuery = new long[goalHigh.length];
+        for (int d = 0; d < goalHigh.length; d++) {
+            compactGoalLow[d] = goalLow[d].longValueExact();
+            compactGoalHigh[d] = goalHigh[d].longValueExact();
+        }
+        entryBytes = 128L + 8L * goalHigh.length;
+        budget.note("count_match_coordinates", "certified_long; dimensions=" + goalHigh.length + "; entry_bytes=" + entryBytes);
     }
 
     /** Complete small simplex domains; no per-count Boolean expansion. */
@@ -519,7 +621,10 @@ final class CountMeetInMiddle implements AutoCloseable {
         final int[] next, chosen, strides;
         final BigInteger[][] low, high;
         final BigInteger[][] reachable;
-        final BigInteger[] values;
+        final BigInteger[][] prefixes;
+        final long[][] compactLow, compactHigh, compactPrefixes;
+        BigInteger[] values;
+        long[] compactValues;
         int depth, code;
         boolean ready, done;
 
@@ -529,7 +634,8 @@ final class CountMeetInMiddle implements AutoCloseable {
             next = new int[size + 1];
             chosen = new int[size];
             strides = new int[size];
-            values = new BigInteger[goalHigh.length];
+            prefixes = compactCoefficients == null ? new BigInteger[size + 1][goalHigh.length] : null;
+            values = prefixes == null ? new BigInteger[goalHigh.length] : prefixes[0];
             Arrays.fill(values, BigInteger.ZERO);
             low = new BigInteger[size + 1][values.length];
             high = new BigInteger[size + 1][values.length];
@@ -555,6 +661,16 @@ final class CountMeetInMiddle implements AutoCloseable {
                     for (int i = size - 1; i >= 0; i--) reachable[i][d] = extend(reachable[i + 1][d], start + i, d);
                 }
             }
+            if (compactCoefficients != null) {
+                compactLow = new long[size + 1][values.length];
+                compactHigh = new long[size + 1][values.length];
+                compactPrefixes = new long[size + 1][values.length];
+                compactValues = compactPrefixes[0];
+                for (int i = 0; i <= size; i++) for (int d = 0; d < values.length; d++) {
+                    compactLow[i][d] = low[i][d].longValueExact();
+                    compactHigh[i][d] = high[i][d].longValueExact();
+                }
+            } else compactLow = compactHigh = compactPrefixes = null;
             int stride = 1;
             for (int i = 0; i < size; i++) {
                 strides[i] = stride;
@@ -591,6 +707,7 @@ final class CountMeetInMiddle implements AutoCloseable {
 
         boolean step() {
             if (done || ready) return true;
+            if (compactCoefficients != null) return stepCompact();
             for (int quantum = 0; quantum < 16; quantum++) {
                 charge();
                 if (depth == size) {
@@ -608,30 +725,76 @@ final class CountMeetInMiddle implements AutoCloseable {
                 }
                 int option = next[depth]++;
                 chosen[depth] = option;
-                code += strides[depth] * option;
                 boolean viable = true;
-                int changed = 0;
+                BigInteger[] child = prefixes[depth + 1];
                 for (int d = 0; d < values.length; d++) {
                     charge();
-                    values[d] = values[d].add(coefficients[start + depth][option][d]);
-                    changed++;
-                    if (goalHigh[d] != null && values[d].add(low[depth + 1][d]).compareTo(goalHigh[d]) > 0 ||
-                            goalLow[d] != null && values[d].add(high[depth + 1][d]).compareTo(goalLow[d]) < 0) {
-                        viable = false;
-                        break;
-                    }
+                    child[d] = values[d].add(coefficients[start + depth][option][d]);
                     BigInteger suffix = reachable[depth + 1][d];
                     if (suffix != null) {
-                        charge();
-                        BigInteger needed = goalHigh[d].subtract(values[d]).subtract(low[depth + 1][d]);
-                        if (needed.signum() < 0 || needed.compareTo(BigInteger.valueOf(suffix.bitLength())) >= 0 || !suffix.testBit(needed.intValue())) {
+                        // For an equality, the exact suffix set already checks
+                        // both range endpoints as well as the holes. Avoid a
+                        // separate interval check and its BigInteger additions.
+                        BigInteger needed = goalHigh[d].subtract(child[d]).subtract(low[depth + 1][d]);
+                        if (needed.signum() < 0 || needed.bitLength() > 31 || !suffix.testBit(needed.intValue())) {
                             viable = false;
                             break;
                         }
+                    } else if (goalHigh[d] != null && child[d].add(low[depth + 1][d]).compareTo(goalHigh[d]) > 0 ||
+                            goalLow[d] != null && child[d].add(high[depth + 1][d]).compareTo(goalLow[d]) < 0) {
+                        viable = false;
+                        break;
                     }
                 }
-                if (!viable) undo(changed);
-                else {
+                if (viable) {
+                    code += strides[depth] * option;
+                    values = child;
+                    depth++;
+                    next[depth] = 0;
+                }
+            }
+            return false;
+        }
+
+        private boolean stepCompact() {
+            for (int quantum = 0; quantum < 16; quantum++) {
+                charge();
+                if (depth == size) {
+                    ready = true;
+                    return true;
+                }
+                if (next[depth] == domains.get(start + depth).size) {
+                    if (depth == 0) {
+                        done = true;
+                        return true;
+                    }
+                    depth--;
+                    undo();
+                    continue;
+                }
+                int option = next[depth]++;
+                chosen[depth] = option;
+                boolean viable = true;
+                long[] child = compactPrefixes[depth + 1];
+                for (int d = 0; d < child.length; d++) {
+                    charge();
+                    child[d] = compactValues[d] + compactCoefficients[start + depth][option][d];
+                    BigInteger suffix = reachable[depth + 1][d];
+                    if (suffix != null) {
+                        long needed = compactGoalHigh[d] - child[d] - compactLow[depth + 1][d];
+                        if (needed < 0 || needed > Integer.MAX_VALUE || !suffix.testBit((int) needed)) {
+                            viable = false;
+                            break;
+                        }
+                    } else if (child[d] + compactLow[depth + 1][d] > compactGoalHigh[d] ||
+                            child[d] + compactHigh[depth + 1][d] < compactGoalLow[d]) {
+                        viable = false;
+                        break;
+                    }
+                }
+                if (viable) {
+                    code += strides[depth] * option;
+                    compactValues = child;
                     depth++;
                     next[depth] = 0;
                 }
@@ -649,16 +812,10 @@ final class CountMeetInMiddle implements AutoCloseable {
         }
 
         void undo() {
-            undo(values.length);
-        }
-
-        void undo(int changed) {
-            int option = chosen[depth];
-            code -= strides[depth] * option;
-            for (int d = 0; d < changed; d++) {
-                charge();
-                values[d] = values[d].subtract(coefficients[start + depth][option][d]);
-            }
+            charge();
+            code -= strides[depth] * chosen[depth];
+            if (compactCoefficients != null) compactValues = compactPrefixes[depth];
+            else values = prefixes[depth];
         }
     }
 
@@ -698,7 +855,7 @@ final class CountMeetInMiddle implements AutoCloseable {
 
     private void charge() {
         budget.check();
-        if (++work > allowance) throw new LocalLimit();
+        if (++work > allowance && !retaining) throw new LocalLimit();
     }
 
     private boolean finish(boolean impossible, String detail) {
@@ -710,17 +867,51 @@ final class CountMeetInMiddle implements AutoCloseable {
         return true;
     }
 
-    BigInteger[] counts() {
+    public BigInteger[] counts() {
         return complete && counts != null ? counts.clone() : null;
+    }
+
+    /** Setup is paid; bounded hash probes or original-row validation are live. */
+    boolean probing() {
+        return !complete && phase >= 2 && phase <= 3 && (equalities || pointWidths != null);
+    }
+
+    /** Scheduling estimate for an admitted equality table, never a proof bound. */
+    long continuationWork() {
+        if (complete || costProbe || !equalities || phase < 1 || phase > 2) return 0;
+        // Signature generation and complement lookup both scale with the
+        // projected table dimensions. Keep one small turn for prefix overhead.
+        long estimate = 4L * ((long) leftStates + rightStates) * goalHigh.length;
+        return Math.max(0, estimate - work) + 262144;
     }
 
     boolean infeasible() {
         return complete && infeasible;
     }
 
+    private boolean retaining, paused;
+
+    CountMeetInMiddle retained() { retaining = true; return this; }
+    public boolean paused() { return paused; }
+    public long work() { return work; }
+    public long progress() {
+        return signatures + probes;
+    }
+    public boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
+        return original.equals(rows) && Arrays.equals(lower, low) && Arrays.equals(upper, high);
+    }
+    public void resume(long quantum) {
+        if (!paused || complete) throw new IllegalStateException("CountMeetInMiddle is not paused");
+        allowance = CountContinuation.deadline(work, quantum, budget);
+        paused = false;
+    }
+
     @Override
     public void close() {
+        complete = true;
+        paused = false;
         left.clear();
+        compactLeft.clear();
         rows.clear();
         budget.release(memory);
         memory = 0;

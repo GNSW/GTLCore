@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -33,6 +36,15 @@ final class GraphCatalogIndex<K> {
 
     int resourceCount() {
         return resources.size();
+    }
+
+    long estimatedBytes() {
+        long bytes = 256L + 160L * resources.size() + 64L * ports.size();
+        for (var port : ports.values()) bytes += 192L + 28L * port.inputs.length + 12L * port.outputs.length +
+                4L * port.physicalOutputs.length + 64L * port.changed.length;
+        for (int[] row : consumers) bytes += 24L + 4L * row.length;
+        for (int[] row : producers) bytes += 24L + 4L * row.length;
+        return bytes;
     }
 
     K resource(int id) {

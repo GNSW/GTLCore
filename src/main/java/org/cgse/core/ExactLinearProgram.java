@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -44,6 +47,10 @@ final class ExactLinearProgram implements AutoCloseable {
     private int[] basic, nonbasic;
     private int phase, pivotRow = -1, pivotColumn, cell;
     private ExactRational divisor;
+    private ExactRational.ProductQuotient rowFactor;
+    private int factorRow = -1;
+    private long factorMemory;
+    private boolean factorAttempted;
     private long memory, work;
     private Result result;
     private ExactRational[] point, certificate;
@@ -408,17 +415,38 @@ final class ExactLinearProgram implements AutoCloseable {
         pivotColumn = column;
         divisor = table[row][column];
         cell = 0;
+        rowFactor = null;
+        factorRow = -1;
     }
 
     private void updatePivot() {
+        if (!factorAttempted) {
+            factorAttempted = true;
+            // One reduced 2048-bit fraction, retained only by this tableau.
+            // Declining optional scratch must not change LP admission.
+            if (budget.tryReserve(768)) factorMemory = 768;
+        }
         int columns = variables + 2, cells = (rows + 2) * columns;
         for (int part = 0; part < 256 && cell < cells; part++, cell++) {
             int i = cell / columns, j = cell % columns;
             if (i == pivotRow || j == pivotColumn || table[i][pivotColumn].signum() == 0 || table[pivotRow][j].signum() == 0) continue;
             chargePivot(table[i][j], table[pivotRow][j], table[i][pivotColumn], divisor);
-            table[i][j] = table[i][j].subtract(table[pivotRow][j].multiply(table[i][pivotColumn]).divide(divisor));
+            if (factorMemory != 0 && factorRow != i) {
+                factorRow = i;
+                rowFactor = new ExactRational.ProductQuotient(table[i][pivotColumn], divisor);
+            }
+            // The factor is unchanged across this row, including 256-cell
+            // handoffs. Reordering must not bypass the old product's precision
+            // limit or reject a factor that only fits after multiplication.
+            ExactRational change = rowFactor != null ? rowFactor.apply(table[pivotRow][j]) :
+                    table[pivotRow][j].multiply(table[i][pivotColumn]).divide(divisor);
+            table[i][j] = table[i][j].subtract(change);
         }
         if (cell < cells) return;
+        // The column entries are about to be replaced; do not retain an old
+        // multiplier alongside the next pivot's optional fraction.
+        rowFactor = null;
+        factorRow = -1;
         for (int j = 0; j < columns; j++) if (j != pivotColumn) {
             charge();
             table[pivotRow][j] = table[pivotRow][j].divide(divisor);
@@ -540,6 +568,7 @@ final class ExactLinearProgram implements AutoCloseable {
             budget.proofJournal().add(CountProof.certificate("rational_relaxation", variables, constraints, List.of(), certificate, true));
         result = value;
         if (keepBasis && value == Result.OPTIMAL && Arrays.stream(basic).noneMatch(id -> id == -1)) {
+            releaseFactor();
             savedBasis = new Basis(this);
             table = null;
             memory = 0;
@@ -620,8 +649,16 @@ final class ExactLinearProgram implements AutoCloseable {
     }
 
     private void releaseTable() {
+        releaseFactor();
         table = null;
         budget.release(memory);
         memory = 0;
+    }
+
+    private void releaseFactor() {
+        rowFactor = null;
+        factorRow = -1;
+        budget.release(factorMemory);
+        factorMemory = 0;
     }
 }

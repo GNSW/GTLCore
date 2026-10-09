@@ -261,6 +261,8 @@ spotless {
 
     java {
         target 'src/main/java/**/*.java', 'src/test/java/**/*.java'
+        // Portable CGSE sources retain the formatting of their source repository.
+        targetExclude 'src/main/java/org/cgse/**/*.java'
 
         def orderFile = file("$rootDir/spotless/spotless.importorder")
         def formatFile = file("$rootDir/spotless/spotless.eclipseformat.xml")

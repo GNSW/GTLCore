@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.util.*;
@@ -450,6 +453,63 @@ final class GraphSourceRanking<K> implements AutoCloseable {
     }
 
     private record Source<K>(GraphRecipe<K> recipe, double score, boolean productive, double depth) {}
+
+    record Choice<K>(GraphRecipe<K> recipe, int ordinal) {}
+
+    /**
+     * A stock view needs one source, not a sorted copy of every provider. Keep
+     * the best inspected source even if this optional scan is interrupted. The
+     * uninspected suffix remains in the compiler and in all complete searches.
+     * No demand-dependent result is cached as an inventory-independent order.
+     */
+    Choice<K> choose(K key, boolean byCost, long needed, boolean batches, Set<String> excluded,
+                     Set<String> tried, long maximumWork) {
+        var sources = compiler.producers(key);
+        long before = budget.threadSearchWork();
+        Source<K> best = null;
+        int ordinal = 0, bestOrdinal = 0;
+        try {
+            for (var recipe : sources) {
+                rankingCheck(before, maximumWork);
+                if (excluded.contains(recipe.id())) continue;
+                int current = ordinal++;
+                if (tried.contains(recipe.id())) continue;
+                long gain = recipe.executionOutputs().getOrDefault(key, 0L) - recipe.inputs().getOrDefault(key, 0L);
+                long output = Math.max(1, gain);
+                long runs = needed / output + (needed % output == 0 ? 0 : 1);
+                double score = 0, depth = 0;
+                // A partly scored source must never displace a completed one.
+                for (var input : recipe.inputs().entrySet()) {
+                    rankingCheck(before, maximumWork);
+                    Integer d = distance(input.getKey());
+                    if (d == null || quantitative && !growing.contains(input.getKey()) && !external.contains(input.getKey()) &&
+                            stock.getOrDefault(input.getKey(), 0L) < input.getValue()) {
+                        score = depth = Double.POSITIVE_INFINITY;
+                        break;
+                    }
+                    depth += d;
+                    score += batches ? runs * (double) input.getValue() * cost(input.getKey()) :
+                            byCost ? input.getValue() * cost(input.getKey()) : d;
+                }
+                if (!batches && byCost) score /= local ? recipe.outputs().getOrDefault(key, 1L) : output;
+                var candidate = new Source<>(recipe, score, batches ? gain > 0 : local || gain > 0,
+                        !batches && local ? 0 : depth);
+                if (best == null || better(candidate, best)) {
+                    best = candidate;
+                    bestOrdinal = current;
+                }
+            }
+        } catch (RankingStopped ignored) {
+            // Retain progress instead of reverting to the first unfunded source.
+        }
+        return best == null ? null : new Choice<>(best.recipe(), bestOrdinal);
+    }
+
+    private static boolean better(Source<?> a, Source<?> b) {
+        if (a.productive() != b.productive()) return a.productive();
+        int score = Double.compare(a.score(), b.score());
+        return score < 0 || score == 0 && Double.compare(a.depth(), b.depth()) < 0;
+    }
 
     @Override
     public void close() {

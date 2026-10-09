@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -30,6 +33,9 @@ final class CountQuickSolve implements AutoCloseable {
     private boolean structureAttempted;
     private CountCongruence congruence;
     private boolean congruenceAttempted;
+    private CountLpSearch lpScout;
+    private boolean lpAttempted, lpActive;
+    private long matchingSinceLp;
     private boolean equationAttempted;
     private ExactRational[] point;
     private BigInteger[] counts;
@@ -146,6 +152,26 @@ final class CountQuickSolve implements AutoCloseable {
                 congruenceAttempted = true;
                 if (impossible) return finish(null, true);
             }
+            if (!lpAttempted) {
+                if (lpScout == null) lpScout = CountLpSearch.create(reduction, variables, budget);
+                if (lpScout != null) {
+                    if (!lpScout.step()) return false;
+                    var value = lpScout.counts();
+                    boolean impossible = lpScout.infeasible();
+                    if (!lpScout.retained()) {
+                        lpScout.close();
+                        lpScout = null;
+                    }
+                    // CountLpSearch already restores the original coordinates
+                    // of this subproblem; do not expand through reduction twice.
+                    if (value != null || impossible) {
+                        counts = value;
+                        infeasible = impossible && !trial;
+                        return complete = true;
+                    }
+                }
+                lpAttempted = true;
+            }
             if (!equationAttempted) {
                 if (diophantine == null) diophantine = new CountDiophantine(reduction.rows(), reduction.lower(), reduction.upper(), budget);
                 if (!diophantine.step()) return false;
@@ -156,7 +182,10 @@ final class CountQuickSolve implements AutoCloseable {
                 if (value != null) return finish(value, false);
             }
             if (!structureAttempted) {
-                if (structural == null) structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, matchingAllowance);
+                // A quick witness attempt has a shared local quota. Leave room
+                // for matching/Boolean search after the first structural visit.
+                if (structural == null) structural = new CountStructureSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget,
+                        Math.min(65536, matchingAllowance / 4));
                 if (!structural.step()) return false;
                 var value = structural.counts();
                 boolean impossible = structural.infeasible();
@@ -213,7 +242,35 @@ final class CountQuickSolve implements AutoCloseable {
         }
         if (phase == 3) {
             if (matching != null) {
-                if (!matching.step()) return false;
+                // Keep the small weighted LP alive alongside the finite table.
+                // Scaling can expose either structure; table enumeration must
+                // not silently discard an unfinished, reusable LP basis.
+                if (lpScout != null && (lpActive || matchingSinceLp >= 65536)) {
+                    if (!lpActive) {
+                        lpScout.resume(32768);
+                        lpActive = true;
+                        matchingSinceLp = 0;
+                    }
+                    if (!lpScout.step()) return false;
+                    var value = lpScout.counts();
+                    boolean impossible = lpScout.infeasible();
+                    if (!lpScout.retained()) {
+                        lpScout.close();
+                        lpScout = null;
+                    }
+                    lpActive = false;
+                    if (value != null || impossible) {
+                        counts = value;
+                        infeasible = impossible && !trial;
+                        return complete = true;
+                    }
+                    return false;
+                }
+                long before = budget.threadWork();
+                boolean done;
+                try { done = matching.step(); }
+                finally { matchingSinceLp += budget.threadWork() - before; }
+                if (!done) return false;
                 var value = matching.counts();
                 boolean impossible = matching.infeasible();
                 matching.close();
@@ -309,6 +366,16 @@ final class CountQuickSolve implements AutoCloseable {
         return counts;
     }
 
+    long finiteContinuationWork() {
+        long estimate = matching == null ? 0 : matching.continuationWork();
+        // LP gets one short turn per two matching turns while both remain live.
+        return lpScout == null ? estimate : estimate + estimate / 2;
+    }
+
+    boolean finiteProbing() {
+        return matching != null && matching.probing();
+    }
+
     boolean infeasible() {
         return infeasible;
     }
@@ -336,6 +403,8 @@ final class CountQuickSolve implements AutoCloseable {
         if (repair != null) repair.close();
         if (diving != null) diving.close();
         if (congruence != null) congruence.close();
+        if (lpScout != null) lpScout.close();
+        lpScout = null;
         budget.release(memory);
         memory = 0;
     }

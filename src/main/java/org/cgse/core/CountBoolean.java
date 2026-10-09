@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -9,7 +12,7 @@ import java.util.*;
  * backjump over unrelated choices. Trial fixed counts and local cutoffs never
  * become infeasibility proofs for the parent integer model.
  */
-final class CountBoolean implements AutoCloseable {
+final class CountBoolean implements CountContinuation {
 
     private record Row(int[] variables, BigInteger[] coefficients, BigInteger upper, Integer cardinality) {
 
@@ -35,11 +38,12 @@ final class CountBoolean implements AutoCloseable {
     private final BitSet queued = new BitSet();
     private final List<Integer> trail = new ArrayList<>();
     private final PlanningBudget budget;
-    private final BigInteger[] fixed;
+    private final BigInteger[] fixed, originalLower, originalUpper;
     private final int[] values, levels;
     private final BitSet[] reasons;
     private final double[] activity, polarity, positiveActivity, negativeActivity;
-    private final long allowance;
+    private long allowance;
+    private boolean retaining, paused;
     private long memory, work;
     private int rowIndex, level, decisions, conflicts, pinned;
     private boolean complete, infeasible;
@@ -71,6 +75,8 @@ final class CountBoolean implements AutoCloseable {
     CountBoolean(List<ExactLinearProgram.Constraint> constraints, BigInteger[] lower,
                  BigInteger[] upper, PlanningBudget budget) {
         original = constraints;
+        originalLower = lower.clone();
+        originalUpper = upper.clone();
         this.budget = budget;
         fixed = lower.clone();
         values = new int[lower.length];
@@ -107,10 +113,13 @@ final class CountBoolean implements AutoCloseable {
         }
     }
 
-    boolean step() {
-        if (complete) return true;
+    public boolean step() {
+        if (complete || paused) return true;
         charge();
-        if (work >= allowance) return finish("work_limit");
+        if (work >= allowance) {
+            if (retaining) return paused = true;
+            return finish("work_limit");
+        }
         if (rowIndex < original.size()) {
             var row = original.get(rowIndex++);
             var variables = new ArrayList<Integer>();
@@ -383,7 +392,7 @@ final class CountBoolean implements AutoCloseable {
         return true;
     }
 
-    BigInteger[] counts() {
+    public BigInteger[] counts() {
         return counts == null ? null : counts.clone();
     }
 
@@ -395,8 +404,23 @@ final class CountBoolean implements AutoCloseable {
         return complete && infeasible;
     }
 
+    CountBoolean retained() { retaining = true; return this; }
+    public boolean paused() { return paused; }
+    public long work() { return work; }
+    public long progress() { return conflicts; }
+    public boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
+        return original.equals(rows) && Arrays.equals(originalLower, low) && Arrays.equals(originalUpper, high);
+    }
+    public void resume(long quantum) {
+        if (!paused || complete) throw new IllegalStateException("Boolean search is not paused");
+        allowance = CountContinuation.deadline(work, quantum, budget);
+        paused = false;
+    }
+
     @Override
     public void close() {
+        complete = true;
+        paused = false;
         budget.release(memory);
         memory = 0;
     }

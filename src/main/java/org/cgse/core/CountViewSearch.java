@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -61,8 +64,7 @@ final class CountViewSearch implements AutoCloseable {
         CountLcg solver;
         CountCdcl cdcl;
         CountJump jump;
-        CountSeparator separator;
-        CountMeetInMiddle matching;
+        CountContinuation specialist;
         long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
         long publishedRoots;
         long importedBounds;
@@ -78,11 +80,11 @@ final class CountViewSearch implements AutoCloseable {
         }
 
         boolean started() {
-            return solver != null || cdcl != null || jump != null || separator != null || matching != null;
+            return solver != null || cdcl != null || jump != null || specialist != null;
         }
 
         boolean paused() {
-            return solver != null ? solver.paused() : cdcl != null ? cdcl.paused() : jump != null && jump.paused();
+            return specialist != null ? specialist.paused() : solver != null ? solver.paused() : cdcl != null ? cdcl.paused() : jump != null && jump.paused();
         }
 
         void resume(long quantum, PlanningBudget budget, CountModelViews models) {
@@ -90,10 +92,11 @@ final class CountViewSearch implements AutoCloseable {
             if (domains != null) scope = domains;
             if (domains != null && domains.version() > 0)
                 budget.note("count_view_facts", "destination=" + view.name() + "; engine=" + engine + "; imported_version=" + domains.version());
-            if (engine == Engine.SEPARATOR) {
-                separator = new CountSeparator(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MAX_QUANTUM);
+            if (specialist != null) specialist.resume(quantum);
+            else if (engine == Engine.SEPARATOR) {
+                specialist = new CountSeparator(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
             } else if (engine == Engine.MITM) {
-                matching = new CountMeetInMiddle(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MAX_QUANTUM);
+                specialist = new CountMeetInMiddle(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
             } else if (engine == Engine.PB) {
                 if (cdcl == null) cdcl = new CountCdcl(view.rows(), domains.lower(), domains.upper(), budget, quantum).retained();
                 else cdcl.resume(quantum);
@@ -136,36 +139,32 @@ final class CountViewSearch implements AutoCloseable {
             if (solver != null) solver.close();
             if (cdcl != null) cdcl.close();
             if (jump != null) jump.close();
-            if (separator != null) separator.close();
-            if (matching != null) matching.close();
+            if (specialist != null) specialist.close();
             solver = null;
             cdcl = null;
             jump = null;
-            separator = null;
-            matching = null;
+            specialist = null;
         }
 
         boolean step() {
-            if (separator != null) return separator.step();
-            if (matching != null) return matching.step();
+            if (specialist != null) return specialist.step();
             return cdcl != null ? cdcl.step() : jump != null ? jump.step() : solver.step();
         }
 
         long progress() {
-            if (separator != null || matching != null) return 0;
+            if (specialist != null) return specialist.progress();
             return cdcl != null ? cdcl.progress() : jump != null ? jump.progress() : solver.progress();
         }
 
         BigInteger[] counts() {
-            if (separator != null) return separator.counts();
-            if (matching != null) return matching.counts();
+            if (specialist != null) return specialist.counts();
             return cdcl != null ? cdcl.counts() : jump != null ? jump.counts() : solver.counts();
         }
 
         boolean infeasible() {
             // These brief scouts only propose original-coordinate candidates.
             // Their cutoff or local proof never displaces the retained engines.
-            if (separator != null || matching != null) return false;
+            if (specialist != null) return false;
             return cdcl != null ? cdcl.infeasible() : solver != null && solver.infeasible();
         }
     }
@@ -177,7 +176,11 @@ final class CountViewSearch implements AutoCloseable {
         LOCKS,
         JUMP,
         SEPARATOR,
-        MITM;
+        MITM,
+        DOMAIN,
+        DIAGRAM,
+        BOOLEAN,
+        DIOPHANTINE;
 
         boolean provesInfeasibility() {
             return this == LCG || this == PB || this == LOCKS;
@@ -193,7 +196,9 @@ final class CountViewSearch implements AutoCloseable {
         if (allowance <= 0 || infeasible) throw new IllegalStateException("Invalid view search continuation");
         counts = null;
         until = work + Math.min(allowance, budget.remainingWork() / 4);
-        for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view)) {
+        // An adopted specialist must not suppress the proving engines' first
+        // visit. Once those exist, do not rescan domains at every handoff.
+        for (var view : models.available()) if (searches.stream().noneMatch(search -> search.view == view && search.engine == Engine.LCG)) {
             boolean binary = binary(view);
             addSearch(view, Engine.LCG);
             // The weighted Boolean engine has different propagation, phase
@@ -206,6 +211,37 @@ final class CountViewSearch implements AutoCloseable {
             }
         }
         addStrideScout();
+    }
+
+    /** Transfer an already-paid frontier, only in its unchanged reduced coordinate scope. */
+    boolean retain(CountReduction reduction, CountContinuation frontier) {
+        if (!frontier.paused()) return false;
+        var view = models.reduced();
+        if (view == null) {
+            models.addReduced(reduction);
+            view = models.reduced();
+        }
+        if (view == null || !frontier.matches(view.rows(), view.lower(), view.upper())) return false;
+        Engine engine = frontier instanceof CountSeparator ? Engine.SEPARATOR :
+                frontier instanceof CountMeetInMiddle ? Engine.MITM :
+                frontier instanceof CountDomainSearch ? Engine.DOMAIN :
+                frontier instanceof CountDecisionDiagram ? Engine.DIAGRAM :
+                frontier instanceof CountDiophantine ? Engine.DIOPHANTINE :
+                frontier instanceof CountBoolean ? Engine.BOOLEAN : null;
+        if (engine == null) throw new IllegalArgumentException("Unknown count continuation");
+        for (Search search : searches) if (search.view == view && search.engine == engine) return false;
+        Search search = new Search(view, policy.add(view.shape().cost(), engine), engine);
+        search.specialist = frontier;
+        search.scope = new CountModelViews.Domains(view.lower(), view.upper(), 0);
+        search.progress = frontier.progress();
+        search.work = frontier.work();
+        search.scheduling.eligible = policy.mode() != CountPortfolioPolicy.Mode.PROOF;
+        policy.selected(search.scheduling);
+        policy.feedback(search.scheduling, frontier.work(), frontier.progress());
+        searches.add(search);
+        budget.note("count_continuation", "adopted; engine=" + engine.name().toLowerCase(Locale.ROOT) +
+                "; work=" + frontier.work() + "; same_model_and_domains");
+        return true;
     }
 
     private void addSearch(CountModelViews.View view, Engine engine) {

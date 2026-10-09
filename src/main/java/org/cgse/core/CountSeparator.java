@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -8,7 +11,7 @@ import java.util.*;
  * extendible interface assignment, not just one local choice. Complexity is
  * admitted by induced domain product; large domains never expand per unit.
  */
-final class CountSeparator implements AutoCloseable {
+final class CountSeparator implements CountContinuation {
 
     private static final class Stop extends RuntimeException {
 
@@ -41,10 +44,11 @@ final class CountSeparator implements AutoCloseable {
     private final List<CountConflict> proofSteps = new ArrayList<>();
     private int[] domains, assignment;
     private BigInteger[] counts;
-    private long memory, work, states;
-    private final long allowance;
+    private long memory, work, states, completedTuples;
+    private long allowance;
     private int cursor, maxSeparator;
     private boolean prepared, complete, infeasible;
+    private CountInterfaceSearch interfaceSearch;
 
     CountSeparator(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget) {
         this(rows, lower, upper, budget, 262144);
@@ -62,12 +66,25 @@ final class CountSeparator implements AutoCloseable {
         else memory = bytes;
     }
 
-    boolean step() {
-        if (complete) return true;
+    public boolean step() {
+        if (complete || paused) return true;
+        budget.checkpoint();
+        if (retaining && work >= allowance) return paused = true;
         try {
             charge();
+            if (interfaceSearch != null) {
+                long before = budget.threadSearchWork();
+                boolean done;
+                try { done = interfaceSearch.step(); }
+                finally { work += budget.threadSearchWork() - before; }
+                if (!done) return false;
+                if (interfaceSearch.paused()) return paused = true;
+                counts = interfaceSearch.counts();
+                interfaceSearch.close();
+                interfaceSearch = null;
+                return finish(false, counts == null ? "interface_declined" : "interface_witness");
+            }
             if (!prepared) {
-                prepared = true;
                 prepare();
                 return complete;
             }
@@ -128,6 +145,7 @@ final class CountSeparator implements AutoCloseable {
             }
             if (bucket.support[bucket.cursor] < 0) record(bucket, false);
             bucket.cursor++;
+            completedTuples++;
             return false;
         } catch (Stop stopped) {
             counts = null;
@@ -135,32 +153,64 @@ final class CountSeparator implements AutoCloseable {
         }
     }
 
+    private int preparing, preparationCursor;
+    private BitSet live;
+    private BitSet[] graph;
+    private int[] rank;
+    private final List<ExactLinearProgram.Constraint> shifted = new ArrayList<>();
+
     private void prepare() {
-        domains = new int[lower.length];
-        assignment = new int[lower.length];
-        BitSet live = new BitSet();
-        BitSet[] graph = new BitSet[lower.length];
-        for (int i = 0; i < lower.length; i++) {
-            charge();
-            graph[i] = new BitSet();
-            if (upper[i] == null) {
-                finish(false, "unbounded_domain");
+        if (preparing == 0) {
+            boolean wide = false;
+            for (int i = 0; i < lower.length; i++) {
+                charge();
+                if (upper[i] != null && upper[i].compareTo(lower[i]) < 0) {
+                    finish(true, "empty_domain");
+                    return;
+                }
+                wide |= upper[i] == null || upper[i].subtract(lower[i]).compareTo(BigInteger.valueOf(31)) > 0;
+            }
+            if (wide) {
+                interfaceSearch = new CountInterfaceSearch(original, lower, upper, budget,
+                        retaining ? Math.max(4096, allowance - work) : allowance - work);
+                if (retaining) interfaceSearch.retained();
+                prepared = true;
                 return;
             }
-            BigInteger width = upper[i].subtract(lower[i]);
-            if (width.signum() < 0) {
-                finish(true, "empty_domain");
-                return;
+            domains = new int[lower.length];
+            assignment = new int[lower.length];
+            live = new BitSet();
+            graph = new BitSet[lower.length];
+            for (int i = 0; i < lower.length; i++) {
+                charge();
+                graph[i] = new BitSet();
+                if (upper[i] == null) {
+                    finish(false, "unbounded_domain");
+                    return;
+                }
+                BigInteger width = upper[i].subtract(lower[i]);
+                if (width.signum() < 0) {
+                    finish(true, "empty_domain");
+                    return;
+                }
+                if (width.compareTo(BigInteger.valueOf(31)) > 0) {
+                    finish(false, "wide_domain");
+                    return;
+                }
+                domains[i] = width.intValueExact() + 1;
+                if (domains[i] > 1) live.set(i);
             }
-            if (width.compareTo(BigInteger.valueOf(31)) > 0) {
-                finish(false, "wide_domain");
-                return;
-            }
-            domains[i] = width.intValueExact() + 1;
-            if (domains[i] > 1) live.set(i);
+            rank = new int[lower.length];
+            Arrays.fill(rank, -1);
+            preparing = 1;
+            return;
         }
-        List<ExactLinearProgram.Constraint> shifted = new ArrayList<>();
-        for (var row : original) {
+        if (preparing == 1) {
+            if (preparationCursor == original.size()) {
+                preparing = 2;
+                return;
+            }
+            var row = original.get(preparationCursor++);
             Map<Integer, BigInteger> terms = new LinkedHashMap<>();
             BigInteger bound = row.upper();
             for (var term : row.terms().entrySet()) {
@@ -174,17 +224,16 @@ final class CountSeparator implements AutoCloseable {
                     finish(true, "fixed_infeasible");
                     return;
                 }
-                continue;
+                return;
             }
             for (int a : terms.keySet()) for (int b : terms.keySet()) {
                 charge();
                 if (a != b) graph[a].set(b);
             }
             shifted.add(new ExactLinearProgram.Constraint(terms, bound));
+            return;
         }
-        int[] rank = new int[lower.length];
-        Arrays.fill(rank, -1);
-        while (!live.isEmpty()) {
+        if (!live.isEmpty()) {
             int best = -1;
             long least = Long.MAX_VALUE;
             for (int id = live.nextSetBit(0); id >= 0; id = live.nextSetBit(id + 1)) {
@@ -226,6 +275,7 @@ final class CountSeparator implements AutoCloseable {
                     if (a != b) graph[a].set(b);
                 }
             }
+            return;
         }
         for (var row : shifted) {
             int first = row.terms().keySet().stream().mapToInt(id -> rank[id]).min().orElseThrow();
@@ -241,10 +291,15 @@ final class CountSeparator implements AutoCloseable {
                     bucket.children.stream().mapToLong(child -> child.separator.length + 1L).sum();
             predictedWork += (long) bucket.support.length * domains[bucket.variable] * perTuple;
         }
-        if (predictedWork > allowance) {
+        if (!retaining && predictedWork > allowance) {
             finish(false, "separator_work_estimate");
             return;
         }
+        prepared = true;
+        live = null;
+        graph = null;
+        rank = null;
+        shifted.clear();
         budget.note("count_separator", "admitted; variables=" + buckets.size() + "; width=" + maxSeparator + "; projected_states=" + states);
     }
 
@@ -292,10 +347,10 @@ final class CountSeparator implements AutoCloseable {
 
     private void charge() {
         budget.check();
-        if (++work > allowance) throw new Stop();
+        if (++work > allowance && !retaining) throw new Stop();
     }
 
-    BigInteger[] counts() {
+    public BigInteger[] counts() {
         return counts == null ? null : counts.clone();
     }
 
@@ -303,8 +358,28 @@ final class CountSeparator implements AutoCloseable {
         return infeasible;
     }
 
+    private boolean retaining, paused;
+
+    CountSeparator retained() { retaining = true; return this; }
+    public boolean paused() { return paused; }
+    public long work() { return work; }
+    public long progress() { return completedTuples; }
+    public boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
+        return original.equals(rows) && Arrays.equals(lower, low) && Arrays.equals(upper, high);
+    }
+    public void resume(long quantum) {
+        if (!paused || complete) throw new IllegalStateException("CountSeparator is not paused");
+        allowance = CountContinuation.deadline(work, quantum, budget);
+        if (interfaceSearch != null && interfaceSearch.paused()) interfaceSearch.resume(quantum);
+        paused = false;
+    }
+
     @Override
     public void close() {
+        complete = true;
+        paused = false;
+        if (interfaceSearch != null) interfaceSearch.close();
+        interfaceSearch = null;
         budget.release(memory);
         memory = 0;
     }

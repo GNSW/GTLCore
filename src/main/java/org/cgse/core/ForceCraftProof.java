@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -5,6 +8,11 @@ import java.util.*;
 
 /** Checks a completed witness's production obligation; failure only rejects that witness. */
 final class ForceCraftProof<K> implements AutoCloseable {
+
+    enum Outcome {
+        PROVED, NON_PRODUCTIVE, OUTPUT_SHORTFALL, MODEL_LIMIT, BATCH_SEMANTICS,
+        WORK_LIMIT, MEMORY_LIMIT, RELAXATION_INCONCLUSIVE
+    }
 
     private final PlanningBudget budget;
     private final long allowance;
@@ -17,6 +25,7 @@ final class ForceCraftProof<K> implements AutoCloseable {
     private BigInteger[] low, high;
     private long memory, work;
     private boolean complete, proved;
+    private Outcome outcome = Outcome.RELAXATION_INCONCLUSIVE;
 
     ForceCraftProof(GraphPlan<K> plan, PlanVerification<K> verified, Map<K, Long> mandatorySeeds, PlanningBudget budget) {
         this.budget = budget;
@@ -26,6 +35,7 @@ final class ForceCraftProof<K> implements AutoCloseable {
         // Returned configuration tokens are not physical production. A zero
         // gain loop cannot discharge an ordinary forced crafting request.
         if (verified.physicalProduced(plan.target()).compareTo(amount) < 0 || net.signum() <= 0) {
+            outcome = net.signum() <= 0 ? Outcome.NON_PRODUCTIVE : Outcome.OUTPUT_SHORTFALL;
             complete = true;
             return;
         }
@@ -37,11 +47,13 @@ final class ForceCraftProof<K> implements AutoCloseable {
         long terms = counts.keySet().stream().map(plan.recipes()::get).mapToLong(r -> r.inputs().size() + r.outputs().size()).sum();
         if (counts.size() > 96 || terms > 2048 || allowance < 2048 ||
                 counts.keySet().stream().map(plan.recipes()::get).anyMatch(GraphRecipe::batchSensitiveInputs)) {
+            outcome = counts.size() > 96 || terms > 2048 ? Outcome.MODEL_LIMIT : allowance < 2048 ? Outcome.WORK_LIMIT : Outcome.BATCH_SEMANTICS;
             complete = true;
             return;
         }
         long bytes = 2048L + 512L * counts.size() + 384L * terms;
         if (!budget.tryReserve(bytes)) {
+            outcome = Outcome.MEMORY_LIMIT;
             complete = true;
             return;
         }
@@ -102,6 +114,7 @@ final class ForceCraftProof<K> implements AutoCloseable {
         long before = budget.threadWork();
         try {
             if (work >= allowance) {
+                outcome = Outcome.WORK_LIMIT;
                 complete = true;
                 return true;
             }
@@ -126,6 +139,7 @@ final class ForceCraftProof<K> implements AutoCloseable {
                     for (var input : recipes.get(i).inputs().entrySet()) {
                         budget.check();
                         if (work + budget.threadWork() - before >= allowance) {
+                            outcome = Outcome.WORK_LIMIT;
                             complete = true;
                             return true;
                         }
@@ -135,6 +149,7 @@ final class ForceCraftProof<K> implements AutoCloseable {
                         for (int j = 0; j < recipes.size(); j++) if (j != i) {
                             budget.check();
                             if (work + budget.threadWork() - before >= allowance) {
+                                outcome = Outcome.WORK_LIMIT;
                                 complete = true;
                                 return true;
                             }
@@ -145,6 +160,7 @@ final class ForceCraftProof<K> implements AutoCloseable {
                         }
                         long bytes = 128L + 96L * gains.size();
                         if (!budget.tryReserve(bytes)) {
+                            outcome = Outcome.MEMORY_LIMIT;
                             complete = true;
                             return true;
                         }
@@ -170,6 +186,19 @@ final class ForceCraftProof<K> implements AutoCloseable {
 
     boolean proved() {
         return complete && proved;
+    }
+
+    Outcome outcome() {
+        if (!complete) throw new IllegalStateException("Production proof is still running");
+        return proved ? Outcome.PROVED : outcome;
+    }
+
+    CandidateFeedback feedback() {
+        return switch (outcome()) {
+            case PROVED -> CandidateFeedback.ACCEPTED;
+            case NON_PRODUCTIVE, OUTPUT_SHORTFALL -> CandidateFeedback.REJECTED;
+            default -> CandidateFeedback.INCONCLUSIVE;
+        };
     }
 
     @Override

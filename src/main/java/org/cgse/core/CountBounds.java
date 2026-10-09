@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -157,6 +160,7 @@ final class CountBounds implements AutoCloseable {
                 enqueue(r);
             }
             combinePairs(known);
+            combineSharedDemands();
             combineCapacityGroups();
             // Seed the worklist with the narrowest equations. A triangular
             // count chain can then propagate from its fixed boundary in one
@@ -207,6 +211,64 @@ final class CountBounds implements AutoCloseable {
                 append(consequence, reason);
                 if (++added == 256) return;
             }
+        }
+    }
+
+    /**
+     * Keep joint demand visible across alternative output channels. Summing
+     * rows with the same sole positive variable can expose a complete negative
+     * capacity group that none of the individual rows contains. The following
+     * capacity pass then cancels it exactly, e.g. bounding the final recipe by
+     * the total shared feedstock instead of treating each channel independently.
+     * Only nonnegative row sums are added; no source or trial count is fixed.
+     */
+    private void combineSharedDemands() {
+        if (lower.length > 512 || rows.size() > 2048 || work >= allowance / 4) return;
+        long bytes = 1024L + 96L * rows.size() + 192L * lower.length;
+        if (!budget.tryReserve(bytes)) return;
+        long started = work, limit = Math.min(16384, allowance / 8);
+        try {
+            Map<Integer, List<Integer>> groups = new LinkedHashMap<>();
+            int initial = rows.size();
+            for (int r = 0; r < initial; r++) {
+                if (work - started >= limit) return;
+                var row = rows.get(r);
+                if (row.terms().size() < 3 || row.terms().size() > 256) continue;
+                int positive = -1;
+                boolean eligible = true;
+                for (var term : row.terms().entrySet()) {
+                    charge();
+                    if (term.getValue().signum() > 0) {
+                        if (positive >= 0) { eligible = false; break; }
+                        positive = term.getKey();
+                    }
+                }
+                if (eligible && positive >= 0) groups.computeIfAbsent(positive, unused -> new ArrayList<>()).add(r);
+            }
+            Set<ExactLinearProgram.Constraint> known = new HashSet<>(rows);
+            int added = 0;
+            for (var group : groups.values()) {
+                if (work - started >= limit || work >= allowance / 4 || added == 32) break;
+                if (group.size() < 2 || group.size() > 32) continue;
+                Map<Integer, BigInteger> terms = new LinkedHashMap<>();
+                BigInteger bound = BigInteger.ZERO;
+                BitSet reason = explain ? new BitSet() : null;
+                for (int r : group) {
+                    var row = rows.get(r);
+                    bound = bound.add(row.upper());
+                    if (explain) union(reason, rowReasons.get(r));
+                    for (var term : row.terms().entrySet()) {
+                        charge();
+                        if (work - started >= limit) return;
+                        terms.merge(term.getKey(), term.getValue(), BigInteger::add);
+                    }
+                }
+                if (bound.bitLength() > 2048 || terms.values().stream().anyMatch(value -> value.bitLength() > 2048)) continue;
+                if (addConsequence(new ExactLinearProgram.Constraint(terms, bound), reason, known)) added++;
+            }
+            if (added > 0) budget.note("count_shared_demand", "joint_rows=" + added + "; exact_nonnegative_sums");
+        } finally {
+            budget.release(bytes);
         }
     }
 

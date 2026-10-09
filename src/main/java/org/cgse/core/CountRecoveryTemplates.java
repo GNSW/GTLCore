@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.util.*;
@@ -34,8 +37,26 @@ final class CountRecoveryTemplates<K> {
     private final List<Template<K>> templates = new ArrayList<>();
     private boolean requested, reusable;
     private long weight;
+    private long hits, misses, evictions;
+
+    record CacheMetrics(GraphCompiler.CacheEntry entry, List<GraphCompiler<?>> compilers) {}
+
+    synchronized CacheMetrics cacheMetrics() {
+        List<GraphCompiler<?>> compilers = new ArrayList<>();
+        for (var template : templates) {
+            compilers.add(template.completeCompiler);
+            compilers.add(template.retainedCompiler);
+        }
+        return new CacheMetrics(new GraphCompiler.CacheEntry(templates.size(), weight, 128L * weight, hits, misses, evictions), List.copyOf(compilers));
+    }
 
     synchronized Template<K> reuse(RecipeCountModel<K> model) {
+        var result = reuseChecked(model);
+        if (result == null) misses++; else hits++;
+        return result;
+    }
+
+    private Template<K> reuseChecked(RecipeCountModel<K> model) {
         reusable |= requested;
         requested = true;
         if (templates.isEmpty()) return null;
@@ -75,7 +96,10 @@ final class CountRecoveryTemplates<K> {
         var value = new Template<>(model, List.copyOf(recipes), List.copyOf(retained), bodies, goals, size);
         templates.add(0, value);
         weight += size;
-        while (templates.size() > 8 || weight > 32768) weight -= templates.remove(templates.size() - 1).weight;
+        while (templates.size() > 8 || weight > 32768) {
+            weight -= templates.remove(templates.size() - 1).weight;
+            evictions++;
+        }
         return value;
     }
 

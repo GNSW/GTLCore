@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -25,7 +28,10 @@ final class CountLpSearch implements AutoCloseable {
         this.representatives = representatives;
         this.memory = memory;
         long remaining = budget.remainingWork();
-        until = remaining - remaining / 4;
+        // This is the first visit, not ownership of the root search budget.
+        // Keep the LP basis/LCG frontier for later turns while the remaining
+        // representations and finite-domain specialists get their first visit.
+        until = Math.min(262144, remaining / 4);
     }
 
     static CountLpSearch create(CountReduction reduction, int originalVariables, PlanningBudget budget) {

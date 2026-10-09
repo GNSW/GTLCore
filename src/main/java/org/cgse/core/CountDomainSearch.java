@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -9,7 +12,7 @@ import java.util.*;
  * lower-bound face of a wide domain can yield a witness but cannot export a
  * negative conclusion or a learned clause about the unrestricted model.
  */
-final class CountDomainSearch implements AutoCloseable {
+final class CountDomainSearch implements CountContinuation {
 
     private final List<ExactLinearProgram.Constraint> original;
     private final BigInteger[] lower, upper;
@@ -22,7 +25,8 @@ final class CountDomainSearch implements AutoCloseable {
     private CountSymmetry symmetry;
     private boolean symmetryAttempted;
     private BigInteger[] counts;
-    private long memory;
+    private long memory, work;
+    private boolean retaining, paused;
     private boolean trial, complete, infeasible;
 
     CountDomainSearch(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
@@ -72,6 +76,7 @@ final class CountDomainSearch implements AutoCloseable {
             return;
         }
         memory = bytes;
+        long before = budget.threadSearchWork();
         try {
             List<ExactLinearProgram.Constraint> encoded = new ArrayList<>();
             for (int i = 0; i < lower.length; i++) for (int k = 1; k <= width[i]; k++) {
@@ -107,11 +112,17 @@ final class CountDomainSearch implements AutoCloseable {
         } catch (RuntimeException | Error failure) {
             close();
             throw failure;
-        }
+        } finally { work += budget.threadSearchWork() - before; }
     }
 
-    boolean step() {
-        if (complete) return true;
+    public boolean step() {
+        if (complete || paused) return true;
+        long before = budget.threadSearchWork();
+        try { return advance(); }
+        finally { work += budget.threadSearchWork() - before; }
+    }
+
+    private boolean advance() {
         if (symmetry != null) {
             if (!symmetry.step()) return false;
             counts = symmetry.counts();
@@ -125,6 +136,7 @@ final class CountDomainSearch implements AutoCloseable {
         }
         if (lazy != null) {
             if (!lazy.step()) return false;
+            if (retaining && lazy.paused()) return paused = true;
             counts = lazy.counts();
             infeasible = lazy.infeasible();
             memory += CountMapping.retain(learned, lazy.learnedConflicts(), budget);
@@ -134,6 +146,7 @@ final class CountDomainSearch implements AutoCloseable {
             return true;
         }
         if (!search.step()) return false;
+        if (retaining && search.paused()) return paused = true;
         var binary = search.counts();
         infeasible = search.infeasible() && !trial;
         if (binary != null) {
@@ -185,7 +198,7 @@ final class CountDomainSearch implements AutoCloseable {
         return true;
     }
 
-    BigInteger[] counts() {
+    public BigInteger[] counts() {
         return counts == null ? null : counts.clone();
     }
 
@@ -197,8 +210,29 @@ final class CountDomainSearch implements AutoCloseable {
         return List.copyOf(learned);
     }
 
+    CountDomainSearch retained() {
+        retaining = true;
+        if (search != null) search.retained();
+        return this;
+    }
+    public boolean paused() { return paused; }
+    public long work() { return work; }
+    public long progress() { return lazy != null ? lazy.progress() : search != null ? search.progress() : 0; }
+    public boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
+        return original.equals(rows) && Arrays.equals(lower, low) && Arrays.equals(upper, high);
+    }
+    public void resume(long quantum) {
+        if (!paused || complete) throw new IllegalStateException("Domain search is not paused");
+        CountContinuation.deadline(work, quantum, budget);
+        if (lazy != null) lazy.resume(quantum);
+        else search.resume(quantum);
+        paused = false;
+    }
+
     @Override
     public void close() {
+        complete = true;
+        paused = false;
         if (symmetry != null) symmetry.close();
         symmetry = null;
         if (search != null) search.close();

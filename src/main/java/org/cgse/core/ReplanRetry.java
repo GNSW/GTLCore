@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 /** Tick-based backoff for one failed suffix; events never shorten its quiet period. */

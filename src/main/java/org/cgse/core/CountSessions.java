@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.math.BigInteger;
@@ -10,8 +13,21 @@ final class CountSessions {
                          List<CountConflict> conflicts, CountProof.Certificate proof, long terms) {}
 
     private final Deque<Entry> entries = new ArrayDeque<>();
+    private long hits, misses, evictions;
+
+    synchronized GraphCompiler.CacheEntry cacheMetrics() {
+        long weight = entries.stream().mapToLong(e -> e.terms + e.recipes.size() +
+                e.conflicts.stream().mapToLong(c -> c.assumptions().stream().mapToLong(r -> 1L + r.terms().size()).sum()).sum()).sum();
+        return new GraphCompiler.CacheEntry(entries.size(), weight, 512L * weight, hits, misses, evictions);
+    }
 
     synchronized <K> List<CountConflict> reuse(RecipeCountModel<K> model, PlanningBudget budget) {
+        var result = reuseChecked(model, budget);
+        if (result.isEmpty()) misses++; else hits++;
+        return result;
+    }
+
+    private <K> List<CountConflict> reuseChecked(RecipeCountModel<K> model, PlanningBudget budget) {
         if (entries.isEmpty() || model.recipes.size() > 128) return List.of();
         budget.charge(model.recipes.size());
         var ids = model.recipes.stream().map(GraphRecipe::id).toList();
@@ -95,7 +111,10 @@ final class CountSessions {
         var entry = new Entry(model.recipes.stream().map(GraphRecipe::id).toList(), List.copyOf(model.constraints), List.copyOf(accepted), proof, terms);
         entries.removeIf(old -> old.recipes.equals(entry.recipes) && old.assumptions.equals(entry.assumptions));
         entries.addFirst(entry);
-        while (entries.size() > 8 || entries.stream().mapToLong(Entry::terms).sum() > 8192) entries.removeLast();
+        while (entries.size() > 8 || entries.stream().mapToLong(Entry::terms).sum() > 8192) {
+            entries.removeLast();
+            evictions++;
+        }
     }
 
     private static void chargeCopy(CountConflict conflict, PlanningBudget budget) {

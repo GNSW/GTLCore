@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autumn
+// SPDX-License-Identifier: MPL-2.0
+
 package org.cgse.core;
 
 import java.util.ArrayList;
@@ -16,6 +19,7 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
     private GraphSourceRanking<K> localRanking;
     private GraphSourceRanking<K> quantitativeRanking;
     private GraphPlan<K> result;
+    private int proposalView = -1;
     private final Family original = new Family(false), quantitative = new Family(true);
     private Family selected = original;
     private long work, until;
@@ -30,7 +34,7 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
                             Set<K> external, Map<K, Long> seeds, Set<String> excluded, boolean preserve,
                             boolean force, CatalystPolicy policy, PlanningBudget budget, long started) {
         this.budget = budget;
-        neighborhood = new GraphSupportNeighborhood<>(target, amount, stock, external, seeds, preserve, force, budget, started);
+        neighborhood = new GraphSupportNeighborhood<>(compiler, target, amount, stock, external, seeds, excluded, preserve, force, budget, started);
         allowance = Math.min(4_194_304, budget.remainingWork() / 4);
         continuationAllowance = Math.min(8_388_608, budget.remainingWork() / 2);
         until = allowance;
@@ -55,14 +59,18 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
     }
 
     boolean step() {
-        if (complete || paused) return true;
+        budget.checkpoint();
+        if (complete || paused || result != null) return true;
         if (jointActive) {
             long before = budget.threadSearchWork();
             try {
                 if (!neighborhood.step()) return false;
                 jointActive = false;
                 result = neighborhood.result();
-                if (result != null) return complete = true;
+                if (result != null) {
+                    proposalView = -1;
+                    return true;
+                }
             } finally {
                 work += budget.threadSearchWork() - before;
             }
@@ -114,10 +122,13 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
             }
             if (finished) {
                 result = views.get(active).result();
+                if (result != null) {
+                    proposalView = active;
+                    return true;
+                }
                 done.set(active);
                 selected.live--;
                 views.get(active).close();
-                if (result != null) return complete = true;
             }
         } finally {
             long used = budget.threadSearchWork() - before;
@@ -132,25 +143,95 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
                 until = until > Long.MAX_VALUE - used ? Long.MAX_VALUE : until + used;
             }
         }
-        // Newly admitted source heuristics share one exploration allowance.
-        // Their cheap repair estimates must not displace the continuation of
-        // an established view. Credit grows with actual original-view work;
-        // once those views finish, the new family can use the entire remainder.
+        // Newly admitted source heuristics share an exploration allowance.
+        // Observed refinement may earn additional turns, bounded by charged
+        // work so an established continuation keeps running. Once the original
+        // views finish, the new family can use the entire remainder.
         if (done.get(active) || selected.turn >= 32_768) {
             selected.next();
             if (original.live == 0 && quantitative.live == 0) {
                 viewsComplete = true;
                 return false;
             }
-            selected = quantitative.live > 0 && (original.live == 0 || quantitative.work < original.work / 8) ?
+            selected = quantitative.live > 0 && (original.live == 0 || quantitative.work < original.work / 8 || quantitativePromising()) ?
                     quantitative : original;
             return false;
         }
         return false;
     }
 
+    /**
+     * Exploration has a guaranteed small share, but a productive new family
+     * must not stay confined to it while older views expand increasingly costly
+     * branches. Compare observed repair costs after refinement, and stop granting
+     * extra turns once charged work catches up with the still-live original
+     * family. An atomic step may overshoot; the shared hard budget still applies.
+     * These estimates select a turn; they cannot discard a source or prove that
+     * the lower-cost proposal is executable.
+     */
+    private boolean quantitativePromising() {
+        if (quantitative.work >= original.work) return false;
+        double originalCost = Double.POSITIVE_INFINITY, quantitativeCost = Double.POSITIVE_INFINITY;
+        for (int i = 0; i < views.size(); i++) if (!done.get(i) && views.get(i).refined()) {
+            var view = views.get(i);
+            if (view.quantitative()) quantitativeCost = Math.min(quantitativeCost, view.estimatedRepairCost());
+            else originalCost = Math.min(originalCost, view.estimatedRepairCost());
+        }
+        return quantitativeCost < originalCost;
+    }
+
     GraphPlan<K> result() {
         return result;
+    }
+
+    boolean supportProposal() {
+        return result != null && proposalView < 0;
+    }
+
+    int proposalView() {
+        if (result == null || complete) throw new IllegalStateException("No candidate awaiting validation");
+        return proposalView;
+    }
+
+    /** Work is already charged to the request; attribute it to the proposing frontier too. */
+    void validationWork(int view, long used) {
+        if (used < 0) throw new IllegalArgumentException("Negative validation work");
+        if (complete) return;
+        work = add(work, used);
+        if (view >= 0) {
+            var source = views.get(view);
+            Family family = source.quantitative() ? quantitative : original;
+            family.work = add(family.work, used);
+            // Feedback can already have rotated the cursor. Never charge its
+            // successor's turn for the previous witness's final validation.
+            if (result != null && proposalView == view) family.turn = add(family.turn, used);
+            source.validationWork(used);
+            if (family == quantitative) until = add(until, used);
+        }
+    }
+
+    private static long add(long a, long b) {
+        return a > Long.MAX_VALUE - b ? Long.MAX_VALUE : a + b;
+    }
+
+    void feedback(CandidateFeedback feedback) {
+        if (result == null || complete) throw new IllegalStateException("No portfolio candidate awaiting validation");
+        budget.checkpoint();
+        budget.note("stock_view", "validation=" + feedback + "; view=" + proposalView + "; work=" + work);
+        if (feedback == CandidateFeedback.ACCEPTED) {
+            close();
+            return;
+        }
+        if (proposalView >= 0) {
+            views.get(proposalView).feedback(feedback);
+            // The rejected view retains its repair state; its siblings also
+            // retain their turns. A proposal is not portfolio completion.
+            selected.next();
+            selected = quantitative.live > 0 && (original.live == 0 || quantitative.work < original.work / 8) ?
+                    quantitative : original;
+        } else neighborhood.rejectCandidate();
+        result = null;
+        proposalView = -1;
     }
 
     boolean compilationActive() {
@@ -239,6 +320,8 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
 
     @Override
     public void close() {
+        complete = true;
+        paused = false;
         for (var view : views) view.close();
         if (ranking != null) ranking.close();
         ranking = null;

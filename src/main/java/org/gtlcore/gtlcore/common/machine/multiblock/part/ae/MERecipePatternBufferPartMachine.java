@@ -14,6 +14,7 @@ import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternFilter.Descrip
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternFilter.Rule;
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternFilter.Target;
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternHelper;
+import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternHelper.InputSlot;
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternHelper.RecipePattern;
 
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
@@ -92,6 +93,7 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
     private final List<Rule> whitelistRules = new ArrayList<>();
     private final Set<String> ruleAllowed = new HashSet<>();
     private final Map<String, AEKey> primaryOverrides = new HashMap<>();
+    private final Map<String, Map<String, AEKey>> inputOverrides = new HashMap<>();
     @Getter
     private long configurationRevision;
     @Persisted
@@ -109,11 +111,12 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
     private TickableSubscription modeSubscription;
     private int skippedRecipes;
     private int unrepresentableChancedPrimaryRecipes;
+    private int unrepresentableChancedInputRecipes;
 
-    public record RecipeStatistics(int published, int blacklisted, int ruleFiltered, int whitelistFiltered, int chancedPrimary, int skipped) {
+    public record RecipeStatistics(int published, int blacklisted, int ruleFiltered, int whitelistFiltered, int chancedPrimary, int chancedInput, int skipped) {
 
         public int blocked() {
-            return blacklisted + ruleFiltered + whitelistFiltered + chancedPrimary;
+            return blacklisted + ruleFiltered + whitelistFiltered + chancedPrimary + chancedInput;
         }
     }
 
@@ -169,9 +172,11 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         List<RecipePattern> expanded = new ObjectArrayList<>();
         int skipped = 0;
         int chancedPrimary = 0;
+        int chancedInput = 0;
         for (GTRecipe recipe : MERecipePatternHelper.getRecipes(manager, types)) {
             RecipePattern pattern = MERecipePatternHelper.createPattern(recipe, getLevel());
             if (pattern != null) expanded.add(pattern);
+            else if (MERecipePatternHelper.hasChancedInput(recipe)) chancedInput++;
             else if (MERecipePatternHelper.hasChancedPrimaryOutput(recipe)) chancedPrimary++;
             else skipped++;
         }
@@ -202,6 +207,7 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         reloadGeneration = generation;
         skippedRecipes = skipped;
         unrepresentableChancedPrimaryRecipes = chancedPrimary;
+        unrepresentableChancedInputRecipes = chancedInput;
         // A freshly loaded part may not have rejoined its controller yet. Keep saved jobs until its mode is known.
         if (types.isEmpty() && availablePatterns.isEmpty() && !pendingSlotData.isEmpty() && saved.isEmpty()) {
             needPatternSync = true;
@@ -231,7 +237,10 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
             if (getRecipeStatus(recipePattern.id()) != 0) continue;
             ItemStack complete = preview.getDefinition().toStack();
             IPatternDetails processed = realPatternHelper.processPatternWithCircuit(complete, circuit -> {}, getLevel(), keepByProduct);
-            if (processed == null) continue;
+            if (processed == null) {
+                invalidPatterns.add(recipePattern.id());
+                continue;
+            }
             ItemStack encoded = processed.getDefinition().toStack();
             // MEBufferPatternHelper rebuilds the ordinary AE2 IO; retain the generated recipe's unique binding.
             encoded.getOrCreateTag().putString("gtlcoreRecipe", complete.getOrCreateTag().getString("gtlcoreRecipe"));
@@ -240,6 +249,8 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
             if (pattern != null) {
                 availablePatterns.add(pattern);
                 patternToSlot.put(pattern, index);
+            } else {
+                invalidPatterns.add(recipePattern.id());
             }
         }
         needPatternSync = true;
@@ -304,17 +315,19 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         int ruleFiltered = 0;
         int whitelistFiltered = 0;
         int chancedPrimary = 0;
+        int chancedInput = 0;
         for (RecipePattern pattern : recipePatterns) {
             switch (getRecipeStatus(pattern.id())) {
                 case 1 -> blacklisted++;
                 case 2 -> ruleFiltered++;
                 case 3 -> chancedPrimary++;
                 case 5 -> whitelistFiltered++;
+                case 6 -> chancedInput++;
             }
         }
-        int skipped = skippedRecipes + recipePatterns.size() - availablePatterns.size() - blacklisted - ruleFiltered - whitelistFiltered - chancedPrimary;
+        int skipped = skippedRecipes + recipePatterns.size() - availablePatterns.size() - blacklisted - ruleFiltered - whitelistFiltered - chancedPrimary - chancedInput;
         return new RecipeStatistics(availablePatterns.size(), blacklisted, ruleFiltered, whitelistFiltered,
-                chancedPrimary + unrepresentableChancedPrimaryRecipes, skipped);
+                chancedPrimary + unrepresentableChancedPrimaryRecipes, chancedInput + unrepresentableChancedInputRecipes, skipped);
     }
 
     public List<RecipePattern> searchRecipes(String query, Set<String> localizedMaterials) {
@@ -350,7 +363,8 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
     }
 
     /**
-     * 0 = published, 1 = blacklisted, 2 = blacklist rule, 3 = chanced primary, 4 = AE2 limits, 5 = outside whitelist.
+     * 0 = published, 1 = blacklisted, 2 = blacklist rule, 3 = chanced primary, 4 = AE2 limits, 5 = outside whitelist,
+     * 6 = chanced input.
      */
     public int getRecipeStatus(String id) {
         if (blacklist.contains(id)) return 1;
@@ -358,6 +372,8 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         // Blacklist entries and rules always win, even when the same recipe matches the whitelist.
         if (isWhitelistActive() && !whitelist.contains(id) && !ruleAllowed.contains(id)) return 5;
         RecipePattern pattern = patternById.get(id);
+        // Neither a whitelist entry nor a primary-output override can enable probabilistic consumption.
+        if (pattern != null && pattern.chancedInput()) return 6;
         if (pattern == null || getPrimaryOutput(pattern) == null) return 3;
         return invalidPatterns.contains(id) ? 4 : 0;
     }
@@ -376,15 +392,21 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         IPatternDetails original = recipePattern.pattern();
         AEKey primary = getPrimaryOutput(recipePattern);
         List<AEItemKey> virtualInputs = virtualInputKeys.getOrDefault(recipePattern.id(), List.of());
-        if (virtualInputs.isEmpty() && (primary == null || original.getPrimaryOutput().what().equals(primary))) return original;
+        if (!inputOverrides.containsKey(recipePattern.id()) && virtualInputs.isEmpty() &&
+                (primary == null || original.getPrimaryOutput().what().equals(primary)))
+            return original;
         if (!(original instanceof AEProcessingPattern processing)) return original;
         List<GenericStack> outputs = new ArrayList<>(Arrays.stream(processing.getSparseOutputs()).filter(Objects::nonNull).toList());
         if (primary != null) outputs.sort(Comparator.comparing(stack -> !stack.what().equals(primary)));
         List<GenericStack> inputs = new ArrayList<>();
         // One token grants unlimited matching supply for its non-consumed payload, independently of recipe quantity.
         for (AEItemKey token : virtualInputs) inputs.add(new GenericStack(token, 1));
-        inputs.addAll(Arrays.stream(processing.getSparseInputs()).filter(Objects::nonNull).toList());
         try {
+            Map<AEKey, Long> configuredInputs = new LinkedHashMap<>();
+            for (InputSlot slot : recipePattern.inputSlots()) {
+                configuredInputs.merge(getInputChoice(recipePattern, slot), slot.amount(), Math::addExact);
+            }
+            configuredInputs.forEach((key, amount) -> inputs.add(new GenericStack(key, amount)));
             ItemStack encoded = PatternDetailsHelper.encodeProcessingPattern(inputs.toArray(GenericStack[]::new), outputs.toArray(GenericStack[]::new));
             encoded.getOrCreateTag().putString("gtlcoreRecipe", recipePattern.id());
             encoded.getOrCreateTag().putInt("gtlcoreRecipeCircuit", recipePattern.circuit());
@@ -392,6 +414,39 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
         } catch (IllegalArgumentException | ArithmeticException ignored) {
             return null;
         }
+    }
+
+    public @Nullable InputSlot getInputSlot(RecipePattern pattern, String slotId) {
+        return pattern.inputSlots().stream().filter(slot -> slot.id().equals(slotId)).findFirst().orElse(null);
+    }
+
+    public AEKey getInputChoice(RecipePattern pattern, InputSlot slot) {
+        AEKey selected = inputOverrides.getOrDefault(pattern.id(), Map.of()).get(slot.id());
+        return selected != null && slot.alternatives().contains(selected) ? selected : slot.defaultKey();
+    }
+
+    public List<AEItemKey> getVirtualInputKeys(RecipePattern pattern) {
+        return virtualInputKeys.getOrDefault(pattern.id(), List.of());
+    }
+
+    public void setInputChoice(String recipeId, String slotId, @Nullable AEKey choice) {
+        RecipePattern pattern = patternById.get(recipeId);
+        if (isRemote() || pattern == null) return;
+        InputSlot slot = getInputSlot(pattern, slotId);
+        if (slot == null || (choice != null && !slot.alternatives().contains(choice))) return;
+        Map<String, AEKey> choices = inputOverrides.get(recipeId);
+        boolean changed;
+        if (choice == null || choice.equals(slot.defaultKey())) {
+            changed = choices != null && choices.remove(slotId) != null;
+            if (choices != null && choices.isEmpty()) inputOverrides.remove(recipeId);
+        } else {
+            if (choices == null) {
+                choices = new HashMap<>();
+                inputOverrides.put(recipeId, choices);
+            }
+            changed = !choice.equals(choices.put(slotId, choice));
+        }
+        if (changed) configurationChanged();
     }
 
     public void setRecipeBlacklisted(String id, boolean excluded) {
@@ -657,6 +712,15 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
             primaries.add(data);
         });
         tag.put("recipePrimaryOutputs", primaries);
+        ListTag inputs = new ListTag();
+        inputOverrides.forEach((recipeId, choices) -> choices.forEach((slotId, choice) -> {
+            CompoundTag data = new CompoundTag();
+            data.putString("recipe", recipeId);
+            data.putString("input", slotId);
+            data.put("material", choice.toTagGeneric());
+            inputs.add(data);
+        }));
+        tag.put("recipeInputChoices", inputs);
     }
 
     private static ListTag saveRecipeList(Set<String> ids) {
@@ -691,6 +755,14 @@ public class MERecipePatternBufferPartMachine extends MEPatternBufferPartMachine
             CompoundTag data = primaries.getCompound(index);
             AEKey primary = AEKey.fromTagGeneric(data.getCompound("output"));
             if (primary != null) primaryOverrides.put(data.getString("recipe"), primary);
+        }
+        inputOverrides.clear();
+        ListTag inputs = tag.getList("recipeInputChoices", Tag.TAG_COMPOUND);
+        for (int index = 0; index < inputs.size(); index++) {
+            CompoundTag data = inputs.getCompound(index);
+            AEKey choice = AEKey.fromTagGeneric(data.getCompound("material"));
+            if (choice != null) inputOverrides.computeIfAbsent(data.getString("recipe"), ignored -> new HashMap<>())
+                    .put(data.getString("input"), choice);
         }
         reloadGeneration = -1;
     }

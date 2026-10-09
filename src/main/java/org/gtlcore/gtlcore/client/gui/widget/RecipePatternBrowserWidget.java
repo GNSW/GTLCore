@@ -6,6 +6,7 @@ import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MERecipePatternBuff
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternFilter;
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternFilter.Rule;
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternFilter.Target;
+import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternHelper.InputSlot;
 import org.gtlcore.gtlcore.integration.ae2.handler.MERecipePatternHelper.RecipePattern;
 
 import com.lowdragmc.lowdraglib.gui.texture.*;
@@ -22,6 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.*;
 import com.google.common.primitives.Ints;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
@@ -53,6 +55,12 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     private static final int RULE_PAGE = 28;
     private static final int WHITELIST = 29;
     private static final int FILTER_MODE = 30;
+    private static final int SEARCH_VISIBILITY = 31;
+    private static final int INPUT_OPTIONS = 32;
+    private static final int INPUT_CHOICE = 33;
+    private static final int INPUT_OPTIONS_PAGE = 34;
+    private static final int CLOSE_INPUT_OPTIONS = 35;
+    private static final int INPUT_OPTION_PAGE_SIZE = 18;
 
     public enum Page {
         OVERVIEW,
@@ -65,9 +73,27 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         WHITELIST
     }
 
+    private enum SearchVisibility {
+
+        ALL,
+        PUBLISHED,
+        BLOCKED;
+
+        private boolean matches(int status) {
+            return switch (this) {
+                case ALL -> true;
+                case PUBLISHED -> status == 0;
+                case BLOCKED -> status == 1 || status == 2 || status == 3 || status == 5 || status == 6;
+            };
+        }
+    }
+
+    private record InputView(String id, GenericStack stack, int alternatives, boolean customised) {}
+
     private final MERecipePatternBufferPartMachine machine;
     private final Page page;
     private FilterMode filterMode = FilterMode.BLACKLIST;
+    private SearchVisibility searchVisibility = SearchVisibility.ALL;
     private final WidgetGroup recipeRows = new WidgetGroup(8, 48, 136, PAGE_SIZE * 28).setClientSideWidget();
     private final WidgetGroup inputSlots = new WidgetGroup(160, 90, 162, 18).setClientSideWidget();
     private final WidgetGroup outputSlots = new WidgetGroup(160, 140, 162, 18).setClientSideWidget();
@@ -78,6 +104,13 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     private List<RecipePattern> searchResults = List.of();
     private String selectedId = "";
     private List<GenericStack> selectedInputs = List.of();
+    private List<InputView> selectedInputViews = List.of();
+    private final WidgetGroup inputChooser = new WidgetGroup(156, 76, 170, 94).setClientSideWidget();
+    private final WidgetGroup inputOptionSlots = new WidgetGroup(4, 22, 162, 36).setClientSideWidget();
+    private String selectedInputId = "";
+    private int inputOptionPage, inputOptionCount;
+    private AEKey inputDefault, inputChoice;
+    private List<GenericStack> inputOptions = List.of();
     private List<GenericStack> selectedOutputs = List.of();
     private AEKey selectedDisplay;
     private AEKey selectedPrimary;
@@ -87,6 +120,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     private int searchPage, recipeListPage, rulePage, inputPage, outputPage;
     private int searchCount, recipeListCount, ruleCount, publishedCount, skippedCount;
     private int blockedCount, chancedPrimaryCount, ruleFilteredCount, activeBlacklistCount;
+    private int chancedInputCount;
     private int whitelistFilteredCount;
     private Target ruleTarget = Target.RECIPE_ID;
     private String ruleExpression = "";
@@ -127,7 +161,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
 
     private WidgetGroup createSearchPage() {
         WidgetGroup view = new WidgetGroup(0, 0, 332, 226).setClientSideWidget();
-        TextFieldWidget field = new TextFieldWidget(4, 4, 270, 18, () -> search, value -> search = value) {
+        TextFieldWidget field = new TextFieldWidget(4, 4, 210, 18, () -> search, value -> search = value) {
 
             @Override
             public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
@@ -142,7 +176,10 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         field.setHoverTooltips(Component.translatable(PREFIX + "search_hint"));
         enableMaterialDrop(field, value -> search = value);
         view.addWidget(field);
-        view.addWidget(button(280, 4, 48, 18, () -> text("search"), this::submitSearch));
+        view.addWidget(button(220, 4, 48, 18, () -> text("search"), this::submitSearch));
+        view.addWidget(button(272, 4, 56, 18, () -> text("visibility." + searchVisibility.name().toLowerCase(Locale.ROOT)),
+                () -> send(SEARCH_VISIBILITY, buffer -> buffer.writeEnum(SearchVisibility.values()[(searchVisibility.ordinal() + 1) % SearchVisibility.values().length])))
+                .setHoverTooltips(Component.translatable(PREFIX + "visibility_hint")));
         view.addWidget(panel(4, 28, 144, 178));
         view.addWidget(panel(154, 28, 174, 178));
         view.addWidget(line(8, 31, 136, 12, () -> text("results_label", searchCount), MUTED_COLOR));
@@ -152,7 +189,8 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         view.addWidget(line(160, 45, 162, 12, () -> selectedId, MUTED_COLOR));
         view.addWidget(line(160, 59, 162, 12, () -> selectedId.isEmpty() ? "" : text("status." + selectedStatus), MUTED_COLOR));
         view.addWidget(new ImageWidget(160, 73, 162, 1, new ColorRectTexture(PANEL_BORDER)));
-        view.addWidget(line(160, 76, 162, 12, () -> text("inputs"), TEXT_COLOR));
+        view.addWidget(line(160, 76, 162, 12, () -> text("inputs"), TEXT_COLOR)
+                .setHoverTooltips(Component.translatable(PREFIX + "input_choice_hint")));
         view.addWidget(line(160, 126, 162, 12, () -> text("outputs_short"), TEXT_COLOR)
                 .setHoverTooltips(Component.translatable(PREFIX + "primary_hint")));
         view.addWidget(inputSlots);
@@ -169,7 +207,34 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
             if (!selectedId.isEmpty()) sendPrimary(selectedId, null);
         }).setHoverTooltips(Component.translatable(PREFIX + "primary_hint")));
         addFooter(view);
+        createInputChooser();
+        view.addWidget(inputChooser);
         return view;
+    }
+
+    private void createInputChooser() {
+        inputChooser.addWidget(new ButtonWidget(0, 0, 170, 94, RecipePatternUiTextures.BACKGROUND, click -> {}));
+        inputChooser.addWidget(line(4, 4, 138, 14, () -> text("choose_input"), TEXT_COLOR));
+        inputChooser.addWidget(button(148, 4, 16, 12, () -> "×", () -> send(CLOSE_INPUT_OPTIONS, buffer -> {})));
+        inputChooser.addWidget(inputOptionSlots);
+        inputChooser.addWidget(line(4, 61, 162, 12, () -> inputChoice == null ? "" : inputChoice.getDisplayName().getString(), MUTED_COLOR));
+        inputChooser.addWidget(button(4, 76, 82, 12, () -> text("reset_input"), () -> sendInputChoice(selectedId, selectedInputId, null)));
+        addPager(inputChooser, 92, 76, 72, () -> inputOptionPage, () -> pages(inputOptionCount, INPUT_OPTION_PAGE_SIZE),
+                delta -> send(INPUT_OPTIONS_PAGE, buffer -> {
+                    buffer.writeUtf(selectedId, 1024);
+                    buffer.writeUtf(selectedInputId, 64);
+                    buffer.writeInt(delta);
+                }));
+        inputChooser.setVisible(false).setActive(false);
+    }
+
+    private void sendInputChoice(String recipeId, String slotId, @Nullable AEKey choice) {
+        send(INPUT_CHOICE, buffer -> {
+            buffer.writeUtf(recipeId, 1024);
+            buffer.writeUtf(slotId, 64);
+            buffer.writeBoolean(choice != null);
+            if (choice != null) GenericStack.writeBuffer(new GenericStack(choice, 1), buffer);
+        });
     }
 
     private WidgetGroup createRecipeListPage() {
@@ -216,7 +281,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     }
 
     private String blockedCounts() {
-        return text("blocked_counts", chancedPrimaryCount, activeBlacklistCount, ruleFilteredCount, whitelistFilteredCount);
+        return text("blocked_counts", chancedPrimaryCount, chancedInputCount, activeBlacklistCount, ruleFilteredCount, whitelistFilteredCount);
     }
 
     private List<String> getRecipeList() {
@@ -370,12 +435,51 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
                 localizedMaterials = ids;
                 searchPage = 0;
                 selectedId = "";
+                selectedInputId = "";
+            }
+            case SEARCH_VISIBILITY -> {
+                SearchVisibility visibility = buffer.readEnum(SearchVisibility.class);
+                if (page != Page.SEARCH) return;
+                searchVisibility = visibility;
+                searchPage = 0;
+                selectedId = "";
+                selectedInputId = "";
             }
             case SEARCH_PAGE -> searchPage = movePage(searchPage, buffer.readInt(), searchCount, PAGE_SIZE);
             case SELECT -> {
                 String recipeId = buffer.readUtf(1024);
                 if (machine.getRecipePattern(recipeId) != null) selectedId = recipeId;
+                selectedInputId = "";
             }
+            case INPUT_OPTIONS -> {
+                String recipeId = buffer.readUtf(1024);
+                String slotId = buffer.readUtf(64);
+                RecipePattern pattern = machine.getRecipePattern(recipeId);
+                if (page != Page.SEARCH || !recipeId.equals(selectedId) || pattern == null) return;
+                InputSlot slot = machine.getInputSlot(pattern, slotId);
+                if (slot == null || slot.alternatives().size() <= 1) return;
+                selectedInputId = slotId;
+                inputOptionPage = 0;
+            }
+            case INPUT_CHOICE -> {
+                String recipeId = buffer.readUtf(1024);
+                String slotId = buffer.readUtf(64);
+                GenericStack choice = buffer.readBoolean() ? GenericStack.readBuffer(buffer) : null;
+                if (page != Page.SEARCH || !recipeId.equals(selectedId)) return;
+                machine.setInputChoice(recipeId, slotId, choice == null ? null : choice.what());
+                selectedInputId = "";
+            }
+            case INPUT_OPTIONS_PAGE -> {
+                String recipeId = buffer.readUtf(1024);
+                String slotId = buffer.readUtf(64);
+                int delta = buffer.readInt();
+                RecipePattern pattern = machine.getRecipePattern(recipeId);
+                if (page != Page.SEARCH || !recipeId.equals(selectedId) || !slotId.equals(selectedInputId) || pattern == null) return;
+                InputSlot slot = machine.getInputSlot(pattern, slotId);
+                if (slot == null) return;
+                inputOptionPage = movePage(inputOptionPage, delta, slot.alternatives().size(), INPUT_OPTION_PAGE_SIZE);
+            }
+            case CLOSE_INPUT_OPTIONS -> selectedInputId = "";
             case BLACKLIST -> machine.setRecipeBlacklisted(buffer.readUtf(1024), buffer.readBoolean());
             case WHITELIST -> machine.setRecipeWhitelisted(buffer.readUtf(1024), buffer.readBoolean());
             case PRIMARY -> {
@@ -454,10 +558,14 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
 
     private void refreshView() {
         if (page == Page.SEARCH) {
-            searchResults = machine.searchRecipes(search, localizedMaterials);
+            searchResults = machine.searchRecipes(search, localizedMaterials).stream()
+                    .filter(pattern -> searchVisibility.matches(machine.getRecipeStatus(pattern.id()))).toList();
             searchCount = searchResults.size();
             searchPage = clampPage(searchPage, searchCount, PAGE_SIZE);
-            if (machine.getRecipePattern(selectedId) == null) selectedId = searchResults.isEmpty() ? "" : searchResults.get(searchPage * PAGE_SIZE).id();
+            if (searchResults.stream().noneMatch(pattern -> pattern.id().equals(selectedId))) {
+                selectedId = searchResults.isEmpty() ? "" : searchResults.get(searchPage * PAGE_SIZE).id();
+                selectedInputId = "";
+            }
         } else if (page == Page.FILTERS) {
             recipeListCount = getRecipeList().size();
             recipeListPage = clampPage(recipeListPage, recipeListCount, RECIPE_LIST_PAGE_SIZE);
@@ -469,6 +577,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         skippedCount = statistics.skipped();
         blockedCount = statistics.blocked();
         chancedPrimaryCount = statistics.chancedPrimary();
+        chancedInputCount = statistics.chancedInput();
         activeBlacklistCount = statistics.blacklisted();
         ruleFilteredCount = statistics.ruleFiltered();
         whitelistFilteredCount = statistics.whitelistFiltered();
@@ -482,6 +591,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         buffer.writeVarInt(skippedCount);
         buffer.writeVarInt(blockedCount);
         buffer.writeVarInt(chancedPrimaryCount);
+        buffer.writeVarInt(chancedInputCount);
         buffer.writeVarInt(activeBlacklistCount);
         buffer.writeVarInt(ruleFilteredCount);
         buffer.writeVarInt(whitelistFilteredCount);
@@ -493,6 +603,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     }
 
     private void writeSearchSnapshot(FriendlyByteBuf buffer) {
+        buffer.writeEnum(searchVisibility);
         buffer.writeVarInt(searchPage);
         buffer.writeVarInt(searchCount);
         buffer.writeUtf(selectedId);
@@ -511,12 +622,35 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
             buffer.writeBoolean(primary != null);
             if (primary != null) GenericStack.writeBuffer(new GenericStack(primary, 1), buffer);
             IPatternDetails preview = machine.getPreviewPattern(selected);
-            List<GenericStack> inputs = Arrays.stream(preview.getInputs()).map(input -> {
-                GenericStack stack = input.getPossibleInputs()[0];
-                return new GenericStack(stack.what(), Math.multiplyExact(stack.amount(), input.getMultiplier()));
-            }).toList();
-            writeStacks(buffer, inputs);
+            List<AEItemKey> virtualInputs = machine.getVirtualInputKeys(selected);
+            buffer.writeVarInt(selected.inputSlots().size() + virtualInputs.size());
+            for (InputSlot slot : selected.inputSlots()) {
+                AEKey choice = machine.getInputChoice(selected, slot);
+                buffer.writeUtf(slot.id(), 64);
+                GenericStack.writeBuffer(new GenericStack(choice, slot.amount()), buffer);
+                buffer.writeVarInt(slot.alternatives().size());
+                buffer.writeBoolean(!choice.equals(slot.defaultKey()));
+            }
+            for (AEItemKey virtual : virtualInputs) {
+                buffer.writeUtf("", 64);
+                GenericStack.writeBuffer(new GenericStack(virtual, 1), buffer);
+                buffer.writeVarInt(1);
+                buffer.writeBoolean(false);
+            }
             writeStacks(buffer, Arrays.asList(preview.getOutputs()));
+        }
+        InputSlot slot = selected == null ? null : machine.getInputSlot(selected, selectedInputId);
+        buffer.writeBoolean(slot != null && slot.alternatives().size() > 1);
+        if (slot != null && slot.alternatives().size() > 1) {
+            inputOptionCount = slot.alternatives().size();
+            inputOptionPage = clampPage(inputOptionPage, inputOptionCount, INPUT_OPTION_PAGE_SIZE);
+            buffer.writeUtf(slot.id(), 64);
+            buffer.writeVarInt(inputOptionCount);
+            buffer.writeVarInt(inputOptionPage);
+            GenericStack.writeBuffer(new GenericStack(slot.defaultKey(), 1), buffer);
+            GenericStack.writeBuffer(new GenericStack(machine.getInputChoice(selected, slot), 1), buffer);
+            writeStacks(buffer, page(slot.alternatives(), inputOptionPage, INPUT_OPTION_PAGE_SIZE).stream()
+                    .map(key -> new GenericStack(key, 1)).toList());
         }
     }
 
@@ -542,6 +676,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
         skippedCount = buffer.readVarInt();
         blockedCount = buffer.readVarInt();
         chancedPrimaryCount = buffer.readVarInt();
+        chancedInputCount = buffer.readVarInt();
         activeBlacklistCount = buffer.readVarInt();
         ruleFilteredCount = buffer.readVarInt();
         whitelistFilteredCount = buffer.readVarInt();
@@ -553,6 +688,7 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
     }
 
     private void readSearchSnapshot(FriendlyByteBuf buffer) {
+        searchVisibility = buffer.readEnum(SearchVisibility.class);
         searchPage = buffer.readVarInt();
         searchCount = buffer.readVarInt();
         String previous = selectedId;
@@ -585,7 +721,13 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
             selectedStatus = buffer.readVarInt();
             selectedWhitelisted = buffer.readBoolean();
             selectedPrimary = buffer.readBoolean() ? GenericStack.readBuffer(buffer).what() : null;
-            selectedInputs = readStacks(buffer);
+            int inputCount = buffer.readVarInt();
+            List<InputView> inputs = new ArrayList<>(inputCount);
+            for (int index = 0; index < inputCount; index++) {
+                inputs.add(new InputView(buffer.readUtf(64), GenericStack.readBuffer(buffer), buffer.readVarInt(), buffer.readBoolean()));
+            }
+            selectedInputViews = inputs;
+            selectedInputs = inputs.stream().map(InputView::stack).toList();
             selectedOutputs = readStacks(buffer);
             selectedDisplay = selectedOutputs.isEmpty() ? null : selectedOutputs.get(0).what();
         } else {
@@ -593,10 +735,43 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
             selectedWhitelisted = false;
             selectedPrimary = null;
             selectedInputs = List.of();
+            selectedInputViews = List.of();
             selectedOutputs = List.of();
             selectedDisplay = null;
         }
+        boolean choosing = buffer.readBoolean();
+        if (choosing) {
+            selectedInputId = buffer.readUtf(64);
+            inputOptionCount = buffer.readVarInt();
+            inputOptionPage = buffer.readVarInt();
+            inputDefault = GenericStack.readBuffer(buffer).what();
+            inputChoice = GenericStack.readBuffer(buffer).what();
+            inputOptions = readStacks(buffer);
+        } else {
+            selectedInputId = "";
+            inputOptions = List.of();
+        }
+        inputChooser.setVisible(choosing).setActive(choosing);
+        displayInputOptions();
         displayStacks();
+    }
+
+    private void displayInputOptions() {
+        inputOptionSlots.clearAllWidgets();
+        String recipeId = selectedId;
+        String slotId = selectedInputId;
+        for (int index = 0; index < inputOptions.size(); index++) {
+            GenericStack stack = inputOptions.get(index);
+            int x = index % 9 * 18;
+            int y = index / 9 * 18;
+            inputOptionSlots.addWidget(stackWidget(stack, x, y));
+            Widget button = new ButtonWidget(x, y, 18, 18, IGuiTexture.EMPTY, click -> {
+                if (click.isRemote) sendInputChoice(recipeId, slotId, stack.what());
+            }).setHoverTooltips(stack.what().getDisplayName(), Component.literal(materialId(stack)),
+                    Component.translatable(PREFIX + (stack.what().equals(inputDefault) ? "input_default" : "select_input")));
+            if (stack.what().equals(inputChoice)) button.setBackground(new ColorBorderTexture(1, 0xFF70D090));
+            inputOptionSlots.addWidget(button);
+        }
     }
 
     private void readRecipeListSnapshot(FriendlyByteBuf buffer) {
@@ -663,6 +838,24 @@ public class RecipePatternBrowserWidget extends WidgetGroup {
             int x = (index % 9) * 18;
             int y = (index / 9) * 18;
             group.addWidget(stackWidget(stack, x, y));
+            if (!output) {
+                InputView input = selectedInputViews.get(inputPage * STACK_PAGE_SIZE + index);
+                if (!input.id().isEmpty() && input.alternatives() > 1) {
+                    String recipeId = selectedId;
+                    Widget button = new ButtonWidget(x, y, 18, 18, IGuiTexture.EMPTY, click -> {
+                        if (!click.isRemote) return;
+                        if (click.button == 1) sendInputChoice(recipeId, input.id(), null);
+                        else send(INPUT_OPTIONS, buffer -> {
+                            buffer.writeUtf(recipeId, 1024);
+                            buffer.writeUtf(input.id(), 64);
+                        });
+                    }).setHoverTooltips(stack.what().getDisplayName(), Component.literal(materialId(stack) + " × " + stack.amount()),
+                            Component.translatable(PREFIX + "input_alternatives", input.alternatives()),
+                            Component.translatable(PREFIX + "input_choice_hint"));
+                    if (input.customised()) button.setBackground(new ColorBorderTexture(1, 0xFF70D090));
+                    group.addWidget(button);
+                }
+            }
             if (output) {
                 String recipeId = selectedId;
                 Widget button = new ButtonWidget(x, y, 18, 18, new ColorRectTexture(0), click -> {

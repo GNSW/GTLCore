@@ -118,9 +118,6 @@ public final class BloomPipeline implements AutoCloseable {
             glBindVertexArray(fullscreenVao);
             blur.use();
             blur.integer("Source", 0);
-            mapping.apply(blur);
-            blur.integer("SceneDepth", 5);
-            blur.matrix("Projection", projection);
             int source = mask.texture;
             for (int i = 0; i < 4; i++) {
                 blur.integer("Radius", 3 + i * 2);
@@ -137,14 +134,12 @@ public final class BloomPipeline implements AutoCloseable {
                 source = vertical[i].texture;
             }
 
-            // Oculus draws its opaque hand before the translucent-terrain capture too,
-            // so foreground hand/wall occlusion is retained without treating glass as solid.
+            // Source visibility already used opaque depth, including the hand and frame
+            // rails. Optical halos may cross silhouettes; clipping them here would attach
+            // the blur to scene geometry and produce seams as the camera moves.
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, main.frameBufferId);
             glViewport(0, 0, main.viewWidth, main.viewHeight);
             composite.use();
-            mapping.apply(composite);
-            composite.integer("SceneDepth", 5);
-            composite.matrix("Projection", projection);
             for (int i = 0; i < 4; i++) {
                 texture(i, vertical[i].texture);
                 composite.integer("Blur" + i, i);
@@ -253,8 +248,8 @@ public final class BloomPipeline implements AutoCloseable {
             texture = glGenTextures();
             framebuffer = glGenFramebuffers();
             glBindTexture(GL_TEXTURE_2D, texture);
-            // Alpha carries surface distance, not opacity. Depth is tested per texel before
-            // interpolation, independently of how many nearby emitters are currently on.
+            // Keep radiance in half floats through all blur passes. Visibility is resolved
+            // in the full-resolution emission mask; alpha carries no scene-depth metadata.
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, (ByteBuffer) null);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

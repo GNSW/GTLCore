@@ -34,10 +34,8 @@ void main() {
     if (gl_FragCoord.z > sceneDepth + epsilon) discard;
     float fog = clamp((FogEnd - fogDistance) / max(FogEnd - FogStart, 0.001), 0.0, 1.0);
     vec3 radiance = color.rgb * color.a * fog;
-    float distance = abs(Projection[2][3]) > 0.5
-            ? abs(Projection[3][2] / (2.0 * gl_FragCoord.z - 1.0 + Projection[2][2]))
-            : 2.0 * gl_FragCoord.z / max(abs(Projection[2][2]), 0.000001);
-    // Depth is independent of brightness. Each texel is visibility-tested before filtering;
-    // averaging light-weighted depths would let a blinking distant light hide a steady one.
-    fragColor = vec4(radiance, min(distance, 65504.0));
+    // Resolve visibility at the full-resolution source, including opaque frame rails.
+    // The following optical blur carries only light, never a brightness-weighted depth
+    // or the background's depth; either would make unrelated halos cut each other off.
+    fragColor = vec4(radiance, 0.0);
 }

@@ -1,12 +1,15 @@
 {
-    "ldlib": {
-        "emissive": true
-    },
-    "animation":{
-      "interpolate": true,
-      "frametime":1
-   },
-    "shimmer": {
-        "bloom": true
-    }
+  "ldlib": {
+    "emissive": true
+  },
+  "animation": {
+    "interpolate": true,
+    "frametime": 1
+  },
+  "shimmer": {
+    "bloom": true
+  },
+  "gtlbloom": {
+    "emission_category": "core"
+  }
 }

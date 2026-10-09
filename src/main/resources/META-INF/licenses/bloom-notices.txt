@@ -1,0 +1,6 @@
+GTLCore bloom rendering is adapted from GTL Bloom Preview 0.3.6.
+See GTL-Bloom-Preview-MIT.txt for its copyright and license.
+The Gaussian blur, four-scale weighting and Jodie Reinhard tone mapping
+are adapted from Low-Drag-MC/Shimmer, commit 49cb20e7406de63027f8666d6dde9b73d8444f80.
+https://github.com/Low-Drag-MC/Shimmer
+See Shimmer-MIT.txt for the upstream copyright and license.

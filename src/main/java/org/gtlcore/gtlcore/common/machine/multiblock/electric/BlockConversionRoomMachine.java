@@ -57,12 +57,20 @@ public class BlockConversionRoomMachine extends StorageMachine {
     private final int am;
     private final List<int[]> poses;
 
-    private Set<BlockBusPartMachine> blockBusPartMachine = new HashSet<>();
+    private final Set<BlockBusPartMachine> blockBusPartMachine = new HashSet<>();
 
     public BlockConversionRoomMachine(IMachineBlockEntity holder, boolean isLarge) {
         super(holder, 1);
         this.am = isLarge ? 64 : 4;
         this.poses = isLarge ? poses2 : poses1;
+        machineStorage.addChangedListener(this::onSimulationCardChanged);
+    }
+
+    private void onSimulationCardChanged() {
+        if (!isRemote() && isFormed()) {
+            getRecipeLogic().markLastRecipeDirty();
+            getRecipeLogic().updateTickSubscription();
+        }
     }
 
     @Override
@@ -74,6 +82,7 @@ public class BlockConversionRoomMachine extends StorageMachine {
     @Override
     public void onStructureFormed() {
         super.onStructureFormed();
+        blockBusPartMachine.clear();
         for (IMultiPart part : getParts()) {
             if (part instanceof BlockBusPartMachine busPartMachine) {
                 blockBusPartMachine.add(busPartMachine);
@@ -84,7 +93,7 @@ public class BlockConversionRoomMachine extends StorageMachine {
     @Override
     public void onStructureInvalid() {
         super.onStructureInvalid();
-        blockBusPartMachine = null;
+        blockBusPartMachine.clear();
     }
 
     @Override
@@ -92,7 +101,7 @@ public class BlockConversionRoomMachine extends StorageMachine {
         boolean value = super.onWorking();
         if (getOffsetTimer() % 20 == 0) {
             int amount = getTier() * am - 7;
-            if (blockBusPartMachine != null && !getMachineStorageItem().isEmpty()) {
+            if (!getMachineStorageItem().isEmpty()) {
                 int a = amount;
                 if (getMachineStorageItem().is(GTLItems.FAST_CONVERSION_SIMULATE_CARD.get())) {
                     a = 81 * 64 * 3;

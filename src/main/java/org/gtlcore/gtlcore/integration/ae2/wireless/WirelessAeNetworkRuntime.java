@@ -126,6 +126,7 @@ public final class WirelessAeNetworkRuntime {
             "me_extend_pattern_buffer",
             "me_stocking_pattern_buffer",
             "me_final_pattern_buffer",
+            "me_recipe_pattern_buffer",
             "me_pattern_buffer_proxy",
             "me_extended_export_buffer",
             "me_extended_async_export_buffer",

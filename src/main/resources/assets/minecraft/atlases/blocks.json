@@ -1,0 +1,52 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/1m_storage_light_on"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/1m_storage_light_off"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/4m_storage_light_on"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/4m_storage_light_off"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/16m_storage_light_on"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/16m_storage_light_off"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/64m_storage_light_on"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/64m_storage_light_off"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/256m_storage_light_on"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/256m_storage_light_off"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/max_storage_light_on"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "gtlcore:block/crafting/max_storage_light_off"
+    }
+  ]
+}

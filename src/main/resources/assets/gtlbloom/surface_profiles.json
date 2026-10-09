@@ -1,0 +1,639 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "sprite": "gtlcore:block/casings/aluminium_bronze_casing",
+      "source_sha256": "e2419e3f9b393404978000423c6dc32bbe05a8cea292583bd6f305c7e5fd9e3d",
+      "category": "metal",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "height_mask",
+      "mask": "gtlbloom:surface_masks/aluminium_bronze_inset.png",
+      "mask_sha256": "e7550cbbbbc2138ff77f192b9c67755e733fc362365421019d2278f59fa699e3"
+    },
+    {
+      "sprite": "gtlcore:block/casings/aluminium_bronze_casing_ctm",
+      "source_sha256": "48f73c20f64f274de4ba057915da354e5211d1c511ab13137e7c520a82e70948",
+      "category": "metal",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/iridium_casing",
+      "source_sha256": "fa6549f1c28be2efca09a9e8d9d078b417a4982f505425a39a606fe1c2fd0c73",
+      "category": "metal",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "height_mask",
+      "mask": "gtlbloom:surface_masks/iridium_horizontal_seam.png",
+      "mask_sha256": "016f10ed815af4130adb200b3d5695f10d176d7f0ac849810b9ae022fce4d4b4"
+    },
+    {
+      "sprite": "gtlcore:block/casings/iridium_casing_ctm",
+      "source_sha256": "1d8fa884fa9ef9c09272724bf7819e4782e83dd3d63dcde6fcaa83d423ec7c1d",
+      "category": "metal",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/infinity_glass",
+      "source_sha256": "1a692448ec527f9c363dbf8a2ca815026252afaadd067fb66c30fb12a8c614db",
+      "category": "glass",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/infinity_glass_ctm",
+      "source_sha256": "4a5bfafbf6f72cc592dbbf60529eed7ed26a3acc7c0e3f19fb5535880914ce82",
+      "category": "glass",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/rhenium_reinforced_energy_glass",
+      "source_sha256": "3e5b2e0118fdcb89a7a25989af29da7d554598c62103439623d4d4b874c431e8",
+      "category": "glass",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/rhenium_reinforced_energy_glass_ctm",
+      "source_sha256": "4ed151d78579e8987aa5d6c261957a708801c6d6078bbe3ebf0c0b45c1a63981",
+      "category": "glass",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/hsss_reinforced_borosilicate_glass",
+      "source_sha256": "959e052334bab07b0bf567902bdaacc950d4a9a68425bdacbee78779d97e6394",
+      "category": "glass",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtlcore:block/casings/hsss_reinforced_borosilicate_glass_ctm",
+      "source_sha256": "16adcb65102295d04bab0918a3ce4622f133239690d5d75c52b4940fa3dd6fb6",
+      "category": "glass",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_solid_steel",
+      "source_sha256": "de3a1acebc026423e774c258fc6698b5f70d466d8ebd72d933c932e54a4fbc7b",
+      "category": "metal",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_solid_steel_ctm",
+      "source_sha256": "58755601186545eb52ce95f08805ad01c233d573ec42e2fcac4a45e1b059d32d",
+      "category": "metal",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_clean_stainless_steel",
+      "source_sha256": "52de0430dbe7a58daed34dfcb405519d66d20b33152bc0d1d9d07c6d98cd4ffa",
+      "category": "metal",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_clean_stainless_steel_ctm",
+      "source_sha256": "48cd9112d79d1b873c0a4911d2d1812c1d36e3a8daa36f9ee10d735b05423d93",
+      "category": "metal",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_stable_titanium",
+      "source_sha256": "b5ca162c62c6aabc9f2c5aea259dd64e72c5d222fc88101d5872ebe1b9a5c446",
+      "category": "metal",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_stable_titanium_ctm",
+      "source_sha256": "96f48dc9c6c77f37de23e8aceaa9aad4b15455a5f94cad325514c0c0d1af37b2",
+      "category": "metal",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_robust_tungstensteel",
+      "source_sha256": "dcb4fc8632b813ca9b7316197dff8e05be92cfa6d52150071bd3220e69a626f7",
+      "category": "metal",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/solid/machine_casing_robust_tungstensteel_ctm",
+      "source_sha256": "0dfcc3dccf766d5610bc942778f0883f6d9edc231ec27b12c888121d65b61b8b",
+      "category": "metal",
+      "width": 32,
+      "height": 32,
+      "frame_width": 32,
+      "frame_height": 32,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/ulv/bottom",
+      "source_sha256": "2262e835b473e935bfe242538897625e232891d0912431602c2f466ecc1f8890",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/ulv/side",
+      "source_sha256": "2262e835b473e935bfe242538897625e232891d0912431602c2f466ecc1f8890",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/ulv/top",
+      "source_sha256": "2262e835b473e935bfe242538897625e232891d0912431602c2f466ecc1f8890",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/lv/bottom",
+      "source_sha256": "210e5a9dd81cff9897c2f7b52273a69a5d5dd3b07c54ba3683190080cd6ab760",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/lv/side",
+      "source_sha256": "3fcf30c385a0ddc2108f7e9003d0564fb5a57a4bb1c0b69c722a06211ff6daa2",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/lv/top",
+      "source_sha256": "3fcf30c385a0ddc2108f7e9003d0564fb5a57a4bb1c0b69c722a06211ff6daa2",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/mv/bottom",
+      "source_sha256": "7249618487da01c7051e9b978fb5180f1fee0a86f0fa43cd3feb1b66d43878e4",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/mv/side",
+      "source_sha256": "7249618487da01c7051e9b978fb5180f1fee0a86f0fa43cd3feb1b66d43878e4",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/mv/top",
+      "source_sha256": "7249618487da01c7051e9b978fb5180f1fee0a86f0fa43cd3feb1b66d43878e4",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/hv/bottom",
+      "source_sha256": "ea333a8440746fd694b0266ef5dde68333f2e426001ba1ac0484b158c1e8cb0f",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/hv/side",
+      "source_sha256": "cd479a44c4cb5a979ccb394217d51f7bd0b23128d4de0ced0c1c4056353274d4",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/hv/top",
+      "source_sha256": "cd479a44c4cb5a979ccb394217d51f7bd0b23128d4de0ced0c1c4056353274d4",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/ev/bottom",
+      "source_sha256": "e6dfaaab10194e1e24a0389bbbd23070b0fdcd73d22e7baa0f4ddd655c997927",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/ev/side",
+      "source_sha256": "4c7aa45e91499019f492d3b078148634e110d881920ccc0f914396eb736642cb",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/ev/top",
+      "source_sha256": "e6dfaaab10194e1e24a0389bbbd23070b0fdcd73d22e7baa0f4ddd655c997927",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/iv/bottom",
+      "source_sha256": "31de7e27a89bd8bfaa0137f373b358312b9275b501b689cd555a4ad33ee44256",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/iv/side",
+      "source_sha256": "447da97ab9a260c5d832372453f9693ce8b9b4a1ff556a75dbb07ce32cfb43e8",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/iv/top",
+      "source_sha256": "31de7e27a89bd8bfaa0137f373b358312b9275b501b689cd555a4ad33ee44256",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/luv/bottom",
+      "source_sha256": "05992f9741bb6ac830c9b3849ea0c293aeec8e0d80f7d2ee7e9072b764cd92ce",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/luv/side",
+      "source_sha256": "05992f9741bb6ac830c9b3849ea0c293aeec8e0d80f7d2ee7e9072b764cd92ce",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/luv/top",
+      "source_sha256": "05992f9741bb6ac830c9b3849ea0c293aeec8e0d80f7d2ee7e9072b764cd92ce",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/zpm/bottom",
+      "source_sha256": "5d2636a1735d790dea563f94e080d90f19966fdf1cfc22d6276792fa07c1be13",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/zpm/side",
+      "source_sha256": "c83269d6826609bea6b20d2efec88d48acf3edd23fd7543fd0e39fa97ecdd511",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/zpm/top",
+      "source_sha256": "7b70ff11cc2c415cf23857244555666782748d6051c72e36f082b9ee57900cac",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uv/bottom",
+      "source_sha256": "9ba78e722bdbef5d0e867998c1818e04d5a5aee95a97687337b81cb37e40103f",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uv/side",
+      "source_sha256": "ae4f36590ac59397887182c4eddc31269c97c8d8c93e3f4b42f762581c5a8723",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uv/top",
+      "source_sha256": "792fbb0918a798e6967d6146465d38448e11178d6fae17491abf070f6ead9b08",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uhv/bottom",
+      "source_sha256": "fd0321d1a57925f7fd1554688c71f428530d3ac82c55ebbb8315274e3b159798",
+      "category": "paint",
+      "width": 16,
+      "height": 32,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uhv/side",
+      "source_sha256": "141c0fa75a9227decee8c192a92aef1bb798f6d32fb1391854f6e2ae9cea143f",
+      "category": "paint",
+      "width": 16,
+      "height": 32,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uhv/top",
+      "source_sha256": "40a0d1b3c016c53408d1c503c9e80fda608182a9ac106c24f22c25121478370a",
+      "category": "paint",
+      "width": 16,
+      "height": 32,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uev/bottom",
+      "source_sha256": "1131d06b83d823d7ef328e2eaec853b0e167ba1645a99ab0e12f31ef3123be9f",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uev/side",
+      "source_sha256": "a048384c3bc8e24be7d31b8aa09f470a9b6b783608ef590a01ef0fd9db2c26f5",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uev/top",
+      "source_sha256": "bdfa79f1e9efb2add4dbae85f11bc6e780a74f75b06a4db584e3fe6716413f30",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uiv/bottom",
+      "source_sha256": "91cae63cc62caf0cb077a3b5dd2a3063756a19c4dee31d59ac9e3e7e4648c15e",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uiv/side",
+      "source_sha256": "aee0570f4781de7dafedc495c2a9bb8cfa59dd9b4ade9dbbddee416544f2a787",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uiv/top",
+      "source_sha256": "5107918cd4d982a5d1d9a49f768bc9a0f4679546472f64d0e1b5ba32698d7484",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uxv/bottom",
+      "source_sha256": "bfe6b57bfe12a94db42b48b73dbe56baffaea83da935e096a2e01def82dfa148",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uxv/side",
+      "source_sha256": "1f0f22260ab0b8e51658a635253f5d202a8ecc0bbfec7a394585cb115c22202a",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/uxv/top",
+      "source_sha256": "bc7ce80fe896549f4a2ec7cdd3a8df7d27cb1a55bf71d2ac9e1b069d5aaaeb66",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/opv/bottom",
+      "source_sha256": "8d2d153d4fb6ca5ff0a2ccdfbe84aacdca7585963666c21de2f21730c25887fc",
+      "category": "paint",
+      "width": 16,
+      "height": 128,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/opv/side",
+      "source_sha256": "9d03e78e54f5cb64befb2d8c1f192a33aaed5a6407f0d219fe8129083b2eaa37",
+      "category": "paint",
+      "width": 16,
+      "height": 128,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/opv/top",
+      "source_sha256": "9cc9f6b2c78d3aaa7630628eb94a163b6fb64b5b11124985d97f745dded940a1",
+      "category": "paint",
+      "width": 16,
+      "height": 128,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/max/bottom",
+      "source_sha256": "f7764284a331e2713c7f9235f5e4e85584b15ee1ac849115e8bc691c3790a8f7",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/max/side",
+      "source_sha256": "0a658b429d4da7a371fdd248fa8abf16199c485d32b80aba33561e5f42abdcee",
+      "category": "paint",
+      "width": 16,
+      "height": 160,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    },
+    {
+      "sprite": "gtceu:block/casings/voltage/max/top",
+      "source_sha256": "f7764284a331e2713c7f9235f5e4e85584b15ee1ac849115e8bc691c3790a8f7",
+      "category": "paint",
+      "width": 16,
+      "height": 16,
+      "frame_width": 16,
+      "frame_height": 16,
+      "structure": "none"
+    }
+  ]
+}

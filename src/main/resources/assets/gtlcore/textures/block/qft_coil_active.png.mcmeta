@@ -1,6 +1,6 @@
 {
   "animation": {
-	 "frametime": 2,
+    "frametime": 2,
     "frames": [
       0,
       1,
@@ -37,9 +37,12 @@
     ]
   },
   "ldlib": {
-        "emissive": true
-    },
-    "shimmer": {
-        "bloom": true
-    }
+    "emissive": true
+  },
+  "shimmer": {
+    "bloom": true
+  },
+  "gtlbloom": {
+    "emission_category": "core"
+  }
 }

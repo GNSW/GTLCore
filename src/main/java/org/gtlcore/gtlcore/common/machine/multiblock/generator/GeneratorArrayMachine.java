@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.common.machine.multiblock.generator;
 
+import org.gtlcore.gtlcore.api.recipe.IGTRecipe;
 import org.gtlcore.gtlcore.common.data.GTLRecipeTypes;
+import org.gtlcore.gtlcore.common.machine.trait.GeneratorArrayRecipeLogic;
 
 import com.gregtechceu.gtceu.api.GTValues;
 import com.gregtechceu.gtceu.api.capability.recipe.EURecipeCapability;
@@ -16,9 +18,12 @@ import com.gregtechceu.gtceu.api.machine.MultiblockMachineDefinition;
 import com.gregtechceu.gtceu.api.machine.feature.IMachineLife;
 import com.gregtechceu.gtceu.api.machine.multiblock.WorkableElectricMultiblockMachine;
 import com.gregtechceu.gtceu.api.machine.trait.NotifiableItemStackHandler;
+import com.gregtechceu.gtceu.api.machine.trait.RecipeLogic;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.GTRecipeType;
 import com.gregtechceu.gtceu.api.recipe.RecipeHelper;
+import com.gregtechceu.gtceu.api.recipe.chance.logic.ChanceLogic;
+import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.api.recipe.content.ContentModifier;
 import com.gregtechceu.gtceu.api.recipe.logic.OCParams;
 import com.gregtechceu.gtceu.api.recipe.logic.OCResult;
@@ -55,6 +60,8 @@ import javax.annotation.ParametersAreNonnullByDefault;
 @MethodsReturnNonnullByDefault
 public class GeneratorArrayMachine extends WorkableElectricMultiblockMachine implements IMachineLife {
 
+    private static final String GENERATION_EUT = "gtlcore:generator_array_eut";
+
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(
             GeneratorArrayMachine.class, WorkableElectricMultiblockMachine.MANAGED_FIELD_HOLDER);
 
@@ -76,6 +83,34 @@ public class GeneratorArrayMachine extends WorkableElectricMultiblockMachine imp
     public GeneratorArrayMachine(IMachineBlockEntity holder, Object... args) {
         super(holder, args);
         this.machineStorage = createMachineStorage(args);
+    }
+
+    @Override
+    protected RecipeLogic createRecipeLogic(Object... args) {
+        return new GeneratorArrayRecipeLogic(this);
+    }
+
+    public boolean isWirelessMode() {
+        return isw;
+    }
+
+    public void prepareRecipeOutput(GTRecipe recipe) {
+        long power = RecipeHelper.getOutputEUt(recipe);
+        if (power <= 0) {
+            power = recipe.data.contains(GENERATION_EUT) ? recipe.data.getLong(GENERATION_EUT) : eut;
+        }
+        if (power > 0) {
+            // GTRecipe.copy() shares its data tag with the source recipe.
+            recipe.data = recipe.data.copy();
+            recipe.data.putLong(GENERATION_EUT, power);
+        }
+        if (isw) {
+            recipe.tickOutputs.remove(EURecipeCapability.CAP);
+        } else if (power > 0 && !recipe.tickOutputs.containsKey(EURecipeCapability.CAP)) {
+            recipe.tickOutputs.put(EURecipeCapability.CAP, List.of(new Content(power,
+                    ChanceLogic.getMaxChancedValue(), ChanceLogic.getMaxChancedValue(), 0, null, null)));
+        }
+        IGTRecipe.of(recipe).setHasTick(!recipe.tickInputs.isEmpty() || !recipe.tickOutputs.isEmpty());
     }
 
     @Override
@@ -202,15 +237,13 @@ public class GeneratorArrayMachine extends WorkableElectricMultiblockMachine imp
 
     @Override
     public boolean onWorking() {
-        boolean value = super.onWorking();
+        if (!super.onWorking()) return false;
         if (this.isw) {
-            if (eut > 0) {
-                WirelessEnergyManager.addEUToGlobalEnergyMap(userid, eut, this);
-            } else {
-                return false;
-            }
+            GTRecipe recipe = getRecipeLogic().getLastRecipe();
+            eut = recipe == null ? 0 : recipe.data.getLong(GENERATION_EUT);
+            return userid != null && eut > 0 && WirelessEnergyManager.addEUToGlobalEnergyMap(userid, eut, this);
         }
-        return value;
+        return true;
     }
 
     @Override
@@ -259,12 +292,10 @@ public class GeneratorArrayMachine extends WorkableElectricMultiblockMachine imp
                             multipliers += fluidRecipeCapability.getMaxParallelRatio(generatorArrayMachine, recipe, maxParallel);
                         }
                     }
+                    if (multipliers <= 0) return null;
                     GTRecipe paraRecipe = recipe.copy(ContentModifier.multiplier(multipliers), false);
                     paraRecipe.duration = paraRecipe.duration * getEfficiency(generatorArrayMachine.getRecipeType(), generatorArrayMachine.getTier()) / 100;
-                    if (generatorArrayMachine.isw) {
-                        generatorArrayMachine.eut = RecipeHelper.getOutputEUt(paraRecipe);
-                        paraRecipe.tickOutputs.remove(EURecipeCapability.CAP);
-                    }
+                    generatorArrayMachine.prepareRecipeOutput(paraRecipe);
                     return paraRecipe;
                 }
             }
@@ -299,6 +330,9 @@ public class GeneratorArrayMachine extends WorkableElectricMultiblockMachine imp
         if (!clickData.isRemote) {
             if (componentData.equals("wireless_switch")) {
                 this.isw = !this.isw;
+                getRecipeLogic().markLastRecipeDirty();
+                getRecipeLogic().updateTickSubscription();
+                markDirty();
             }
         }
     }

@@ -1,6 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphPlan;
+import org.cgse.core.GraphPlan;
 
 import java.util.UUID;
 

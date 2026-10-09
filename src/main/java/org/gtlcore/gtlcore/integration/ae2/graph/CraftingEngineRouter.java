@@ -4,7 +4,6 @@ import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.config.AECraftingEngine;
 import org.gtlcore.gtlcore.config.AEGraphSeedPolicy;
 import org.gtlcore.gtlcore.config.ConfigHolder;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.*;
 
 import net.minecraft.world.level.Level;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -18,6 +17,9 @@ import appeng.api.networking.crafting.ICraftingSimulationRequester;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.me.service.CraftingService;
+import org.cgse.core.*;
+import org.cgse.core.PlanningInventory;
+import org.cgse.core.RequestPlanningWork;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -32,16 +34,7 @@ public final class CraftingEngineRouter {
     private CraftingEngineRouter() {}
 
     static <K> Map<K, Long> planningAvailability(Map<K, Long> network, Map<K, Long> forecast) {
-        Map<K, Long> result = new LinkedHashMap<>(network);
-        forecast.forEach((key, count) -> result.merge(key, CheckedAmounts.nonNegative(count), (stored, owned) -> {
-            // Availability is a lower bound for a long-sized request, not an
-            // ownership ledger. An infinity cell plus real CPU-held material
-            // must not overflow before replanning even starts. Physical inputs,
-            // expected outputs and settlement continue to use exact arithmetic.
-            CheckedAmounts.nonNegative(stored);
-            return stored + Math.min(owned, Long.MAX_VALUE - stored);
-        }));
-        return result;
+        return PlanningInventory.availability(network, forecast);
     }
 
     private static PlanningScheduler scheduler;
@@ -208,13 +201,8 @@ public final class CraftingEngineRouter {
         private CapturedPatternCatalog.Build preparing;
         private CapturedPatternCatalog.Prepared prepared;
         private GraphCompiler<AEKey> compiler;
-        private Map<AEKey, Long> available;
-        private CatalystPlanningWork<AEKey> current;
-        private GraphPlan<AEKey> selected;
-        private boolean partialSearch, directEmission, unavailableTarget, tryEstimate, tryNeighbor;
-        private boolean fallbackAttempted, fallbackMode;
-        private long low, high, middle, snapshotNanos, snapshotElapsedNanos, catalogPreparationNanos;
-        private long estimatedAmount;
+        private RequestPlanningWork<AEKey> planning;
+        private long snapshotNanos, snapshotElapsedNanos, catalogPreparationNanos;
         private long catalogPreparationStarted, catalogPreparationElapsed, catalogParallelNanos;
         private int catalogParallelBatches;
         private GraphSnapshots.Timing snapshotTiming;
@@ -256,93 +244,25 @@ public final class CraftingEngineRouter {
                 compiler = prepared.compiler();
                 preparing = null;
                 request.dependencies(snapshot.structure().resources());
-                available = planningAvailability(snapshot.stock(), checkpoint == null ? Map.of() : checkpoint.forecast());
-                directEmission = snapshot.emitable().contains(target) && compiler.producers(target).isEmpty();
-                unavailableTarget = checkpoint == null && !snapshot.emitable().contains(target) && compiler.producers(target).isEmpty();
+                planning = new RequestPlanningWork<>(compiler, target, amount, snapshot.stock(), snapshot.emitable(),
+                        checkpoint, preserve, strategy == CalculationStrategy.CRAFT_LESS, strategy.toString(), catalysts,
+                        fallbackEnabled, snapshot.structure().boundedAlternatives(), budget, request::isCancelled, report -> {
+                            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+                                    "[Graph Crafting] fallback target={} amount={} trigger={} cycle_solving=false result={} work={} elapsed_ms={}",
+                                    report.target(), report.amount(), report.trigger(), report.result(), report.nodes(), report.elapsedNanos() / 1_000_000.0);
+                        });
                 budget.note("catalog", "recipes=" + compiler.catalog().size() + "; target_sources=" + compiler.producers(target).size() +
-                        "; stock_keys=" + available.size() + "; target_stock=" + available.getOrDefault(target, 0L) +
+                        "; stock_keys=" + planning.availability().size() + "; target_stock=" + planning.availability().getOrDefault(target, 0L) +
                         "; external=" + snapshot.emitable().size() + "; cache_hit=" + snapshot.cacheHit() +
                         "; input_alternatives_bounded=" + snapshot.structure().boundedAlternatives());
-                if (directEmission && checkpoint == null) available.remove(target);
-                current = calculation(amount);
             }
-            if (!current.advance(slice)) return false;
-            GraphPlan<AEKey> candidate = current.result();
-            if (!partialSearch) {
-                selected = candidate;
-                if (selected.feasible() || unavailableTarget || strategy != CalculationStrategy.CRAFT_LESS || selected.missing().isEmpty()) return finish();
-                partialSearch = true;
-                low = 1;
-                high = amount - 1;
-                estimatedAmount = estimateAmount(candidate);
-                tryEstimate = estimatedAmount > 1;
-                middle = 1;
-            } else {
-                if (candidate.feasible()) {
-                    selected = candidate;
-                    low = middle + 1;
-                } else if (candidate.missing().isEmpty()) {
-                    budget.note("craft_less", "undecided_probe=" + middle + "; retained_amount=" + selected.amount());
-                    return finishReduced();
-                } else high = middle - 1;
-                if (tryEstimate && estimatedAmount >= low && estimatedAmount <= high) {
-                    middle = estimatedAmount;
-                    tryNeighbor = true;
-                } else if (tryNeighbor && candidate.feasible()) {
-                    middle = low;
-                    tryNeighbor = false;
-                } else {
-                    middle = low + (high - low) / 2;
-                    tryNeighbor = false;
-                }
-                tryEstimate = false;
-            }
-            if (low > high) return finish();
-            current.close();
-            current = calculation(middle);
-            return false;
-        }
-
-        private CatalystPlanningWork<AEKey> calculation(long count) {
-            budget.note("request", "target=" + target + "; amount=" + count + "; strategy=" + strategy + "; preserve_seeds=" + preserve);
-            // Feasibility probes must not each repeat the optional catalyst
-            // acceleration search. Preserve the shared order budget.
-            return new CatalystPlanningWork<>(checkpoint != null || strategy == CalculationStrategy.CRAFT_LESS ? CatalystPolicy.MINIMAL : catalysts, budget,
-                    policy -> new GraphPlanningWork<>(compiler, target, count, available, snapshot.emitable(),
-                            checkpoint == null ? Map.of() : checkpoint.recoverySeeds(), preserve, checkpoint == null && !directEmission, budget).catalysts(policy));
-        }
-
-        private long estimateAmount(GraphPlan<AEKey> full) {
-            java.math.BigInteger guess = java.math.BigInteger.valueOf(amount);
-            for (var entry : full.initialExact().entrySet()) {
-                if (snapshot.emitable().contains(entry.getKey()) || entry.getValue().signum() == 0) continue;
-                java.math.BigInteger scaled = java.math.BigInteger.valueOf(amount)
-                        .multiply(java.math.BigInteger.valueOf(available.getOrDefault(entry.getKey(), 0L)))
-                        .divide(entry.getValue());
-                guess = guess.min(scaled);
-            }
-            // A probe hint, never an upper-bound proof: batches, alternative
-            // sources and startup costs need not scale with order quantity.
-            return guess.max(java.math.BigInteger.ONE).longValueExact();
-        }
-
-        private boolean finishReduced() {
-            if (selected.feasible()) selected = new GraphPlan<>(selected.target(), selected.amount(), selected.preserveSeeds(), selected.steps(),
-                    selected.recipes(), selected.initialExact(), selected.seeds(), Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL,
-                    budget.nodes(), selected.planningNanos());
+            if (!planning.advance(slice)) return false;
             return finish();
         }
 
         @Override
         public void close() {
-            if (current != null) current.close();
-        }
-
-        private RuntimeException limitOrUnknown(GraphPlan<AEKey> plan) {
-            return switch (plan.result()) {
-                case TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT, QUEUE_LIMIT -> new PlanningBudget.Exhausted(PlanningBudget.Limit.valueOf(plan.result().name()), budget.failureDetail());
-                default -> new GraphPlanningFailure(plan.result(), budget.failureDetail());
-            };
+            if (planning != null) planning.close();
         }
 
         private void logFailure(Throwable error) {
@@ -356,13 +276,10 @@ public final class CraftingEngineRouter {
         }
 
         private boolean finish() {
-            if (!selected.feasible() && selected.missing().isEmpty() && !fallback(selected.result())) throw limitOrUnknown(selected);
-            if (!selected.feasible() && snapshot.structure().boundedAlternatives() && !fallbackMode && !fallback(GraphPlan.Result.SEARCH_LIMIT))
-                throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "input_alternatives_bounded; missing preview is not a proof for omitted alternatives");
-            Map<AEKey, Long> extractionStock = new LinkedHashMap<>(available);
-            if (directEmission && checkpoint == null) extractionStock.remove(target);
+            GraphPlan<AEKey> selected = planning.result();
+            Map<AEKey, Long> extractionStock = new LinkedHashMap<>(planning.availability());
             long assemblyStarted = System.nanoTime();
-            result = new AeGraphPlan(selected, prepared.bindings(), snapshot.emitable(), extractionStock, fallbackMode);
+            result = new AeGraphPlan(selected, prepared.bindings(), snapshot.emitable(), extractionStock, planning.fallbackMode());
             long assemblyNanos = System.nanoTime() - assemblyStarted;
             long skipped = ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging ? logAllowance(grid,
                     new PlanLogKey(target, amount, strategy, selected.result(), snapshot.epoch(), selected.missingExact().hashCode())) : -1;
@@ -380,43 +297,11 @@ public final class CraftingEngineRouter {
             return true;
         }
 
-        /** One bounded ordinary expansion, never another cycle solver or a legacy engine request. */
-        private boolean fallback(GraphPlan.Result reason) {
-            if (!fallbackEnabled || fallbackAttempted || request.isCancelled() || compiler == null || prepared == null || available == null)
-                return false;
-            if (!switch (reason) {
-                case UNKNOWN, INFEASIBLE, TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT -> true;
-                default -> false;
-            }) return false;
-            fallbackAttempted = true;
-            // Stop any count-search siblings before releasing their state. The
-            // fallback has its own small allowance, not a refund of spent work.
-            budget.cancel();
-            if (current != null) {
-                current.close();
-                current = null;
-            }
-            PlanningBudget quick = new PlanningBudget(250, 131_072, 16L << 20, request::isCancelled, System::nanoTime);
-            try {
-                selected = GraphFallback.plan(compiler, target, amount, available, snapshot.emitable(),
-                        checkpoint == null ? Map.of() : checkpoint.recoverySeeds(), preserve, checkpoint == null && !directEmission, quick);
-                fallbackMode = true;
-                budget.note("fallback", "cycle_solving=false; reason=" + reason + "; work=" + quick.nodes() + "; result=" + selected.result());
-                if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
-                        "[Graph Crafting] fallback target={} amount={} trigger={} cycle_solving=false result={} work={} elapsed_ms={}",
-                        target, amount, reason, selected.result(), quick.nodes(), quick.elapsedNanos() / 1_000_000.0);
-                return true;
-            } catch (PlanningBudget.Exhausted exhausted) {
-                budget.note("fallback", "cycle_solving=false; trigger=" + reason + "; stopped=" + exhausted.limit() + "; work=" + quick.nodes());
-                return false;
-            }
-        }
-
         @Override
         public CompletableFuture<?> waitingFor() {
             if (!capture.isDone()) return capture;
             if (preparing != null) return preparing.waitingFor();
-            return current == null ? null : current.waitingFor();
+            return planning == null ? null : planning.waitingFor();
         }
 
         @Override
@@ -426,17 +311,9 @@ public final class CraftingEngineRouter {
 
         @Override
         public ICraftingPlan limited(PlanningBudget.Exhausted limit) {
-            if (current != null) {
-                GraphPlan<AEKey> retained = current.limited(limit);
-                if (retained.feasible()) selected = retained;
-            }
-            if (selected == null || !selected.feasible() && (!partialSearch || selected.missingExact().isEmpty())) {
-                if (!fallback(GraphPlan.Result.valueOf(limit.limit().name()))) throw limit;
-                finish();
-                return result;
-            }
-            budget.note("craft_less", "limit=" + limit.limit() + "; retained_amount=" + selected.amount() + "; result=" + selected.result());
-            finishReduced();
+            if (planning == null) throw limit;
+            planning.limited(limit);
+            finish();
             return result;
         }
     }

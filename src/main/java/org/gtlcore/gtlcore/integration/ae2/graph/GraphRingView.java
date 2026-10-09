@@ -1,12 +1,12 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.*;
-
 import net.minecraft.network.FriendlyByteBuf;
 
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import io.netty.buffer.Unpooled;
+import org.cgse.core.*;
+import org.cgse.core.PlanRingView;
 
 import java.math.BigInteger;
 import java.util.*;
@@ -15,7 +15,7 @@ import java.util.*;
 public final class GraphRingView {
 
     public static final int PAGE_SIZE = 256;
-    public static final int MAX_ROWS = 400_000;
+    public static final int MAX_ROWS = PlanRingView.MAX_ROWS;
     public static final int MAX_PAGE_BYTES = 1_048_576;
     private static final int PAGE_BYTES = 65_536;
 
@@ -64,7 +64,7 @@ public final class GraphRingView {
         target = new GenericStack(builder.plan.target(), builder.plan.amount());
         preserve = builder.plan.preserveSeeds();
         rows = List.copyOf(builder.all);
-        graphRows = builder.graphRows;
+        graphRows = builder.cursor.graphRows();
         weights = builder.weights.stream().mapToInt(Integer::intValue).toArray();
         headerWeight = builder.headerWeight;
     }
@@ -74,75 +74,34 @@ public final class GraphRingView {
 
         private final UUID id;
         private final GraphPlan<AEKey> plan;
-        private final Deque<Iterator<AEKey>> resources = new ArrayDeque<>();
-        private final Set<AEKey> seenResources = new HashSet<>();
-        private final Iterator<Map.Entry<String, Long>> selected;
+        private final PlanRingView.Cursor<AEKey> cursor;
         private final List<Row> all = new ArrayList<>();
         private final List<Integer> weights = new ArrayList<>();
         private final Map<AEKey, Integer> keySizes = new HashMap<>();
-        private final IdentityHashMap<PlanStep, Integer> programs = new IdentityHashMap<>();
-        private int graphRows;
         private final int headerWeight;
-
-        private record Pending(Iterator<PlanStep> children, int parent) {}
-
-        private final Deque<Pending> pending = new ArrayDeque<>();
 
         Builder(UUID id, GraphPlan<AEKey> plan, Map<String, Long> selected) {
             this.id = id;
             this.plan = plan;
             headerWeight = 128 + stackSize(new GenericStack(plan.target(), plan.amount()));
             if (headerWeight > MAX_PAGE_BYTES / 2) throw new IllegalArgumentException("Graph display target exceeds packet limit");
-            resources.add(plan.initial().keySet().iterator());
-            resources.add(plan.seeds().keySet().iterator());
-            resources.add(plan.missing().keySet().iterator());
-            this.selected = selected.entrySet().iterator();
-            pending.push(new Pending(List.of(plan.steps()).iterator(), -1));
+            cursor = new PlanRingView.Cursor<>(plan, selected.keySet());
         }
 
         private boolean next() {
-            if (!resources.isEmpty()) {
-                if (!resources.peek().hasNext()) {
-                    resources.pop();
-                    return false;
-                }
-                var key = resources.peek().next();
-                if (!seenResources.add(key)) return false;
-                all.add(new Row(Kind.RESOURCE, "", new GenericStack(key, plan.initial().getOrDefault(key, 0L)),
-                        plan.initialExact().getOrDefault(key, BigInteger.ZERO), plan.seeds().getOrDefault(key, 0L),
-                        plan.missingExact().getOrDefault(key, BigInteger.ZERO), List.of(), List.of(), -1));
-            } else if (selected.hasNext()) {
-                var entry = selected.next();
-                var recipe = plan.recipes().get(entry.getKey());
-                if (recipe.inputs().size() > 512 || recipe.outputs().size() > 512)
-                    throw new IllegalArgumentException("Too many graph display slots");
-                all.add(new Row(Kind.RECIPE, entry.getKey(), stacks(recipe.executionOutputs()).get(0), plan.patternTimesExact().get(entry.getKey()), 0, BigInteger.ZERO,
-                        stacks(recipe.inputs()), stacks(recipe.executionOutputs()), -1));
-            } else if (!pending.isEmpty()) {
-                if (programs.isEmpty()) graphRows = all.size();
-                var target = new GenericStack(plan.target(), plan.amount());
-                var next = pending.peek();
-                if (!next.children().hasNext()) {
-                    pending.pop();
-                    return false;
-                }
-                var step = next.children().next();
-                int index = all.size();
-                Integer reference = programs.putIfAbsent(step, index);
-                if (reference != null)
-                    all.add(new Row(Kind.REFERENCE, reference.toString(), target, BigInteger.ONE, 0, BigInteger.ZERO, List.of(), List.of(), next.parent()));
-                else if (step instanceof PlanStep.Batch batch)
-                    all.add(new Row(Kind.BATCH, batch.recipe(), target, BigInteger.valueOf(batch.runs()), 0, BigInteger.ZERO, List.of(), List.of(), next.parent()));
-                else if (step instanceof PlanStep.Repeat repeat) {
-                    all.add(new Row(Kind.REPEAT, "", target, BigInteger.valueOf(repeat.times()), 0, BigInteger.ZERO, List.of(), List.of(), next.parent()));
-                    pending.push(new Pending(List.of(repeat.body()).iterator(), index));
-                } else {
-                    all.add(new Row(Kind.SEQUENCE, "", target, BigInteger.ONE, 0, BigInteger.ZERO, List.of(), List.of(), next.parent()));
-                    pending.push(new Pending(((PlanStep.Sequence) step).children().iterator(), index));
-                }
-            } else return true;
-            if (all.size() > MAX_ROWS) throw new IllegalArgumentException("Graph display exceeds row limit");
-            var row = all.get(all.size() - 1);
+            if (cursor.advance()) return true;
+            var portable = cursor.row();
+            if (portable == null) return false;
+            var inputs = stacks(portable.inputs());
+            var outputs = stacks(portable.outputs());
+            GenericStack icon = switch (portable.kind()) {
+                case RESOURCE -> new GenericStack(portable.resource(), ExactAmounts.capped(portable.count()));
+                case RECIPE -> outputs.get(0);
+                default -> new GenericStack(plan.target(), plan.amount());
+            };
+            var row = new Row(Kind.valueOf(portable.kind().name()), portable.id(), icon, portable.count(),
+                    portable.seed().longValueExact(), portable.missing(), inputs, outputs, portable.parent());
+            all.add(row);
             long weight = 128L + 3L * row.id().length() + stackSize(row.icon()) + row.count().bitLength() / 8 + row.missing().bitLength() / 8;
             for (var stack : row.inputs()) weight += stackSize(stack);
             for (var stack : row.outputs()) weight += stackSize(stack);
@@ -200,8 +159,8 @@ public final class GraphRingView {
         return new Page(id, target, preserve, offset, rows.size(), graphRows, rows.subList(offset, end));
     }
 
-    private static List<GenericStack> stacks(Map<AEKey, Long> values) {
-        return values.entrySet().stream().map(entry -> new GenericStack(entry.getKey(), entry.getValue())).toList();
+    private static List<GenericStack> stacks(List<PlanRingView.Amount<AEKey>> values) {
+        return values.stream().map(value -> new GenericStack(value.key(), value.amount().longValueExact())).toList();
     }
 
     public static void write(Page page, FriendlyByteBuf buffer) {

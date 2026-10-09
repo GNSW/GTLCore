@@ -1,13 +1,12 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphCompiler;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphRecipe;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningBudget;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningScheduler;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PreparedCatalog;
-
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEKey;
+import org.cgse.core.GraphCompiler;
+import org.cgse.core.GraphRecipe;
+import org.cgse.core.PlanningBudget;
+import org.cgse.core.PlanningScheduler;
+import org.cgse.core.PreparedCatalog;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -90,8 +89,8 @@ public final class CapturedPatternCatalog {
                 return true;
             }
             budget.phase(PlanningBudget.Phase.BUILD);
-            while (indexing == null && slice.next()) {
-                budget.check();
+            while (indexing == null && slice.nextCompilation()) {
+                budget.compilationCheck();
                 if (parallel != null) {
                     if (!parallel.isDone()) return false;
                     batches = parallel.join().iterator();
@@ -157,7 +156,7 @@ public final class CapturedPatternCatalog {
             var context = new PatternFingerprint.Context();
             List<Encoded> result = new ArrayList<>(end - start);
             for (int index = start; index < end; index++) {
-                budget.check();
+                budget.compilationCheck();
                 long began = System.nanoTime();
                 Entry entry = capturedEntries.get(index);
                 String binding = context.of(entry.values());

@@ -113,7 +113,7 @@
   "config.gtlcore.option.ae2GraphFallback.comment": "仅用于 GRAPH，默认开启。主求解器未能返回计划时，使用已捕获的样板做一次普通配方展开，不调用环求解器；循环或展开边界作为待补材料显示。回退预览不代表所有路线均无解。额外最多使用 250 毫秒、131072 次工作和 16 MiB 工作内存；取消、快照失败及不支持的样板语义不会触发回退。修改后对新规划生效。",
   "gtlcore.ae.graph.fallback_preview": "回退预览（未求解循环，缺料仅针对此方案）",
   "gtlcore.ae.graph.fallback_plan": "回退计划（未求解循环）",
-  "config.gtlcore.option.ae2GraphPlannerMaxSteps.comment": "仅用于 GRAPH。每个请求在遍历、搜索和校验中允许执行的累计计算工作量。各个区域、并行任务和分段计算共用此预算；超过后停止规划。开启并行工作预算扩展时，此值作为乘以线程倍率前的基础上限。这不是配方执行次数或订单物品数量的上限。",
+  "config.gtlcore.option.ae2GraphPlannerMaxSteps.comment": "仅用于 GRAPH。每个请求的搜索与校验工作量上限。图结构编译单独计费，另有同额上限，不扣搜索额度；两者共用内存、超时和取消限制。各区域、线程和分段计算共用各自的累计额度。开启并行工作预算扩展时，此值为线程倍率前的基础上限。这不是配方执行次数或订单物品数量的上限。",
   "config.gtlcore.option.ae2GraphPlannerMemoryMiB": "图合成单请求估算内存上限（MiB）",
   "config.gtlcore.option.ae2GraphPlannerMemoryMiB.comment": "每次图合成规划的估算内存预算，范围 16–1024 MiB，默认 128 MiB。按需使用，不会预先分配；超出预算时停止该次规划。这不是 JVM 堆内存上限，也不是 AE 合成 CPU 的字节容量。多个请求分别计费，实际进程内存可能更高。已有配置值会保留。",
   "gtlcore.ae.graph.planning_status": "图合成：%s（已等待 %s 秒，可取消）",

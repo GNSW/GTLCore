@@ -1,7 +1,6 @@
 package org.gtlcore.gtlcore.client.ae2.graph;
 
 import org.gtlcore.gtlcore.integration.ae2.graph.*;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.*;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAePackets;
 import org.gtlcore.gtlcore.integration.jei.JeiMissingIngredientBookmarks;
 
@@ -24,6 +23,7 @@ import appeng.client.gui.me.crafting.CraftConfirmScreen;
 import appeng.client.gui.widgets.IconButton;
 import appeng.client.gui.widgets.TabButton;
 import appeng.menu.me.crafting.CraftConfirmMenu;
+import org.cgse.core.*;
 
 import java.math.BigInteger;
 import java.util.*;

@@ -1,29 +1,19 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphPlan;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningBudget;
+import org.cgse.core.GraphPlan;
+import org.cgse.core.PlanningFailure;
 
 import java.util.Locale;
 
 /** A completed planning outcome, distinct from a crashed planner. */
-public final class GraphPlanningFailure extends RuntimeException {
-
-    private final GraphPlan.Result result;
+public final class GraphPlanningFailure extends PlanningFailure {
 
     public GraphPlanningFailure(GraphPlan.Result result, String detail) {
-        super("Graph crafting: " + result + (detail.isEmpty() ? "" : " (" + detail + ")"));
-        this.result = result;
+        super(result, detail);
     }
 
     public static String messageKey(Throwable error) {
-        while (error != null) {
-            if (error instanceof GraphPlanningFailure failure)
-                return "gtlcore.ae.graph.failure." + failure.result.name().toLowerCase(Locale.ROOT);
-            if (error instanceof PlanningBudget.Exhausted exhausted)
-                return "gtlcore.ae.graph.failure." + exhausted.limit().name().toLowerCase(Locale.ROOT);
-            if (error.getCause() == error) break;
-            error = error.getCause();
-        }
-        return null;
+        var result = PlanningFailure.result(error);
+        return result == null ? null : "gtlcore.ae.graph.failure." + result.name().toLowerCase(Locale.ROOT);
     }
 }

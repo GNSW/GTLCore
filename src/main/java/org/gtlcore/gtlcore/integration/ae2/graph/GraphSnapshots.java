@@ -1,7 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import org.gtlcore.gtlcore.GTLCore;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanningBudget;
 
 import net.minecraft.Util;
 import net.minecraftforge.event.OnDatapackSyncEvent;
@@ -10,6 +9,8 @@ import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+
+import org.cgse.core.PlanningBudget;
 
 import java.util.ArrayDeque;
 import java.util.Deque;

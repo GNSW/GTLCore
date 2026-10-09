@@ -1,12 +1,12 @@
 package org.gtlcore.gtlcore.config;
 
 import org.gtlcore.gtlcore.GTLCore;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.CraftingCostModel;
 
 import dev.toma.configuration.Configuration;
 import dev.toma.configuration.config.Config;
 import dev.toma.configuration.config.Configurable;
 import dev.toma.configuration.config.format.ConfigFormats;
+import org.cgse.core.CraftingCostModel;
 
 @Config(id = GTLCore.MOD_ID)
 public class ConfigHolder {
@@ -128,7 +128,7 @@ public class ConfigHolder {
     @Configurable
     @Configurable.Range(min = 10000, max = Integer.MAX_VALUE)
     @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxSteps.comment")
-    public int ae2GraphPlannerMaxSteps = 20000000;
+    public int ae2GraphPlannerMaxSteps = 40000000;
     @Configurable
     @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerParallelWorkBudget.comment")
     public boolean ae2GraphPlannerParallelWorkBudget = false;

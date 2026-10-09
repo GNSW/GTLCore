@@ -1,7 +1,6 @@
 package org.gtlcore.gtlcore.client.ae2.graph;
 
 import org.gtlcore.gtlcore.GTLCore;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.PlanGraphLayout.Box;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,6 +14,7 @@ import net.minecraftforge.fml.common.Mod;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
+import org.cgse.core.PlanGraphLayout.Box;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;

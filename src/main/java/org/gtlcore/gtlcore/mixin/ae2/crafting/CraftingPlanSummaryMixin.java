@@ -7,7 +7,6 @@ import org.gtlcore.gtlcore.integration.ae2.graph.GraphPlanSummary;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphPlanSummaryView;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphSeedStatus;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphSummaryContext;
-import org.gtlcore.gtlcore.integration.ae2.graph.core.GraphPlan;
 
 import net.minecraft.network.FriendlyByteBuf;
 
@@ -21,6 +20,7 @@ import appeng.menu.me.crafting.CraftingPlanSummaryEntry;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.sugar.Local;
+import org.cgse.core.GraphPlan;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;

@@ -46,6 +46,13 @@ public final class EmissiveAliases {
 
     private static final String PREFIX = "block/gtlbloom_pbr_alias/";
     private static final ResourceLocation BLOCK_ATLAS = new ResourceLocation("minecraft", "blocks");
+    // EyeOfHarmonyRenderer draws these additional models directly, never through a blockstate
+    // alias wrapper. Their 8192x4096 / 4096x2048 textures alone added 40 Mi pixels to the atlas.
+    // This is an ownership declaration, not a size limit or a blanket exclusion of OBJ models.
+    private static final Set<ResourceLocation> DIRECT_MODELS = Set.of(
+            GTLCore.id("obj/space"), GTLCore.id("obj/star"));
+    private static final Set<ResourceLocation> DIRECT_TEXTURES = Set.of(
+            GTLCore.id("block/obj/space_layer"), GTLCore.id("block/obj/star_layer"));
     private static volatile Set<ResourceLocation> discovered = Set.of();
     private static volatile Set<ResourceLocation> fullBlockTargets = Set.of();
     private static volatile List<Model> awaitingAtlas = List.of();
@@ -107,17 +114,33 @@ public final class EmissiveAliases {
     /** Resource JSON is only a discovery hint. It never globally marks a source texture emissive. */
     static Set<ResourceLocation> discover(ResourceManager resources) {
         Map<ResourceLocation, Definition> definitions = new HashMap<>();
+        Set<ResourceLocation> sharedDirectResources = new HashSet<>();
         resources.listResources("models", id -> id.getPath().endsWith(".json")).forEach((id, resource) -> {
             try (var reader = resource.openAsReader()) {
                 String path = id.getPath();
                 ResourceLocation model = new ResourceLocation(id.getNamespace(), path.substring(7, path.length() - 5));
-                definitions.put(model, readDefinition(JsonParser.parseReader(reader).getAsJsonObject()));
+                JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+                if (!DIRECT_MODELS.contains(model)) collectDirectReferences(json, sharedDirectResources, 0);
+                definitions.put(model, readDefinition(json));
             } catch (Exception ignored) {
                 // A malformed or custom model cannot make the resource reload fail here. Minecraft's
                 // own model loader reports its errors; unavailable material conversion never enables shader-on local
                 // bloom.
             }
         });
+        // Resource packs can reuse an otherwise renderer-only model as a blockstate variant.
+        // Read every stack entry, just as Minecraft combines multipart/variant definitions.
+        for (ResourceLocation id : resources.listResources("blockstates", file -> file.getPath().endsWith(".json")).keySet()) {
+            for (var resource : resources.getResourceStack(id)) {
+                try (var reader = resource.openAsReader()) {
+                    collectDirectReferences(JsonParser.parseReader(reader), sharedDirectResources, 0);
+                } catch (Exception ignored) {
+                    // Leave malformed blockstate diagnostics to the model loader.
+                }
+            }
+        }
+        Set<ResourceLocation> directTextures = new HashSet<>(DIRECT_TEXTURES);
+        directTextures.removeAll(sharedDirectResources);
         Set<ResourceLocation> result = new TreeSet<>();
         Set<ResourceLocation> fullBlockModels = fullBlockModels(resources);
         for (ResourceLocation model : definitions.keySet()) {
@@ -139,6 +162,12 @@ public final class EmissiveAliases {
                 cursor = definition.parent;
             }
             if (faces != null) for (String face : faces) addResolved(result, face, textures);
+            // A different model (including inherited, custom-loader and unused pack models)
+            // referencing the texture makes its use ambiguous: keep the alias conservatively.
+            if (!DIRECT_MODELS.contains(model) || sharedDirectResources.contains(model)) {
+                for (String value : textures.values()) directTextures.remove(resolve(value, textures));
+                if (allFaces != null) for (String value : allFaces) directTextures.remove(resolve(value, textures));
+            }
             // Allocate all possible texture slots for a rule's blockstate model variants. Runtime
             // BloomRules.fullBlock(state), not this resource-time superset, chooses emissive instances.
             if (fullBlockModels.contains(model)) {
@@ -155,13 +184,28 @@ public final class EmissiveAliases {
             ResourceLocation sprite = new ResourceLocation(id.getNamespace(), path.substring(9, path.length() - 4));
             if (!reserved(sprite)) result.add(sprite);
         });
-        // Pre-stitch possible runtime-only model textures; selection is still per emitted quad.
+        // Keep unknown runtime-only textures, all states and all modes preallocated. Only skip
+        // the proven standalone-only copies; originals and their PBR maps remain untouched.
         resources.listResources("textures/block", id -> id.getPath().endsWith(".png") && !id.getPath().endsWith("_s.png") && !id.getPath().endsWith("_n.png")).keySet().forEach(id -> {
             String path = id.getPath();
             ResourceLocation sprite = new ResourceLocation(id.getNamespace(), path.substring(9, path.length() - 4));
-            if (!reserved(sprite)) result.add(sprite);
+            if (!reserved(sprite) && !directTextures.contains(sprite)) result.add(sprite);
         });
         return result;
+    }
+
+    private static void collectDirectReferences(JsonElement value, Set<ResourceLocation> references, int depth) {
+        if (depth > 128) return;
+        if (value.isJsonArray()) {
+            for (JsonElement child : value.getAsJsonArray()) collectDirectReferences(child, references, depth + 1);
+        } else if (value.isJsonObject()) {
+            for (JsonElement child : value.getAsJsonObject().asMap().values())
+                collectDirectReferences(child, references, depth + 1);
+        } else if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+            // Custom loaders need not call their material slot "texture" or their model "model".
+            ResourceLocation id = ResourceLocation.tryParse(value.getAsString());
+            if (id != null && (DIRECT_MODELS.contains(id) || DIRECT_TEXTURES.contains(id))) references.add(id);
+        }
     }
 
     private static void addResolved(Set<ResourceLocation> result, String value, Map<String, String> textures) {

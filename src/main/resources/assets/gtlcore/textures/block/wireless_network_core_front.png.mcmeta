@@ -2,5 +2,11 @@
   "animation": {
     "interpolate": false,
     "frametime": 2
+  },
+  "shimmer": {
+    "bloom": true
+  },
+  "gtlbloom": {
+    "emission_category": "core"
   }
 }

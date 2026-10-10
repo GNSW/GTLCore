@@ -2,113 +2,29 @@
   "parent": "minecraft:block/cube",
   "textures": {
     "particle": "gtceu:block/casings/voltage/ev/side",
-    "down": "gtceu:block/casings/voltage/ev/bottom",
-    "up": "gtceu:block/casings/voltage/ev/top",
-    "north": "gtlcore:block/wireless_network_core_front",
-    "east": "gtceu:block/casings/voltage/ev/side",
-    "south": "gtceu:block/casings/voltage/ev/side",
-    "west": "gtceu:block/casings/voltage/ev/side",
-    "bloom": "gtlcore:block/gtlbloom_masks/wireless_network_core_front"
+    "bottom": "gtceu:block/casings/voltage/ev/bottom",
+    "top": "gtceu:block/casings/voltage/ev/top",
+    "side": "gtceu:block/casings/voltage/ev/side",
+    "front": "gtlcore:block/wireless_network_core_front"
   },
-  "render_type": "minecraft:cutout_mipped",
   "elements": [
     {
-      "from": [
-        0,
-        0,
-        0
-      ],
-      "to": [
-        16,
-        16,
-        16
-      ],
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
       "faces": {
-        "down": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#down",
-          "cullface": "down"
-        },
-        "up": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#up",
-          "cullface": "up"
-        },
-        "north": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#north",
-          "cullface": "north"
-        },
-        "south": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#south",
-          "cullface": "south"
-        },
-        "west": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#west",
-          "cullface": "west"
-        },
-        "east": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#east",
-          "cullface": "east"
-        }
+        "down": { "texture": "#bottom", "cullface": "down" },
+        "up": { "texture": "#top", "cullface": "up" },
+        "north": { "texture": "#side", "cullface": "north" },
+        "south": { "texture": "#side", "cullface": "south" },
+        "west": { "texture": "#side", "cullface": "west" },
+        "east": { "texture": "#side", "cullface": "east" }
       }
     },
     {
-      "from": [
-        0,
-        0,
-        -0.001
-      ],
-      "to": [
-        16,
-        16,
-        -0.001
-      ],
-      "shade": true,
+      "from": [0, 0, -0.02],
+      "to": [16, 16, 0],
       "faces": {
-        "north": {
-          "uv": [
-            0,
-            0,
-            16,
-            16
-          ],
-          "texture": "#bloom",
-          "cullface": "north"
-        }
+        "north": { "texture": "#front" }
       }
     }
   ]

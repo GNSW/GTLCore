@@ -75,8 +75,7 @@ public final class PlanningScheduler implements AutoCloseable {
         jobs.add(job);
         job.future.whenComplete((result, error) -> {
             if (error != null) budget.cancel();
-            jobs.remove(job);
-            admitted.decrementAndGet();
+            job.releaseAdmission();
             if (!job.queued.get()) job.dispose();
         });
         job.enqueue();
@@ -135,14 +134,24 @@ public final class PlanningScheduler implements AutoCloseable {
             return next(true);
         }
 
+        /** The work charges its own step; only check cancellation and slice fairness here. */
+        public boolean nextUncharged() {
+            return next(false, false);
+        }
+
         private boolean next(boolean compilation) {
+            return next(compilation, true);
+        }
+
+        private boolean next(boolean compilation, boolean charge) {
             // An advance can perform many charged arithmetic operations. Count
             // their deterministic effort as well as continuation calls, so one
             // expensive order yields even before its wall-time slice expires.
             if (steps != 0 && (steps >= stepsPerSlice || owner.budget.threadWork() - workStarted >= stepsPerSlice ||
                     System.nanoTime() - deadline >= 0))
                 return false;
-            if (compilation) owner.budget.compilationCheck();
+            if (!charge) owner.budget.checkpoint();
+            else if (compilation) owner.budget.compilationCheck();
             else owner.budget.check();
             steps++;
             return true;
@@ -163,6 +172,8 @@ public final class PlanningScheduler implements AutoCloseable {
 
         public <R> CompletableFuture<List<R>> fork(PlanningBudget.Phase phase, List<? extends Supplier<R>> partitions) {
             if (partitions.size() > workers) throw new IllegalArgumentException("Too many parallel partitions");
+            // Only immutable labels cross workers, never an active timing scope.
+            var context = owner.budget.traceContext();
             var children = new ArrayList<CompletableFuture<R>>();
             for (Supplier<R> partition : partitions) {
                 CompletableFuture<R> child = new CompletableFuture<>();
@@ -173,10 +184,15 @@ public final class PlanningScheduler implements AutoCloseable {
                         @Override
                         public void run() {
                             long start = enter();
-                            try (var timing = owner.budget.work(phase)) {
-                                if (owner.future.isDone()) throw new java.util.concurrent.CancellationException();
-                                owner.budget.checkpoint();
-                                child.complete(partition.get());
+                            try {
+                                R value;
+                                try (var timing = owner.budget.work(phase); var costs = owner.budget.trace(context)) {
+                                    if (owner.future.isDone()) throw new java.util.concurrent.CancellationException();
+                                    owner.budget.checkpoint();
+                                    value = partition.get();
+                                }
+                                // A completed partition must have published its exclusive costs.
+                                child.complete(value);
                             } catch (Throwable failure) {
                                 child.completeExceptionally(failure);
                             } finally {
@@ -244,6 +260,7 @@ public final class PlanningScheduler implements AutoCloseable {
         private final CompletableFuture<T> future = new CompletableFuture<>();
         private final AtomicBoolean queued = new AtomicBoolean();
         private final AtomicBoolean disposed = new AtomicBoolean();
+        private final AtomicBoolean admissionReleased = new AtomicBoolean();
 
         private Job(Work<T> work, PlanningBudget budget) {
             this.work = work;
@@ -255,9 +272,11 @@ public final class PlanningScheduler implements AutoCloseable {
             try {
                 executor.execute(this);
             } catch (RuntimeException rejected) {
-                future.completeExceptionally(rejected);
                 queued.set(false);
-                dispose();
+                try { dispose(); }
+                catch (Throwable cleanupFailure) { if (cleanupFailure != rejected) rejected.addSuppressed(cleanupFailure); }
+                releaseAdmission();
+                future.completeExceptionally(rejected);
             }
         }
 
@@ -269,34 +288,58 @@ public final class PlanningScheduler implements AutoCloseable {
                 return;
             }
             long start = enter();
-            boolean again = false;
+            boolean again = false, terminal = false;
+            T result = null;
+            Throwable terminalFailure = null;
             CompletableFuture<?> waiting = null;
             try (var timing = budget.work(budget.phase())) {
-                if (work.advance(new Slice(this))) future.complete(work.result());
+                if (work.advance(new Slice(this))) {
+                    result = work.result();
+                    terminal = true;
+                }
                 else {
                     waiting = work.waitingFor();
                     again = waiting == null;
                 }
-            } catch (PlanningBudget.Exhausted limit) {
-                try {
-                    future.complete(work.limited(limit));
-                } catch (Throwable failure) {
-                    future.completeExceptionally(failure);
-                }
             } catch (Throwable failure) {
+                terminal = true;
                 Throwable cause = failure;
                 while (cause instanceof java.util.concurrent.CompletionException && cause.getCause() != null) cause = cause.getCause();
                 if (cause instanceof PlanningBudget.Exhausted limit) {
                     try {
-                        future.complete(work.limited(limit));
+                        result = work.limited(limit);
                     } catch (Throwable limitedFailure) {
-                        future.completeExceptionally(limitedFailure);
+                        terminalFailure = limitedFailure;
                     }
-                } else future.completeExceptionally(failure);
+                } else terminalFailure = failure;
             } finally {
+                // Do not publish a successful/failed request while its own
+                // synchronous resources and final cost scopes are still live.
+                // External cancellation remains immediate; running child work
+                // retains its existing cooperative release contract.
+                if (terminalFailure != null) budget.cancel();
+                if (terminal || future.isDone()) {
+                    try { dispose(); }
+                    catch (Throwable cleanupFailure) {
+                        terminal = true;
+                        if (terminalFailure == null) terminalFailure = cleanupFailure;
+                        else if (terminalFailure != cleanupFailure) terminalFailure.addSuppressed(cleanupFailure);
+                    }
+                }
                 leave(start);
                 queued.set(false);
+                // Cancellation can race the preceding check while this slice
+                // still owns the queued flag.
                 if (future.isDone()) dispose();
+            }
+            if (terminal) {
+                // User completion callbacks can immediately submit the next
+                // order. Do not depend on CompletableFuture callback ordering
+                // to free this request's admission slot.
+                releaseAdmission();
+                if (terminalFailure == null) future.complete(result);
+                else future.completeExceptionally(terminalFailure);
+                return;
             }
             // Register only after releasing this slice: even immediately-completed
             // dependencies cannot run two coordinator slices concurrently.
@@ -315,6 +358,13 @@ public final class PlanningScheduler implements AutoCloseable {
 
         private void dispose() {
             if (disposed.compareAndSet(false, true)) work.close();
+        }
+
+        private void releaseAdmission() {
+            if (admissionReleased.compareAndSet(false, true)) {
+                jobs.remove(this);
+                admitted.decrementAndGet();
+            }
         }
     }
 }

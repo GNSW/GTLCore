@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 
 /** Single owner of a graph task. All methods are called on the server thread. */
 public final class GraphJobRuntime<K> {
@@ -197,6 +198,10 @@ public final class GraphJobRuntime<K> {
     }
 
     public int tick(Adapter<K> adapter, long tick, int workBudget) {
+        return tick(adapter, tick, workBudget, System::nanoTime);
+    }
+
+    int tick(Adapter<K> adapter, long tick, int workBudget, LongSupplier clock) {
         if (preparedOutputs != null || settlementEscrow != null) return 0;
         if (state == State.SETTLING || state == State.CANCELLING) {
             settle(adapter, workBudget);
@@ -207,10 +212,10 @@ public final class GraphJobRuntime<K> {
         drainSurplus(adapter, workBudget);
         if (state != State.RUNNING) return 0;
         int pushed = 0;
-        long deadline = System.nanoTime() + 2_000_000L;
+        long deadline = clock.getAsLong() + 2_000_000L;
         int checkBudget = (int) Math.min(4096L, Math.max(0L, workBudget) + PipelineScheduler.WINDOW);
         for (int work = 0; pushed < workBudget && work < checkBudget && state == State.RUNNING; work++) {
-            if (work > 0 && System.nanoTime() - deadline >= 0) break;
+            if (work > 0 && clock.getAsLong() - deadline >= 0) break;
             checks++;
             PlanStep.Batch step = dag == null ? pipeline.poll(tick,
                     key -> CheckedAmounts.add(owned.get(key), expected.getOrDefault(key, 0L))) : dag.poll(tick);

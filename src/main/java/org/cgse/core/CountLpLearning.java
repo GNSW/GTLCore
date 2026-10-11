@@ -21,6 +21,12 @@ final class CountLpLearning {
         private CountLpStructure structure;
         private PlanningBudget budget;
         private long prepared, structureHits;
+        private final boolean integerDomains;
+
+        Session() { this(false); }
+
+        /** Separate bounded-integer channel; the Boolean projection remains the default. */
+        Session(boolean integerDomains) { this.integerDomains = integerDomains; }
 
         Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                      PlanningBudget budget, long maximumWork) {
@@ -32,7 +38,7 @@ final class CountLpLearning {
             }
             try {
                 var helper = new CountLpLearning(budget, Math.min(maximumWork, budget.remainingWork()));
-                if (lower.length >= 2 && lower.length <= 128 && upper.length == lower.length &&
+                if (!integerDomains && lower.length >= 2 && lower.length <= 128 && upper.length == lower.length &&
                         rows.size() <= 512 && maximumWork >= 1024) {
                     if (structure != null && structure.matches(rows, lower.length, helper::check)) structureHits++;
                     else {
@@ -42,7 +48,7 @@ final class CountLpLearning {
                     }
                 } else clearStructure();
                 var result = CountLpLearning.solve(rows, lower, upper, budget,
-                        maximumWork - helper.spent(), numerical, structure);
+                        maximumWork - helper.spent(), numerical, structure, integerDomains);
                 if (result == null) {
                     numerical.close();
                     if (structure != null) {
@@ -51,7 +57,7 @@ final class CountLpLearning {
                         // remaining work and memory rather than a fresh budget.
                         clearStructure();
                         result = CountLpLearning.solve(rows, lower, upper, budget,
-                                maximumWork - helper.spent(), numerical, null);
+                                maximumWork - helper.spent(), numerical, null, integerDomains);
                     }
                 }
                 return result;
@@ -103,16 +109,23 @@ final class CountLpLearning {
         final Cut cut;
         final boolean numericalInfeasible;
         final long numericalWork;
+        final BigInteger[] integerPoint;
         private final PlanningBudget budget;
         private long memory;
 
         Result(double[] point, Cut cut, boolean numericalInfeasible, long numericalWork, PlanningBudget budget, long memory) {
+            this(point, cut, numericalInfeasible, numericalWork, budget, memory, null);
+        }
+
+        Result(double[] point, Cut cut, boolean numericalInfeasible, long numericalWork, PlanningBudget budget, long memory,
+               BigInteger[] integerPoint) {
             this.point = point;
             this.cut = cut;
             this.numericalInfeasible = numericalInfeasible;
             this.numericalWork = numericalWork;
             this.budget = budget;
             this.memory = memory;
+            this.integerPoint = integerPoint;
         }
 
         @Override
@@ -131,6 +144,7 @@ final class CountLpLearning {
 
     private final PlanningBudget budget;
     private final long started, allowance;
+    private boolean integerDomains;
 
     private CountLpLearning(PlanningBudget budget, long allowance) {
         this.budget = budget;
@@ -140,16 +154,17 @@ final class CountLpLearning {
 
     static Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                         PlanningBudget budget, long maximumWork) {
-        return solve(rows, lower, upper, budget, maximumWork, null, null);
+        return solve(rows, lower, upper, budget, maximumWork, null, null, false);
     }
 
     private static Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                                 PlanningBudget budget, long maximumWork, CountNumericRelaxation.Session numerical,
-                                CountLpStructure structure) {
+                                CountLpStructure structure, boolean integerDomains) {
         if (lower.length < 2 || lower.length > 128 || upper.length != lower.length || rows.size() > 512 || maximumWork < 1024) return null;
         long bytes = 0;
         try {
             var helper = new CountLpLearning(budget, Math.min(maximumWork, budget.remainingWork()));
+            helper.integerDomains = integerDomains;
             long terms = structure == null ? 0 : structure.termCount;
             if (structure == null) {
                 for (var row : rows) {
@@ -186,7 +201,8 @@ final class CountLpLearning {
         boolean unfixed = false;
         for (int i = 0; i < variables; i++) {
             check();
-            if (high[i] == null || low[i].signum() < 0 || high[i].compareTo(BigInteger.ONE) > 0 || low[i].compareTo(high[i]) > 0)
+            if (high[i] == null || low[i].compareTo(high[i]) > 0 || low[i].bitLength() > 1024 || high[i].bitLength() > 1024 ||
+                    !integerDomains && (low[i].signum() < 0 || high[i].compareTo(BigInteger.ONE) > 0))
                 return null;
             unfixed |= !low[i].equals(high[i]);
             if (!low[i].equals(high[i])) {
@@ -217,12 +233,14 @@ final class CountLpLearning {
                     check();
                     int id = term.getKey();
                     var coefficient = term.getValue();
-                    // Boolean endpoint shifts are exact copies/additions, with no
-                    // multiplication by a large count hidden in this projection.
-                    if (low[id].signum() != 0) bound = subtract(bound, coefficient);
+                    // Preserve the Boolean copy fast path. Integer coordinates
+                    // shift by a*l and use the actual width u-l for activity.
+                    if (low[id].signum() != 0) bound = subtract(bound,
+                            integerDomains ? multiply(coefficient, low[id]) : coefficient);
                     if (map[id] >= 0) {
                         terms.put(map[id], coefficient);
-                        if (coefficient.signum() > 0) maximum = add(maximum, coefficient);
+                        if (coefficient.signum() > 0) maximum = add(maximum,
+                                integerDomains ? multiply(coefficient, subtract(high[id], low[id])) : coefficient);
                     }
                 }
             } else {
@@ -261,11 +279,23 @@ final class CountLpLearning {
                 session.solve(free.size(), reduced, cost, budget, numericalAllowance);
         if (numerical == null) return null;
         double[] point = null;
+        BigInteger[] integerPoint = null;
         if (numerical.point() != null) {
             point = new double[variables];
+            if (integerDomains) integerPoint = new BigInteger[variables];
             for (int i = 0; i < variables; i++) {
                 check();
                 point[i] = map[i] < 0 ? low[i].doubleValue() : low[i].doubleValue() + numerical.point()[map[i]];
+                if (integerPoint != null) {
+                    if (map[i] < 0) integerPoint[i] = low[i];
+                    else if (!Double.isFinite(numerical.point()[map[i]])) integerPoint = null;
+                    else {
+                        // Round z before adding the exact offset. Converting l+z
+                        // through double loses whole units above 2^53.
+                        var rounded = BigDecimal.valueOf(numerical.point()[map[i]]).setScale(0, RoundingMode.HALF_EVEN).toBigIntegerExact();
+                        integerPoint[i] = add(low[i], rounded);
+                    }
+                }
             }
         }
         double maximumDual = numerical.phaseOneInfeasible() ? 0 : 1, minimumDual = Double.POSITIVE_INFINITY;
@@ -279,7 +309,10 @@ final class CountLpLearning {
         }
         if (!numerical.phaseOneInfeasible() && objective >= 0) minimumDual = Math.min(minimumDual, 1);
         Cut cut = null;
-        if (maximumDual > 0 && Double.isFinite(maximumDual)) {
+        var rational = rationalWeights(numerical.dual(), source,
+                numerical.phaseOneInfeasible() ? -1 : objective);
+        if (rational != null) cut = combine(rows, rational, low, high);
+        if (cut == null && maximumDual > 0 && Double.isFinite(maximumDual)) {
             int span = Double.isFinite(minimumDual) ? Math.max(0, Math.getExponent(maximumDual) - Math.getExponent(minimumDual)) : 0;
             // Coarse proposals are cheap. A bounded extra precision adapts to
             // mixed row scales instead of silently losing every small weight.
@@ -300,7 +333,55 @@ final class CountLpLearning {
                 if (cut != null) break;
             }
         }
-        return new Result(point, cut, numerical.phaseOneInfeasible(), numerical.work(), budget, bytes);
+        return new Result(point, cut, numerical.phaseOneInfeasible(), numerical.work(), budget, bytes, integerPoint);
+    }
+
+    /** Small rational multipliers are proposals; only the exact row sum below can prove anything. */
+    private Map<Integer, BigInteger> rationalWeights(double[] dual, List<Integer> source, int objective) {
+        Map<Integer, long[]> fractions = new TreeMap<>();
+        BigInteger denominator = BigInteger.ONE;
+        for (int i = 0; i < source.size(); i++) {
+            check();
+            double value = dual[i];
+            if (!(value > 0) || !Double.isFinite(value)) continue;
+            long[] fraction = approximate(value);
+            if (fraction == null) return null;
+            if (fraction[0] == 0) continue;
+            fractions.put(source.get(i), fraction);
+            var next = BigInteger.valueOf(fraction[1]);
+            integer(Math.max(denominator.bitLength(), next.bitLength()));
+            denominator = multiply(denominator.divide(denominator.gcd(next)), next);
+            if (denominator.bitLength() > 256) return null;
+        }
+        Map<Integer, BigInteger> weights = new TreeMap<>();
+        for (var entry : fractions.entrySet()) {
+            check();
+            var fraction = entry.getValue();
+            integer(denominator.bitLength());
+            weights.put(entry.getKey(), multiply(BigInteger.valueOf(fraction[0]), denominator.divide(BigInteger.valueOf(fraction[1]))));
+        }
+        if (objective >= 0) weights.merge(objective, denominator, this::add);
+        return weights;
+    }
+
+    private long[] approximate(double value) {
+        if (value > 1e9) return null;
+        double remainder = value;
+        long p0 = 0, p1 = 1, q0 = 1, q1 = 0;
+        for (int step = 0; step < 32; step++) {
+            check();
+            double whole = Math.floor(remainder);
+            if (!Double.isFinite(whole) || whole > 1e9) return null;
+            long part = (long) whole;
+            if (q1 != 0 && part > (65536 - q0) / q1) return null;
+            long q = part * q1 + q0;
+            if (part != 0 && p1 > (Long.MAX_VALUE - p0) / part) return null;
+            long p = part * p1 + p0;
+            if (Math.abs(value - (double) p / q) <= 1e-8 * Math.max(1, value)) return new long[] { p, q };
+            p0 = p1; p1 = p; q0 = q1; q1 = q;
+            remainder = 1 / (remainder - whole);
+        }
+        return null;
     }
 
     private BigInteger weight(double value, double maximum, int precision) {
@@ -343,14 +424,17 @@ final class CountLpLearning {
         BigInteger minimum = BigInteger.ZERO;
         for (var term : terms.entrySet()) {
             check();
-            if ((term.getValue().signum() > 0 ? low[term.getKey()] : high[term.getKey()]).signum() != 0)
-                minimum = add(minimum, term.getValue());
+            var endpoint = term.getValue().signum() > 0 ? low[term.getKey()] : high[term.getKey()];
+            if (endpoint.signum() != 0)
+                minimum = add(minimum, integerDomains ? multiply(term.getValue(), endpoint) : term.getValue());
         }
         BigInteger slack = subtract(bound, minimum);
         boolean useful = slack.signum() < 0;
         if (!useful) for (var term : terms.entrySet()) {
             check();
-            if (!low[term.getKey()].equals(high[term.getKey()]) && term.getValue().abs().compareTo(slack) > 0) useful = true;
+            int id = term.getKey();
+            if (!low[id].equals(high[id]) && (integerDomains ? multiply(term.getValue().abs(), subtract(high[id], low[id])) :
+                    term.getValue().abs()).compareTo(slack) > 0) useful = true;
         }
         if (!useful || rows.contains(consequence)) return null;
         // This is the certificate construction itself: every weight is an

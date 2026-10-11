@@ -54,6 +54,9 @@ final class CountModelViews implements AutoCloseable {
     private long factVersion;
     private CountViewConflicts conflicts;
     private CountViewCuts cuts;
+    private RecipeCountModel<?> templateModel;
+
+    void retainTemplates(RecipeCountModel<?> model) { templateModel = model; }
 
     record Domains(BigInteger[] lower, BigInteger[] upper, long version) {}
 
@@ -96,6 +99,8 @@ final class CountModelViews implements AutoCloseable {
     View reduced() {
         return reduced;
     }
+
+    boolean compiledAlternatives() { return lightAttempted || reduced != null; }
 
     /** Integer-equivalent row simplification without changing variable coordinates. */
     void compileLight() {
@@ -196,8 +201,15 @@ final class CountModelViews implements AutoCloseable {
     }
 
     boolean sharesBounds(View view) {
-        return view.semantics.transfersProof() && original.lower.length <= 1024 &&
-                budget.remainingWork() >= 8L * original.lower.length + 1024 &&
+        return original.lower.length <= 1024 && budget.remainingWork() >= 8L * original.lower.length + 1024 &&
+                sharesCuts(view);
+    }
+
+    boolean sharesCuts(View view) {
+        // Sparse certified rows have their own term, byte and work caps. The
+        // dense-domain sharing limit must not discard a small consequence in
+        // a large model. Ownership and covering semantics are still required.
+        return view != null && view.semantics.transfersProof() &&
                 (views.stream().anyMatch(value -> value == view) || auxiliaryViews.stream().anyMatch(value -> value == view));
     }
 
@@ -218,13 +230,20 @@ final class CountModelViews implements AutoCloseable {
     }
 
     void publishCuts(View view, List<CountLpLearning.Cut> learned, int from, Object origin) {
-        if (view == null || from >= learned.size() || !sharesBounds(view)) return;
+        if (from >= learned.size() || !sharesCuts(view)) return;
         if (cuts == null) cuts = CountViewCuts.create(budget, original);
         if (cuts == null) return;
         int before = cuts.version();
         cuts.publish(view, learned, from, origin);
         if (cuts.version() > before) budget.note("count_view_cuts", "origin=" + view.name() + "; certified=" + (cuts.version() - before) +
                 "; version=" + cuts.version() + "; scope=owned_count_model");
+        // Identity-coordinate views may cite normalized material rows. The cache
+        // independently reconstructs each premise from the complete material row;
+        // bound-dependent simplifications and unmapped affine rows are rejected.
+        if (view.inverse == null && view.substitution == null && view.semantics == Semantics.EQUIVALENT &&
+                templateModel != null && templateModel.rowTemplates != null)
+            for (int i = from; i < learned.size(); i++)
+                templateModel.rowTemplates.remember(templateModel, view.rows(), learned.get(i), budget);
     }
 
     int cutVersion() {
@@ -232,7 +251,7 @@ final class CountModelViews implements AutoCloseable {
     }
 
     int importCuts(View view, int after, Object origin, CountLcg solver) {
-        if (cuts == null || after >= cuts.version() || !sharesBounds(view)) return 0;
+        if (cuts == null || after >= cuts.version() || !sharesCuts(view)) return 0;
         return cuts.transfer(view, after, origin, solver::learn);
     }
 
@@ -415,6 +434,12 @@ final class CountModelViews implements AutoCloseable {
     }
 
     BigInteger[] restoreAndCheck(View view, BigInteger[] counts) {
+        try (var costs = budget.trace(PlanningCostTrace.Stage.RESTORE)) {
+            return restoreAndCheckMeasured(view, counts);
+        }
+    }
+
+    private BigInteger[] restoreAndCheckMeasured(View view, BigInteger[] counts) {
         if (counts == null) return null;
         BigInteger[] result = view.restore(counts);
         if (result == null || result.length != original.lower.length) return invalidCandidate(view, "Unmapped count model");

@@ -25,6 +25,7 @@ final class CountBounds implements AutoCloseable {
     private final long continuationLimit;
     private boolean complete, blocked;
     private boolean combined;
+    private long propagated;
     private final boolean explain;
     private final List<BitSet> rowReasons = new ArrayList<>();
     private final BitSet[] lowerReasons, upperReasons;
@@ -505,6 +506,15 @@ final class CountBounds implements AutoCloseable {
             return false;
         }
         if (queue.isEmpty()) return finish(false);
+        // Several complete passes without draining the queue indicate feedback
+        // rather than an ordinary DAG wave. Try the existing exact sparse
+        // elimination before spending tens of thousands of bound updates on a
+        // nearly balanced loop. This changes when consequences are proposed,
+        // not their proof or the propagation allowance.
+        if (!combined && propagated >= 4L * (originalRows.size() + lower.length)) {
+            combined = true;
+            if (combinePending()) return false;
+        }
         if (work >= allowance) {
             if (!combined) {
                 combined = true;
@@ -526,6 +536,7 @@ final class CountBounds implements AutoCloseable {
             budget.note("count_bounds", "work_limit; terms=" + work + "; pending_rows=" + queue.size());
             return finish(false);
         }
+        propagated++;
         int id = queue.removeFirst();
         queued.clear(id);
         var row = rows.get(id);

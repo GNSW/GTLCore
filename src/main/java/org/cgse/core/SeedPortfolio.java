@@ -22,19 +22,27 @@ final class SeedPortfolio<K> implements AutoCloseable {
 
     SeedPortfolio(GraphCompiler<K> compiler, GraphPlan<K> plan, Map<K, Long> stock, Map<K, Long> mandatory,
                   Set<K> external, Set<String> excluded, boolean force, PlanningBudget budget) {
-        this.compiler = compiler;
-        best = plan;
-        this.stock = stock;
-        this.mandatory = mandatory;
-        this.external = external;
-        this.excluded = excluded;
-        this.force = force;
-        this.budget = budget;
-        frontier.add(plan);
-        search = new SeedOptimization<>(compiler, plan, stock, mandatory, external, excluded, force, budget);
+        try (var costs = budget.trace(PlanningCostTrace.Origin.SEED_OPTIMIZATION, PlanningCostTrace.Stage.PREPARE)) {
+            this.compiler = compiler;
+            best = plan;
+            this.stock = stock;
+            this.mandatory = mandatory;
+            this.external = external;
+            this.excluded = excluded;
+            this.force = force;
+            this.budget = budget;
+            frontier.add(plan);
+            search = new SeedOptimization<>(compiler, plan, stock, mandatory, external, excluded, force, budget);
+        }
     }
 
     boolean step() {
+        try (var costs = budget.trace(PlanningCostTrace.Origin.SEED_OPTIMIZATION, PlanningCostTrace.Stage.SEARCH)) {
+            return stepMeasured();
+        }
+    }
+
+    private boolean stepMeasured() {
         if (complete) return true;
         if (!search.step()) return false;
         GraphPlan<K> found = search.result();

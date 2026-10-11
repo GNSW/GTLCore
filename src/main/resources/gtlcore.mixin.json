@@ -87,7 +87,8 @@
     "mc.GuiGraphicsMixin",
     "meRequester.NumberFieldMixin",
     "configuration.ConfigScreenVisibilityMixin",
-    "configuration.ConfigValueLocalizationMixin"
+    "configuration.ConfigValueLocalizationMixin",
+    "configuration.EnumWidgetLocalizationMixin"
   ],
   "mixins": [
     "gtm.StableBlockCandidatesMixin",

@@ -33,6 +33,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     final Set<ExactLinearProgram.Constraint> learnedMaterials = new LinkedHashSet<>();
     final Set<ExactLinearProgram.Constraint> usedMaterials = new LinkedHashSet<>();
     final List<CountGuard> supportConflicts = new ArrayList<>();
+    /** Newly proved original-coordinate clauses awaiting coordinator publication. */
     final Set<CountConflict> learnedChoices = new LinkedHashSet<>();
     private List<CountConflict> knownChoices = List.of();
     private List<ExactLinearProgram.Constraint> knownMaterials = List.of();
@@ -90,6 +91,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     CountViewSearch viewSearch;
     CountLpSearch lpSearch;
     boolean lpTried, lpActive, lpResuming, preferLpResume = true;
+    boolean lpScoutsSampled, lpAfterScouts;
     int viewStage, viewCandidateStage;
     CountLcg auxiliaryLcg;
     int auxiliaryMode;
@@ -97,6 +99,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     long auxiliaryUntil = 262144;
     boolean auxiliaryCompared, auxiliaryLive;
     boolean proofTask, proofContradiction;
+    boolean deferredVisit;
     CountDecisionDiagram diagram;
     CountObbt obbt;
     boolean gomoryTried;
@@ -431,6 +434,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (lpActive) {
             if (!lpSearch.step()) return;
             lpSearch.publishCuts(modelViews, reduction);
+            // Leave the initial sample bounded so cheap candidate strategies
+            // can run. Later, productive cuts earn a bounded continuation
+            // before branch fan-out disperses the remaining budget.
+            if ((lpResuming || lpScoutsSampled) && lpSearch.continueOnCuts()) return;
             lpActive = false;
             counts = lpSearch.counts();
             boolean impossible = lpSearch.infeasible();
@@ -441,7 +448,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             // The initial LP turn precedes registration of reduced views.
             // Return through the portfolio entrance before ordinary strategies;
             // a retained LP search must not hide those equivalent coordinates.
-            int continuation = lpResuming ? 4 : 5;
+            int continuation = lpAfterScouts ? 8 : lpResuming ? 4 : 5;
+            lpAfterScouts = false;
             if (counts != null) {
                 viewCandidateStage = continuation;
                 beginScheduling();
@@ -983,6 +991,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                     return;
                 }
                 modelViews.compileLight();
+                modelViews.retainTemplates(model);
                 modelViews.addReduced(reduction);
                 viewSearch = new CountViewSearch(modelViews, budget);
                 viewSearch.mode(CountPortfolioPolicy.Mode.PROOF);
@@ -992,7 +1001,25 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 viewSearch.resume(Math.max(1, auxiliaryUntil - auxiliaryWork - (budget.threadWork() - runStarted)));
                 viewStage = 6;
             } else if (auxiliaryMode == 1) cdcl = new CountDomainSearch(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072, CountCdcl.Branching.LEARNING_RATE).retained();
-            else if (auxiliaryMode >= 2) auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072);
+            else if (auxiliaryMode >= 2) {
+                if (auxiliaryMode == 4 && !CountIntegerLpLearning.hasBoundedIntegerSupport(
+                        reduction.rows(), reduction.lower(), reduction.upper(), budget)) {
+                    state = State.UNRESOLVED;
+                    return;
+                }
+                auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072)
+                        .minimizeIntegerConflicts();
+                // Root witness arms own longer retained slices. Give bounded
+                // integer LP proposals an owned frontier rather
+                // than restarting a numerical probe in every short view visit.
+                // Preserve the ordinary LCG too: numerical phases complement
+                // its decision order, and cannot safely replace it.
+                if (auxiliaryMode == 4) {
+                    auxiliaryLcg.integerRelaxation();
+                    if (auxiliaryLcg.learnedRelaxationEnabled())
+                        budget.note("count_integer_lp_auxiliary", "bounded_integer_support; retained_root_witness; shared_request_budget");
+                }
+            }
             else {
                 if (!matchingScouted && current.isEmpty()) {
                     matchingScouted = true;
@@ -1190,6 +1217,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (current.isEmpty() && auxiliaryMode == 0) {
             modelViews = CountModelViews.create(linearConstraints, lower, upper, budget);
             if (modelViews != null) {
+                modelViews.retainTemplates(model);
                 reduction.retainStrideView();
                 viewSearch = new CountViewSearch(modelViews, budget);
                 viewSearch.mode(portfolioMode);
@@ -1279,6 +1307,17 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private void beginBoolean() {
+        // Source faces, packing, decomposition and matching retain their first
+        // chances at a cheap witness. Only then extend a productive LP sample;
+        // rejection/cutoff returns to this same Boolean entrance, not a replay
+        // of those completed scouts or an unresolved root/child fan-out.
+        if (!earlyBinary && !lpScoutsSampled) {
+            lpScoutsSampled = true;
+            if (lpSearch != null && lpSearch.continueOnCuts()) {
+                lpAfterScouts = lpActive = true;
+                return;
+            }
+        }
         // A local cutoff falls through to other representations, but revisiting
         // the identical rows and bounds would merely repeat the same search.
         if (triedBinary) {
@@ -1704,6 +1743,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     boolean sameAuxiliarySearch(IntegerCountBranch<K> other) {
         if (other == this || auxiliaryMode < 2 || other.auxiliaryMode < 2 || model != other.model ||
                 auxiliaryLcg == null || other.auxiliaryLcg == null || limit != null || other.limit != null ||
+                auxiliaryLcg.learnedRelaxationEnabled() != other.auxiliaryLcg.learnedRelaxationEnabled() ||
                 !auxiliaryLive || !other.auxiliaryLive || memory == 0 || workspace == 0 ||
                 other.memory == 0 || other.workspace == 0 || other.state != State.OPEN ||
                 state != State.OPEN && state != State.UNRESOLVED ||
@@ -1962,6 +2002,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         else if (continuation == 4 || continuation == 6) state = State.UNRESOLVED;
         else if (continuation == 5) beginCompiledPortfolio();
         else if (continuation == 7) groups = new CountGroups(reduction.rows(), reduction.lower(), reduction.upper(), budget);
+        else if (continuation == 8) beginBoolean();
         // Stage 1 resumes compilation, preserving the untouched original model.
     }
 

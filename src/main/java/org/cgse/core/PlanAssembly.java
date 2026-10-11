@@ -39,23 +39,31 @@ final class PlanAssembly<K> implements AutoCloseable {
 
     PlanAssembly(K target, long amount, boolean preserve, PlanStep steps, Map<String, GraphRecipe<K>> recipes,
                  Map<K, Long> seeds, Map<K, Long> stock, Set<K> external, GraphCompiler.Compiled<K> graph, PlanningBudget budget, long started, CatalystPolicy catalystPolicy) {
-        this.target = target;
-        this.amount = amount;
-        this.preserve = preserve;
-        this.steps = PlanFlowPruning.optimize(PlanEGraph.optimize(steps, budget), recipes, budget);
-        this.recipes = recipes;
-        this.seeds = seeds;
-        this.stock = stock;
-        this.external = external;
-        this.graph = graph;
-        this.budget = budget;
-        this.started = started;
-        this.catalystPolicy = catalystPolicy;
-        computation = new SummaryComputation<>(this.steps, recipes, budget);
-        counting = new PlanCountComputation(this.steps);
+        try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
+            this.target = target;
+            this.amount = amount;
+            this.preserve = preserve;
+            this.steps = PlanFlowPruning.optimize(PlanEGraph.optimize(steps, budget), recipes, budget);
+            this.recipes = recipes;
+            this.seeds = seeds;
+            this.stock = stock;
+            this.external = external;
+            this.graph = graph;
+            this.budget = budget;
+            this.started = started;
+            this.catalystPolicy = catalystPolicy;
+            computation = new SummaryComputation<>(this.steps, recipes, budget);
+            counting = new PlanCountComputation(this.steps);
+        }
     }
 
     boolean step() {
+        try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
+            return stepMeasured();
+        }
+    }
+
+    private boolean stepMeasured() {
         budget.check();
         switch (phase) {
             case 0 -> {

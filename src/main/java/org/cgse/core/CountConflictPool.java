@@ -47,9 +47,9 @@ final class CountConflictPool implements AutoCloseable {
 
     private final Map<CountConflict, Entry> entries = new LinkedHashMap<>();
 
-    // A branch republishes its same explanations at each yield. Remember a
+    // Independent publishers can offer the same explanation. Remember a
     // bounded set of already-subsumed publications while their stronger clause
-    // remains resident; otherwise containment checks would repeat every slice.
+    // remains resident, avoiding repeated containment checks.
     private record Alias(Entry covering, long bytes) {}
 
     private final Map<CountConflict, Alias> aliases = new LinkedHashMap<>();

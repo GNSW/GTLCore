@@ -304,11 +304,29 @@ final class CountJump implements AutoCloseable {
         candidates.remove(values[variable]);
         for (BigInteger value : candidates) {
             double score = score(variable, value);
-            if (score < scores[variable]) {
+            if (score < scores[variable] || score == scores[variable] && jumps[variable] != null &&
+                    compareMoves(variable, value, jumps[variable]) < 0) {
                 scores[variable] = score;
                 jumps[variable] = value;
             }
         }
+    }
+
+    private double compareMoves(int variable, BigInteger left, BigInteger right) {
+        BigInteger leftDelta = left.subtract(values[variable]);
+        BigInteger rightDelta = right.subtract(values[variable]);
+        double difference = 0;
+        for (Term term : affected.get(variable)) {
+            charge();
+            int r = term.row();
+            BigInteger leftViolation = residual[r].add(term.coefficient().multiply(leftDelta)).max(BigInteger.ZERO);
+            BigInteger rightViolation = residual[r].add(term.coefficient().multiply(rightDelta)).max(BigInteger.ZERO);
+            // Subtract before converting to double: gains measured from the
+            // current point can both round to -1e30 even though only one move
+            // reaches the feasible side of an integer breakpoint.
+            difference += weights[r] * ratio(leftViolation.subtract(rightViolation), scales[r]);
+        }
+        return difference;
     }
 
     /** Weighted hinges form a convex function along one integer coordinate. */

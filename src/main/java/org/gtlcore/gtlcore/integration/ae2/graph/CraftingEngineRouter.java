@@ -107,15 +107,22 @@ public final class CraftingEngineRouter {
                                               Level level, ICraftingSimulationRequester requester,
                                               AEKey target, long amount, CalculationStrategy strategy) {
         return begin(catalog, grid, service, level, requester.getActionSource(), target, amount, strategy, null,
-                ConfigHolder.INSTANCE.ae2GraphSeedPolicy == AEGraphSeedPolicy.PRESERVE, requester instanceof SubmissionRefresh);
+                ConfigHolder.INSTANCE.ae2GraphSeedPolicy == AEGraphSeedPolicy.PRESERVE, requester instanceof SubmissionRefresh,
+                requester instanceof SubmissionRefresh refresh ? refresh.candidate() : null);
     }
 
     /** A submitted preview lost stock; recheck extractable inventory instead of AE's delayed cache. */
     public static ICraftingSimulationRequester submissionRefresh(IActionSource source) {
-        return new SubmissionRefresh(source);
+        return submissionRefresh(source, null);
     }
 
-    private record SubmissionRefresh(IActionSource source) implements ICraftingSimulationRequester {
+    public static ICraftingSimulationRequester submissionRefresh(IActionSource source, AeGraphPlan previous) {
+        return new SubmissionRefresh(source, previous == null ? null : previous.reuseCandidate());
+    }
+
+    private record SubmissionRefresh(IActionSource source,
+                                     RequestPlanningWork.ReuseCandidate<AEKey> candidate)
+            implements ICraftingSimulationRequester {
 
         @Override
         public IActionSource getActionSource() {
@@ -126,12 +133,13 @@ public final class CraftingEngineRouter {
     public static GraphPlanningRequest replan(GtlPatternCatalog catalog, GraphCpuHost host, CraftingService service,
                                               GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve) {
         return begin(catalog, host.grid(), service, host.level(), host.source(), checkpoint.target(), checkpoint.remaining(),
-                CalculationStrategy.REPORT_MISSING_ITEMS, checkpoint, preserve, false);
+                CalculationStrategy.REPORT_MISSING_ITEMS, checkpoint, preserve, false, null);
     }
 
     private static GraphPlanningRequest begin(GtlPatternCatalog catalog, IGrid grid, CraftingService service,
                                               Level level, IActionSource source, AEKey target, long amount, CalculationStrategy strategy,
-                                              GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve, boolean refreshInventory) {
+                                              GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve, boolean refreshInventory,
+                                              RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
         if (amount <= 0) throw new IllegalArgumentException("Non-positive crafting request");
         PlanningScheduler planner = scheduler();
         long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.ae2GraphPlannerMaxSteps,
@@ -142,7 +150,7 @@ public final class CraftingEngineRouter {
         GraphPlanningRequest result = new GraphPlanningRequest(budget);
         if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) budget.enableMetrics();
         CompletableFuture<GtlPatternCatalog.Snapshot> snapshot = new CompletableFuture<>();
-        var work = new RequestWork(grid, snapshot, target, amount, strategy, budget, checkpoint, preserve, result);
+        var work = new RequestWork(grid, snapshot, target, amount, strategy, budget, checkpoint, preserve, result, reuseCandidate);
         // Admit before collecting world data; rejected/cancelled requests never collect a snapshot.
         var worker = planner.submit(work, budget);
         result.attach(worker);
@@ -197,6 +205,7 @@ public final class CraftingEngineRouter {
         private final boolean preserve;
         private final GraphPlanningRequest request;
         private final boolean fallbackEnabled;
+        private final RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate;
         private GtlPatternCatalog.Snapshot snapshot;
         private CapturedPatternCatalog.Build preparing;
         private CapturedPatternCatalog.Prepared prepared;
@@ -211,7 +220,8 @@ public final class CraftingEngineRouter {
 
         private RequestWork(IGrid grid, CompletableFuture<GtlPatternCatalog.Snapshot> capture, AEKey target, long amount,
                             CalculationStrategy strategy, PlanningBudget budget,
-                            GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve, GraphPlanningRequest request) {
+                            GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve, GraphPlanningRequest request,
+                            RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
             this.grid = grid;
             this.capture = capture;
             this.target = target;
@@ -222,6 +232,7 @@ public final class CraftingEngineRouter {
             this.preserve = preserve;
             this.request = request;
             this.fallbackEnabled = ConfigHolder.INSTANCE.ae2GraphFallback;
+            this.reuseCandidate = reuseCandidate;
         }
 
         @Override
@@ -250,7 +261,7 @@ public final class CraftingEngineRouter {
                             if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
                                     "[Graph Crafting] fallback target={} amount={} trigger={} cycle_solving=false result={} work={} elapsed_ms={}",
                                     report.target(), report.amount(), report.trigger(), report.result(), report.nodes(), report.elapsedNanos() / 1_000_000.0);
-                        });
+                        }).reuseCandidate(reuseCandidate);
                 budget.note("catalog", "recipes=" + compiler.catalog().size() + "; target_sources=" + compiler.producers(target).size() +
                         "; stock_keys=" + planning.availability().size() + "; target_stock=" + planning.availability().getOrDefault(target, 0L) +
                         "; external=" + snapshot.emitable().size() + "; cache_hit=" + snapshot.cacheHit() +
@@ -279,7 +290,8 @@ public final class CraftingEngineRouter {
             GraphPlan<AEKey> selected = planning.result();
             Map<AEKey, Long> extractionStock = new LinkedHashMap<>(planning.availability());
             long assemblyStarted = System.nanoTime();
-            result = new AeGraphPlan(selected, prepared.bindings(), snapshot.emitable(), extractionStock, planning.fallbackMode());
+            result = new AeGraphPlan(selected, prepared.bindings(), snapshot.emitable(), extractionStock,
+                    planning.fallbackMode(), planning.reuseCandidate());
             long assemblyNanos = System.nanoTime() - assemblyStarted;
             long skipped = ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging ? logAllowance(grid,
                     new PlanLogKey(target, amount, strategy, selected.result(), snapshot.epoch(), selected.missingExact().hashCode())) : -1;

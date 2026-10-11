@@ -20,6 +20,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
     final List<K> rowKeys = new ArrayList<>();
     final PlanningBudget budget;
     CountRecoveryTemplates<K> recoveryTemplates;
+    CountRowTemplates rowTemplates;
     private long memory;
 
     static <K> RecipeCountModel<K> create(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
@@ -55,7 +56,8 @@ final class RecipeCountModel<K> implements AutoCloseable {
             if (cached != null && cached.keys.size() <= maxKeys && cached.recipes.size() <= maxRecipes) {
                 budget.check();
                 long bytes = cached.sparseBytes();
-                if (force && !external.contains(target)) bytes += 128L + 96L * cached.recipes.size();
+                if (force && !external.contains(target)) bytes += productionBytes(cached.recipes.size(),
+                        stock.getOrDefault(target, 0L), amount, seeds.getOrDefault(target, 0L));
                 if (!budget.tryReserve(bytes)) {
                     budget.note("count_model", "skipped; sparse_bytes=" + bytes + "; insufficient memory");
                     return null;
@@ -63,6 +65,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 workspace += bytes;
                 var model = new RecipeCountModel<>(cached, stock, external, budget, goals(target, amount, seeds));
                 model.recoveryTemplates = compiler.recoveryTemplates;
+                model.rowTemplates = compiler.rowTemplates;
                 if (force && !external.contains(target)) model.requireProduction(target, amount);
                 model.memory = workspace;
                 workspace = 0;
@@ -75,7 +78,8 @@ final class RecipeCountModel<K> implements AutoCloseable {
             var keys = closure.keys();
             long entries = closure.incidences();
             long sparseBytes = 128L * entries + 128L * (keys.size() + recipes.size());
-            if (force && !external.contains(target)) sparseBytes += 128L + 96L * recipes.size();
+            if (force && !external.contains(target)) sparseBytes += productionBytes(recipes.size(),
+                    stock.getOrDefault(target, 0L), amount, seeds.getOrDefault(target, 0L));
             if (!budget.tryReserve(sparseBytes)) {
                 budget.note("count_model", "skipped; sparse_bytes=" + sparseBytes + "; insufficient memory");
                 return null;
@@ -83,6 +87,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
             workspace += sparseBytes;
             var model = new RecipeCountModel<>(recipes, keys, stock, external, budget, goals(target, amount, seeds), compiler.catalogIndex());
             model.recoveryTemplates = compiler.recoveryTemplates;
+            model.rowTemplates = compiler.rowTemplates;
             if (force && !external.contains(target)) model.requireProduction(target, amount);
             if (compiler.reuseCountCatalogs() &&
                     GraphCompiler.cacheableCountCatalog(entries + keys.size() + recipes.size(), seeds.size(), excluded.size(), external.size()))
@@ -108,7 +113,15 @@ final class RecipeCountModel<K> implements AutoCloseable {
             produced.addAll(recipe.outputs().keySet());
             entries += recipe.inputs().size() + recipe.outputs().size();
         }
-        if (keys.size() > 256) return null;
+        // Upstream-only inputs are supplied by the enclosing demand solve and
+        // contribute no rows to this local count problem. Limit its constrained
+        // coordinates, not those boundary ports. They remain in the model and
+        // the original recipes for scheduling and exact demand restoration.
+        int constrained = 0;
+        for (K key : produced) {
+            budget.check();
+            if (!external.contains(key) && ++constrained > 256) return null;
+        }
         long bytes = (512L << 10) + 128L * entries;
         if (!budget.tryReserve(bytes)) return null;
         try {
@@ -163,14 +176,33 @@ final class RecipeCountModel<K> implements AutoCloseable {
      * witness still passes the independent scheduling and candidate checks.
      */
     private void requireProduction(K target, long amount) {
+        boolean positiveGain = BigInteger.valueOf(stock.getOrDefault(target, 0L)).compareTo(goal(target)) >= 0;
         Map<Integer, BigInteger> terms = new LinkedHashMap<>();
+        Map<Integer, BigInteger> gain = positiveGain ? new LinkedHashMap<>() : null;
         for (int i = 0; i < recipes.size(); i++) {
             budget.check();
             long output = recipes.get(i).executionOutputs().getOrDefault(target, 0L);
             if (output != 0) terms.put(i, BigInteger.valueOf(output).negate());
+            if (positiveGain) {
+                budget.check();
+                // Match the final ForceCraftProof's strictly positive gain.
+                // delta() deliberately omits per-push configuration charges:
+                // this remains a necessary bound when pushes combine runs.
+                BigInteger coefficient = delta(recipes.get(i), target).negate();
+                if (coefficient.signum() != 0) gain.put(i, coefficient);
+            }
         }
         productionGoals.put(target, BigInteger.valueOf(amount));
         constraints.add(new ExactLinearProgram.Constraint(terms, BigInteger.valueOf(amount).negate()));
+        // If stock is below the final goal, the material row already requires
+        // positive gain. Otherwise reject unproductive turnover here instead
+        // of enumerating counts that candidate verification always rejects.
+        if (positiveGain) constraints.add(new ExactLinearProgram.Constraint(gain, BigInteger.ONE.negate()));
+    }
+
+    private static long productionBytes(int recipes, long stock, long amount, long seed) {
+        boolean positiveGain = stock >= amount && stock - amount >= seed;
+        return (128L + 96L * recipes) * (positiveGain ? 2 : 1);
     }
 
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,

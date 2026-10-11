@@ -112,10 +112,10 @@ public class EncodePatternTransferHandlerMixin {
                index = 1,
                remap = false)
     public List<List<GenericStack>> multiBlockInputFilter(List<List<GenericStack>> genericIngredients, @Local(name = "recipeBase") Object recipeBase) {
-        if (!(recipeBase instanceof MultiblockInfoWrapper) || INSTANCE.filterHatch.length == 0) return genericIngredients;
+        if (!(recipeBase instanceof MultiblockInfoWrapper) || INSTANCE.machines.filterHatch.length == 0) return genericIngredients;
         var newList = new ObjectArrayList<List<GenericStack>>();
         for (var l : genericIngredients) {
-            var list = l.stream().filter(g -> Arrays.stream(INSTANCE.filterHatch).noneMatch(s -> g.what().getId().toString().contains(s))).toList();
+            var list = l.stream().filter(g -> Arrays.stream(INSTANCE.machines.filterHatch).noneMatch(s -> g.what().getId().toString().contains(s))).toList();
             if (!list.isEmpty()) newList.add(l);
         }
         return newList;

@@ -49,7 +49,7 @@ public abstract class ExportOnlyAEStockingFluidListMixin extends ExportOnlyAEFlu
     protected IntArrayList gTLCore$configIndexList;
 
     @Unique
-    private static final boolean ENABLE_ULTIMATE_ME_STOCKING = ConfigHolder.INSTANCE.enableUltimateMEStocking;
+    private static final boolean ENABLE_ULTIMATE_ME_STOCKING = ConfigHolder.INSTANCE.machines.enableUltimateMEStocking;
 
     @SuppressWarnings("target")
     @Shadow(remap = false)

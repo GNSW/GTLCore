@@ -65,7 +65,7 @@ public abstract class OreRecipeHandlerMixin {
     private static void gtlcore$processOreForgeHammer(TagPrefix orePrefix, Material material, OreProperty property, Consumer<FinishedRecipe> provider) {
         ItemStack crushedStack = ChemicalHelper.get(crushed, material);
         int amountOfCrushedOre = property.getOreMultiplier();
-        int oreTypeMultiplier = org.gtlcore.gtlcore.config.ConfigHolder.INSTANCE.oreMultiplier;
+        int oreTypeMultiplier = org.gtlcore.gtlcore.config.ConfigHolder.INSTANCE.content.oreMultiplier;
         crushedStack.setCount(crushedStack.getCount() * property.getOreMultiplier());
 
         GTRecipeBuilder builder = FORGE_HAMMER_RECIPES
@@ -99,7 +99,7 @@ public abstract class OreRecipeHandlerMixin {
         } else {
             ingotStack = ChemicalHelper.get(dust, smeltingMaterial);
         }
-        int oreTypeMultiplier = org.gtlcore.gtlcore.config.ConfigHolder.INSTANCE.oreMultiplier;
+        int oreTypeMultiplier = org.gtlcore.gtlcore.config.ConfigHolder.INSTANCE.content.oreMultiplier;
         ingotStack.setCount(ingotStack.getCount() * property.getOreMultiplier() * oreTypeMultiplier);
         crushedStack.setCount(crushedStack.getCount() * property.getOreMultiplier());
 
@@ -383,7 +383,7 @@ public abstract class OreRecipeHandlerMixin {
     @Unique
     private static void gtlcore$processRawOre(TagPrefix orePrefix, Material material, OreProperty property, Consumer<FinishedRecipe> provider) {
         ItemStack crushedStack = ChemicalHelper.get(crushed, material,
-                material.getProperty(PropertyKey.ORE).getOreMultiplier() * org.gtlcore.gtlcore.config.ConfigHolder.INSTANCE.oreMultiplier / 2);
+                material.getProperty(PropertyKey.ORE).getOreMultiplier() * org.gtlcore.gtlcore.config.ConfigHolder.INSTANCE.content.oreMultiplier / 2);
         ItemStack ingotStack;
         Material smeltingMaterial = property.getDirectSmeltResult() == null ? material :
                 property.getDirectSmeltResult();

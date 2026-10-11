@@ -51,7 +51,7 @@ public abstract class StorageServiceMixin implements InventorySnapshotVersion {
     protected abstract void updateCachedStacks();
 
     @Unique
-    private static final int STORAGE_MASK = NumberUtils.nearestPow2Lookup(ConfigHolder.INSTANCE.ae2StorageServiceUpdateInterval) - 1;
+    private static final int STORAGE_MASK = NumberUtils.nearestPow2Lookup(ConfigHolder.INSTANCE.performance.ae2StorageServiceUpdateInterval) - 1;
 
     public StorageServiceMixin(InterestManager<StackWatcher<IStorageWatcherNode>> interestManager) {
         this.interestManager = interestManager;

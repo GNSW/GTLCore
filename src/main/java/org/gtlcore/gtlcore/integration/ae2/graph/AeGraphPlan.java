@@ -70,7 +70,7 @@ public final class AeGraphPlan implements ICraftingPlan {
             if (emitable.contains(key) && deficit.signum() > 0) emissions.put(key, deficit);
         });
         this.emitted = Map.copyOf(emissions);
-        costMode = ConfigHolder.INSTANCE == null ? CraftingCostModel.Mode.LEGACY : ConfigHolder.INSTANCE.ae2GraphByteCostMode;
+        costMode = ConfigHolder.INSTANCE == null ? CraftingCostModel.Mode.LEGACY : ConfigHolder.INSTANCE.ae.ae2GraphByteCostMode;
         this.exactBytes = CraftingCostModel.bytes(graph, costMode, key -> key.getType().getAmountPerByte());
         this.bytes = ExactAmounts.capped(exactBytes);
     }

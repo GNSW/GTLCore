@@ -34,7 +34,7 @@ import static com.lowdragmc.lowdraglib.gui.texture.ProgressTexture.FillDirection
 
 public class GTLRecipeTypes {
 
-    public static final GTRecipeType PRIMITIVE_VOID_ORE_RECIPES = ConfigHolder.INSTANCE.enablePrimitiveVoidOre ?
+    public static final GTRecipeType PRIMITIVE_VOID_ORE_RECIPES = ConfigHolder.INSTANCE.content.enablePrimitiveVoidOre ?
             register("primitive_void_ore", MULTIBLOCK)
                     .setMaxIOSize(0, 0, 1, 0)
                     .setMaxTooltips(1)

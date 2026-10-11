@@ -91,7 +91,7 @@ public final class GraphRingPackets {
                         failure(player, "INVALID_PAGE");
                         return;
                     }
-                    if (offset == 0 && ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging)
+                    if (offset == 0 && ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging)
                         GTLCore.LOGGER.info("[Graph Crafting] view={} rows={} first_page_ms={}", plan, page.total(), (System.nanoTime() - start) / 1_000_000.0);
                     WirelessAePackets.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new Response(container, page));
                 }));

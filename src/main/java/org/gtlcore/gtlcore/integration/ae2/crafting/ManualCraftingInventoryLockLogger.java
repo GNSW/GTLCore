@@ -51,7 +51,7 @@ public final class ManualCraftingInventoryLockLogger {
 
     public static boolean isEnabled() {
         return ConfigHolder.INSTANCE != null &&
-                ConfigHolder.INSTANCE.debugLogging.enableAe2ManualCraftingInventoryLockLogging;
+                ConfigHolder.INSTANCE.diagnostics.debugLogging.enableAe2ManualCraftingInventoryLockLogging;
     }
 
     public static void acquired(long reservationId, MEStorage storage, KeyCounter amounts, IActionSource source) {

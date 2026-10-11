@@ -18,11 +18,11 @@ public abstract class YouCantBreakAE2Mixin {
 
     @ModifyVariable(method = "updateBlocks", at = @At(value = "STORE", ordinal = 2), remap = false, name = "matcher")
     public BlockMatcher modifyBlockMatcher(BlockMatcher matcher) {
-        if (ConfigHolder.INSTANCE.blackBlockList == null || ConfigHolder.INSTANCE.blackBlockList.length < 1) {
+        if (ConfigHolder.INSTANCE.interaction.blackBlockList == null || ConfigHolder.INSTANCE.interaction.blackBlockList.length < 1) {
             return matcher;
         }
         return (original, state) -> {
-            boolean flag = !TextUtil.containsWithWildcard(ConfigHolder.INSTANCE.blackBlockList, Registries.getBlockId(state.getBlock()));
+            boolean flag = !TextUtil.containsWithWildcard(ConfigHolder.INSTANCE.interaction.blackBlockList, Registries.getBlockId(state.getBlock()));
             return flag && state.getBlock() == original.getBlock();
         };
     }

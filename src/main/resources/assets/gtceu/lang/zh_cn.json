@@ -786,7 +786,7 @@
   "gtceu.machine.me_pattern_buffer.desc.0": "§f所有样板槽位都拥有§6完全隔离§f。",
   "gtceu.machine.me_pattern_buffer.desc.1": "对槽位§b中键§f打开专用§6催化剂槽§f, 左侧§6电路§f与§6催化剂§f栏位与所有样板共享。",
   "gtceu.machine.me_pattern_buffer.desc.2": "在§6样板§f中填写对应电路作为虚拟电路，下单时§6无消耗§f，会§6覆盖§f共享电路设置。",
-  "gtceu.machine.me_pattern_buffer.desc.3": "自带§6样板倍增§f功能，只需填写基础数量的样板，下单时会一次性发配所需乘数。",
+  "gtceu.machine.me_pattern_buffer.desc.3": "自带§6样板倍增§f功能，下单时会一次性发配所需乘数。",
   "gtceu.machine.me_pattern_buffer.desc.4": "自带§6配方缓存§f功能，单个槽位默认缓存一种配方，可自定义修改。",
   "gtceu.machine.me_pattern_buffer.desc.5": "自带§6ME输出§f功能，无需放置额外的输出舱室。",
   "gtlcore.machine.pattern_quick_upload.tooltip": "支持§6快捷上传样板§f。",

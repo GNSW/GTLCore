@@ -89,7 +89,7 @@ public class ForgeCommonEventListener {
 
     @SubscribeEvent
     public static void onPlayerTickEvent(TickEvent.PlayerTickEvent event) {
-        if (ConfigHolder.INSTANCE.disableDrift && event.phase == TickEvent.Phase.END &&
+        if (ConfigHolder.INSTANCE.gameplay.disableDrift && event.phase == TickEvent.Phase.END &&
                 event.side == LogicalSide.CLIENT && event.player.xxa == 0 && event.player.zza == 0) {
             event.player.setDeltaMovement(event.player.getDeltaMovement().multiply(0.5, 1, 0.5));
         }
@@ -97,7 +97,7 @@ public class ForgeCommonEventListener {
 
     @SubscribeEvent
     public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (ConfigHolder.INSTANCE.sendUpdateMessages && event.getEntity() instanceof ServerPlayer player) {
+        if (ConfigHolder.INSTANCE.gameplay.sendUpdateMessages && event.getEntity() instanceof ServerPlayer player) {
             player.displayClientMessage(Component.translatable("gtlcore.message.structure_update_notice"), false);
             player.displayClientMessage(Component.translatable("block.gtceu.huge_incubator"), false);
             player.displayClientMessage(Component.translatable("gtlcore.message.close_update_notice"), false);

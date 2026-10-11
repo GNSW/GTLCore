@@ -127,7 +127,7 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
 
     @Unique
     private static boolean isPatternProviderAutoExpandEnabledByDefault() {
-        return ConfigHolder.INSTANCE != null && ConfigHolder.INSTANCE.ae2PatternProviderAutoExpandDefault;
+        return ConfigHolder.INSTANCE != null && ConfigHolder.INSTANCE.ae.ae2PatternProviderAutoExpandDefault;
     }
 
     @Inject(method = "exportSettings", at = @At("TAIL"), remap = false)

@@ -14,7 +14,7 @@ public final class GTRecipeJeiTiming {
     private GTRecipeJeiTiming() {}
 
     public static boolean isEnabled() {
-        return ConfigHolder.INSTANCE == null || ConfigHolder.INSTANCE.optimizeGtceuJeiRegistration;
+        return ConfigHolder.INSTANCE == null || ConfigHolder.INSTANCE.performance.optimizeGtceuJeiRegistration;
     }
 
     public static void reset() {

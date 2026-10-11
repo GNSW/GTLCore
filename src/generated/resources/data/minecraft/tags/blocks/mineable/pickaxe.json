@@ -76,6 +76,7 @@
     "gtlcore:component_assembly_line_casing_opv",
     "gtlcore:component_assembly_line_casing_max",
     "gtlcore:wireless_network_core",
-    "gtlcore:wireless_network_bookmark"
+    "gtlcore:wireless_network_bookmark",
+    "gtlcore:wireless_grid_energy_monitor"
   ]
 }

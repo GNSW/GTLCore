@@ -10,7 +10,7 @@ public final class BloomConfig {
 
     private static BloomOptions options() {
         var holder = ConfigHolder.INSTANCE;
-        return holder == null || holder.bloom == null ? DEFAULTS : holder.bloom;
+        return holder == null || holder.graphics.bloom == null ? DEFAULTS : holder.graphics.bloom;
     }
 
     public static BloomOptions.Mode mode() {

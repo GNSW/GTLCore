@@ -45,7 +45,7 @@ public class SourceTooltipRegister$FragmentWorldCollection {
     }
 
     public static void register(SourceTooltipRegistrationEvent event) {
-        if (!ConfigHolder.INSTANCE.enableSkyBlokeMode) return;
+        if (!ConfigHolder.INSTANCE.content.enableSkyBlokeMode) return;
         of_fwc(event.register$item("gtceu:raw_almandine"), as_fwc(0, " [ 14 ]"));
         of_fwc(event.register$item("gtceu:raw_aluminium"), as_fwc(2, " [ 2 ]"), as_fwc(9, " [ 3 ]"), as_fwc(13, " [ 4 ]"));
         of_fwc(event.register$item("gtceu:raw_alunite"), as_fwc(1, " [ 4 ]"), as_fwc(6, " [ 3 ]"), as_fwc(12, " [ 1 ]"), as_fwc(14, " [ 1 ]"));

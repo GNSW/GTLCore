@@ -40,7 +40,7 @@ final class GtlDispatchPolicy {
         if (provider instanceof IMEPatternPartMachine || provider instanceof IMECraftIOPart) return true;
         if (provider instanceof PatternRelayPart relay) return relay.isAccessMode();
         if (provider instanceof IAutoExpandSettings settings) return settings.isPatternAutoExpand();
-        return ConfigHolder.INSTANCE != null && ConfigHolder.INSTANCE.ae2PatternProviderAutoExpandDefault &&
+        return ConfigHolder.INSTANCE != null && ConfigHolder.INSTANCE.ae.ae2PatternProviderAutoExpandDefault &&
                 provider instanceof PatternProviderLogic;
     }
 

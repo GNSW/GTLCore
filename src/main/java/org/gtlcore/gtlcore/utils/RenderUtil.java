@@ -34,6 +34,6 @@ public class RenderUtil {
     }
 
     public static float getSmoothTick(MetaMachine machine, float partialTick) {
-        return ConfigHolder.INSTANCE.enableSmoothAnimations ? GlobalRenderClock.getSmoothTick() : machine.getOffsetTimer() + partialTick;
+        return ConfigHolder.INSTANCE.graphics.enableSmoothAnimations ? GlobalRenderClock.getSmoothTick() : machine.getOffsetTimer() + partialTick;
     }
 }

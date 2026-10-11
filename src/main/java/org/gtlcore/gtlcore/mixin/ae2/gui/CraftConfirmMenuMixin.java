@@ -134,7 +134,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
             }
         }
         if (job instanceof GraphPlanningRequest request &&
-                request.noticeDue(ConfigHolder.INSTANCE.ae2GraphPlannerNoticeAfterMs) && getPlayer() instanceof ServerPlayer player) {
+                request.noticeDue(ConfigHolder.INSTANCE.interaction.ae2GraphPlannerNoticeAfterMs) && getPlayer() instanceof ServerPlayer player) {
             var phase = request.budget().phase().name().toLowerCase(java.util.Locale.ROOT);
             player.displayClientMessage(Component.translatable("gtlcore.ae.graph.planning_status",
                     Component.translatable("gtlcore.ae.graph.phase." + phase), request.budget().elapsedNanos() / 1_000_000_000L), true);
@@ -402,7 +402,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         if (this.result instanceof AeGraphPlan graph) {
             // Dynamic inventory remains the default. Preview reservations are
             // opt-in and must never cause an unbounded replan/reacquire loop.
-            if (ConfigHolder.INSTANCE.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL && !graph.simulation() &&
+            if (ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL && !graph.simulation() &&
                     graph != gtlcore$reservedPlan && graph != gtlcore$reservationAttemptedPlan) {
                 boolean reserved = gtlcore$tryReserveInventory(graph);
                 gtlcore$reservationAttemptedPlan = graph;
@@ -411,7 +411,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
             }
             return;
         }
-        if (!ConfigHolder.INSTANCE.enableAe2ManualCraftingInventoryLock) {
+        if (!ConfigHolder.INSTANCE.ae.enableAe2ManualCraftingInventoryLock) {
             this.gtlcore$releaseInventoryReservation();
         } else if (this.result != null && this.result != this.gtlcore$reservedPlan &&
                 !this.gtlcore$tryReserveInventory(this.result)) {
@@ -460,7 +460,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     @Inject(method = "broadcastChanges",
             at = @At(value = "INVOKE", target = "Lappeng/menu/AEBaseMenu;broadcastChanges()V"))
     private void gtlcore$syncMissingCraftAvailability(CallbackInfo ci) {
-        this.gtlcore$missingCraftAvailable = ConfigHolder.INSTANCE.enableAe2MissingCrafting &&
+        this.gtlcore$missingCraftAvailable = ConfigHolder.INSTANCE.ae.enableAe2MissingCrafting &&
                 gtlcore$findMissingCraftCpu(null) != null;
     }
 
@@ -516,19 +516,19 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
                                                                       ICraftingCPU target,
                                                                       boolean prioritizePower,
                                                                       IActionSource source) {
-        TransfiniteCraftingCPU missingCraftCpu = ConfigHolder.INSTANCE.enableAe2MissingCrafting && plan.simulation() ?
+        TransfiniteCraftingCPU missingCraftCpu = ConfigHolder.INSTANCE.ae.enableAe2MissingCrafting && plan.simulation() ?
                 gtlcore$findMissingCraftCpu(plan) : null;
         ICraftingCPU submittedTarget = missingCraftCpu == null ? target : missingCraftCpu;
         ICraftingPlan submittedPlan = missingCraftCpu != null ?
                 new MissingCraftingPlan(plan) : plan;
         gtlcore$validateInventoryReservation();
         boolean keepPreviewReservation = plan instanceof AeGraphPlan && !plan.simulation() &&
-                ConfigHolder.INSTANCE.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL;
+                ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL;
         // Reuse the preview's ownership through submission. Releasing it and
         // reacquiring would expose the ingredients to competing extractions.
         // The old optional submission-only lock retains its original lifetime.
         if (plan instanceof AeGraphPlan && !plan.simulation() &&
-                (keepPreviewReservation || ConfigHolder.INSTANCE.enableAe2ManualCraftingInventoryLock))
+                (keepPreviewReservation || ConfigHolder.INSTANCE.ae.enableAe2ManualCraftingInventoryLock))
             gtlcore$tryReserveInventory(plan);
         var reservation = plan == this.gtlcore$reservedPlan ? this.gtlcore$inventoryReservation : null;
         ICraftingSubmitResult submitResult;
@@ -555,7 +555,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
                 // next broadcast. A new plan or explicit submit can try again.
                 gtlcore$reservationAttemptedPlan = plan;
             }
-            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
+            if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
                     "[Graph Crafting] confirmation rejected plan={} result={} simulation={} cpu={} error={} detail={}",
                     graph.id(), graph.graph().result(), submittedPlan.simulation(),
                     submittedTarget == null ? "auto" : submittedTarget.getClass().getName(), submitResult.errorCode(), submitResult.errorDetail());
@@ -598,7 +598,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
                        target = "Lappeng/api/networking/crafting/ICraftingPlan;simulation()Z"),
               remap = false)
     private boolean gtlcore$allowMissingCraftOnTransfiniteCpu(ICraftingPlan plan) {
-        return plan.simulation() && (!ConfigHolder.INSTANCE.enableAe2MissingCrafting ||
+        return plan.simulation() && (!ConfigHolder.INSTANCE.ae.enableAe2MissingCrafting ||
                 gtlcore$findMissingCraftCpu(plan) == null);
     }
 
@@ -671,8 +671,8 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         if (gtlcore$inventoryReservation == null) return;
         var grid = getGrid();
         boolean enabled = gtlcore$reservedPlan instanceof AeGraphPlan ?
-                ConfigHolder.INSTANCE.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL :
-                ConfigHolder.INSTANCE.enableAe2ManualCraftingInventoryLock;
+                ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL :
+                ConfigHolder.INSTANCE.ae.enableAe2ManualCraftingInventoryLock;
         if (gtlcore$closed || !enabled || result != gtlcore$reservedPlan || plan == null ||
                 grid == null || grid != gtlcore$reservedGrid || getActionSource() != gtlcore$reservationSource ||
                 grid.getStorageService().getInventory() != gtlcore$reservedStorage)

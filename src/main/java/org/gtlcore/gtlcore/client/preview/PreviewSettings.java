@@ -10,7 +10,7 @@ public final class PreviewSettings {
     private PreviewSettings() {}
 
     private static ConfigHolder.PreviewOptions options() {
-        return ConfigHolder.INSTANCE == null ? DEFAULTS : ConfigHolder.INSTANCE.multiblockPreview;
+        return ConfigHolder.INSTANCE == null ? DEFAULTS : ConfigHolder.INSTANCE.graphics.multiblockPreview;
     }
 
     public static boolean enabled() {

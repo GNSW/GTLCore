@@ -49,8 +49,8 @@ public class SlaughterhouseMachine extends WorkableElectricMultiblockMachine {
 
     @Persisted
     private boolean isSpawn;
-    private final String[] mobList1 = ConfigHolder.INSTANCE.mobList1;
-    private final String[] mobList2 = ConfigHolder.INSTANCE.mobList2;
+    private final String[] mobList1 = ConfigHolder.INSTANCE.machines.mobList1;
+    private final String[] mobList2 = ConfigHolder.INSTANCE.machines.mobList2;
 
     public SlaughterhouseMachine(IMachineBlockEntity holder) {
         super(holder);

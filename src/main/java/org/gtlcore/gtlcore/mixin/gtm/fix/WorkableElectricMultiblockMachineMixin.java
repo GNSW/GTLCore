@@ -20,6 +20,7 @@ import com.gregtechceu.gtceu.api.machine.multiblock.WorkableElectricMultiblockMa
 import com.gregtechceu.gtceu.api.machine.multiblock.WorkableMultiblockMachine;
 import com.gregtechceu.gtceu.api.misc.EnergyContainerList;
 import com.gregtechceu.gtceu.common.data.GTRecipeTypes;
+import com.gregtechceu.gtceu.common.machine.multiblock.electric.FusionReactorMachine;
 import com.gregtechceu.gtceu.common.machine.multiblock.electric.research.DataBankMachine;
 import com.gregtechceu.gtceu.utils.GTUtil;
 
@@ -34,6 +35,7 @@ import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Arrays;
@@ -149,6 +151,12 @@ public abstract class WorkableElectricMultiblockMachineMixin extends WorkableMul
             IRecipeCapabilityMachine.attachConfigurators(configuratorPanel, (WorkableElectricMultiblockMachine) self());
             ILockRecipe.attachRecipeLockable(configuratorPanel, this.getRecipeLogic());
         }
+    }
+
+    @ModifyArg(method = "addDisplayText", at = @At(value = "INVOKE", target = "Lcom/gregtechceu/gtceu/api/machine/multiblock/MultiblockDisplayText$Builder;addEnergyTierLine(I)Lcom/gregtechceu/gtceu/api/machine/multiblock/MultiblockDisplayText$Builder;"), index = 0, remap = false)
+    private int gtlcore$getDisplayedRecipeTier(int energyTier) {
+        // Fusion recipes are limited by the reactor tier, not the inherited hatch voltage tier.
+        return self() instanceof FusionReactorMachine fusion ? fusion.getTier() : energyTier;
     }
 
     @Inject(method = "addDisplayText", at = @At(value = "INVOKE", target = "Lcom/gregtechceu/gtceu/api/machine/multiblock/WorkableElectricMultiblockMachine;getDefinition()Lcom/gregtechceu/gtceu/api/machine/MultiblockMachineDefinition;"), remap = false)

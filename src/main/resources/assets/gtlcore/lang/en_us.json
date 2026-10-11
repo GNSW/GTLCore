@@ -466,6 +466,7 @@
   "block.gtlcore.virtual_ingredient_supply_machine.tooltip.1": "Encode the Virtual Ingredient into a pattern in place of the item or fluid itself",
   "block.gtlcore.virtual_ingredient_supply_machine.tooltip.2": "Items or fluids put in here are sealed and cannot be taken back",
   "item.gtlcore.virtual_ingredient": "Virtual Ingredient",
+  "tooltip.gtlcore.infinite_water_cover.production": "§bWater Supply: §fUp to %1$s mB every %2$s ticks",
   "tooltip.gtlcore.virtual_ingredient.usage": "Right-click in air to set what it provides",
   "tooltip.gtlcore.virtual_ingredient.role": "Only works for recipe inputs that are not consumed",
   "tooltip.gtlcore.virtual_ingredient.payload": "Provides: %s",

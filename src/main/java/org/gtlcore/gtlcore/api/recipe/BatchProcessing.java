@@ -1,11 +1,14 @@
 package org.gtlcore.gtlcore.api.recipe;
 
+import org.gtlcore.gtlcore.api.machine.computation.ComputationAmounts;
+import org.gtlcore.gtlcore.api.machine.computation.ComputationRecipes;
 import org.gtlcore.gtlcore.api.machine.multiblock.ParallelMachine;
 import org.gtlcore.gtlcore.api.machine.trait.IBatchMachine;
 import org.gtlcore.gtlcore.api.recipe.ingredient.LongIngredient;
 import org.gtlcore.gtlcore.common.machine.trait.MultipleRecipesLogic;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 
+import com.gregtechceu.gtceu.api.capability.recipe.CWURecipeCapability;
 import com.gregtechceu.gtceu.api.capability.recipe.FluidRecipeCapability;
 import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.capability.recipe.RecipeCapability;
@@ -155,6 +158,7 @@ public final class BatchProcessing {
         recipe.tickOutputs.putAll(tickOutputs);
         recipe.duration = result.duration;
         recipe.ocTier = result.ocTier;
+        recipe.data = result.data.copy();
         RecipeExtensionCopier.copy(result, recipe);
         return true;
     }
@@ -222,6 +226,10 @@ public final class BatchProcessing {
     }
 
     private static int limitByLongAmounts(GTRecipe recipe, int limit) {
+        if (recipe.data.getBoolean("duration_is_total_cwu"))
+            limit = limitByMaximumAmount(limit, ComputationAmounts.total(recipe));
+        limit = limitByMaximumAmount(limit, ComputationRecipes.required(recipe.getInputContents(CWURecipeCapability.CAP)));
+        limit = limitByMaximumAmount(limit, ComputationRecipes.required(recipe.getOutputContents(CWURecipeCapability.CAP)));
         limit = limitByMaximumAmount(limit, getMaximumItemAmount(recipe.getInputContents(ItemRecipeCapability.CAP)));
         limit = limitByMaximumAmount(limit, getMaximumFluidAmount(recipe.getInputContents(FluidRecipeCapability.CAP)));
         limit = limitByMaximumAmount(limit, getMaximumItemAmount(recipe.getOutputContents(ItemRecipeCapability.CAP)));
@@ -278,7 +286,14 @@ public final class BatchProcessing {
     }
 
     private static GTRecipe scaleRecipe(GTRecipe recipe, int batchSize) {
-        GTRecipe batched = recipe.copy(preciseMultiplier(batchSize), false);
+        // Sequential cycles scale ordinary IO and duration, never the per-tick rates. Scaling
+        // everything and restoring tick IO afterwards can overflow a valid long CWU/t first.
+        GTRecipe batched = recipe.copy();
+        var modifier = preciseMultiplier(batchSize);
+        batched.inputs.clear();
+        batched.inputs.putAll(recipe.copyContents(recipe.inputs, modifier));
+        batched.outputs.clear();
+        batched.outputs.putAll(recipe.copyContents(recipe.outputs, modifier));
         RecipeExtensionCopier.copy(recipe, batched);
 
         batched.tickInputs.clear();
@@ -286,6 +301,12 @@ public final class BatchProcessing {
         batched.tickOutputs.clear();
         batched.tickOutputs.putAll(recipe.tickOutputs);
         batched.duration = recipe.duration * batchSize;
+        if (recipe.data.getBoolean("duration_is_total_cwu")) {
+            long total = Math.multiplyExact(ComputationAmounts.total(recipe), batchSize);
+            batched.data = recipe.data.copy();
+            batched.data.putLong(ComputationAmounts.TOTAL_CWU, total);
+            batched.duration = ComputationAmounts.duration(total);
+        }
         batched.ocTier = recipe.ocTier;
         IGTRecipe.of(batched).setRealParallels(IGTRecipe.of(recipe).getRealParallels() * batchSize);
         return batched;

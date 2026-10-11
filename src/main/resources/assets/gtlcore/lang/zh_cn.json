@@ -463,6 +463,7 @@
   "block.gtlcore.virtual_ingredient_supply_machine.tooltip.1": "编码样板时用虚拟原料代替该物品/流体本身",
   "block.gtlcore.virtual_ingredient_supply_machine.tooltip.2": "放入的物品/流体会被封存，无法取回",
   "item.gtlcore.virtual_ingredient": "虚拟原料",
+  "tooltip.gtlcore.infinite_water_cover.production": "§b供水量：§f每 %2$s tick 最多 %1$s mB",
   "tooltip.gtlcore.virtual_ingredient.usage": "对空气右键，设置其提供的原料",
   "tooltip.gtlcore.virtual_ingredient.role": "仅对不被消耗的配方输入生效",
   "tooltip.gtlcore.virtual_ingredient.payload": "提供：%s",

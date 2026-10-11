@@ -55,6 +55,15 @@ public abstract class ContentModifierMixin implements IAdvancedContentModifier {
 
     @Override
     @Unique
+    public long applyExact(long value) {
+        if (!useFraction) return IAdvancedContentModifier.super.applyExact(value);
+        if (value < 0 || numerator < 0 || denominator <= 0) throw new IllegalArgumentException("Invalid exact modifier");
+        return BigInteger.valueOf(value).multiply(BigInteger.valueOf(numerator))
+                .divide(BigInteger.valueOf(denominator)).longValueExact();
+    }
+
+    @Override
+    @Unique
     public void setDivision(long numerator, long denominator) {
         this.numerator = numerator;
         this.denominator = denominator;

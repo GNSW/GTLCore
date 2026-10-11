@@ -1,9 +1,11 @@
 package org.gtlcore.gtlcore.api.machine.computation;
 
 import org.gtlcore.gtlcore.api.recipe.IAdvancedContentModifier;
+import org.gtlcore.gtlcore.api.recipe.IAdvancedOCResult;
 
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.content.ContentModifier;
+import com.gregtechceu.gtceu.api.recipe.logic.OCResult;
 
 import java.math.BigDecimal;
 
@@ -40,6 +42,16 @@ public final class ComputationAmounts {
 
     public static long total(GTRecipe recipe) {
         return recipe.data.contains(TOTAL_CWU) ? Math.max(1, recipe.data.getLong(TOTAL_CWU)) : Math.max(1, recipe.duration);
+    }
+
+    public static void applyOverclock(GTRecipe recipe, OCResult result) {
+        if (!recipe.data.getBoolean("duration_is_total_cwu") || !recipe.data.contains(TOTAL_CWU)) return;
+        var advanced = (IAdvancedOCResult) (Object) result;
+        long total = ComputationMath.overclockTotal(total(recipe), recipe.duration, result.getDuration(),
+                advanced.getDurationFactor(), advanced.getBaseOCLevel());
+        // Recipe copies may share data with the cached original. Never discount it.
+        recipe.data = recipe.data.copy();
+        recipe.data.putLong(TOTAL_CWU, total);
     }
 
     public static int duration(long total) {

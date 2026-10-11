@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.mixin.gtm.api.recipe;
 
+import org.gtlcore.gtlcore.api.machine.computation.ComputationAmounts;
 import org.gtlcore.gtlcore.api.recipe.BatchProcessing;
 import org.gtlcore.gtlcore.api.recipe.IAdvancedOCResult;
 import org.gtlcore.gtlcore.api.recipe.RecipeMultiplierTracker;
@@ -59,6 +60,7 @@ public abstract class RecipeModifierListMixin {
         RecipeMultiplierTracker.finish(machine, modifiedRecipe);
 
         if (modifiedRecipe != null && result.getDuration() != 0) {
+            ComputationAmounts.applyOverclock(modifiedRecipe, result);
             modifiedRecipe.duration = result.getDuration();
 
             if (result.getEut() > 0L) {

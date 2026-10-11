@@ -15,8 +15,28 @@ import java.util.function.Consumer;
  */
 public final class RequestPlanningWork<K> implements PlanningScheduler.Work<GraphPlan<K>> {
 
+    /** Caller-owned, immutable handoff for one completed request, not a global cache. */
+    public static final class ReuseCandidate<K> {
+        private final GraphPlan<K> plan;
+        private final ReuseScope<K> scope;
+
+        private ReuseCandidate(GraphPlan<K> plan, ReuseScope<K> scope) {
+            this.plan = plan;
+            this.scope = scope;
+        }
+    }
+
+    private record ReuseScope<K>(K target, long amount, boolean preserve, boolean craftLess, String strategy,
+                                 CatalystPolicy catalysts, boolean forceCraft, boolean replanning,
+                                 boolean fallbackEnabled, boolean boundedAlternatives,
+                                 Set<K> external, Map<K, Long> requiredSeeds) {}
+
     public record FallbackReport<K>(K target, long amount, GraphPlan.Result trigger,
                                     GraphPlan.Result result, long nodes, long elapsedNanos) {}
+
+    /** Both accounts remain explicit: fallback spends a separate allowance after primary search stops. */
+    public record CostReport(PlanningBudget.Metrics primary, PlanningCostTrace.Snapshot primaryPipeline,
+                             PlanningBudget.Metrics fallback, PlanningCostTrace.Snapshot fallbackPipeline) {}
 
     private final GraphCompiler<K> compiler;
     private final K target;
@@ -35,10 +55,17 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private final CatalystPolicy catalysts;
     private final boolean directEmission;
     private final boolean unavailableTarget;
+    private final Map<K, Long> recoverySeeds;
+    private final ReuseScope<K> requestScope;
     private CatalystPlanningWork<K> current;
     private GraphPlan<K> selected;
+    private GraphPlan<K> reuseCandidate;
+    private boolean reuseAttempted;
+    private boolean completed;
     private boolean partialSearch, tryEstimate, tryNeighbor;
     private boolean fallbackAttempted, fallbackMode;
+    private PlanningBudget.Metrics fallbackMetrics;
+    private PlanningCostTrace.Snapshot fallbackPipeline;
     private long low, high, middle, estimatedAmount;
 
     public RequestPlanningWork(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
@@ -49,7 +76,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         this.compiler = compiler;
         this.target = target;
         this.amount = amount;
-        this.emitable = emitable;
+        this.emitable = Set.copyOf(emitable);
         this.checkpoint = checkpoint;
         this.preserve = preserve;
         this.craftLess = craftLess;
@@ -63,6 +90,10 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         available = PlanningInventory.availability(stock, checkpoint == null ? Map.of() : checkpoint.forecast());
         directEmission = emitable.contains(target) && compiler.producers(target).isEmpty();
         unavailableTarget = checkpoint == null && !emitable.contains(target) && compiler.producers(target).isEmpty();
+        recoverySeeds = checkpoint == null ? Map.of() : GraphRecipe.amounts(checkpoint.recoverySeeds());
+        requestScope = new ReuseScope<>(target, amount, preserve, craftLess, strategy, catalysts,
+                checkpoint == null && !directEmission, checkpoint != null, fallbackEnabled, boundedAlternatives,
+                this.emitable, recoverySeeds);
     }
 
     /** Availability used for extraction accounting after planning. */
@@ -70,8 +101,38 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         return available;
     }
 
+    /** An explicit witness for this refresh; every current obligation is revalidated. */
+    public RequestPlanningWork<K> reuseCandidate(GraphPlan<K> previous) {
+        if (current != null || selected != null) throw new IllegalStateException("Planning already started");
+        reuseCandidate = previous;
+        return this;
+    }
+
+    /** Use a prior request only when all captured request policies still match. */
+    public RequestPlanningWork<K> reuseCandidate(ReuseCandidate<K> previous) {
+        if (current != null || selected != null) throw new IllegalStateException("Planning already started");
+        reuseCandidate = previous != null && previous.scope.equals(reuseScope()) ? previous.plan : null;
+        if (previous != null && reuseCandidate == null) budget.note("plan_reuse", "declined; reason=request_configuration");
+        return this;
+    }
+
+    /** No handle is exported for failed, incomplete or reduced-amount requests. */
+    public ReuseCandidate<K> reuseCandidate() {
+        return completed && selected != null && selected.feasible() && selected.amount() == amount ?
+                new ReuseCandidate<>(selected, reuseScope()) : null;
+    }
+
+    private ReuseScope<K> reuseScope() {
+        return requestScope;
+    }
+
     public boolean fallbackMode() {
         return fallbackMode;
+    }
+
+    /** Fallback fields are null until an attempted fallback finishes (including a budget exit). */
+    public CostReport costs() {
+        return new CostReport(budget.metrics(), budget.pipelineMetrics(), fallbackMetrics, fallbackPipeline);
     }
 
     @Override
@@ -122,8 +183,19 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         // Feasibility probes share the order budget and must not each repeat
         // the optional catalyst acceleration search.
         return new CatalystPlanningWork<>(checkpoint != null || craftLess ? CatalystPolicy.MINIMAL : catalysts, budget,
-                policy -> new GraphPlanningWork<>(compiler, target, count, available, emitable,
-                        checkpoint == null ? Map.of() : checkpoint.recoverySeeds(), preserve, checkpoint == null && !directEmission, budget).catalysts(policy));
+                policy -> {
+                    var work = new GraphPlanningWork<>(compiler, target, count, available, emitable,
+                            recoverySeeds, preserve,
+                            checkpoint == null && !directEmission, budget).catalysts(policy);
+                    // A rejection consumes the proposal only, never an ordinary
+                    // search attempt or the remainder of craft-less probes.
+                    if (!reuseAttempted) {
+                        reuseAttempted = true;
+                        work.reuseCandidate(reuseCandidate);
+                        reuseCandidate = null;
+                    }
+                    return work;
+                });
     }
 
     private long estimateAmount(GraphPlan<K> full) {
@@ -158,6 +230,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         if (!selected.feasible() && selected.missing().isEmpty() && !fallback(selected.result())) throw limitOrUnknown(selected);
         if (!selected.feasible() && boundedAlternatives && !fallbackMode && !fallback(GraphPlan.Result.SEARCH_LIMIT))
             throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "input_alternatives_bounded; missing preview is not a proof for omitted alternatives");
+        completed = true;
         return true;
     }
 
@@ -177,9 +250,12 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
             current = null;
         }
         PlanningBudget quick = new PlanningBudget(250, 131_072, 16L << 20, cancelled, System::nanoTime);
+        if (budget.metricsEnabled()) quick.enableMetrics();
         try {
-            selected = GraphFallback.plan(compiler, target, amount, available, emitable,
-                    checkpoint == null ? Map.of() : checkpoint.recoverySeeds(), preserve, checkpoint == null && !directEmission, quick);
+            try (var costs = quick.trace(PlanningCostTrace.Origin.FALLBACK, PlanningCostTrace.Stage.SEARCH)) {
+                selected = GraphFallback.plan(compiler, target, amount, available, emitable,
+                        recoverySeeds, preserve, checkpoint == null && !directEmission, quick);
+            }
             fallbackMode = true;
             budget.note("fallback", "cycle_solving=false; reason=" + reason + "; work=" + quick.nodes() + "; result=" + selected.result());
             fallbackReporter.accept(new FallbackReport<>(target, amount, reason, selected.result(), quick.nodes(), quick.elapsedNanos()));
@@ -187,6 +263,9 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         } catch (PlanningBudget.Exhausted exhausted) {
             budget.note("fallback", "cycle_solving=false; trigger=" + reason + "; stopped=" + exhausted.limit() + "; work=" + quick.nodes());
             return false;
+        } finally {
+            fallbackMetrics = quick.metrics();
+            fallbackPipeline = quick.pipelineMetrics();
         }
     }
 

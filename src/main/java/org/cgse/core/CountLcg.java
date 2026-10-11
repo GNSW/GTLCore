@@ -178,18 +178,43 @@ final class CountLcg implements AutoCloseable {
     private static final class RowActivity {
 
         boolean valid;
+        boolean finiteLong = true;
 
         BigInteger minimum = BigInteger.ZERO;
+        // A null arbitrary-precision value denotes the exact primitive sum.
+        // The row estimate already covers this scalar; no extra cache grows.
+        long minimumLong;
         BigInteger maximumChange = BigInteger.ZERO;
         int infinities, infiniteXor;
         int[] booleanOrder;
+
+        BigInteger minimum() {
+            return minimum == null ? BigInteger.valueOf(minimumLong) : minimum;
+        }
+
+        void add(BigInteger coefficient, BigInteger delta) {
+            if (minimum == null && finiteLong) {
+                // Immutable root endpoints and widths admit both operands.
+                // Their product and the accumulated sum still need checks:
+                // individually small terms can overflow, including on undo.
+                try {
+                    long change = Math.multiplyExact(coefficient.longValue(), delta.longValue());
+                    minimumLong = Math.addExact(minimumLong, change);
+                    return;
+                } catch (ArithmeticException overflow) {
+                    // Promote before updating, retaining the exact old sum.
+                }
+            }
+            minimum = minimum().add(coefficient.multiply(delta));
+        }
     }
 
     private final PlanningBudget budget;
     private List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] rootLow, rootHigh, low, high;
     private final BigInteger[] levelZeroLow, levelZeroHigh;
-    private long rootVersion;
+    private long rootVersion, minimizationWork, minimized;
+    private boolean integerMinimization, minimizationEnabled;
     private final double[] activity;
     private RowActivity[] rowActivity;
     private final List<List<Incidence>> incident = new ArrayList<>();
@@ -222,6 +247,8 @@ final class CountLcg implements AutoCloseable {
     private double[] finiteHint;
     private int fixedPeak;
     private boolean learnedRelaxation;
+    private boolean integerRelaxation;
+    private int relaxationFocus = -1;
     private int originalRows, relaxationDecisions = -1, relaxationConflicts = -1;
     private long relaxationCalls, relaxationCuts, relaxationMisses, relaxationNumericalWork;
     private double[] relaxationPoint;
@@ -231,6 +258,7 @@ final class CountLcg implements AutoCloseable {
     private int cycleDecisions = -1, cycleConflicts = -1;
     private long cycleNext, cycleWork;
     private CountLpLearning.Session lpSession;
+    private CountIntegerLpLearning integerLpSession;
     private CountLcgReliability reliability;
     private CountLcgRowPool rowPool;
     private int pendingVariable = -1, pendingLevel, pendingTrail;
@@ -256,20 +284,30 @@ final class CountLcg implements AutoCloseable {
     /** Opt-in Boolean LP explanations; ordinary lazy-bound searches retain their old path. */
     CountLcg learnedRelaxation() {
         try {
-            return enableLearnedRelaxation();
+            return enableLearnedRelaxation(false);
         } catch (RuntimeException | Error failure) {
             close();
             throw failure;
         }
     }
 
-    private CountLcg enableLearnedRelaxation() {
-        if (learnedRelaxation || !importedRows.isEmpty() || !cycleRows.isEmpty() || complete || low.length < 2 || low.length > 128 || rows.size() > 512) return this;
-        for (int i = 0; i < low.length; i++) {
+    CountLcg integerRelaxation() {
+        try {
+            return enableLearnedRelaxation(true);
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
+        }
+    }
+
+    private CountLcg enableLearnedRelaxation(boolean integers) {
+        if (learnedRelaxation || !importedRows.isEmpty() || !cycleRows.isEmpty() || complete || low.length < 2 ||
+                low.length > (integers ? 8192 : 128) || rows.size() > (integers ? 32768 : 512)) return this;
+        for (int i = 0; !integers && i < low.length; i++) {
             charge();
             if (low[i].signum() < 0 || high[i] == null || high[i].compareTo(BigInteger.ONE) > 0) return this;
         }
-        long perCut = 256L + 128L * low.length;
+        long perCut = 256L + 128L * Math.min(128, low.length);
         int capacity = (int) Math.min(2048, Math.min(budget.availableBytes() / 16 / perCut,
                 budget.remainingWork() / Math.max(1, 8L * low.length)));
         if (capacity < 16) return this;
@@ -281,8 +319,10 @@ final class CountLcg implements AutoCloseable {
         originalRows = rows.size();
         rowActivity = Arrays.copyOf(rowActivity, rows.size() + capacity);
         learnedRelaxation = true;
-        lpSession = new CountLpLearning.Session();
-        reliability = new CountLcgReliability(low.length, budget, this::charge, this::integerCost);
+        integerRelaxation = integers;
+        if (integers) integerLpSession = new CountIntegerLpLearning();
+        else lpSession = new CountLpLearning.Session();
+        if (!integers) reliability = new CountLcgReliability(low.length, budget, this::charge, this::integerCost);
         rowPool = new CountLcgRowPool(originalRows, rowActivity.length, low.length, budget, this::charge);
         return this;
     }
@@ -297,6 +337,12 @@ final class CountLcg implements AutoCloseable {
 
     List<CountLpLearning.Cut> sharedRows() {
         return List.copyOf(sharedRows);
+    }
+
+    /** The auxiliary portfolio arm uses shorter integer clauses; other arms retain their ordering. */
+    CountLcg minimizeIntegerConflicts() {
+        minimizationEnabled = true;
+        return this;
     }
 
     /** An independent rounding arm; the default search keeps its old ordering. */
@@ -357,6 +403,11 @@ final class CountLcg implements AutoCloseable {
                 boundTrail.add(new ArrayList<>());
                 boundTrail.add(new ArrayList<>());
                 if (upper[i] != null && lower[i].compareTo(upper[i]) > 0) conflict = List.of();
+                if (!integerMinimization && (upper[i] == null || !lower[i].equals(upper[i]) &&
+                        !(lower[i].signum() == 0 && BigInteger.ONE.equals(upper[i])))) {
+                    integerCost(lower[i], BigInteger.ONE);
+                    integerMinimization = upper[i] == null || !lower[i].add(BigInteger.ONE).equals(upper[i]);
+                }
             }
             for (int r = 0; r < rows.size(); r++) {
                 charge();
@@ -509,7 +560,8 @@ final class CountLcg implements AutoCloseable {
                     up = finiteHint[best] > middle.doubleValue();
             }
             if (savedValues != null && savedValues[best] != null) up = savedValues[best].compareTo(middle) > 0;
-            if (relaxationPoint != null) up = relaxationPoint[best] >= 0.5;
+            if (relaxationPoint != null && Double.isFinite(relaxationPoint[best]))
+                up = integerRelaxation ? relaxationPoint[best] > middle.doubleValue() : relaxationPoint[best] >= 0.5;
             if (reliability != null) {
                 pendingVariable = best;
                 pendingLevel = level;
@@ -695,11 +747,15 @@ final class CountLcg implements AutoCloseable {
 
     /** A numerical result can only propose an exact row combination or a checked integer point. */
     private boolean relax() {
+        long integerAllowance = Math.min(65536, Math.min(budget.remainingWork() / 8, Math.max(0, allowance - work)));
+        if (integerRelaxation && integerAllowance < 2048) return false;
         relaxationDecisions = decisions;
         relaxationConflicts = conflicts;
         long before = budget.threadWork(), oldTicks = workTicks;
-        try (var result = lpSession.solve(rows.subList(0, originalRows), low, high, budget,
-                Math.min(200000, budget.remainingWork() / 4))) {
+        try (var result = integerRelaxation ? integerLpSession.solve(rows.subList(0, originalRows), low, high,
+                relaxationFocus, budget, integerAllowance) :
+                lpSession.solve(rows.subList(0, originalRows), low, high, budget,
+                        Math.min(200000, budget.remainingWork() / 4))) {
             relaxationCalls++;
             if (result == null) {
                 relaxationMisses++;
@@ -741,8 +797,12 @@ final class CountLcg implements AutoCloseable {
                 boolean valid = true;
                 for (int i = 0; i < rounded.length; i++) {
                     charge();
-                    if (!Double.isFinite(relaxationPoint[i])) valid = false;
-                    rounded[i] = Math.round(relaxationPoint[i]) <= 0 ? BigInteger.ZERO : BigInteger.ONE;
+                    if (integerRelaxation) {
+                        rounded[i] = result.integerPoint != null && result.integerPoint[i] != null ? result.integerPoint[i] : low[i];
+                    } else {
+                        if (!Double.isFinite(relaxationPoint[i])) valid = false;
+                        rounded[i] = Math.round(relaxationPoint[i]) <= 0 ? BigInteger.ZERO : BigInteger.ONE;
+                    }
                     if (rounded[i].compareTo(rootLow[i]) < 0 || rootHigh[i] != null && rounded[i].compareTo(rootHigh[i]) > 0) valid = false;
                 }
                 if (valid && satisfies(rounded)) {
@@ -789,13 +849,21 @@ final class CountLcg implements AutoCloseable {
                 integerCost(a, width);
                 cached.maximumChange = cached.maximumChange.max(a.abs().multiply(width));
             }
+            if (first && cached.finiteLong)
+                cached.finiteLong = rootHigh[id] != null && a.abs().bitLength() <= 63 &&
+                        rootLow[id].bitLength() <= 63 && rootHigh[id].bitLength() <= 63 &&
+                        rootHigh[id].subtract(rootLow[id]).bitLength() <= 63;
         }
-        if (learnedRelaxation && rowId >= originalRows && cached.booleanOrder == null) {
+        if (learnedRelaxation && !integerRelaxation && rowId >= originalRows && cached.booleanOrder == null) {
             reserve(64L + 4L * row.terms().size());
             cached.booleanOrder = row.terms().keySet().stream().sorted((a, b) -> {
                 charge();
                 return row.terms().get(b).abs().compareTo(row.terms().get(a).abs());
             }).mapToInt(Integer::intValue).toArray();
+        }
+        if (cached.finiteLong && cached.minimum.bitLength() <= 63) {
+            cached.minimumLong = cached.minimum.longValue();
+            cached.minimum = null;
         }
         cached.valid = true;
         rowActivity[rowId] = cached;
@@ -819,7 +887,7 @@ final class CountLcg implements AutoCloseable {
                     cached.infinities += next == null ? 1 : -1;
                 }
                 integerCost(a, delta);
-                cached.minimum = cached.minimum.add(a.multiply(delta));
+                cached.add(a, delta);
             }
             enqueue(rowId);
         }
@@ -828,9 +896,10 @@ final class CountLcg implements AutoCloseable {
     private void propagate(int rowId) {
         var row = rows.get(rowId);
         RowActivity cached = activity(rowId);
-        BigInteger sum = cached.minimum;
+        BigInteger sum = cached.minimum();
         int infinities = cached.infinities, infinite = cached.infiniteXor;
         if (infinities == 0 && sum.compareTo(row.upper()) > 0) {
+            if (integerRelaxation && rowId < originalRows) relaxationFocus = rowId;
             conflict = antecedents(row, -1, sum.subtract(row.upper()).subtract(BigInteger.ONE), trail.size());
             return;
         }
@@ -859,6 +928,10 @@ final class CountLcg implements AutoCloseable {
         // Propagate using a frozen set of bounds; new implications are placed
         // on the queue, so none of their explanations can refer to themselves.
         int prefix = trail.size();
+        if (infinities == 0 && cached.finiteLong && residual.bitLength() <= 63) {
+            propagateLong(rowId, residual.longValue(), prefix);
+            return;
+        }
         var candidates = new ArrayList<Literal>();
         var explanations = new ArrayList<LinearReason>();
         for (var term : row.terms().entrySet()) {
@@ -890,9 +963,50 @@ final class CountLcg implements AutoCloseable {
         for (int i = 0; i < candidates.size() && conflict == null; i++) tighten(candidates.get(i), null, explanations.get(i));
     }
 
+    /** Exact specialization: admission bounds every endpoint and domain width, including after backtracking. */
+    private void propagateLong(int rowId, long residual, int prefix) {
+        var row = rows.get(rowId);
+        List<Literal> candidates = null;
+        List<LinearReason> explanations = null;
+        for (var term : row.terms().entrySet()) {
+            // Keep the same scan charge and implication order as the arbitrary-
+            // precision path. This changes arithmetic cost, not search budget.
+            charge();
+            long coefficient = term.getValue().longValue();
+            if (coefficient == 0) continue;
+            int id = term.getKey();
+            long first = low[id].longValue(), last = high[id].longValue();
+            if (first == last) continue;
+            long magnitude = Math.abs(coefficient);
+            long distance = residual / magnitude;
+            // Comparing the quotient avoids a potentially overflowing product
+            // magnitude * width. A tightened endpoint stays inside this domain.
+            if (distance >= last - first) continue;
+            long endpoint = coefficient > 0 ? first + distance : last - distance;
+            var next = new Literal(id, coefficient < 0, BigInteger.valueOf(endpoint));
+            // a * (floor(r/a) + 1) - r - 1 = a - 1 - (r mod a).
+            // Neither product nor distance + 1 need fit in a signed long.
+            long slack = magnitude - 1 - residual % magnitude;
+            if (candidates == null) {
+                candidates = new ArrayList<>();
+                explanations = new ArrayList<>();
+            }
+            candidates.add(next);
+            explanations.add(new LinearReason(row, id, BigInteger.valueOf(slack), prefix, rowId));
+        }
+        if (candidates != null)
+            for (int i = 0; i < candidates.size() && conflict == null; i++)
+                tighten(candidates.get(i), null, explanations.get(i));
+    }
+
     private List<Literal> antecedents(ExactLinearProgram.Constraint row, int except, BigInteger slack, int prefix) {
+        return antecedents(row, except, slack, prefix, Long.MAX_VALUE);
+    }
+
+    private List<Literal> antecedents(ExactLinearProgram.Constraint row, int except, BigInteger slack, int prefix, long until) {
         var result = new ArrayList<Literal>();
         for (var term : row.terms().entrySet()) {
+            if (work >= until) return null;
             charge();
             int id = term.getKey();
             if (id == except || term.getValue().signum() == 0) continue;
@@ -1125,6 +1239,9 @@ final class CountLcg implements AutoCloseable {
             finish("proven_infeasible");
             return;
         }
+        // Keep complementary primary/Boolean search orderings. The auxiliary
+        // integer arm checks implication strength as well as literal identity.
+        if (minimizationEnabled && integerMinimization) minimize(frontier, highest);
         int back = 0;
         BitSet levels = new BitSet();
         for (ExplainedLiteral explained : frontier.terms.values()) {
@@ -1160,6 +1277,87 @@ final class CountLcg implements AutoCloseable {
                 memory -= bytes;
                 budget.release(bytes);
             }
+        }
+    }
+
+    /**
+     * Remove a bound only if the remaining conjunction directly implies it
+     * through its frozen reason. Unlike Boolean variable marks, a retained bound
+     * must entail the exact requested direction AND strength. Only a finished
+     * walk can remove a literal; decisions, cutoffs and memory refusals keep it.
+     */
+    private void minimize(ConflictFrontier frontier, int highest) {
+        if (frontier.terms.size() < 3) return;
+        long available = Math.min(2048, work / 32 - minimizationWork);
+        if (available < 32) return;
+        long bytes = 512L + 16L * frontier.terms.size();
+        if (!budget.tryReserve(bytes)) return;
+        long started = work;
+        try {
+            var entries = new ArrayList<>(frontier.terms.values());
+            for (int at = entries.size() - 1; at >= 0 && work - started < available; at--) {
+                charge();
+                ExplainedLiteral candidate = entries.get(at);
+                if (trail.get(candidate.source).level == highest) continue;
+                long quantum = Math.max(0, Math.min(256, available - (work - started)));
+                long until = quantum > Long.MAX_VALUE - work ? Long.MAX_VALUE : work + quantum;
+                List<Literal> reason = minimizationReason(trail.get(candidate.source), until);
+                if (reason == null || reason.size() > 256) continue;
+                boolean redundant = true;
+                for (int index = reason.size() - 1; index >= 0; index--) {
+                    if (work >= until) {
+                        redundant = false;
+                        break;
+                    }
+                    charge();
+                    Literal required = reason.get(index);
+                    if (rootTrue(required)) continue;
+                    int key = boundKey(required.variable, required.minimum);
+                    ExplainedLiteral retained = frontier.terms.get(key);
+                    if (retained != null && retained != candidate && (required.minimum ?
+                            retained.literal.value.compareTo(required.value) >= 0 :
+                            retained.literal.value.compareTo(required.value) <= 0)) continue;
+                    redundant = false;
+                    break;
+                }
+                if (redundant) {
+                    // Commit only a complete scan. A later candidate can use
+                    // already retained antecedents, never a removed bound.
+                    if (work >= until) continue;
+                    charge();
+                    // The heap served first-UIP resolution; only the ordered
+                    // map is consulted for the final clause and backjump now.
+                    frontier.terms.remove(boundKey(candidate.literal.variable, candidate.literal.minimum));
+                    minimized++;
+                }
+            }
+        } finally {
+            minimizationWork += work - started;
+            budget.release(bytes);
+        }
+    }
+
+    /** Optional explanation allocation must not terminate an otherwise viable search. */
+    private List<Literal> minimizationReason(Change change, long until) {
+        if (work >= until) return null;
+        if (change.reason != null || change.linear == null) return change.reason;
+        var linear = change.linear;
+        int size = linear.row.terms().size();
+        if (size > 256) return null;
+        long bytes = 96L * size;
+        if (!budget.tryReserve(bytes)) return null;
+        try {
+            explainedReasons++;
+            var result = antecedents(linear.row, linear.except, linear.slack, linear.prefix, until);
+            if (result == null) return null;
+            change.reason = List.copyOf(result);
+            long retained = 96L * result.size();
+            change.bytes += retained;
+            memory += retained;
+            bytes -= retained;
+            return change.reason;
+        } finally {
+            budget.release(bytes);
         }
     }
 
@@ -1298,6 +1496,9 @@ final class CountLcg implements AutoCloseable {
         certificate = null;
     }
 
+    /** Only distinct, exactly certified LP consequences count toward continued sampling. */
+    long cutProgress() { return relaxationCuts; }
+
     /** Search feedback, never a proof or a reason to exclude a model. */
     long progress() {
         return rootProgress + learnedProgress + fixedPeak;
@@ -1335,9 +1536,10 @@ final class CountLcg implements AutoCloseable {
         }
         complete = true;
         budget.note("count_lcg", detail + "; decisions=" + decisions + "; conflicts=" + conflicts + "; backjumps=" + jumps +
-                "; restarts=" + restarts + "; relaxed_reasons=" + relaxedReasons + "; lazy_reasons=" + lazyReasons +
+                "; restarts=" + restarts + "; minimized=" + minimized + "; minimization_work=" + minimizationWork +
+                "; relaxed_reasons=" + relaxedReasons + "; lazy_reasons=" + lazyReasons +
                 "; explained_reasons=" + explainedReasons + "; work=" + work);
-        if (learnedRelaxation) budget.note("count_lp_learning", "calls=" + relaxationCalls + "; cuts=" + relaxationCuts +
+        if (learnedRelaxation) budget.note(integerRelaxation ? "count_integer_lp_learning" : "count_lp_learning", "calls=" + relaxationCalls + "; cuts=" + relaxationCuts +
                 "; proposal_misses=" + relaxationMisses + "; numerical_work=" + relaxationNumericalWork);
         if (!cycleRows.isEmpty()) budget.note("count_lcg_cycles", "cuts=" + cycleRows.size() + "; work=" + cycleWork);
         if (reliability != null) budget.note("count_lcg_reliability", reliability.diagnostic());
@@ -1447,6 +1649,7 @@ final class CountLcg implements AutoCloseable {
     public void close() {
         finiteHint = null;
         if (lpSession != null) lpSession.close();
+        if (integerLpSession != null) integerLpSession.close();
         if (reliability != null) reliability.close();
         if (rowPool != null) rowPool.close();
         budget.release(memory);

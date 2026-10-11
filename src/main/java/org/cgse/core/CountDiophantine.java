@@ -135,11 +135,11 @@ final class CountDiophantine implements CountContinuation {
             return complete = true;
         }
         long before = budget.threadWork();
-        try { return advance(); }
+        try { return advance(before); }
         finally { work += budget.threadWork() - before; }
     }
 
-    private boolean advance() {
+    private boolean advance(long started) {
         if (!prepared) {
             prepared = true;
             if (freeVariables.size() > 3) {
@@ -151,7 +151,14 @@ final class CountDiophantine implements CountContinuation {
         }
         if (affine != null) {
             if (!affine.step()) return false;
-            if (affine.paused()) return paused = true;
+            if (affine.paused()) {
+                // The owner may have yielded before the child reached its old
+                // deadline. Spend only this owner's still-unused grant instead
+                // of reporting an empty paused batch after the next resume.
+                long remaining = allowance - work - (budget.threadWork() - started);
+                if (remaining > 0) { affine.resume(remaining); return false; }
+                return paused = true;
+            }
             counts = affine.counts();
             affine.close();
             affine = null;
@@ -160,7 +167,7 @@ final class CountDiophantine implements CountContinuation {
             freeVariables = null;
             return complete;
         }
-        if (faceChoices != null) return stepFaces();
+        if (faceChoices != null) return stepFaces(started);
         if (next.compareTo(end) > 0) {
             complete = true;
             budget.note("count_diophantine", "unresolved; work=" + work + "; original_domain_retained");
@@ -281,7 +288,7 @@ final class CountDiophantine implements CountContinuation {
         return values;
     }
 
-    private boolean stepFaces() {
+    private boolean stepFaces(long started) {
         if (faceAttempt >= Math.min(16, faceChoices.length)) {
             complete = true;
             budget.note("count_diophantine", "faces_unresolved; work=" + work + "; original_domain_retained");
@@ -300,7 +307,11 @@ final class CountDiophantine implements CountContinuation {
             if (retaining) face.retained();
         }
         if (!face.step()) return false;
-        if (face.paused()) return paused = true;
+        if (face.paused()) {
+            long remaining = allowance - work - (budget.threadWork() - started);
+            if (remaining > 0) { face.resume(remaining); return false; }
+            return paused = true;
+        }
         counts = face.counts();
         face.close();
         face = null;
@@ -332,6 +343,7 @@ final class CountDiophantine implements CountContinuation {
     CountDiophantine retained() { retaining = true; return this; }
     @Override public boolean paused() { return paused; }
     @Override public long work() { return work; }
+    boolean hasCoupledElimination() { return affine != null && affine.hasCoupledElimination(); }
     @Override public long progress() {
         return affine != null ? affine.progress() : faceAttempt;
     }

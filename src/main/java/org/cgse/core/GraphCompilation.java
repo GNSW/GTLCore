@@ -93,29 +93,41 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
 
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
-        while (slice.nextCompilation()) {
-            if (phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 && edgeInputs == null && edgeProducers == null &&
-                    packedEdges == null && packedInput == 0 && merging == null) {
-                if (parallelEdges == null && cursor < nodes.size()) {
-                    List<Supplier<EdgeBatch>> partitions = new ArrayList<>();
-                    for (int i = 0; i < slice.parallelism() && cursor < nodes.size(); i++) {
-                        int start = cursor, end = Math.min(nodes.size(), start + 64);
-                        cursor = end;
-                        partitions.add(() -> collectEdges(start, end));
-                    }
-                    parallelEdges = slice.fork(partitions);
-                    return false;
-                }
-                if (parallelEdges != null) {
-                    if (!parallelEdges.isDone()) return false;
-                    merging = parallelEdges.join();
-                    parallelEdges = null;
-                    mergeBatch = mergeNode = mergeEdge = 0;
-                }
-            }
-            if (step()) return true;
+        while (slice.nextUncharged()) {
+            if (step(slice)) return true;
+            if (waitingFor() != null) return false;
         }
         return false;
+    }
+
+    /** One operation inside the coordinator's already admitted slice. */
+    boolean step(PlanningScheduler.Slice slice) {
+        try (var costs = budget.trace(PlanningCostTrace.Stage.PREPARE)) {
+            return stepMeasured(slice);
+        }
+    }
+
+    private boolean stepMeasured(PlanningScheduler.Slice slice) {
+        if (slice != null && phase == 2 && nodes.size() >= 512 && slice.parallelism() > 1 &&
+                edgeInputs == null && edgeProducers == null && packedEdges == null && packedInput == 0 && merging == null) {
+            if (parallelEdges == null && cursor < nodes.size()) {
+                List<Supplier<EdgeBatch>> partitions = new ArrayList<>();
+                for (int i = 0; i < slice.parallelism() && cursor < nodes.size(); i++) {
+                    int start = cursor, end = Math.min(nodes.size(), start + 64);
+                    cursor = end;
+                    partitions.add(() -> collectEdges(start, end));
+                }
+                parallelEdges = slice.fork(partitions);
+                return false;
+            }
+            if (parallelEdges != null) {
+                if (!parallelEdges.isDone()) return false;
+                merging = parallelEdges.join();
+                parallelEdges = null;
+                mergeBatch = mergeNode = mergeEdge = 0;
+            }
+        }
+        return step();
     }
 
     @Override

@@ -32,6 +32,7 @@ public final class GraphCompiler<K> {
     private boolean catalogIndexRequested, catalogIndexReusable;
     private final List<QuantityCertificate<K>> quantityCertificates = new ArrayList<>();
     final CountSessions countSessions = new CountSessions();
+    final CountRowTemplates rowTemplates = new CountRowTemplates();
     final CountRecoveryTemplates<K> recoveryTemplates = new CountRecoveryTemplates<>();
     private final List<DemandEntry<K>> demandPrograms = new ArrayList<>();
     private final Map<String, long[]> cacheCounters = new LinkedHashMap<>();
@@ -126,6 +127,7 @@ public final class GraphCompiler<K> {
             active = sum(active, local.activeSearches);
             local.caches.forEach((name, value) -> aggregate.merge(name, value, CacheEntry::plus));
             aggregate.merge("count_session", compiler.countSessions.cacheMetrics(), CacheEntry::plus);
+            aggregate.merge("count_row_template", compiler.rowTemplates.cacheMetrics(), CacheEntry::plus);
             var recovery = compiler.recoveryTemplates.cacheMetrics();
             aggregate.merge("recovery_template", recovery.entry(), CacheEntry::plus);
             pending.addAll(recovery.compilers());

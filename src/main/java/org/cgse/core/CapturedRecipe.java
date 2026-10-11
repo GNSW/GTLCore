@@ -40,11 +40,13 @@ public final class CapturedRecipe<K> {
     private final int[] choices;
     private final int size;
     private final boolean bounded;
+    private final boolean captureBounded;
 
     public CapturedRecipe(List<Input<K>> inputs, List<Amount<K>> outputs, boolean external, boolean bounded) {
         this.inputs = List.copyOf(inputs);
         this.outputs = List.copyOf(outputs);
         this.external = external;
+        this.captureBounded = bounded;
         choices = new int[inputs.size()];
         int product = 1;
         for (int slot = 0; slot < inputs.size(); slot++) {
@@ -64,7 +66,7 @@ public final class CapturedRecipe<K> {
                 bounded |= count >= MAX_VARIANTS;
             }
             choices[slot] = count;
-            product = Math.min(MAX_VARIANTS + 1, product * count);
+            product = (int) Math.min(MAX_VARIANTS + 1L, (long) product * count);
         }
         this.size = Math.min(MAX_VARIANTS, product);
         this.bounded = bounded || product > MAX_VARIANTS;
@@ -77,6 +79,19 @@ public final class CapturedRecipe<K> {
     public boolean bounded() {
         return bounded;
     }
+
+    /** Complete captured domain, with the same first window as expand(). Caller owns its lifetime. */
+    public CapturedRecipeDomain<K> domain(PlanningBudget budget) {
+        return new CapturedRecipeDomain<>(this, budget);
+    }
+
+    List<Input<K>> inputs() { return inputs; }
+
+    List<Amount<K>> outputs() { return outputs; }
+
+    boolean external() { return external; }
+
+    boolean captureBounded() { return captureBounded; }
 
     /**
      * First occurrences in exactly the old Cartesian traversal order, without
@@ -98,7 +113,7 @@ public final class CapturedRecipe<K> {
         int stride = 1;
         for (int slot = inputs.size() - 1; slot >= 0; slot--) {
             pending.add(new Frontier(slot, 0, stride));
-            stride = Math.min(MAX_VARIANTS, stride * choices[slot]);
+            stride = (int) Math.min(MAX_VARIANTS, (long) stride * choices[slot]);
         }
         return new Iterator<>() {
 
@@ -148,7 +163,10 @@ public final class CapturedRecipe<K> {
                     Input<K> input = inputs.get(slot);
                     budget.reserve(32L * choices[slot] * (1 + Math.min(9, Math.max(1, input.multiplier()))));
                     List<List<Picked<K>>> selected = new ArrayList<>();
-                    for (Candidate<K> candidate : input.candidates()) selected.add(List.of(new Picked<>(candidate, input.multiplier())));
+                    for (Candidate<K> candidate : input.candidates()) {
+                        if (selected.size() == choices[slot]) break;
+                        selected.add(List.of(new Picked<>(candidate, input.multiplier())));
+                    }
                     if (!external && input.multiplier() <= 9 && input.candidates().size() > 1)
                         mixed(input.candidates(), 0, input.multiplier(), new ArrayList<>(), selected, budget);
                     if (selected.size() != choices[slot]) throw new IllegalStateException("Captured alternative count differs");

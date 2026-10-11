@@ -16,6 +16,10 @@ final class CountLpSearch implements AutoCloseable {
     private final int[] representatives;
     private long memory, work, until;
     private boolean complete;
+    private final long progressLimit;
+    private long lastCuts;
+    private int idleProgressTurns;
+    private boolean progressFinished;
     private CountModelViews.View sharingView;
     private int publishedCuts;
 
@@ -32,6 +36,11 @@ final class CountLpSearch implements AutoCloseable {
         // Keep the LP basis/LCG frontier for later turns while the remaining
         // representations and finite-domain specialists get their first visit.
         until = Math.min(262144, remaining / 4);
+        // One frontier-owned opportunity, never renewed on a parent resume.
+        // Preferential LP work is capped at half of the entrance allowance:
+        // productive cuts must still leave room for complementary candidates.
+        // Ordinary steps and sharing continue to charge the same request.
+        progressLimit = remaining / 2;
     }
 
     static CountLpSearch create(CountReduction reduction, int originalVariables, PlanningBudget budget) {
@@ -116,6 +125,23 @@ final class CountLpSearch implements AutoCloseable {
         } finally {
             work += budget.threadWork() - before;
         }
+    }
+
+    /** Extend a completed sample only while it is producing certified new cuts. */
+    boolean continueOnCuts() {
+        if (progressFinished || !retained() || work >= progressLimit) return false;
+        long cuts = search.cutProgress();
+        if (cuts > lastCuts) idleProgressTurns = 0;
+        else idleProgressTurns++;
+        lastCuts = cuts;
+        // A short dry interval is normal while learned cuts propagate. Stop
+        // the preferential run after four completed samples without a new cut.
+        if (cuts == 0 || idleProgressTurns >= 4) {
+            progressFinished = true;
+            return false;
+        }
+        resume(Math.min(262144, progressLimit - work));
+        return true;
     }
 
     boolean retained() {

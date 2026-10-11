@@ -101,6 +101,12 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
     }
 
     boolean step() {
+        try (var costs = budget.trace(PlanningCostTrace.Origin.SUPPORT_NEIGHBORHOOD, PlanningCostTrace.Stage.SEARCH)) {
+            return stepMeasured();
+        }
+    }
+
+    private boolean stepMeasured() {
         long before = budget.threadSearchWork();
         String previousFailure = budget.failureDetail();
         try {

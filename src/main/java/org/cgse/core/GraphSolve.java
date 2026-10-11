@@ -43,6 +43,7 @@ final class GraphSolve<K> implements AutoCloseable {
     private Iterator<K> applying;
     private PlanAssembly<K> assembly;
     private GraphPlan<K> result;
+    private GraphCompiler.Region<K> unresolvedRegion;
     private final CatalystPolicy catalystPolicy;
 
     GraphSolve(GraphCompiler.Compiled<K> graph, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
@@ -131,6 +132,7 @@ final class GraphSolve<K> implements AutoCloseable {
             selection = null;
             if (selected == null) {
                 var region = graph.regions().get(regionIndex - 1);
+                unresolvedRegion = region;
                 budget.note("region", "no_witness; index=" + (regionIndex - 1) + "; recipes=" + region.recipes().size() +
                         "; cyclic=" + region.cyclic() + "; ids=" + region.recipes().stream().limit(6).map(GraphRecipe::id).toList());
                 result = failure(GraphPlan.Result.UNKNOWN);
@@ -215,6 +217,11 @@ final class GraphSolve<K> implements AutoCloseable {
     private GraphPlan<K> failure(GraphPlan.Result reason) {
         return new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()), Map.of(), Map.of(), Map.of(), Map.of(), reason,
                 budget.nodes(), System.nanoTime() - started);
+    }
+
+    /** A local cutoff identifies a repair boundary, never a forbidden source set. */
+    GraphCompiler.Region<K> unresolvedRegion() {
+        return unresolvedRegion;
     }
 
     GraphPlan<K> result() {

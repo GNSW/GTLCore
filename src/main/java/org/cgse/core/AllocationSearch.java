@@ -551,23 +551,31 @@ final class AllocationSearch<K> {
         Candidate(PlanStep witness, Map<String, GraphRecipe<K>> relevant, K target, long amount, Map<K, Long> stock,
                   Map<K, Long> requiredSeeds, Set<K> external, boolean preserve, boolean force, boolean preview,
                   PlanningBudget budget, long started) {
-            this.witness = PlanFlowPruning.optimize(PlanEGraph.optimize(witness, budget), relevant, budget);
-            this.relevant = relevant;
-            this.target = target;
-            this.amount = amount;
-            this.stock = stock;
-            this.requiredSeeds = Map.copyOf(requiredSeeds);
-            this.external = external;
-            this.preserve = preserve;
-            this.force = force;
-            this.preview = preview;
-            this.budget = budget;
-            this.started = started;
-            collecting.push(this.witness);
-            seeds.putAll(requiredSeeds);
+            try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
+                this.witness = PlanFlowPruning.optimize(PlanEGraph.optimize(witness, budget), relevant, budget);
+                this.relevant = relevant;
+                this.target = target;
+                this.amount = amount;
+                this.stock = stock;
+                this.requiredSeeds = Map.copyOf(requiredSeeds);
+                this.external = external;
+                this.preserve = preserve;
+                this.force = force;
+                this.preview = preview;
+                this.budget = budget;
+                this.started = started;
+                collecting.push(this.witness);
+                seeds.putAll(requiredSeeds);
+            }
         }
 
         boolean step() {
+            try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
+                return stepMeasured();
+            }
+        }
+
+        private boolean stepMeasured() {
             budget.check();
             if (stage == 0) {
                 if (!collecting.isEmpty()) {

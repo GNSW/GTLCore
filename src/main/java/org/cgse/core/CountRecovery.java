@@ -287,9 +287,11 @@ final class CountRecovery<K> implements AutoCloseable {
         if (!done) budget.note("count_recovery", "candidate_work_limit; work=" + viewWork + "; alternatives=" + candidates.size());
         var plan = search.result();
         if (plan != null && plan.feasible()) {
-            PlanStep candidate = fuel == null ? plan.steps() : fuel.lift(plan, bytes -> memory += bytes);
-            if (candidate != null) witness = PlanRewrite.batches(candidate, batch -> bodies.containsKey(batch.recipe()) ?
-                    PlanStep.repeat(bodies.get(batch.recipe()), BigInteger.valueOf(batch.runs())) : batch, budget, bytes -> memory += bytes);
+            try (var costs = budget.trace(PlanningCostTrace.Stage.RESTORE)) {
+                PlanStep candidate = fuel == null ? plan.steps() : fuel.lift(plan, bytes -> memory += bytes);
+                if (candidate != null) witness = PlanRewrite.batches(candidate, batch -> bodies.containsKey(batch.recipe()) ?
+                        PlanStep.repeat(bodies.get(batch.recipe()), BigInteger.valueOf(batch.runs())) : batch, budget, bytes -> memory += bytes);
+            }
             budget.note("count_recovery", (witness != null ? "lifted_witness" : "account_allocation_unresolved") + "; macros=" + bodies.size());
         }
         search.close();

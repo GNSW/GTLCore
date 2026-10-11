@@ -58,7 +58,7 @@ public final class PlanningBudget {
 
     /** Origin of an execution witness submitted to the outer plan validator. */
     public enum CandidateOrigin {
-        SOURCE_GRAPH, BOOTSTRAP, STOCK_VIEW, SUPPORT_NEIGHBORHOOD, ALLOCATION, INTEGER_COUNTS, STOCK_WITNESS
+        SOURCE_GRAPH, BOOTSTRAP, STOCK_VIEW, SUPPORT_NEIGHBORHOOD, ALLOCATION, INTEGER_COUNTS, STOCK_WITNESS, PLAN_REUSE
     }
 
     public enum CandidateOutcome { ACCEPTED, REJECTED, INCONCLUSIVE, ABANDONED, INVALID }
@@ -92,6 +92,7 @@ public final class PlanningBudget {
     private final ThreadLocal<WorkScope> currentScope = new ThreadLocal<>();
     private final AtomicLong activeWorkers = new AtomicLong(), peakWorkers = new AtomicLong(), maxSlice = new AtomicLong();
     private volatile boolean measuring;
+    private volatile PlanningCostTrace costTrace;
     private volatile CountProof.Journal proofJournal;
     private final Map<String, long[]> strategyTotals = new LinkedHashMap<>();
     private final Map<CandidateOrigin, long[]> candidateTotals = new EnumMap<>(CandidateOrigin.class);
@@ -168,7 +169,7 @@ public final class PlanningBudget {
         if (units < 0) throw new IllegalArgumentException("Negative work");
         if (units > Long.MAX_VALUE / WORK_SCALE) {
             checkpoint();
-            compilationNodes.set(Long.MAX_VALUE);
+            traceCharge(Long.MAX_VALUE - compilationNodes.getAndSet(Long.MAX_VALUE), true);
             throw exhausted(Limit.SEARCH_LIMIT, "compilation_work_accounting_overflow");
         }
         chargeTicks(units * WORK_SCALE, true);
@@ -179,7 +180,7 @@ public final class PlanningBudget {
         if (units < 0) throw new IllegalArgumentException("Negative work");
         if (units > Long.MAX_VALUE / WORK_SCALE) {
             checkpoint();
-            nodes.set(Long.MAX_VALUE);
+            traceCharge(Long.MAX_VALUE - nodes.getAndSet(Long.MAX_VALUE), false);
             throw exhausted(Limit.SEARCH_LIMIT, "work_accounting_overflow");
         }
         chargeTicks(units * WORK_SCALE);
@@ -207,6 +208,7 @@ public final class PlanningBudget {
             // count or allow a later addition to reopen the exhausted request.
             if (previous == Long.MAX_VALUE || ticks >= Long.MAX_VALUE - previous) {
                 if (previous != Long.MAX_VALUE && !account.compareAndSet(previous, Long.MAX_VALUE)) continue;
+                traceCharge(Long.MAX_VALUE - previous, compilation);
                 throw exhausted(Limit.SEARCH_LIMIT, compilation ? "compilation_work_accounting_overflow" : "work_accounting_overflow");
             }
             total = previous + ticks;
@@ -225,12 +227,18 @@ public final class PlanningBudget {
                 counter[3] = searchFraction % WORK_SCALE;
             }
         }
+        traceCharge(ticks, compilation);
         if (units(total) > maxNodes) throw exhausted(Limit.SEARCH_LIMIT,
                 (compilation ? "compilation_work=" : "search_work=") + units(total) + "/" + maxNodes);
     }
 
     static long units(long ticks) {
         return ticks / WORK_SCALE + (ticks % WORK_SCALE == 0 ? 0 : 1);
+    }
+
+    private void traceCharge(long ticks, boolean compilation) {
+        PlanningCostTrace trace = costTrace;
+        if (trace != null) trace.charge(ticks, compilation);
     }
 
     /** Per-thread accounting prevents concurrent branches charging one another's work. */
@@ -362,8 +370,31 @@ public final class PlanningBudget {
         return started.get() == Long.MIN_VALUE ? 0 : clock.getAsLong() - started.get();
     }
 
-    public void enableMetrics() {
+    public synchronized void enableMetrics() {
+        if (costTrace == null) costTrace = new PlanningCostTrace();
         measuring = true;
+    }
+
+    /** Exclusive costs since metrics were enabled; outcomes remain available through candidates(). */
+    public PlanningCostTrace.Snapshot pipelineMetrics() {
+        PlanningCostTrace trace = costTrace;
+        return trace == null ? new PlanningCostTrace.Snapshot(Map.of()) : trace.snapshot();
+    }
+
+    PlanningCostTrace.Scope trace(PlanningCostTrace.Origin origin, PlanningCostTrace.Stage stage) {
+        PlanningCostTrace trace = costTrace;
+        return trace == null ? null : trace.enter(origin, stage);
+    }
+
+    PlanningCostTrace.Scope trace(PlanningCostTrace.Stage stage) { return trace(null, stage); }
+
+    PlanningCostTrace.Context traceContext() {
+        PlanningCostTrace trace = costTrace;
+        return trace == null ? null : trace.context();
+    }
+
+    PlanningCostTrace.Scope trace(PlanningCostTrace.Context context) {
+        return context == null ? null : trace(context.origin(), context.stage());
     }
 
     boolean metricsEnabled() {

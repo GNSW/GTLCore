@@ -44,7 +44,7 @@ final class CountKernelSearch implements AutoCloseable {
         started = budget.threadWork();
         int n = lower.length, d = basis.size();
         long bytes = 4096L + 2048L * n * d + 256L * (rows.size() + 2L * n) * (d + 1L);
-        if (d < 2 || d >= n || n > 48 || rows.size() > 512 || allowance < 2048 || !budget.tryReserve(bytes)) {
+        if (d < 2 || d >= n || d > 48 || n > 128 || rows.size() > 512 || allowance < 2048 || !budget.tryReserve(bytes)) {
             complete = true;
             return;
         }
@@ -162,7 +162,14 @@ final class CountKernelSearch implements AutoCloseable {
             if (phase < 3) { prepareStep(); return false; }
             if (phase == 3) {
                 if (!search.step()) return false;
-                if (search.paused()) return paused = true;
+                if (search.paused()) {
+                    // The parent projection may have used part of an earlier
+                    // grant before yielding. Keep its remaining work available
+                    // when the inner walk subsequently reaches that deadline.
+                    long remaining = allowance - work - (budget.threadWork() - started);
+                    if (remaining > 0) { search.resume(remaining); return false; }
+                    return paused = true;
+                }
                 values = search.counts();
                 if (values == null) return complete = true;
                 restored = point.clone();

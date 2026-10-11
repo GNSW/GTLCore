@@ -25,14 +25,22 @@ public final class PlanVerification<K> implements AutoCloseable {
     private int phase;
 
     public PlanVerification(GraphPlan<K> plan, PlanningBudget budget) {
-        if (!plan.feasible() || !plan.missing().isEmpty()) throw new IllegalArgumentException("Unverified plan");
-        this.plan = plan;
-        this.budget = budget;
-        computation = new SummaryComputation<>(plan.steps(), plan.recipes(), budget);
-        counts = new PlanCountComputation(plan.steps());
+        try (var costs = budget.trace(PlanningCostTrace.Stage.VERIFY)) {
+            if (!plan.feasible() || !plan.missing().isEmpty()) throw new IllegalArgumentException("Unverified plan");
+            this.plan = plan;
+            this.budget = budget;
+            computation = new SummaryComputation<>(plan.steps(), plan.recipes(), budget);
+            counts = new PlanCountComputation(plan.steps());
+        }
     }
 
     public boolean step() {
+        try (var costs = budget.trace(PlanningCostTrace.Stage.VERIFY)) {
+            return stepMeasured();
+        }
+    }
+
+    private boolean stepMeasured() {
         budget.check();
         budget.phase(PlanningBudget.Phase.VERIFY);
         switch (phase) {

@@ -88,6 +88,9 @@ public class ConfigHolder {
     @Configurable.Comment("config.gtlcore.option.enableAe2ManualCraftingInventoryLock.comment")
     public boolean enableAe2ManualCraftingInventoryLock = false;
     @Configurable
+    @Configurable.Comment("config.gtlcore.option.ae2GraphInventoryLockBehavior.comment")
+    public AEGraphInventoryLockBehavior ae2GraphInventoryLockBehavior = AEGraphInventoryLockBehavior.DYNAMIC;
+    @Configurable
     @Configurable.Comment("config.gtlcore.option.enableAe2MissingCrafting.comment")
     public boolean enableAe2MissingCrafting = true;
     @Configurable

@@ -44,6 +44,12 @@ final class ForwardCoverability<K> implements AutoCloseable {
 
     ForwardCoverability(List<GraphRecipe<K>> recipes, List<K> keys, List<BigInteger> initial, List<BigInteger> goal,
                         List<BackwardCoverability.Action<K>> actions, PlanningBudget budget, long maximumWork) {
+        this(recipes, keys, initial, goal, actions, budget, maximumWork, true);
+    }
+
+    ForwardCoverability(List<GraphRecipe<K>> recipes, List<K> keys, List<BigInteger> initial, List<BigInteger> goal,
+                        List<BackwardCoverability.Action<K>> actions, PlanningBudget budget, long maximumWork,
+                        boolean reduce) {
         this.recipes = recipes;
         this.keys = keys;
         this.initial = initial;
@@ -51,7 +57,7 @@ final class ForwardCoverability<K> implements AutoCloseable {
         this.actions = List.copyOf(actions);
         this.budget = budget;
         allowance = Math.min(maximumWork, budget.remainingWork() / 32);
-        order = new PartialOrder<>(actions.stream().map(BackwardCoverability.Action::summary).toList(), budget);
+        order = reduce ? new PartialOrder<>(actions.stream().map(BackwardCoverability.Action::summary).toList(), budget) : null;
         if (keys.size() > 32 || actions.size() > 64 || allowance < 1024 || recipes.stream().anyMatch(GraphRecipe::batchSensitiveInputs)) {
             result = BackwardCoverability.Result.UNKNOWN;
             return;
@@ -101,10 +107,6 @@ final class ForwardCoverability<K> implements AutoCloseable {
 
     private BitSet persistent(List<BigInteger> stock) {
         var enabled = new BitSet();
-        var all = new BitSet();
-        all.set(0, actions.size());
-        var held = new LinkedHashMap<K, BigInteger>();
-        for (int k = 0; k < keys.size(); k++) held.put(keys.get(k), stock.get(k));
         for (int a = 0; a < actions.size(); a++) {
             boolean can = true;
             for (int k = 0; k < keys.size(); k++) {
@@ -116,6 +118,13 @@ final class ForwardCoverability<K> implements AutoCloseable {
             }
             if (can) enabled.set(a);
         }
+        // Full traversal is useful when looking for an independently replayable
+        // closed boundary. A persistent-set traversal need not visit that boundary.
+        if (order == null) return enabled;
+        var all = new BitSet();
+        all.set(0, actions.size());
+        var held = new LinkedHashMap<K, BigInteger>();
+        for (int k = 0; k < keys.size(); k++) held.put(keys.get(k), stock.get(k));
         BitSet reduced = order.persistent(all, enabled, held, Set.of());
         if (reduced.isEmpty() || reduced.equals(enabled)) return enabled;
         for (int a = reduced.nextSetBit(0); a >= 0; a = reduced.nextSetBit(a + 1)) {
@@ -167,10 +176,13 @@ final class ForwardCoverability<K> implements AutoCloseable {
             in.add(keys.stream().map(key -> BigInteger.valueOf(recipe.inputs().getOrDefault(key, 0L))).toList());
             out.add(keys.stream().map(key -> BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L))).toList());
         }
-        var proof = new ExecutionProof.Certificate("forward_por_original_closure", ExecutionProof.Kind.FORWARD_BOUNDARY, initial, goal, in, out, List.copyOf(visited), Set.of());
+        var proof = new ExecutionProof.Certificate(order == null ? "forward_original_closure" : "forward_por_original_closure",
+                ExecutionProof.Kind.FORWARD_BOUNDARY, initial, goal, in, out, List.copyOf(visited), Set.of());
         // A reduced traversal alone is never an absence certificate. Require
         // explicit closure under all original transitions before exporting DEAD.
-        if (ExecutionProof.verify(proof, Math.max(1, allowance - work), budget::charge) != CountProof.Verdict.VERIFIED) return finish(BackwardCoverability.Result.UNKNOWN);
+        long remaining = allowance - work - (budget.threadWork() - sliceStarted);
+        if (remaining <= 0 || ExecutionProof.verify(proof, remaining, budget::charge) != CountProof.Verdict.VERIFIED)
+            return finish(BackwardCoverability.Result.UNKNOWN);
         if (budget.proofJournal() != null) budget.proofJournal().add(proof);
         return finish(BackwardCoverability.Result.CLOSED);
     }
@@ -182,7 +194,7 @@ final class ForwardCoverability<K> implements AutoCloseable {
 
     private boolean finish(BackwardCoverability.Result value) {
         result = value;
-        budget.note("forward_por", "result=" + value + "; states=" + visited.size() + "; omitted=" + omitted + "; cycle_expansions=" + cycleExpansions + "; work=" + work);
+        budget.note(order == null ? "forward_original" : "forward_por", "result=" + value + "; states=" + visited.size() + "; omitted=" + omitted + "; cycle_expansions=" + cycleExpansions + "; work=" + work);
         return true;
     }
 

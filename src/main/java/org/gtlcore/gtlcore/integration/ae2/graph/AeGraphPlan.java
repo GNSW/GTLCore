@@ -11,6 +11,7 @@ import appeng.crafting.CraftingPlan;
 import org.cgse.core.CraftingCostModel;
 import org.cgse.core.ExactAmounts;
 import org.cgse.core.GraphPlan;
+import org.cgse.core.RequestPlanningWork;
 
 import java.math.BigInteger;
 import java.util.Collections;
@@ -29,6 +30,7 @@ public final class AeGraphPlan implements ICraftingPlan {
     private final BigInteger exactBytes;
     private final CraftingCostModel.Mode costMode;
     private final boolean fallback;
+    private final RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate;
     private final UUID id = UUID.randomUUID();
     private final Map<String, BigInteger> selectedCounts;
     private final Map<IPatternDetails, Long> selectedPatterns;
@@ -42,8 +44,15 @@ public final class AeGraphPlan implements ICraftingPlan {
 
     public AeGraphPlan(GraphPlan<AEKey> graph, Map<String, IPatternDetails> bindings, Set<AEKey> emitable,
                        Map<AEKey, Long> stock, boolean fallback) {
+        this(graph, bindings, emitable, stock, fallback, null);
+    }
+
+    public AeGraphPlan(GraphPlan<AEKey> graph, Map<String, IPatternDetails> bindings, Set<AEKey> emitable,
+                       Map<AEKey, Long> stock, boolean fallback,
+                       RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
         this.graph = graph;
         this.fallback = fallback;
+        this.reuseCandidate = reuseCandidate;
         this.bindings = Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
         selectedCounts = graph.patternTimesExact();
         Map<IPatternDetails, BigInteger> selected = new LinkedHashMap<>();
@@ -131,6 +140,10 @@ public final class AeGraphPlan implements ICraftingPlan {
 
     public CraftingCostModel.Mode costMode() {
         return costMode;
+    }
+
+    public RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate() {
+        return reuseCandidate;
     }
 
     /** The long UI view must not discount an exact cost larger than Long.MAX_VALUE. */

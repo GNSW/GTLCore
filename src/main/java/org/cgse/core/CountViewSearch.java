@@ -25,6 +25,7 @@ final class CountViewSearch implements AutoCloseable {
     private CandidateOrigin candidateOrigin;
     private Search candidateSource;
     private boolean strideScoutAttempted;
+    private boolean integerLpAttempted;
     private long commonWork, reportedCommonWork, restorationWork;
     private CountPortfolioPolicy.Mode candidateMode;
 
@@ -65,7 +66,11 @@ final class CountViewSearch implements AutoCloseable {
         CountCdcl cdcl;
         CountJump jump;
         CountContinuation specialist;
+        BigInteger[] proposal;
+        PlanningBudget proposalBudget;
+        long proposalBytes;
         long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
+        long continuationLimit, continuationProgress, continuationCheckpoint;
         long publishedRoots;
         long importedBounds;
         int publishedConflicts, importedConflicts;
@@ -80,7 +85,7 @@ final class CountViewSearch implements AutoCloseable {
         }
 
         boolean started() {
-            return solver != null || cdcl != null || jump != null || specialist != null;
+            return solver != null || cdcl != null || jump != null || specialist != null || proposal != null;
         }
 
         boolean paused() {
@@ -88,6 +93,7 @@ final class CountViewSearch implements AutoCloseable {
         }
 
         void resume(long quantum, PlanningBudget budget, CountModelViews models) {
+            if (proposal != null) return;
             var domains = started() ? null : models.domains(view);
             if (domains != null) scope = domains;
             if (domains != null && domains.version() > 0)
@@ -109,8 +115,9 @@ final class CountViewSearch implements AutoCloseable {
             } else {
                 if (solver == null) {
                     solver = new CountLcg(view.rows(), domains.lower(), domains.upper(), budget, quantum);
-                    if (models.sharesBounds(view)) solver.shareRows();
+                    if (models.sharesCuts(view)) solver.shareRows();
                     if (engine == Engine.LOCKS) solver.lockBranching();
+                    if (engine == Engine.INTEGER_LP) solver.integerRelaxation();
                 } else solver.resume(quantum);
                 int bounds = models.importProofBounds(view, importedBounds, solver);
                 importedBounds = models.boundVersion();
@@ -140,6 +147,10 @@ final class CountViewSearch implements AutoCloseable {
             if (cdcl != null) cdcl.close();
             if (jump != null) jump.close();
             if (specialist != null) specialist.close();
+            if (proposalBudget != null) proposalBudget.release(proposalBytes);
+            proposalBudget = null;
+            proposalBytes = 0;
+            proposal = null;
             solver = null;
             cdcl = null;
             jump = null;
@@ -147,16 +158,19 @@ final class CountViewSearch implements AutoCloseable {
         }
 
         boolean step() {
+            if (proposal != null) return true;
             if (specialist != null) return specialist.step();
             return cdcl != null ? cdcl.step() : jump != null ? jump.step() : solver.step();
         }
 
         long progress() {
+            if (proposal != null) return 1;
             if (specialist != null) return specialist.progress();
             return cdcl != null ? cdcl.progress() : jump != null ? jump.progress() : solver.progress();
         }
 
         BigInteger[] counts() {
+            if (proposal != null) return proposal;
             if (specialist != null) return specialist.counts();
             return cdcl != null ? cdcl.counts() : jump != null ? jump.counts() : solver.counts();
         }
@@ -172,6 +186,8 @@ final class CountViewSearch implements AutoCloseable {
     private enum Engine {
 
         LCG,
+        INTEGER_LP,
+        INTEGER_LP_HINT,
         PB,
         LOCKS,
         JUMP,
@@ -183,7 +199,7 @@ final class CountViewSearch implements AutoCloseable {
         DIOPHANTINE;
 
         boolean provesInfeasibility() {
-            return this == LCG || this == PB || this == LOCKS;
+            return this == LCG || this == INTEGER_LP || this == PB || this == LOCKS;
         }
     }
 
@@ -211,6 +227,111 @@ final class CountViewSearch implements AutoCloseable {
             }
         }
         addStrideScout();
+    }
+
+    /** Do not displace cheap compilation or existing engines' initial visits with another LCG. */
+    private boolean addIntegerLp() {
+        if (integerLpAttempted || !models.compiledAlternatives()) return false;
+        integerLpAttempted = true;
+        var candidates = new ArrayList<>(models.available());
+        candidates.sort(Comparator.comparingLong(view -> view.shape().cost()));
+        for (var view : candidates) if (integerLp(view)) {
+            long limit = Math.min(16384, budget.remainingWork() / 32);
+            if (limit < 4096) return false;
+            var domains = models.domains(view);
+            long started = budget.threadWork();
+            try (var probe = new CountIntegerLpLearning();
+                 var result = probe.solve(view.rows(), domains.lower(), domains.upper(), -1, budget, limit)) {
+                if (result == null) return false;
+                boolean added = false;
+                // An exact count witness is useful even when no new cut exists.
+                // Checking it consumes the scout's existing allowance, and the
+                // one-shot proposal cannot prove infeasibility or restart LCG.
+                if (policy.mode() != CountPortfolioPolicy.Mode.PROOF)
+                    added = retainLpProposal(view, domains, result.integerPoint, limit - (budget.threadWork() - started));
+                if (result.cut != null && !view.rows().contains(result.cut.row())) {
+                    addSearch(view, Engine.INTEGER_LP);
+                    models.publishCuts(view, List.of(result.cut), 0, this);
+                    budget.note("count_integer_lp_scout", "certified_cut; retained_arm; view=" + view.name());
+                    added = true;
+                }
+                return added;
+            }
+        }
+        return false;
+    }
+
+    /** Complete missing coordinates only as a candidate, then check every original view row and domain. */
+    private boolean retainLpProposal(CountModelViews.View view, CountModelViews.Domains domains,
+                                     BigInteger[] suggested, long limit) {
+        if (suggested == null || suggested.length != domains.lower().length || limit <= 0) return false;
+        long started = budget.threadWork(), bytes = 256L + 8L * suggested.length;
+        for (int i = 0; i < suggested.length; i++) {
+            if (budget.threadWork() - started >= limit) return false;
+            budget.check();
+            var value = suggested[i] == null ? domains.lower()[i] : suggested[i];
+            bytes += 48L + (value.bitLength() + 7L) / 8;
+        }
+        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
+        try {
+            var point = suggested.clone();
+            for (int i = 0; i < point.length; i++) {
+                if (budget.threadWork() - started >= limit) return false;
+                budget.check();
+                if (point[i] == null) point[i] = domains.lower()[i];
+                if (point[i].compareTo(domains.lower()[i]) < 0 ||
+                        domains.upper()[i] != null && point[i].compareTo(domains.upper()[i]) > 0) return false;
+            }
+            for (var row : view.rows()) {
+                if (budget.threadWork() - started >= limit) return false;
+                budget.check();
+                var total = BigInteger.ZERO;
+                for (var term : row.terms().entrySet()) {
+                    if (budget.threadWork() - started >= limit) return false;
+                    budget.check();
+                    var value = point[term.getKey()];
+                    budget.operation(PlanningBudget.Operation.INTEGER, Math.max(value.bitLength(), term.getValue().bitLength()));
+                    total = total.add(value.multiply(term.getValue()));
+                }
+                if (total.compareTo(row.upper()) > 0) return false;
+            }
+            Search search = new Search(view, policy.add(view.shape().cost(), Engine.INTEGER_LP_HINT), Engine.INTEGER_LP_HINT);
+            search.scope = domains;
+            search.proposal = point;
+            search.proposalBudget = budget;
+            search.proposalBytes = bytes;
+            searches.add(search);
+            bytes = 0;
+            budget.note("count_integer_lp_scout", "checked_point; candidate_only; view=" + view.name());
+            return true;
+        } finally { budget.release(bytes); }
+    }
+
+    /** One complementary arm, admitted by bounded row support rather than the whole LP matrix. */
+    private boolean integerLp(CountModelViews.View view) {
+        long start = budget.threadWork(), limit = Math.min(16384, budget.remainingWork() / 64);
+        if (limit < 1024 || budget.remainingWork() < 65536) return false;
+        for (var row : view.rows()) {
+            if (row.terms().size() < 2 || row.terms().size() > 128) continue;
+            boolean bounded = row.upper().bitLength() <= 1024, integer = false, weighted = false;
+            for (var term : row.terms().entrySet()) {
+                if (budget.threadWork() - start >= limit) return false;
+                budget.check();
+                int id = term.getKey();
+                var high = view.upper()[id];
+                var low = view.lower()[id];
+                if (high == null || high.bitLength() > 1024 || low.bitLength() > 1024 || term.getValue().bitLength() > 1024) {
+                    bounded = false;
+                    break;
+                }
+                if (!low.equals(high)) {
+                    integer |= high.compareTo(BigInteger.ONE) > 0 || low.signum() < 0;
+                    weighted |= term.getValue().abs().compareTo(BigInteger.ONE) > 0;
+                }
+            }
+            if (bounded && integer && weighted) return true;
+        }
+        return false;
     }
 
     /** Transfer an already-paid frontier, only in its unchanged reduced coordinate scope. */
@@ -297,6 +418,7 @@ final class CountViewSearch implements AutoCloseable {
         boolean completedSlice = false;
         boolean rejectedRestoration = false;
         long gained = 0;
+        long integerScoutWork = 0;
         try {
             if (active == null) {
                 active = select();
@@ -369,14 +491,26 @@ final class CountViewSearch implements AutoCloseable {
                 if (!search.done && search.scheduling.eligible && idle < 2) stalled = false;
                 if (!search.done && search.scheduling.eligible && policy.selections(search.scheduling) < 2) sampled = false;
             }
-            if ((stalled || sampled) && counts == null && !infeasible && addIntegerJump()) stalled = false;
+            if ((stalled || sampled) && counts == null && !infeasible) {
+                long scoutStarted = budget.threadWork();
+                boolean added;
+                try { added = addIntegerLp(); }
+                finally {
+                    integerScoutWork = budget.threadWork() - scoutStarted;
+                    commonWork(integerScoutWork);
+                }
+                if (added) stalled = false;
+                else if (addIntegerJump()) stalled = false;
+            }
             return counts != null || infeasible || stalled;
         } finally {
             long spent = budget.threadWork() - before;
             work += spent;
             if (active != null) {
-                active.work += spent;
-                active.sliceWork += spent;
+                // A new engine's admission/proof preparation is common work,
+                // not a cost penalty on the engine whose slice just completed.
+                active.work += spent - integerScoutWork;
+                active.sliceWork += spent - integerScoutWork;
                 if (completedSlice) policy.feedback(active.scheduling, active.sliceWork, gained);
                 // Include the decisive solver step; publishing before this
                 // accounting made a one-step proof appear to cost no work.
@@ -420,6 +554,30 @@ final class CountViewSearch implements AutoCloseable {
     }
 
     private Search select() {
+        // Pay each eligible engine's first visit before extending an already
+        // productive exact-elimination path. A learned conflict alone never
+        // turns a witness task into a proof task or disables other engines.
+        boolean sampled = searches.stream().noneMatch(search -> !search.done && search.scheduling.eligible &&
+                policy.selections(search.scheduling) == 0);
+        if (sampled) for (Search search : searches) {
+            if (search.done || !search.scheduling.eligible || !(search.specialist instanceof CountDiophantine numeric) ||
+                    !numeric.hasCoupledElimination()) continue;
+            if (search.continuationLimit == 0) {
+                long remaining = budget.remainingWork();
+                search.continuationLimit = saturatedAdd(search.work, remaining - remaining / 8);
+                search.continuationCheckpoint = search.work;
+                search.continuationProgress = search.progress;
+            }
+            if (search.progress > search.continuationProgress) {
+                search.continuationCheckpoint = search.work;
+                search.continuationProgress = search.progress;
+            }
+            // The one-time work ceiling and a charged-work stagnation window
+            // bound this preference. Ordinary selection resumes after either;
+            // the retained state and its undecided domain are never discarded.
+            if (search.work < search.continuationLimit && search.work - search.continuationCheckpoint < 262144)
+                return search;
+        }
         var chosen = policy.select();
         return searches.stream().filter(search -> search.scheduling == chosen).findFirst().orElse(null);
     }

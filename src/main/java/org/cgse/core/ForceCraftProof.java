@@ -28,88 +28,96 @@ final class ForceCraftProof<K> implements AutoCloseable {
     private Outcome outcome = Outcome.RELAXATION_INCONCLUSIVE;
 
     ForceCraftProof(GraphPlan<K> plan, PlanVerification<K> verified, Map<K, Long> mandatorySeeds, PlanningBudget budget) {
-        this.budget = budget;
-        allowance = Math.min(65536, budget.remainingWork() / 8);
-        BigInteger amount = BigInteger.valueOf(plan.amount());
-        BigInteger net = verified.summary().delta(plan.target());
-        // Returned configuration tokens are not physical production. A zero
-        // gain loop cannot discharge an ordinary forced crafting request.
-        if (verified.physicalProduced(plan.target()).compareTo(amount) < 0 || net.signum() <= 0) {
-            outcome = net.signum() <= 0 ? Outcome.NON_PRODUCTIVE : Outcome.OUTPUT_SHORTFALL;
-            complete = true;
-            return;
-        }
-        if (net.compareTo(amount) >= 0) {
-            complete = proved = true;
-            return;
-        }
-        var counts = verified.patternCounts();
-        long terms = counts.keySet().stream().map(plan.recipes()::get).mapToLong(r -> r.inputs().size() + r.outputs().size()).sum();
-        if (counts.size() > 96 || terms > 2048 || allowance < 2048 ||
-                counts.keySet().stream().map(plan.recipes()::get).anyMatch(GraphRecipe::batchSensitiveInputs)) {
-            outcome = counts.size() > 96 || terms > 2048 ? Outcome.MODEL_LIMIT : allowance < 2048 ? Outcome.WORK_LIMIT : Outcome.BATCH_SEMANTICS;
-            complete = true;
-            return;
-        }
-        long bytes = 2048L + 512L * counts.size() + 384L * terms;
-        if (!budget.tryReserve(bytes)) {
-            outcome = Outcome.MEMORY_LIMIT;
-            complete = true;
-            return;
-        }
-        memory = bytes;
-        long before = budget.threadWork();
-        try {
-            Map<K, Map<Integer, BigInteger>> consumed = new LinkedHashMap<>();
-            Map<Integer, BigInteger> produced = new LinkedHashMap<>();
-            low = new BigInteger[counts.size()];
-            high = new BigInteger[counts.size()];
-            initial = plan.initialExact();
-            Arrays.fill(low, BigInteger.ZERO);
-            int id = 0;
-            for (var entry : counts.entrySet()) {
-                budget.check();
-                var recipe = plan.recipes().get(entry.getKey());
-                recipes.add(recipe);
-                high[id] = entry.getValue();
-                for (var input : recipe.inputs().entrySet()) {
-                    budget.check();
-                    consumed.computeIfAbsent(input.getKey(), unused -> new LinkedHashMap<>()).merge(id, BigInteger.valueOf(input.getValue()), BigInteger::add);
-                }
-                for (var output : recipe.outputs().entrySet()) {
-                    budget.check();
-                    consumed.computeIfAbsent(output.getKey(), unused -> new LinkedHashMap<>()).merge(id, BigInteger.valueOf(output.getValue()).negate(), BigInteger::add);
-                }
-                long actual = recipe.executionOutputs().getOrDefault(plan.target(), 0L);
-                if (actual > 0) produced.put(id, BigInteger.valueOf(actual));
-                id++;
+        try (var costs = budget.trace(PlanningCostTrace.Stage.FORCE_CHECK)) {
+            this.budget = budget;
+            allowance = Math.min(65536, budget.remainingWork() / 8);
+            BigInteger amount = BigInteger.valueOf(plan.amount());
+            BigInteger net = verified.summary().delta(plan.target());
+            // Returned configuration tokens are not physical production. A zero
+            // gain loop cannot discharge an ordinary forced crafting request.
+            if (verified.physicalProduced(plan.target()).compareTo(amount) < 0 || net.signum() <= 0) {
+                outcome = net.signum() <= 0 ? Outcome.NON_PRODUCTIVE : Outcome.OUTPUT_SHORTFALL;
+                complete = true;
+                return;
             }
-            // Ask if fewer target outputs could preserve this witness's target
-            // gain using a submultiset and the same initial inventory. Genuine
-            // surplus from indivisible productive batches is not turnover.
-            // Optional coproducts are NOT goals: preserving them would make a
-            // wasteful loop look mandatory merely because it also made a bonus.
-            consumed.computeIfAbsent(plan.target(), unused -> new LinkedHashMap<>());
-            for (K key : mandatorySeeds.keySet()) consumed.computeIfAbsent(key, unused -> new LinkedHashMap<>());
-            for (var entry : consumed.entrySet()) {
-                budget.check();
-                BigInteger goal = BigInteger.valueOf(mandatorySeeds.getOrDefault(entry.getKey(), 0L));
-                if (entry.getKey().equals(plan.target()))
-                    goal = goal.add(amount).max(plan.initialExact().getOrDefault(plan.target(), BigInteger.ZERO).add(net));
-                rows.add(new ExactLinearProgram.Constraint(entry.getValue(), plan.initialExact().getOrDefault(entry.getKey(), BigInteger.ZERO).subtract(goal)));
+            if (net.compareTo(amount) >= 0) {
+                complete = proved = true;
+                return;
             }
-            rows.add(new ExactLinearProgram.Constraint(produced, amount.subtract(BigInteger.ONE)));
-            for (int i = 0; i < high.length; i++) rows.add(new ExactLinearProgram.Constraint(Map.of(i, BigInteger.ONE), high[i]));
-            propagating = new CountBounds(counts.size(), rows, budget);
-        } catch (RuntimeException | Error failure) {
-            close();
-            throw failure;
-        } finally {
-            work += budget.threadWork() - before;
+            var counts = verified.patternCounts();
+            long terms = counts.keySet().stream().map(plan.recipes()::get).mapToLong(r -> r.inputs().size() + r.outputs().size()).sum();
+            if (counts.size() > 96 || terms > 2048 || allowance < 2048 ||
+                    counts.keySet().stream().map(plan.recipes()::get).anyMatch(GraphRecipe::batchSensitiveInputs)) {
+                outcome = counts.size() > 96 || terms > 2048 ? Outcome.MODEL_LIMIT : allowance < 2048 ? Outcome.WORK_LIMIT : Outcome.BATCH_SEMANTICS;
+                complete = true;
+                return;
+            }
+            long bytes = 2048L + 512L * counts.size() + 384L * terms;
+            if (!budget.tryReserve(bytes)) {
+                outcome = Outcome.MEMORY_LIMIT;
+                complete = true;
+                return;
+            }
+            memory = bytes;
+            long before = budget.threadWork();
+            try {
+                Map<K, Map<Integer, BigInteger>> consumed = new LinkedHashMap<>();
+                Map<Integer, BigInteger> produced = new LinkedHashMap<>();
+                low = new BigInteger[counts.size()];
+                high = new BigInteger[counts.size()];
+                initial = plan.initialExact();
+                Arrays.fill(low, BigInteger.ZERO);
+                int id = 0;
+                for (var entry : counts.entrySet()) {
+                    budget.check();
+                    var recipe = plan.recipes().get(entry.getKey());
+                    recipes.add(recipe);
+                    high[id] = entry.getValue();
+                    for (var input : recipe.inputs().entrySet()) {
+                        budget.check();
+                        consumed.computeIfAbsent(input.getKey(), unused -> new LinkedHashMap<>()).merge(id, BigInteger.valueOf(input.getValue()), BigInteger::add);
+                    }
+                    for (var output : recipe.outputs().entrySet()) {
+                        budget.check();
+                        consumed.computeIfAbsent(output.getKey(), unused -> new LinkedHashMap<>()).merge(id, BigInteger.valueOf(output.getValue()).negate(), BigInteger::add);
+                    }
+                    long actual = recipe.executionOutputs().getOrDefault(plan.target(), 0L);
+                    if (actual > 0) produced.put(id, BigInteger.valueOf(actual));
+                    id++;
+                }
+                // Ask if fewer target outputs could preserve this witness's target
+                // gain using a submultiset and the same initial inventory. Genuine
+                // surplus from indivisible productive batches is not turnover.
+                // Optional coproducts are NOT goals: preserving them would make a
+                // wasteful loop look mandatory merely because it also made a bonus.
+                consumed.computeIfAbsent(plan.target(), unused -> new LinkedHashMap<>());
+                for (K key : mandatorySeeds.keySet()) consumed.computeIfAbsent(key, unused -> new LinkedHashMap<>());
+                for (var entry : consumed.entrySet()) {
+                    budget.check();
+                    BigInteger goal = BigInteger.valueOf(mandatorySeeds.getOrDefault(entry.getKey(), 0L));
+                    if (entry.getKey().equals(plan.target()))
+                        goal = goal.add(amount).max(plan.initialExact().getOrDefault(plan.target(), BigInteger.ZERO).add(net));
+                    rows.add(new ExactLinearProgram.Constraint(entry.getValue(), plan.initialExact().getOrDefault(entry.getKey(), BigInteger.ZERO).subtract(goal)));
+                }
+                rows.add(new ExactLinearProgram.Constraint(produced, amount.subtract(BigInteger.ONE)));
+                for (int i = 0; i < high.length; i++) rows.add(new ExactLinearProgram.Constraint(Map.of(i, BigInteger.ONE), high[i]));
+                propagating = new CountBounds(counts.size(), rows, budget);
+            } catch (RuntimeException | Error failure) {
+                close();
+                throw failure;
+            } finally {
+                work += budget.threadWork() - before;
+            }
         }
     }
 
     boolean step() {
+        try (var costs = budget.trace(PlanningCostTrace.Stage.FORCE_CHECK)) {
+            return stepMeasured();
+        }
+    }
+
+    private boolean stepMeasured() {
         if (complete) return true;
         long before = budget.threadWork();
         try {

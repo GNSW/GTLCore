@@ -65,36 +65,44 @@ final class CountSchedule<K> implements AutoCloseable {
     }
 
     CountSchedule(RecipeCountModel<K> model, BigInteger[] counts, PlanningBudget budget, boolean balancedFirst) {
-        this.model = model;
-        this.budget = budget;
-        this.balancedFirst = balancedFirst;
-        original = counts.clone();
-        long incidences = model.recipes.stream().mapToLong(r -> r.inputs().size() + r.outputs().size()).sum();
-        long bytes = 4096 + 512L * model.recipes.size() + 512L * incidences + 128L * model.keys.size();
-        if (!budget.tryReserve(bytes)) {
-            result = Result.UNKNOWN;
-            return;
-        }
-        memory = bytes;
-        try {
-            for (GraphRecipe<K> recipe : model.recipes) {
-                recipes.put(recipe.id(), recipe);
-                SequenceSummary<K> summary = SequenceSummary.recipe(recipe);
-                int index = summaries.size();
-                summary.delta().forEach((key, amount) -> {
-                    if (amount.signum() < 0 && !model.external.contains(key))
-                        consumers.computeIfAbsent(key, unused -> new ArrayList<>()).add(index);
-                });
-                summaries.add(summary);
+        try (var costs = budget.trace(PlanningCostTrace.Stage.SCHEDULE)) {
+            this.model = model;
+            this.budget = budget;
+            this.balancedFirst = balancedFirst;
+            original = counts.clone();
+            long incidences = model.recipes.stream().mapToLong(r -> r.inputs().size() + r.outputs().size()).sum();
+            long bytes = 4096 + 512L * model.recipes.size() + 512L * incidences + 128L * model.keys.size();
+            if (!budget.tryReserve(bytes)) {
+                result = Result.UNKNOWN;
+                return;
             }
-            reset();
-        } catch (RuntimeException | Error error) {
-            close();
-            throw error;
+            memory = bytes;
+            try {
+                for (GraphRecipe<K> recipe : model.recipes) {
+                    recipes.put(recipe.id(), recipe);
+                    SequenceSummary<K> summary = SequenceSummary.recipe(recipe);
+                    int index = summaries.size();
+                    summary.delta().forEach((key, amount) -> {
+                        if (amount.signum() < 0 && !model.external.contains(key))
+                            consumers.computeIfAbsent(key, unused -> new ArrayList<>()).add(index);
+                    });
+                    summaries.add(summary);
+                }
+                reset();
+            } catch (RuntimeException | Error error) {
+                close();
+                throw error;
+            }
         }
     }
 
     boolean step() {
+        try (var costs = budget.trace(PlanningCostTrace.Stage.SCHEDULE)) {
+            return stepMeasured();
+        }
+    }
+
+    private boolean stepMeasured() {
         budget.check();
         if (result != null) return true;
         if (bounded != null) {

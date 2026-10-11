@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.api.machine.computation;
 
+import org.gtlcore.gtlcore.api.recipe.IAdvancedContentModifier;
+
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.content.ContentModifier;
 
@@ -31,10 +33,9 @@ public final class ComputationAmounts {
     public static long modify(long value, ContentModifier modifier) {
         if (value < 0 || !Double.isFinite(modifier.getMultiplier()) || !Double.isFinite(modifier.getAddition()))
             throw new IllegalArgumentException("Invalid CWU modifier");
-        BigDecimal result = BigDecimal.valueOf(value).multiply(BigDecimal.valueOf(modifier.getMultiplier()))
-                .add(BigDecimal.valueOf(modifier.getAddition()));
-        if (result.signum() < 0) throw new IllegalArgumentException("Negative modified CWU");
-        return result.toBigInteger().longValueExact();
+        long result = ((IAdvancedContentModifier) modifier).applyExact(value);
+        if (result < 0) throw new IllegalArgumentException("Negative modified CWU");
+        return result;
     }
 
     public static long total(GTRecipe recipe) {

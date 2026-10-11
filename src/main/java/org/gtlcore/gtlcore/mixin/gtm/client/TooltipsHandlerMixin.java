@@ -4,6 +4,8 @@ import org.gtlcore.gtlcore.common.data.source_tooltip.SourceTooltip;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 
 import com.gregtechceu.gtceu.client.TooltipsHandler;
+import com.gregtechceu.gtceu.common.data.GTItems;
+import com.gregtechceu.gtceu.utils.FormattingUtil;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -38,6 +40,16 @@ public abstract class TooltipsHandlerMixin {
             remap = false)
     private static void appendCustomItemTooltips(ItemStack stack, TooltipFlag flag, List<Component> tooltips, CallbackInfo ci) {
         SourceTooltip.append(stack.getItem(), tooltips::add);
+        if (stack.is(GTItems.COVER_INFINITE_WATER.get())) {
+            for (int i = 0; i < tooltips.size(); i++) {
+                Component line = tooltips.get(i);
+                if (line.getContents() instanceof TranslatableContents contents &&
+                        "gtceu.universal.tooltip.produces_fluid".equals(contents.getKey())) {
+                    tooltips.set(i, Component.translatable("tooltip.gtlcore.infinite_water_cover.production",
+                            FormattingUtil.formatNumbers(Integer.MAX_VALUE), 20).setStyle(line.getStyle()));
+                }
+            }
+        }
         if (ME_PATTERN_BUFFER_ID.equals(ForgeRegistries.ITEMS.getKey(stack.getItem()))) {
             tooltips.add(Component.translatable("gtlcore.machine.pattern_quick_upload.tooltip"));
         }

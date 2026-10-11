@@ -1,26 +1,23 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "IGI",
+    "IRI",
     "RCR",
-    "IGI"
+    "IRI"
   ],
   "key": {
     "I": {
-      "item": "minecraft:iron_ingot"
-    },
-    "G": {
-      "item": "minecraft:glass"
+      "item": "gtceu:black_metal_sheet"
     },
     "R": {
-      "item": "minecraft:redstone"
+      "item": "minecraft:glowstone"
     },
     "C": {
-      "item": "minecraft:comparator"
+      "item": "gtmthings:wireless_energy_monitor"
     }
   },
   "result": {
     "item": "gtlcore:wireless_grid_energy_monitor",
-    "count": 1
+    "count": 25
   }
 }

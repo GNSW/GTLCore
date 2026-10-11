@@ -46,7 +46,7 @@ public abstract class TooltipsHandlerMixin {
                 if (line.getContents() instanceof TranslatableContents contents &&
                         "gtceu.universal.tooltip.produces_fluid".equals(contents.getKey())) {
                     tooltips.set(i, Component.translatable("tooltip.gtlcore.infinite_water_cover.production",
-                            FormattingUtil.formatNumbers(Integer.MAX_VALUE), 20).setStyle(line.getStyle()));
+                            FormattingUtil.formatNumbers(Integer.MAX_VALUE)).setStyle(line.getStyle()));
                 }
             }
         }

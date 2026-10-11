@@ -82,7 +82,7 @@ public class PatternBoxBehavior implements IItemUIFactory {
     private static final int PAGE_BUTTON_SIZE = 16;
 
     public static int getPageCount() {
-        return ConfigHolder.INSTANCE.patternBoxPages;
+        return ConfigHolder.INSTANCE.machines.patternBoxPages;
     }
 
     public static int getSlotCount() {

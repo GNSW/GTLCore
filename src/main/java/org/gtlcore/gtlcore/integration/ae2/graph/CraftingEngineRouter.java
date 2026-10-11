@@ -76,7 +76,7 @@ public final class CraftingEngineRouter {
 
     private static final class Settings {
 
-        static final AECraftingEngine ENGINE = ConfigHolder.INSTANCE.ae2CraftingEngine;
+        static final AECraftingEngine ENGINE = ConfigHolder.INSTANCE.ae.ae2CraftingEngine;
     }
 
     public static boolean useGraph() {
@@ -84,14 +84,14 @@ public final class CraftingEngineRouter {
     }
 
     private static synchronized PlanningScheduler scheduler() {
-        if (scheduler == null) scheduler = new PlanningScheduler(ConfigHolder.INSTANCE.ae2GraphPlannerThreads,
-                ConfigHolder.INSTANCE.ae2GraphPlannerMaxRequests, 4096, 2_000_000L);
+        if (scheduler == null) scheduler = new PlanningScheduler(ConfigHolder.INSTANCE.performance.ae2GraphPlannerThreads,
+                ConfigHolder.INSTANCE.performance.ae2GraphPlannerMaxRequests, 4096, 2_000_000L);
         return scheduler;
     }
 
     static CompletableFuture<GraphRingView> describe(GraphRingView.Builder work) {
         return scheduler().submit(work, new PlanningBudget(0, 1_000_000,
-                ConfigHolder.INSTANCE.ae2GraphPlannerMemoryMiB * (1L << 20), () -> false, System::nanoTime));
+                ConfigHolder.INSTANCE.performance.ae2GraphPlannerMemoryMiB * (1L << 20), () -> false, System::nanoTime));
     }
 
     @SubscribeEvent
@@ -107,7 +107,7 @@ public final class CraftingEngineRouter {
                                               Level level, ICraftingSimulationRequester requester,
                                               AEKey target, long amount, CalculationStrategy strategy) {
         return begin(catalog, grid, service, level, requester.getActionSource(), target, amount, strategy, null,
-                ConfigHolder.INSTANCE.ae2GraphSeedPolicy == AEGraphSeedPolicy.PRESERVE, requester instanceof SubmissionRefresh,
+                ConfigHolder.INSTANCE.ae.ae2GraphSeedPolicy == AEGraphSeedPolicy.PRESERVE, requester instanceof SubmissionRefresh,
                 requester instanceof SubmissionRefresh refresh ? refresh.candidate() : null);
     }
 
@@ -142,13 +142,13 @@ public final class CraftingEngineRouter {
                                               RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
         if (amount <= 0) throw new IllegalArgumentException("Non-positive crafting request");
         PlanningScheduler planner = scheduler();
-        long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.ae2GraphPlannerMaxSteps,
-                planner.parallelism(), ConfigHolder.INSTANCE.ae2GraphPlannerParallelWorkBudget);
-        PlanningBudget budget = new PlanningBudget(ConfigHolder.INSTANCE.ae2GraphPlannerTimeoutMs,
-                workLimit, ConfigHolder.INSTANCE.ae2GraphPlannerMemoryMiB * (1L << 20),
+        long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.performance.ae2GraphPlannerMaxSteps,
+                planner.parallelism(), ConfigHolder.INSTANCE.performance.ae2GraphPlannerParallelWorkBudget);
+        PlanningBudget budget = new PlanningBudget(ConfigHolder.INSTANCE.performance.ae2GraphPlannerTimeoutMs,
+                workLimit, ConfigHolder.INSTANCE.performance.ae2GraphPlannerMemoryMiB * (1L << 20),
                 () -> false, System::nanoTime);
         GraphPlanningRequest result = new GraphPlanningRequest(budget);
-        if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) budget.enableMetrics();
+        if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) budget.enableMetrics();
         CompletableFuture<GtlPatternCatalog.Snapshot> snapshot = new CompletableFuture<>();
         var work = new RequestWork(grid, snapshot, target, amount, strategy, budget, checkpoint, preserve, result, reuseCandidate);
         // Admit before collecting world data; rejected/cancelled requests never collect a snapshot.
@@ -172,7 +172,7 @@ public final class CraftingEngineRouter {
                     for (var cpu : service.getCpus()) if (!cpu.isBusy())
                         parallelism = (int) Math.max(parallelism, Math.min(4096L, (long) cpu.getCoProcessors() + 1));
                     // Published by completion of the snapshot future; workers never inspect CPUs.
-                    work.catalysts = new CatalystPolicy(parallelism, ConfigHolder.INSTANCE.ae2GraphMaxExtraCatalystCopies);
+                    work.catalysts = new CatalystPolicy(parallelism, ConfigHolder.INSTANCE.ae.ae2GraphMaxExtraCatalystCopies);
                     task = catalog.begin(grid, service, level, source, target,
                             checkpoint == null ? Set.of() : checkpoint.recoverySeeds().keySet(), budget, refreshInventory);
                 }
@@ -231,7 +231,7 @@ public final class CraftingEngineRouter {
             this.checkpoint = checkpoint;
             this.preserve = preserve;
             this.request = request;
-            this.fallbackEnabled = ConfigHolder.INSTANCE.ae2GraphFallback;
+            this.fallbackEnabled = ConfigHolder.INSTANCE.performance.ae2GraphFallback;
             this.reuseCandidate = reuseCandidate;
         }
 
@@ -258,7 +258,7 @@ public final class CraftingEngineRouter {
                 planning = new RequestPlanningWork<>(compiler, target, amount, snapshot.stock(), snapshot.emitable(),
                         checkpoint, preserve, strategy == CalculationStrategy.CRAFT_LESS, strategy.toString(), catalysts,
                         fallbackEnabled, snapshot.structure().boundedAlternatives(), budget, request::isCancelled, report -> {
-                            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+                            if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
                                     "[Graph Crafting] fallback target={} amount={} trigger={} cycle_solving=false result={} work={} elapsed_ms={}",
                                     report.target(), report.amount(), report.trigger(), report.result(), report.nodes(), report.elapsedNanos() / 1_000_000.0);
                         }).reuseCandidate(reuseCandidate);
@@ -280,7 +280,7 @@ public final class CraftingEngineRouter {
             Throwable cause = error;
             while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
             if (cause instanceof java.util.concurrent.CancellationException) return;
-            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
+            if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
                     "[Graph Crafting] plan failed target={} amount={} phase={} nodes={} reserved_bytes={} elapsed_ms={} detail={} strategies={} error={}",
                     target, amount, budget.phase(), budget.nodes(), budget.peakBytes(), budget.elapsedNanos() / 1_000_000.0,
                     budget.failureDetail(), budget.diagnostics(), cause.toString(), error);
@@ -293,7 +293,7 @@ public final class CraftingEngineRouter {
             result = new AeGraphPlan(selected, prepared.bindings(), snapshot.emitable(), extractionStock,
                     planning.fallbackMode(), planning.reuseCandidate());
             long assemblyNanos = System.nanoTime() - assemblyStarted;
-            long skipped = ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging ? logAllowance(grid,
+            long skipped = ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging ? logAllowance(grid,
                     new PlanLogKey(target, amount, strategy, selected.result(), snapshot.epoch(), selected.missingExact().hashCode())) : -1;
             if (skipped >= 0) GTLCore.LOGGER.info(
                     "[Graph Crafting] plan target={} result={} amount={} snapshot_ms={} planner_ms={} queue_ms={} patterns={} nodes={} cache_hit={} bytes={} byte_cost_mode={} plan={} snapshot_elapsed_ms={} snapshot_wait_ms={} plan_assembly_ms={} catalog_prepare_ms={} snapshot_idle_ms={} snapshot_tick_slices={} snapshot_idle_slices={} snapshot_max_slice_ms={} catalog_elapsed_ms={} catalog_parallel_ms={} catalog_parallel_batches={} target_sources={} catalog_recipes={} missing={} suppressed_repeats={}",

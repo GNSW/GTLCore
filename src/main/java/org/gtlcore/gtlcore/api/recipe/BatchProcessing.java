@@ -88,7 +88,7 @@ public final class BatchProcessing {
 
     public static GTRecipe apply(MetaMachine machine, GTRecipe recipe, boolean isSubTickParallelized) {
         boolean subTickEligible = isSubTickParallelized || IGTRecipe.of(recipe).isSubTickParallelized();
-        int timeLimit = Math.max(1, ConfigHolder.INSTANCE.batchProcessingTimeLimitTicks);
+        int timeLimit = Math.max(1, ConfigHolder.INSTANCE.machines.batchProcessingTimeLimitTicks);
         boolean timeWindowEligible = recipe.duration > 0 && recipe.duration <= timeLimit / 2;
         BatchProcessingDecisionLogger.Eligibility eligibility = subTickEligible ?
                 timeWindowEligible ? SUB_TICK_AND_TIME_WINDOW : SUB_TICK :

@@ -103,7 +103,7 @@ public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVe
 
     @Unique
     private static final int CRAFT_MASK = NumberUtils.nearestPow2Lookup(
-            ConfigHolder.INSTANCE.ae2CraftingServiceUpdateInterval) - 1;
+            ConfigHolder.INSTANCE.performance.ae2CraftingServiceUpdateInterval) - 1;
 
     @Unique
     private static final Comparator<TransfiniteComputationArrayMachine> TRANSFINITE_CPU_COMPARATOR = Comparator.comparingLong(TransfiniteComputationArrayMachine::getParallelism)

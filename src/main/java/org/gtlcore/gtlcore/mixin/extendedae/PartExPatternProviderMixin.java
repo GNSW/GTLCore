@@ -12,6 +12,6 @@ public abstract class PartExPatternProviderMixin {
 
     @ModifyConstant(method = "createLogic", remap = false, constant = @Constant(intValue = 36))
     private int modifyContainer(int constant) {
-        return ConfigHolder.INSTANCE.exPatternProvider;
+        return ConfigHolder.INSTANCE.machines.exPatternProvider;
     }
 }

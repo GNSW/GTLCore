@@ -54,7 +54,7 @@ public final class MaxFastCalculationLogger {
     }
 
     static boolean isEnabled() {
-        return ConfigHolder.INSTANCE == null || ConfigHolder.INSTANCE.debugLogging.enableMaxFastCalculationLogging;
+        return ConfigHolder.INSTANCE == null || ConfigHolder.INSTANCE.diagnostics.debugLogging.enableMaxFastCalculationLogging;
     }
 
     public static void info(String message, Object... arguments) {

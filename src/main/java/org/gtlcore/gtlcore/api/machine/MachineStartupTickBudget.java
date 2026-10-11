@@ -19,16 +19,16 @@ public final class MachineStartupTickBudget {
 
     public static boolean tryAcquire(ServerLevel level, MetaMachine machine) {
         ConfigHolder config = ConfigHolder.INSTANCE;
-        if (config != null && !config.enableMachineStartupTickBudget) {
+        if (config != null && !config.performance.enableMachineStartupTickBudget) {
             return true;
         }
 
         int normalBudget = config == null ? ConfigHolder.DEFAULT_MACHINE_STARTUP_TICK_BUDGET_PER_LEVEL :
-                config.machineStartupTickBudgetPerLevel;
+                config.performance.machineStartupTickBudgetPerLevel;
         int aeBudget = config == null ? ConfigHolder.DEFAULT_MACHINE_STARTUP_AE_TICK_BUDGET_PER_LEVEL :
-                config.machineStartupAeTickBudgetPerLevel;
+                config.performance.machineStartupAeTickBudgetPerLevel;
         int timeBudgetMillis = config == null ? ConfigHolder.DEFAULT_MACHINE_STARTUP_TICK_TIME_BUDGET_MILLIS :
-                config.machineStartupTickTimeBudgetMillis;
+                config.performance.machineStartupTickTimeBudgetMillis;
         synchronized (LEVEL_BUDGETS) {
             LevelBudget levelBudget = LEVEL_BUDGETS.computeIfAbsent(level, ignored -> new LevelBudget());
             levelBudget.beginTick(level, level.getGameTime(), normalBudget, aeBudget, timeBudgetMillis);

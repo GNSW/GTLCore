@@ -12,6 +12,6 @@ public abstract class EventListenerMixin {
 
     @ModifyConstant(method = "onRightClick", remap = false, constant = @Constant(intValue = 30))
     private int modifyConsume1(int constant) {
-        return ConfigHolder.INSTANCE.travelStaffCD;
+        return ConfigHolder.INSTANCE.gameplay.travelStaffCD;
     }
 }

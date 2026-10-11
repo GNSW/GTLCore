@@ -175,7 +175,7 @@ public class MultiBlockMachineB {
             .workableCasingRenderer(GTCEu.id("block/casings/solid/machine_casing_clean_stainless_steel"), GTCEu.id("block/multiblock/large_chemical_reactor"))
             .register();
 
-    public final static MultiblockMachineDefinition PRIMITIVE_VOID_ORE = ConfigHolder.INSTANCE.enablePrimitiveVoidOre ?
+    public final static MultiblockMachineDefinition PRIMITIVE_VOID_ORE = ConfigHolder.INSTANCE.content.enablePrimitiveVoidOre ?
             REGISTRATE.multiblock("primitive_void_ore", PrimitiveOreMachine::new)
                     .langValue("Primitive Void Ore")
                     .tooltips(Component.translatable("tooltip.gtlcore.primitive_void_ore_random_output"))
@@ -197,7 +197,7 @@ public class MultiBlockMachineB {
                     .register() :
             null;
 
-    public final static MultiblockMachineDefinition LARGE_FRAGMENT_WORLD_COLLECTION_MACHINE = ConfigHolder.INSTANCE.enableSkyBlokeMode ?
+    public final static MultiblockMachineDefinition LARGE_FRAGMENT_WORLD_COLLECTION_MACHINE = ConfigHolder.INSTANCE.content.enableSkyBlokeMode ?
             REGISTRATE.multiblock("large_fragment_world_collection_machine", WorkableElectricMultiblockMachine::new)
                     .langValue("Large fragment world collection machine")
                     .tooltips(Component.translatable("gtlcore.machine.large_fragment_world_collection.sky_block_mode"))

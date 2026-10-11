@@ -265,7 +265,7 @@ public class AEUtils {
     // ========================================
 
     public static AE2CalculationMode getCalculationMode() {
-        return ConfigHolder.INSTANCE.ae2CalculationMode;
+        return ConfigHolder.INSTANCE.ae.ae2CalculationMode;
     }
 
     public static boolean isIntegratedCircuit(AEKey key) {

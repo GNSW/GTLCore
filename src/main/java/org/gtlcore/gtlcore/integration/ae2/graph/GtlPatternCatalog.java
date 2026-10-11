@@ -67,7 +67,7 @@ public final class GtlPatternCatalog {
     public Capture begin(IGrid grid, CraftingService service, Level level, IActionSource source, AEKey target,
                          Set<AEKey> recovery, PlanningBudget budget, boolean refreshInventory) {
         return new Capture(grid, service, level, source,
-                new Roots(target, Set.copyOf(recovery), ConfigHolder.INSTANCE.ae2GraphDiscoverByproducts), budget, refreshInventory);
+                new Roots(target, Set.copyOf(recovery), ConfigHolder.INSTANCE.ae.ae2GraphDiscoverByproducts), budget, refreshInventory);
     }
 
     /** World access is split between ticks; each request keeps its frontier and captured bindings. */

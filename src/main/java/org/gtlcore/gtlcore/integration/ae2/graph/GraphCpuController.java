@@ -98,7 +98,7 @@ public final class GraphCpuController {
                 // Do not let Retry reproduce a catalog that execution has just rejected.
                 // No inventory has been extracted yet; the current plan remains rejected.
                 ((GraphRequestTracker) grid.getCraftingService()).gtlcore$invalidateGraphBinding(selected.binding());
-                if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
+                if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.warn(
                         "[Graph Crafting] submit rejected plan={} target={} amount={} recipe={} binding={} reason={} detail={} provider_revision={} captured_current={} selected_slots={} selected_outputs={} catalog_invalidated=true",
                         view.id(), plan.target(), plan.amount(), recipe, selected.binding(), preparedAdapter.bindingFailure(), preparedAdapter.bindingDetail(),
                         ((GraphRequestTracker) grid.getCraftingService()).gtlcore$graphProviderGeneration(),
@@ -170,7 +170,7 @@ public final class GraphCpuController {
         plan.patternTimesExact().forEach((recipe, count) -> runtime.plan().recipes().get(recipe).executionOutputs().forEach((key, amount) -> time.invokeAddMaxItems(ExactAmounts.capped(count.multiply(java.math.BigInteger.valueOf(amount))), key.getType())));
         publish(true);
         notifyOwner(CraftingJobStatusPacket.Status.STARTED);
-        if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+        if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
                 "[Graph Crafting] submit accepted plan={} job={} cpu={} target={} amount={}",
                 view.id(), id, host.cpu().getClass().getName(), plan.target(), plan.amount());
         if (requester == null) return CraftingSubmitResult.successful(null);
@@ -212,7 +212,7 @@ public final class GraphCpuController {
     }
 
     private void logWaiting() {
-        if (!ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) return;
+        if (!ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) return;
         long now = System.nanoTime();
         if (progressVersion != runtime.version()) {
             progressVersion = runtime.version();
@@ -256,7 +256,7 @@ public final class GraphCpuController {
     /** Called by the native CPU's breakCluster after it cancels the task. */
     public void handoffCancelledInventory() {
         if (runtime == null || runtime.state() != GraphJobRuntime.State.CANCELLING) return;
-        if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+        if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
                 "[Graph Crafting] job={} cancelled inventory handed to AE for CPU rebuild/break", link.getCraftingID());
         runtime.detachCancelledInventory().forEach((key, amount) -> host.orphanInventory().insert(key, amount, Actionable.MODULATE));
         finish();
@@ -268,7 +268,7 @@ public final class GraphCpuController {
         if (success) link.markDone();
         else link.cancel();
         notifyOwner(success ? CraftingJobStatusPacket.Status.FINISHED : CraftingJobStatusPacket.Status.CANCELLED);
-        if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+        if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
                 "[Graph Crafting] job={} state={} dispatches={} rejects={} checks={} tick_calls={} tick_ms={}",
                 link.getCraftingID(), runtime.state(), runtime.dispatches(), runtime.rejections(), runtime.checks(), tickCalls, tickNanos / 1_000_000.0);
         for (AEKey key : indexed) {
@@ -533,7 +533,7 @@ public final class GraphCpuController {
             if (!selected.graph().feasible()) return "REPLAN_" + selected.graph().result();
             if (!selected.fitsStorage(host.cpu().getAvailableStorage(), host.unboundedJobStorage())) return "REPLAN_CPU_TOO_SMALL";
             if (!installReplan(selected)) return "REPLAN_RESOURCES_OR_PROVIDER_CHANGED";
-            if (ConfigHolder.INSTANCE.ae2GraphDiagnosticLogging)
+            if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging)
                 GTLCore.LOGGER.info("[Graph Crafting] job={} replan=installed committed_recipes={} remaining_recipes={}",
                         link.getCraftingID(), runtime.committedRuns().size(), runtime.pendingRuns().size());
             return null;

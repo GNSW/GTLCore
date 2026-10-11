@@ -42,6 +42,7 @@ public class CommonProxy {
         REGISTRATE.registerEventListeners(eventBus);
         GTLStats.register(eventBus);
         GTLWirelessAeContent.register(eventBus);
+        org.gtlcore.gtlcore.integration.gtmt.monitor.EnergyMonitorContent.register(eventBus);
         WirelessAeNetworkRuntime.register(MinecraftForge.EVENT_BUS);
         WirelessAePackets.register();
         CuriosTerminalLocator.register();

@@ -98,7 +98,7 @@ public class GravityCondition extends RecipeCondition {
         }
 
         // 检查是否开启空岛模式
-        if (ConfigHolder.INSTANCE.enableSkyBlokeMode) {
+        if (ConfigHolder.INSTANCE.content.enableSkyBlokeMode) {
             // 检查是否为主世界并且高度超过阈值
             boolean isInOverworld = dimensionName.equals("minecraft:overworld");
             boolean isInVoid = dimensionName.equals("kubejs:void");

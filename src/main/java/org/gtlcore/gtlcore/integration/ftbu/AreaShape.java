@@ -55,8 +55,8 @@ public class AreaShape implements Shape {
 
     @Override
     public List<BlockPos> getBlocks(ShapeContext context) {
-        if (NEIGHBOR_POSITIONS.range != ConfigHolder.INSTANCE.ftbUltimineRange) {
-            NEIGHBOR_POSITIONS.update(ConfigHolder.INSTANCE.ftbUltimineRange);
+        if (NEIGHBOR_POSITIONS.range != ConfigHolder.INSTANCE.gameplay.ftbUltimineRange) {
+            NEIGHBOR_POSITIONS.update(ConfigHolder.INSTANCE.gameplay.ftbUltimineRange);
         }
 
         Set<BlockPos> known = new OrderedHashSet<>();

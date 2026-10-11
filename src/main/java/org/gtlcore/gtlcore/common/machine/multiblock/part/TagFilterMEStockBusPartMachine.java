@@ -61,7 +61,7 @@ public class TagFilterMEStockBusPartMachine extends MEInputBusPartMachine implem
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(TagFilterMEStockBusPartMachine.class,
             MEInputBusPartMachine.MANAGED_FIELD_HOLDER);
 
-    private static final boolean ENABLE_ULTIMATE_ME_STOCKING = ConfigHolder.INSTANCE.enableUltimateMEStocking;
+    private static final boolean ENABLE_ULTIMATE_ME_STOCKING = ConfigHolder.INSTANCE.machines.enableUltimateMEStocking;
 
     @Persisted
     protected String tagWhite = "";

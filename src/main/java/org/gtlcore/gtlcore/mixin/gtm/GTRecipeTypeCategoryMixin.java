@@ -148,7 +148,7 @@ public abstract class GTRecipeTypeCategoryMixin {
 
     @Unique
     private static boolean gtlcore$isOptimizationEnabled() {
-        return ConfigHolder.INSTANCE == null || ConfigHolder.INSTANCE.optimizeGtceuJeiRegistration;
+        return ConfigHolder.INSTANCE == null || ConfigHolder.INSTANCE.performance.optimizeGtceuJeiRegistration;
     }
 
     @Unique
@@ -160,7 +160,7 @@ public abstract class GTRecipeTypeCategoryMixin {
     @Unique
     private static int gtlcore$slowTypeWarningMillis() {
         return ConfigHolder.INSTANCE == null ? ConfigHolder.DEFAULT_GTCEU_JEI_SLOW_RECIPE_TYPE_WARNING_MILLIS :
-                ConfigHolder.INSTANCE.debugLogging.gtceuJeiSlowRecipeTypeWarningMillis;
+                ConfigHolder.INSTANCE.diagnostics.debugLogging.gtceuJeiSlowRecipeTypeWarningMillis;
     }
 
     @Unique

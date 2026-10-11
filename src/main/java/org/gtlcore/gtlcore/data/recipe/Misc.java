@@ -84,7 +84,7 @@ public class Misc {
                 'B', GTLItems.ITEM_INFINITY_CELL.asStack(),
                 'C', ZERO_POINT_MODULE.asStack(),
                 'D', GTLItems.FLUID_INFINITY_CELL.asStack());
-        if (ConfigHolder.INSTANCE.enablePrimitiveVoidOre) {
+        if (ConfigHolder.INSTANCE.content.enablePrimitiveVoidOre) {
             VanillaRecipeHelper.addShapedRecipe(provider, true, "primitive_void_ore_recipes",
                     PRIMITIVE_VOID_ORE.asStack(), "DCD", "CGC", "DCD",
                     'D', Blocks.DIRT.asItem(),

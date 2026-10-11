@@ -41,7 +41,7 @@ public final class BatchProcessingDecisionLogger {
 
     public static boolean shouldLog(MetaMachine machine) {
         ConfigHolder config = ConfigHolder.INSTANCE;
-        return config != null && config.debugLogging.enableBatchProcessingLogging &&
+        return config != null && config.diagnostics.debugLogging.enableBatchProcessingLogging &&
                 machine instanceof IBatchMachine batchMachine && batchMachine.isBatchEnabled();
     }
 

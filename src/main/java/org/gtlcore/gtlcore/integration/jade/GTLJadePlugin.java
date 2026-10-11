@@ -21,6 +21,7 @@ public class GTLJadePlugin implements IWailaPlugin {
 
     @Override
     public void register(IWailaCommonRegistration registration) {
+        registration.registerBlockDataProvider(new EnergyMonitorProvider(), org.gtlcore.gtlcore.integration.gtmt.monitor.EnergyMonitorBlockEntity.class);
         registration.registerItemStorage(QuantumChestItemStorageProvider.INSTANCE, MetaMachineBlockEntity.class);
         registration.registerItemStorage(MEStockingItemStorageProvider.INSTANCE, MetaMachineBlockEntity.class);
         registration.registerFluidStorage(MEStockingFluidStorageProvider.INSTANCE, MetaMachineBlockEntity.class);
@@ -36,6 +37,7 @@ public class GTLJadePlugin implements IWailaPlugin {
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
+        registration.registerBlockComponent(new EnergyMonitorProvider(), org.gtlcore.gtlcore.integration.gtmt.monitor.EnergyMonitorBlock.class);
         var meInventoryAmountProvider = new MeInventoryAmountProvider();
         registration.addConfig(meInventoryAmountProvider.getUid(), true);
         registration.registerBlockComponent(meInventoryAmountProvider, Block.class);

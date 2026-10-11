@@ -60,8 +60,8 @@ public abstract class MEExtendedOutputPartMachineBase extends MEIOPartMachine im
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(
             MEExtendedOutputPartMachineBase.class, MEIOPartMachine.MANAGED_FIELD_HOLDER);
 
-    protected final static int MIN_FREQUENCY = ConfigHolder.INSTANCE.MEPatternOutputMin;
-    protected final static int MAX_FREQUENCY = ConfigHolder.INSTANCE.MEPatternOutputMax;
+    protected final static int MIN_FREQUENCY = ConfigHolder.INSTANCE.machines.MEPatternOutputMin;
+    protected final static int MAX_FREQUENCY = ConfigHolder.INSTANCE.machines.MEPatternOutputMax;
 
     @Getter
     protected final Object2LongOpenHashMap<AEKey> buffer = new Object2LongOpenHashMap<>();

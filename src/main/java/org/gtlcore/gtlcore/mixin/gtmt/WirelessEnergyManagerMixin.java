@@ -24,6 +24,7 @@ public abstract class WirelessEnergyManagerMixin {
                                                                     CallbackInfoReturnable<Boolean> cir) {
         if (Boolean.TRUE.equals(cir.getReturnValue())) {
             WirelessEnergyMonitorSnapshot.record(userId, energy.longValue(), machine);
+            org.gtlcore.gtlcore.integration.gtmt.monitor.WirelessEnergyMachineStats.record(userId, energy, machine);
         }
     }
 }

@@ -24,7 +24,7 @@ public abstract class MetaMachineBlockMixin {
     private void gtlcore$enableBatchProcessingByDefault(Level level, BlockPos pos, BlockState state,
                                                         LivingEntity placer, ItemStack stack, CallbackInfo ci) {
         if (level.isClientSide || ConfigHolder.INSTANCE == null ||
-                !ConfigHolder.INSTANCE.batchProcessingEnabledByDefault)
+                !ConfigHolder.INSTANCE.machines.batchProcessingEnabledByDefault)
             return;
 
         MetaMachine machine = MetaMachine.getMachine(level, pos);

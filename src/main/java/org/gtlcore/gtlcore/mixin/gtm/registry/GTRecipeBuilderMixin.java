@@ -51,7 +51,7 @@ public abstract class GTRecipeBuilderMixin {
 
     @Unique
     private int gTLCore$getDuration() {
-        if (ConfigHolder.INSTANCE.durationMultiplier == 1 || gTLCore$eut < 0 ||
+        if (ConfigHolder.INSTANCE.content.durationMultiplier == 1 || gTLCore$eut < 0 ||
                 recipeType == PRIMITIVE_VOID_ORE_RECIPES ||
                 recipeType == GTRecipeTypes.LARGE_BOILER_RECIPES ||
                 recipeType == GTRecipeTypes.STEAM_BOILER_RECIPES ||
@@ -68,7 +68,7 @@ public abstract class GTRecipeBuilderMixin {
                 recipeType == WEATHER_CONTROL_RECIPES) {
             return Math.abs(duration);
         }
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(1, Math.abs(duration * ConfigHolder.INSTANCE.durationMultiplier)));
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(1, Math.abs(duration * ConfigHolder.INSTANCE.content.durationMultiplier)));
     }
 
     @Inject(method = "toJson", at = @At("TAIL"), remap = false)

@@ -45,6 +45,6 @@ public final class CraftingPatternAutoExpand {
     }
 
     private static boolean isPatternProviderAutoExpandEnabled() {
-        return ConfigHolder.INSTANCE != null && ConfigHolder.INSTANCE.ae2PatternProviderAutoExpandDefault;
+        return ConfigHolder.INSTANCE != null && ConfigHolder.INSTANCE.ae.ae2PatternProviderAutoExpandDefault;
     }
 }

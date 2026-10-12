@@ -21,6 +21,7 @@ import java.util.Set;
 public final class ComputationRecipes {
 
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
+    private static final ThreadLocal<Restart> RESTART = new ThreadLocal<>();
 
     private ComputationRecipes() {}
 
@@ -72,12 +73,36 @@ public final class ComputationRecipes {
         long required = required(contents);
         if (required < 0) return false;
         if (required == 0) return true;
+        Restart restart = RESTART.get();
+        if (restart != null && restart.owner == holder && restart.recipe == recipe && required <= restart.paid)
+            return true;
         long maximum = maximum(holder, recipe, required);
         long minimum = Math.min(required, maximum);
         var roots = roots(holder);
         boolean available = minimum == 0 || ComputationNetwork.offer(holder, roots, minimum, maximum) >= minimum;
         if (!available) ComputationNetwork.await(holder, roots, minimum, maximum);
         return available;
+    }
+
+    /** A completed cycle already paid this tick; its successor first consumes CWU on the next tick. */
+    public static GTRecipe.ActionResult matchRestartTick(IRecipeLogicMachine owner, GTRecipe recipe) {
+        var contents = recipe.getTickInputContents(CWURecipeCapability.CAP);
+        long required = required(contents);
+        if (recipe.data.getBoolean("duration_is_total_cwu") || !aggregate(contents) || required <= 0)
+            return recipe.matchTickRecipe(owner);
+        long paid = ((ComputationProgress) owner.getRecipeLogic()).gtlcore$usedComputationThisTick();
+        if (paid < required) return recipe.matchTickRecipe(owner);
+
+        Restart previous = RESTART.get();
+        RESTART.set(new Restart(owner, recipe, paid));
+        try {
+            // Only the restart's CWU admission reuses the successful tick. Other inputs,
+            // outputs and every actual computation debit still use their normal checks.
+            return recipe.matchTickRecipe(owner);
+        } finally {
+            if (previous == null) RESTART.remove();
+            else RESTART.set(previous);
+        }
     }
 
     public static ComputationScheduler.Transaction reserve(IRecipeCapabilityHolder holder, GTRecipe recipe,
@@ -146,6 +171,8 @@ public final class ComputationRecipes {
         Scope scope = CURRENT.get();
         if (scope != null) scope.refunds.add(refund);
     }
+
+    private record Restart(IRecipeLogicMachine owner, GTRecipe recipe, long paid) {}
 
     public static final class Scope implements AutoCloseable {
 

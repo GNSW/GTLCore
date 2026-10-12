@@ -45,6 +45,12 @@ public abstract class ComputationProgressMixin implements ComputationProgress {
     }
 
     @Override
+    public long gtlcore$usedComputationThisTick() {
+        long tick = ComputationNetwork.tick(((RecipeLogic) (Object) this).getMachine().getLevel());
+        return tick == gtlcore$lastDrawTick ? gtlcore$lastDraw : 0;
+    }
+
+    @Override
     public long gtlcore$completedComputation(GTRecipe recipe) {
         long total = ComputationAmounts.total(recipe);
         String id = String.valueOf(recipe.id);

@@ -12,4 +12,8 @@ public interface ComputationProgress extends ComputationUsage {
     void gtlcore$resetComputation(GTRecipe recipe);
 
     void gtlcore$recordComputation(long amount);
+
+    default long gtlcore$usedComputationThisTick() {
+        return 0;
+    }
 }

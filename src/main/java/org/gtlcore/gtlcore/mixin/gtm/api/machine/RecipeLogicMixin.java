@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.gtm.api.machine;
 
 import org.gtlcore.gtlcore.api.machine.ISuspendableMachine;
+import org.gtlcore.gtlcore.api.machine.computation.ComputationRecipes;
 import org.gtlcore.gtlcore.api.machine.trait.ILockRecipe;
 import org.gtlcore.gtlcore.api.machine.trait.IRecipeStatus;
 import org.gtlcore.gtlcore.api.recipe.BatchProcessing;
@@ -298,7 +299,7 @@ public abstract class RecipeLogicMixin implements ILockRecipe, IRecipeStatus {
                         this.markLastRecipeDirty();
                     }
                 }
-                if (!this.recipeDirty && gtlcore$checkLastRecipe(this.lastRecipe)) {
+                if (!this.recipeDirty && gtlcore$checkLastRecipe(this.lastRecipe, true)) {
                     this.setupRecipe(this.lastRecipe);
                     return;
                 } else {
@@ -345,8 +346,14 @@ public abstract class RecipeLogicMixin implements ILockRecipe, IRecipeStatus {
 
     @Unique
     private boolean gtlcore$checkLastRecipe(GTRecipe lastRecipe) {
+        return gtlcore$checkLastRecipe(lastRecipe, false);
+    }
+
+    @Unique
+    private boolean gtlcore$checkLastRecipe(GTRecipe lastRecipe, boolean restarting) {
         return matchRecipe(this.machine, lastRecipe) &&
-                lastRecipe.matchTickRecipe(this.machine).isSuccess() &&
+                (restarting ? ComputationRecipes.matchRestartTick(this.machine, lastRecipe) :
+                        lastRecipe.matchTickRecipe(this.machine)).isSuccess() &&
                 lastRecipe.checkConditions(this.machine.getRecipeLogic()).isSuccess();
     }
 }

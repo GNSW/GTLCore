@@ -151,7 +151,9 @@ public class AdvancedBlockPattern extends BlockPattern {
                           UltimateTerminalBehavior.AutoBuildSetting autoBuildSetting) {
         Level world = player.level();
         int minZ = -centerOffset[4];
-        clearWorldState(worldState);
+        // Terminal probes must not clear the state used by the asynchronous structure checker.
+        MultiblockState buildState = new MultiblockState(world, worldState.controllerPos);
+        clearWorldState(buildState);
         IMultiController controller = worldState.getController();
         BlockPos centerPos = controller.self().getPos();
         Direction facing = controller.self().getFrontFacing();
@@ -171,8 +173,8 @@ public class AdvancedBlockPattern extends BlockPattern {
 
         IActionSource source = IActionSource.ofPlayer(player);
 
-        Object2IntOpenHashMap<SimplePredicate> cacheGlobal = new Object2IntOpenHashMap<>(worldState.getGlobalCount());
-        Object2IntOpenHashMap<SimplePredicate> cacheLayer = new Object2IntOpenHashMap<>(worldState.getLayerCount());
+        Object2IntOpenHashMap<SimplePredicate> cacheGlobal = new Object2IntOpenHashMap<>(buildState.getGlobalCount());
+        Object2IntOpenHashMap<SimplePredicate> cacheLayer = new Object2IntOpenHashMap<>(buildState.getLayerCount());
         Object2ObjectOpenHashMap<BlockPos, Object> blocks = new Object2ObjectOpenHashMap<>();
         ObjectOpenHashSet<BlockPos> placeBlockPos = new ObjectOpenHashSet<>();
         blocks.put(centerPos, controller);
@@ -191,7 +193,7 @@ public class AdvancedBlockPattern extends BlockPattern {
                                 centerPos.getX() + basisX.getX() * x + basisY.getX() * y + basisZ.getX() * z,
                                 centerPos.getY() + basisX.getY() * x + basisY.getY() * y + basisZ.getY() * z,
                                 centerPos.getZ() + basisX.getZ() * x + basisY.getZ() * y + basisZ.getZ() * z);
-                        updateWorldState(worldState, pos, predicate);
+                        updateWorldState(buildState, pos, predicate);
                         ItemStack itemStack = null;
                         if (!world.isEmptyBlock(pos)) {
                             Block block = world.getBlockState(pos).getBlock();
@@ -199,7 +201,7 @@ public class AdvancedBlockPattern extends BlockPattern {
                                 itemStack = block.asItem().getDefaultInstance();
                             } else {
                                 blocks.put(pos, world.getBlockState(pos));
-                                for (SimplePredicate limit : predicate.limited) limit.testLimited(worldState);
+                                for (SimplePredicate limit : predicate.limited) limit.testLimited(buildState);
                                 continue;
                             }
                         }
@@ -397,7 +399,8 @@ public class AdvancedBlockPattern extends BlockPattern {
         var aeInventory = grid != null ? grid.getStorageService().getInventory() : null;
         IActionSource source = IActionSource.ofPlayer(player);
 
-        MultiblockState worldState = controller.getMultiblockState();
+        // Dismantle matching also needs its own cursor, counts and match context.
+        MultiblockState worldState = new MultiblockState(level, centerPos);
         DismantleLayout layout = null;
         if (controller.getPattern().checkPatternAt(worldState, true)) {
             var matchContext = worldState.getMatchContext();

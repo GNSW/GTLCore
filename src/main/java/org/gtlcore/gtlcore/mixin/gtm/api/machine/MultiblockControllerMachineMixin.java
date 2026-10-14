@@ -44,9 +44,13 @@ public abstract class MultiblockControllerMachineMixin extends MetaMachine imple
             Lock lock = getPatternLock();
             long lockStart = timing == null ? 0L : System.nanoTime();
             lock.lock();
-            if (timing != null) timing.lockResult(lockStart, true);
-            boolean matched = checkPattern();
-            lock.unlock();
+            boolean matched;
+            try {
+                if (timing != null) timing.lockResult(lockStart, true);
+                matched = checkPattern();
+            } finally {
+                lock.unlock();
+            }
             if (timing != null) timing.result(matched);
             return matched;
         }
@@ -60,8 +64,12 @@ public abstract class MultiblockControllerMachineMixin extends MetaMachine imple
             boolean acquired = lock.tryLock();
             if (timing != null) timing.lockResult(lockStart, acquired);
             if (acquired) {
-                boolean matched = checkPattern();
-                lock.unlock();
+                boolean matched;
+                try {
+                    matched = checkPattern();
+                } finally {
+                    lock.unlock();
+                }
                 if (timing != null) timing.result(matched);
                 return matched;
             }

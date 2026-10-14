@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.mixin.gtm.api.machine;
 
 import org.gtlcore.gtlcore.api.pattern.INewMultiblockWorldSavedData;
 
+import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
 import com.gregtechceu.gtceu.api.pattern.MultiblockState;
 import com.gregtechceu.gtceu.api.pattern.MultiblockWorldSavedData;
 
@@ -14,6 +15,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Implements(@Interface(
                        iface = INewMultiblockWorldSavedData.class,
@@ -27,6 +29,22 @@ public abstract class MultiblockWorldSavedDataMixin {
     @Shadow(remap = false)
     @Final
     public Map<ChunkPos, Set<MultiblockState>> chunkPosMapping;
+    @Shadow(remap = false)
+    @Final
+    private CopyOnWriteArrayList<IMultiController> controllers;
+
+    @Shadow(remap = false)
+    public abstract void createExecutorService();
+
+    /**
+     * @author Dragons
+     * @reason A controller needs only one outstanding asynchronous search registration.
+     */
+    @Overwrite(remap = false)
+    public void addAsyncLogic(IMultiController controller) {
+        controllers.addIfAbsent(controller);
+        createExecutorService();
+    }
 
     /**
      * @author screret

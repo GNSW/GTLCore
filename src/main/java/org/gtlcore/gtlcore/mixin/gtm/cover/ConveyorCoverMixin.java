@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.gtm.cover;
 
-import com.gregtechceu.gtceu.api.GTValues;
+import org.gtlcore.gtlcore.common.data.GTLCovers;
+
 import com.gregtechceu.gtceu.api.capability.ICoverable;
 import com.gregtechceu.gtceu.api.cover.CoverBehavior;
 import com.gregtechceu.gtceu.api.cover.CoverDefinition;
@@ -28,12 +29,19 @@ public abstract class ConveyorCoverMixin extends CoverBehavior {
     @Final
     public int maxItemTransferRate;
 
+    @Shadow(remap = false)
+    protected int transferRate;
+
     public ConveyorCoverMixin(CoverDefinition definition, ICoverable coverHolder, Direction attachedSide) {
         super(definition, coverHolder, attachedSide);
     }
 
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     public void ConveyorCover(CoverDefinition definition, ICoverable coverHolder, Direction attachedSide, int tier, CallbackInfo ci) {
-        this.maxItemTransferRate = tier == 0 ? Integer.MAX_VALUE : 2 * (int) Math.pow(4, Math.min(tier, GTValues.LuV));
+        int oldMax = this.maxItemTransferRate;
+        this.maxItemTransferRate = GTLCovers.itemTransferRate(tier);
+        if (this.transferRate == oldMax) {
+            this.transferRate = this.maxItemTransferRate;
+        }
     }
 }

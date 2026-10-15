@@ -24,6 +24,8 @@
     "gtm.client.WorldPreviewAccessor",
     "gtm.client.WorldPreviewPerformanceMixin",
     "jei.client.PreviewHeaderBoundsMixin",
+    "gtm.api.gui.widget.NumberInputWidgetMixin",
+    "ldlib.gui.widget.TextFieldWidgetMixin",
     "ldlib.client.PreviewPickingMixin",
     "ldlib.client.PreviewSceneAccessor",
     "ldlib.client.PreviewSceneWidgetMixin",

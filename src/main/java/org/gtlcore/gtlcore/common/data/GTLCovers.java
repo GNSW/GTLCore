@@ -58,5 +58,16 @@ public class GTLCovers {
                 new SimpleCoverRenderer(GTMThings.id("block/cover/overlay_" + (amperage == 1 ? "" : "4a_") + "wireless_energy_receive")));
     }
 
+    public static int itemTransferRate(int tier) {
+        if (tier <= 0 || tier >= 15) return Integer.MAX_VALUE;
+        return 2 << (2 * tier);
+    }
+
+    public static long fluidTransferRate(int tier) {
+        if (tier <= 0) return Integer.MAX_VALUE;
+        if (tier >= 30) return Long.MAX_VALUE;
+        return 64L << (2 * (tier - 1));
+    }
+
     public static void init() {}
 }

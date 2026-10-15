@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.gtm.cover;
 
-import com.gregtechceu.gtceu.api.GTValues;
+import org.gtlcore.gtlcore.common.data.GTLCovers;
+
 import com.gregtechceu.gtceu.api.capability.ICoverable;
 import com.gregtechceu.gtceu.api.cover.CoverBehavior;
 import com.gregtechceu.gtceu.api.cover.CoverDefinition;
@@ -24,13 +25,19 @@ public abstract class PumpCoverMixin extends CoverBehavior {
     @Final
     public long maxMilliBucketsPerTick;
 
+    @Shadow(remap = false)
+    protected long currentMilliBucketsPerTick;
+
     public PumpCoverMixin(CoverDefinition definition, ICoverable coverHolder, Direction attachedSide) {
         super(definition, coverHolder, attachedSide);
     }
 
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     public void PumpCover(CoverDefinition definition, ICoverable coverHolder, Direction attachedSide, int tier, CallbackInfo ci) {
-        this.maxMilliBucketsPerTick = tier == 0 ? Integer.MAX_VALUE :
-                64 * (long) Math.pow(4, Math.min(tier - 1, GTValues.IV));
+        long oldMax = this.maxMilliBucketsPerTick;
+        this.maxMilliBucketsPerTick = GTLCovers.fluidTransferRate(tier);
+        if (this.currentMilliBucketsPerTick == oldMax) {
+            this.currentMilliBucketsPerTick = this.maxMilliBucketsPerTick;
+        }
     }
 }

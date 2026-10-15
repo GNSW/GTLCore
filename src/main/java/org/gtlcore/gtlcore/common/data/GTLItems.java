@@ -193,7 +193,8 @@ public class GTLItems {
             .onRegister(attach(new CoverPlaceBehavior(GTLCovers.FLUID_REGULATOR_MAX)))
             .onRegister(attach(new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("item.gtceu.fluid.regulator.tooltip"));
-                lines.add(Component.translatable("gtceu.universal.tooltip.fluid_transfer_rate", 1048576));
+                lines.add(Component.translatable("gtceu.universal.tooltip.fluid_transfer_rate",
+                        GTLCovers.fluidTransferRate(GTValues.MAX)));
             })))
             .register();
 
@@ -203,7 +204,7 @@ public class GTLItems {
             .onRegister(attach(new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("item.gtceu.electric.pump.tooltip"));
                 lines.add(Component.translatable("gtceu.universal.tooltip.fluid_transfer_rate",
-                        1280 * 64 * 64 * 4 / 20));
+                        GTLCovers.fluidTransferRate(GTValues.MAX)));
             })))
             .register();
 
@@ -212,7 +213,8 @@ public class GTLItems {
             .onRegister(attach(new CoverPlaceBehavior(GTLCovers.CONVEYOR_MODULE_MAX)))
             .onRegister(attach(new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("item.gtceu.conveyor.module.tooltip"));
-                lines.add(Component.translatable("gtceu.universal.tooltip.item_transfer_rate_stacks", 16));
+                lines.add(Component.translatable("gtceu.universal.tooltip.item_transfer_rate_stacks",
+                        GTLCovers.itemTransferRate(GTValues.MAX) / 64));
             })))
             .register();
 
@@ -220,7 +222,8 @@ public class GTLItems {
             .onRegister(attach(new CoverPlaceBehavior(GTLCovers.ROBOT_ARM_MAX)))
             .onRegister(attach(new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("item.gtceu.robot.arm.tooltip"));
-                lines.add(Component.translatable("gtceu.universal.tooltip.item_transfer_rate_stacks", 16));
+                lines.add(Component.translatable("gtceu.universal.tooltip.item_transfer_rate_stacks",
+                        GTLCovers.itemTransferRate(GTValues.MAX) / 64));
             })))
             .register();
 
@@ -234,7 +237,8 @@ public class GTLItems {
             .onRegister(attach(new CoverPlaceBehavior(GTLCovers.ROBOT_ARM_ULV)))
             .onRegister(attach(new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("item.gtceu.robot.arm.tooltip"));
-                lines.add(Component.translatable("gtceu.universal.tooltip.item_transfer_rate_stacks", 33554431));
+                lines.add(Component.translatable("gtceu.universal.tooltip.item_transfer_rate_stacks",
+                        GTLCovers.itemTransferRate(GTValues.ULV) / 64));
             })))
             .register();
 
@@ -243,7 +247,8 @@ public class GTLItems {
             .onRegister(attach(new CoverPlaceBehavior(GTLCovers.FLUID_REGULATORS_ULV)))
             .onRegister(attach(new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("item.gtceu.fluid.regulator.tooltip"));
-                lines.add(Component.translatable("gtceu.universal.tooltip.fluid_transfer_rate", Integer.MAX_VALUE));
+                lines.add(Component.translatable("gtceu.universal.tooltip.fluid_transfer_rate",
+                        GTLCovers.fluidTransferRate(GTValues.ULV)));
             })))
             .register();
 

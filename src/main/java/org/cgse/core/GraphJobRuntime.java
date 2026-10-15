@@ -39,7 +39,10 @@ public final class GraphJobRuntime<K> {
         /** Zero means blocked; must not transfer inputs. */
         long capacity(GraphRecipe<K> recipe, long requested);
 
-        /** Inputs are in escrow. False/rejected must mean no input-transfer side effects. */
+        /** Immutable mandatory return alternatives for this exact batch; no callback may sample randomness. */
+        default List<OutputObligations.ReturnChoice<K>> returnChoices(GraphRecipe<K> recipe, long runs) { return List.of(); }
+
+        /** Inputs are in escrow. Return a non-null outcome; rejection must mean no input-transfer side effects. */
         Outcome push(GraphRecipe<K> recipe, long runs, Map<K, Long> inputs);
 
         long deliver(K key, long amount);
@@ -59,6 +62,7 @@ public final class GraphJobRuntime<K> {
     private final Map<String, BigInteger> acceptedRuns = new LinkedHashMap<>();
     private final Map<String, BigInteger> committedHistory = new LinkedHashMap<>();
     private boolean replanning;
+    private boolean needsStateReplan;
     private long replanEpoch;
     private final Map<String, BigInteger> pendingRuns = new LinkedHashMap<>();
     private final Map<K, BigInteger> pendingOutputs = new LinkedHashMap<>();
@@ -71,9 +75,9 @@ public final class GraphJobRuntime<K> {
     private Map<K, Long> preparedOutputs;
     private Map<K, Long> preparedInputs;
     private Map<K, Long> synchronousReturns;
-    private String preparingRecipe;
-    private long preparingRuns;
-    private Map<K, Long> preparingBatchOutputs;
+    private Map<K, Long> synchronousExpectedReturns;
+    private long preparingOwner;
+    private boolean preparingReturned;
     private Map<K, Long> settlementEscrow;
     private Deque<K> refundQueue;
     private State state = State.RUNNING;
@@ -155,6 +159,7 @@ public final class GraphJobRuntime<K> {
         remainingDelivery = CheckedAmounts.nonNegative(saved.remainingDelivery());
         if (remainingDelivery > plan.amount()) throw new IllegalArgumentException("Invalid delivery remainder");
         state = saved.state();
+        needsStateReplan = saved.needsStateReplan();
         suspended = saved.suspended();
         reason = saved.reason();
         if ((!uncertainInputs.isEmpty() || obligations.ambiguous()) && state != State.CANCELLING && state != State.CANCELLED && state != State.COMPLETED) {
@@ -207,14 +212,14 @@ public final class GraphJobRuntime<K> {
             settle(adapter, workBudget);
             return 0;
         }
-        if (state != State.RUNNING || suspended || replanning) return 0;
+        if (state != State.RUNNING || suspended || replanning || needsStateReplan) return 0;
         replenishExternal();
         drainSurplus(adapter, workBudget);
         if (state != State.RUNNING) return 0;
         int pushed = 0;
         long deadline = clock.getAsLong() + 2_000_000L;
         int checkBudget = (int) Math.min(4096L, Math.max(0L, workBudget) + PipelineScheduler.WINDOW);
-        for (int work = 0; pushed < workBudget && work < checkBudget && state == State.RUNNING; work++) {
+        for (int work = 0; pushed < workBudget && work < checkBudget && state == State.RUNNING && !needsStateReplan; work++) {
             if (work > 0 && clock.getAsLong() - deadline >= 0) break;
             checks++;
             PlanStep.Batch step = dag == null ? pipeline.poll(tick,
@@ -294,7 +299,51 @@ public final class GraphJobRuntime<K> {
             }
             Map<K, Long> outputs = new LinkedHashMap<>();
             for (var output : recipe.executionOutputs().entrySet()) outputs.put(output.getKey(), CheckedAmounts.multiply(output.getValue(), batch));
+            List<OutputObligations.ReturnChoice<K>> returns;
+            try {
+                returns = List.copyOf(adapter.returnChoices(recipe, batch));
+                for (var choice : returns) {
+                    boolean found = false;
+                    for (int slot = 0; slot < recipe.slots().size(); slot++) {
+                        int inputSlot = recipe.slots().get(slot).inputSlot();
+                        if ((inputSlot < 0 ? slot : inputSlot) == choice.inputSlot()) found = true;
+                    }
+                    if (!found) throw new IllegalArgumentException("Unknown return input slot");
+                }
+                if (!obligations.compatible(outputs, returns)) {
+                    reason = "WAIT_RETURN_DOMAIN";
+                    if (dag != null) dag.retry(tick + 5);
+                    else pipeline.retry(tick + 5);
+                    continue;
+                }
+            } catch (RuntimeException e) {
+                state = State.NEEDS_ATTENTION;
+                reason = "RETURN_CONTRACT_FAILED: " + e.getClass().getSimpleName();
+                changed();
+                break;
+            }
             Map<K, Long> dispatchInputs = recipe.dispatchInputs(batch);
+            boolean returnCapacity = true;
+            Map<K, BigInteger> returnDemand = new LinkedHashMap<>();
+            for (var choice : returns) for (K key : choice.allowed()) {
+                returnDemand.merge(key, BigInteger.valueOf(choice.amount()), BigInteger::add);
+            }
+            for (var demand : returnDemand.entrySet()) {
+                K key = demand.getKey();
+                long heldAfterDispatch = owned.get(key) - dispatchInputs.getOrDefault(key, 0L);
+                // Equivalent parallel owners can all return the same legal key.
+                // Reserve their aggregate physical headroom, including older
+                // flights, before any input leaves the CPU.
+                BigInteger future = BigInteger.valueOf(heldAfterDispatch)
+                        .add(BigInteger.valueOf(obligations.receivable(key))).add(demand.getValue());
+                if (future.compareTo(ExactAmounts.LONG_MAX) > 0) returnCapacity = false;
+            }
+            if (!returnCapacity) {
+                reason = "WAIT_RETURN_CAPACITY";
+                if (dag != null) dag.retry(tick + 5);
+                else pipeline.retry(tick + 5);
+                continue;
+            }
             for (var output : outputs.entrySet()) {
                 K key = output.getKey();
                 BigInteger over = BigInteger.valueOf(owned.get(key) - dispatchInputs.getOrDefault(key, 0L))
@@ -316,12 +365,18 @@ public final class GraphJobRuntime<K> {
             Map<K, Long> escrow = owned.take(dispatchInputs, 1);
             changedKeys.addAll(escrow.keySet());
             changedKeys.addAll(outputs.keySet());
+            // Host adapters may subscribe every alternative during push, before
+            // publish observes this owner. Include even unused third/fourth keys
+            // so a rejection or entirely synchronous return removes them too.
+            for (var choice : returns) changedKeys.addAll(choice.allowed());
             preparedOutputs = combined;
             preparedInputs = escrow;
             synchronousReturns = new LinkedHashMap<>();
-            preparingRecipe = recipe.id();
-            preparingRuns = batch;
-            preparingBatchOutputs = outputs;
+            synchronousExpectedReturns = new LinkedHashMap<>();
+            // Install an ambiguous owner before calling the provider: synchronous
+            // receipts and synchronous saves must already have a real owner.
+            preparingOwner = obligations.dispatch(recipe.id(), batch, outputs, true, returns);
+            preparingReturned = false;
             Outcome outcome;
             try {
                 outcome = adapter.push(recipe, batch, escrow);
@@ -329,14 +384,17 @@ public final class GraphJobRuntime<K> {
                 outcome = Outcome.IN_DOUBT;
                 reason = "DISPATCH_IN_DOUBT: " + e.getClass().getSimpleName();
             }
+            // A malformed host response does not prove that escrow was never
+            // transferred. Keep uncertain ownership and finish handoff cleanup
+            // through the same path as a provider exception.
+            if (outcome == null) outcome = Outcome.IN_DOUBT;
             if (outcome == Outcome.REJECTED || outcome == Outcome.BLOCKED) {
                 // Returns owed by an older in-flight DAG batch can arrive during
                 // an unrelated rejected push. Only excess callbacks are ambiguous.
-                for (var returned : synchronousReturns.entrySet()) if (returned.getValue() > expected.getOrDefault(returned.getKey(), 0L)) outcome = Outcome.IN_DOUBT;
+                if (preparingReturned) outcome = Outcome.IN_DOUBT;
             }
             if (outcome == Outcome.ACCEPTED) {
-                obligations.dispatch(recipe.id(), batch, outputs, false);
-                synchronousReturns.forEach(obligations::returned);
+                obligations.confirm(preparingOwner);
                 recoveryStage = CheckedAmounts.add(recoveryStage, 1);
                 if (dag == null) pipeline.accepted(batch);
                 else dag.accepted(batch);
@@ -359,34 +417,33 @@ public final class GraphJobRuntime<K> {
                 owned.restore(synchronousReturns);
                 dispatches++;
                 pushed++;
-                reason = "";
+                reason = needsStateReplan ? "STATE_RETURN_CHANGED" : "";
             } else if (outcome == Outcome.IN_DOUBT) {
-                obligations.dispatch(recipe.id(), batch, outputs, true);
-                synchronousReturns.forEach(obligations::returned);
                 uncertainInputs = escrow; // evidence of a possible transfer, NOT held inventory
                 commitPreparedOutputs();
                 owned.restore(synchronousReturns);
                 state = State.NEEDS_ATTENTION;
                 reason = "DISPATCH_IN_DOUBT";
             } else {
-                synchronousReturns.forEach(obligations::returned);
-                synchronousReturns.forEach((key, amount) -> expected.compute(key, (ignored, value) -> value.longValue() == amount ? null : value - amount));
+                obligations.reject(preparingOwner);
+                synchronousExpectedReturns.forEach((key, amount) -> expected.compute(key, (ignored, value) -> value.longValue() == amount ? null : value - amount));
                 owned.restore(synchronousReturns);
                 owned.restore(escrow);
                 rejections++;
-                reason = outcome.name();
+                reason = needsStateReplan ? "STATE_RETURN_CHANGED" : outcome.name();
                 if (dag != null) dag.retry(tick + 5);
                 else pipeline.retry(tick + 5);
             }
             preparedOutputs = null;
             preparedInputs = null;
             synchronousReturns = null;
-            preparingRecipe = null;
-            preparingBatchOutputs = null;
+            synchronousExpectedReturns = null;
+            preparingOwner = 0;
+            preparingReturned = false;
             changed();
             if (cancelRequested) cancel();
         }
-        if (state == State.RUNNING && !replanning) replenishExternal();
+        if (state == State.RUNNING && !replanning && !needsStateReplan) replenishExternal();
         return pushed;
     }
 
@@ -395,6 +452,7 @@ public final class GraphJobRuntime<K> {
         while (iterator.hasNext()) {
             var entry = iterator.next();
             K key = entry.getKey();
+            if (obligations.variableKey(key)) continue;
             long space = Long.MAX_VALUE - owned.get(key) - expected.getOrDefault(key, 0L);
             long count = Math.min(space, ExactAmounts.capped(entry.getValue()));
             if (count <= 0) continue;
@@ -410,18 +468,29 @@ public final class GraphJobRuntime<K> {
 
     public long accept(K key, long amount, boolean simulate) {
         if (amount <= 0 || state == State.CANCELLED || state == State.COMPLETED || state == State.CANCELLING) return 0;
-        long requested = waiting(key);
+        long requested = receivable(key);
         long alreadyBuffered = synchronousReturns == null ? 0 : synchronousReturns.getOrDefault(key, 0L);
         long accepted = Math.min(Math.min(amount, requested), Long.MAX_VALUE - owned.get(key) - alreadyBuffered);
         if (accepted <= 0 || simulate) return Math.max(0, accepted);
-        if (preparedOutputs != null) preparedOutputs.put(key, requested - accepted);
-        else if (accepted == requested) expected.remove(key);
-        else expected.put(key, requested - accepted);
+        var receipt = obligations.receive(key, accepted, preparingOwner);
+        K predicted = receipt.predicted();
+        long left = waiting(predicted) - accepted;
+        if (preparedOutputs != null) preparedOutputs.put(predicted, left);
+        else if (left == 0) expected.remove(predicted);
+        else expected.put(predicted, left);
         if (synchronousReturns == null) {
-            this.obligations.returned(key, accepted);
             owned.add(key, accepted);
-        } else synchronousReturns.merge(key, accepted, CheckedAmounts::add);
+        } else {
+            synchronousReturns.merge(key, accepted, CheckedAmounts::add);
+            synchronousExpectedReturns.merge(predicted, accepted, CheckedAmounts::add);
+            preparingReturned |= receipt.preparingAmount() > 0;
+        }
+        if (receipt.changed()) {
+            needsStateReplan = true;
+            reason = "STATE_RETURN_CHANGED";
+        }
         changedKeys.add(key);
+        changedKeys.add(predicted);
         if (dag != null) dag.resourceChanged(key);
         else pipeline.resourceChanged(key);
         changed();
@@ -434,9 +503,9 @@ public final class GraphJobRuntime<K> {
      * never fabricate a book, waive missing inputs, or discard real byproducts.
      */
     public boolean completePlaceholder() {
-        if (state != State.RUNNING || suspended || replanning || preparedOutputs != null ||
+        if (state != State.RUNNING || suspended || replanning || needsStateReplan || preparedOutputs != null ||
                 settlementEscrow != null || !pendingRuns.isEmpty() || !uncertainInputs.isEmpty() ||
-                obligations.ambiguous() || !obligations.external().isEmpty() || !deferredExternal.isEmpty() || !seedsHeld())
+                obligations.ambiguous() || obligations.hasChoices() || !obligations.external().isEmpty() || !deferredExternal.isEmpty() || !seedsHeld())
             return false;
         if (expected.keySet().stream().anyMatch(key -> !key.equals(plan.target()))) return false;
         expected.clear();
@@ -567,6 +636,7 @@ public final class GraphJobRuntime<K> {
         }
         cancelRequested = false;
         replanning = false;
+        needsStateReplan = false;
         replanEpoch++;
         if (state == State.COMPLETED || state == State.CANCELLED || state == State.CANCELLING) return;
         refundQueue = null;
@@ -600,6 +670,7 @@ public final class GraphJobRuntime<K> {
     public ReplanCheckpoint<K> beginReplan() {
         if (state != State.RUNNING || replanning || preparedOutputs != null || settlementEscrow != null || !uncertainInputs.isEmpty())
             throw new IllegalStateException("Task cannot be replanned during an ambiguous handoff");
+        if (obligations.hasChoices()) throw new IllegalStateException("Unresolved state returns cannot fund a replacement");
         replanning = true;
         reason = "REPLANNING";
         changed();
@@ -607,6 +678,7 @@ public final class GraphJobRuntime<K> {
     }
 
     public Map<K, Long> forecastInventory() {
+        if (obligations.hasChoices()) throw new IllegalStateException("Unresolved state returns have no exact forecast");
         Map<K, Long> forecast = new LinkedHashMap<>(owned.snapshot());
         expected.forEach((key, count) -> forecast.merge(key, count, CheckedAmounts::add));
         return GraphRecipe.amounts(forecast);
@@ -669,6 +741,7 @@ public final class GraphJobRuntime<K> {
         pipeline = newPipeline;
         initializePending();
         replanning = false;
+        needsStateReplan = false;
         reason = "";
         changed();
         return true;
@@ -704,6 +777,20 @@ public final class GraphJobRuntime<K> {
 
     public Map<K, Long> expected() {
         return GraphRecipe.amounts(expected);
+    }
+
+    /** Includes legal receipt alternatives without adding them to the material forecast. */
+    public Set<K> receivableKeys() { return obligations.receivableKeys(); }
+
+    public long receivable(K key) { return obligations.variableKey(key) ? obligations.receivable(key) : waiting(key); }
+
+    public boolean pendingStateReturns() { return obligations.hasChoices(); }
+
+    public boolean needsStateReplan() { return needsStateReplan; }
+
+    public boolean stateReplanReady() {
+        return needsStateReplan && !obligations.hasChoices() && state == State.RUNNING &&
+                !replanning && preparedOutputs == null && settlementEscrow == null && uncertainInputs.isEmpty();
     }
 
     public Map<K, Long> externalWaiting() {
@@ -828,32 +915,39 @@ public final class GraphJobRuntime<K> {
             return new Snapshot<>(plan, owned.snapshot(), GraphRecipe.amounts(expected), settlementEscrow,
                     Map.copyOf(acceptedRuns), List.of(), List.of(), remainingDelivery,
                     State.NEEDS_ATTENTION, suspended, "SETTLEMENT_IN_DOUBT_SAVED_DURING_HANDOFF", obligations.snapshot(), recovery(), Map.copyOf(committedHistory), ExactAmounts.copy(deferredExternal),
-                    pipeline == null ? null : pipeline.snapshot());
+                    pipeline == null ? null : pipeline.snapshot(), needsStateReplan);
         }
         if (preparedOutputs != null) {
             Map<K, Long> held = new LinkedHashMap<>(owned.snapshot());
             synchronousReturns.forEach((key, amount) -> held.merge(key, amount, CheckedAmounts::add));
-            var preparing = new OutputObligations<>(obligations.snapshot());
-            preparing.dispatch(preparingRecipe, preparingRuns, preparingBatchOutputs, true);
-            synchronousReturns.forEach(preparing::returned);
             // A provider may cause a synchronous save. Its handoff has not
             // returned, so persist an ambiguous ticket rather than a retryable
             // pre-dispatch state or a duplicate copy of escrow as held material.
             return new Snapshot<>(plan, GraphRecipe.amounts(held), preparedExpected(), preparedInputs,
                     Map.copyOf(acceptedRuns), List.of(), List.of(), remainingDelivery,
-                    State.NEEDS_ATTENTION, suspended, "DISPATCH_IN_DOUBT_SAVED_DURING_HANDOFF", preparing.snapshot(), recovery(), Map.copyOf(committedHistory), ExactAmounts.copy(deferredExternal),
-                    pipeline == null ? null : pipeline.snapshot());
+                    State.NEEDS_ATTENTION, suspended, "DISPATCH_IN_DOUBT_SAVED_DURING_HANDOFF", obligations.snapshot(), recovery(), Map.copyOf(committedHistory), ExactAmounts.copy(deferredExternal),
+                    pipeline == null ? null : pipeline.snapshot(), needsStateReplan);
         }
         return new Snapshot<>(plan, owned.snapshot(), GraphRecipe.amounts(expected), uncertainInputs,
                 Map.copyOf(acceptedRuns), List.of(), List.of(), remainingDelivery, state, suspended, reason,
-                obligations.snapshot(), recovery(), Map.copyOf(committedHistory), ExactAmounts.copy(deferredExternal), pipeline == null ? null : pipeline.snapshot());
+                obligations.snapshot(), recovery(), Map.copyOf(committedHistory), ExactAmounts.copy(deferredExternal), pipeline == null ? null : pipeline.snapshot(), needsStateReplan);
     }
 
     public record Snapshot<K>(GraphPlan<K> plan, Map<K, Long> owned, Map<K, Long> expected,
                               Map<K, Long> uncertainInputs, Map<String, BigInteger> acceptedRuns,
                               List<PlanCursor.Position> cursor, List<PlanStep.Batch> pipeline, long remainingDelivery, State state,
                               boolean suspended, String reason, OutputObligations.Snapshot<K> obligations,
-                              RecoveryObligation<K> recovery, Map<String, BigInteger> committedHistory, Map<K, BigInteger> deferredExternal, PlanStep pendingSteps) {
+                              RecoveryObligation<K> recovery, Map<String, BigInteger> committedHistory, Map<K, BigInteger> deferredExternal, PlanStep pendingSteps,
+                              boolean needsStateReplan) {
+
+        public Snapshot(GraphPlan<K> plan, Map<K, Long> owned, Map<K, Long> expected,
+                        Map<K, Long> uncertainInputs, Map<String, BigInteger> acceptedRuns,
+                        List<PlanCursor.Position> cursor, List<PlanStep.Batch> pipeline, long remainingDelivery, State state,
+                        boolean suspended, String reason, OutputObligations.Snapshot<K> obligations,
+                        RecoveryObligation<K> recovery, Map<String, BigInteger> committedHistory, Map<K, BigInteger> deferredExternal, PlanStep pendingSteps) {
+            this(plan, owned, expected, uncertainInputs, acceptedRuns, cursor, pipeline, remainingDelivery, state,
+                    suspended, reason, obligations, recovery, committedHistory, deferredExternal, pendingSteps, false);
+        }
 
         public Snapshot(GraphPlan<K> plan, Map<K, Long> owned, Map<K, Long> expected,
                         Map<K, Long> uncertainInputs, Map<String, BigInteger> acceptedRuns,

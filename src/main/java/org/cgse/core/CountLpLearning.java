@@ -12,32 +12,75 @@ import java.util.*;
 /** Exact, globally valid row explanations suggested by a bounded numerical relaxation. */
 final class CountLpLearning {
 
-    record Cut(ExactLinearProgram.Constraint row, Map<Integer, BigInteger> parents, BigInteger divisor) {}
+    record Cut(ExactLinearProgram.Constraint row, Map<Integer, BigInteger> parents, BigInteger divisor) {
+        Cut {
+            // Parent order affects bounded template reconstruction and its
+            // charged intermediate arithmetic. It must not depend on a JVM's
+            // Map.copyOf iteration salt or a caller mutating the proposal.
+            parents = Collections.unmodifiableMap(new TreeMap<>(parents));
+        }
+    }
 
     /** Retain numerical state and original-row structure; cuts still cite original global rows. */
     static final class Session implements AutoCloseable {
 
-        private CountNumericRelaxation.Session numerical = new CountNumericRelaxation.Session();
+        private CountNumericRelaxation.Session numerical;
         private CountLpStructure structure;
         private PlanningBudget budget;
         private long prepared, structureHits;
         private final boolean integerDomains;
+        private final boolean retainCold;
+        private Projection projection;
+        private long projectionMemory;
+        private CountNumericRelaxation.Result ready;
+        private long continuationWork = 2048;
 
-        Session() { this(false); }
+        Session() { this(false, false); }
 
         /** Separate bounded-integer channel; the Boolean projection remains the default. */
-        Session(boolean integerDomains) { this.integerDomains = integerDomains; }
+        Session(boolean integerDomains) { this(integerDomains, false); }
+
+        Session(boolean integerDomains, boolean retainCold) {
+            this.integerDomains = integerDomains;
+            this.retainCold = retainCold;
+            numerical = new CountNumericRelaxation.Session(retainCold);
+        }
 
         Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                      PlanningBudget budget, long maximumWork) {
             if (this.budget != budget) {
                 numerical.close();
+                clearProjection();
                 clearStructure();
-                numerical = new CountNumericRelaxation.Session();
+                numerical = new CountNumericRelaxation.Session(retainCold);
                 this.budget = budget;
             }
+            boolean completing = ready != null;
             try {
                 var helper = new CountLpLearning(budget, Math.min(maximumWork, budget.remainingWork()));
+                helper.integerDomains = integerDomains;
+                if (projection != null) {
+                    if (projection.matches(rows, lower, upper, helper)) {
+                        long bytes = projectionMemory;
+                        if (!budget.tryReserve(bytes)) {
+                            numerical.close();
+                            clearProjection();
+                            return null;
+                        }
+                        try {
+                            var result = helper.solveProjected(rows, lower, upper, bytes, numerical, projection, this);
+                            if (result != null) bytes = 0;
+                            return result;
+                        } finally {
+                            budget.release(bytes);
+                            if (!pending()) clearProjection();
+                        }
+                    }
+                    // Even if preparation of the new model fails, no old cold
+                    // state may keep its owner waiting for a different scope.
+                    numerical.close();
+                    clearProjection();
+                }
                 if (!integerDomains && lower.length >= 2 && lower.length <= 128 && upper.length == lower.length &&
                         rows.size() <= 512 && maximumWork >= 1024) {
                     if (structure != null && structure.matches(rows, lower.length, helper::check)) structureHits++;
@@ -48,27 +91,68 @@ final class CountLpLearning {
                     }
                 } else clearStructure();
                 var result = CountLpLearning.solve(rows, lower, upper, budget,
-                        maximumWork - helper.spent(), numerical, structure, integerDomains);
+                        maximumWork - helper.spent(), numerical, structure, integerDomains, this);
+                if (!pending()) clearProjection();
                 if (result == null) {
-                    numerical.close();
+                    if (!retainCold) numerical.close();
                     if (structure != null) {
                         // Cached metadata is optional. Release it before the
                         // old preparation path retries, using only this call's
                         // remaining work and memory rather than a fresh budget.
                         clearStructure();
                         result = CountLpLearning.solve(rows, lower, upper, budget,
-                                maximumWork - helper.spent(), numerical, null, integerDomains);
+                                maximumWork - helper.spent(), numerical, null, integerDomains, this);
                     }
                 }
                 return result;
             } catch (Stop stopped) {
-                numerical.close();
+                if (!stopped.workExhausted) {
+                    numerical.close();
+                    clearProjection();
+                } else if (completing && ready != null) {
+                    // A complete proposal's exact interpretation can cost more
+                    // than one tiny visit. Ask its owner to accumulate existing
+                    // grants before repeating; this grants no new request work.
+                    if (continuationWork >= 65536) {
+                        // This optional exact explanation did not fit even the
+                        // owner's maximum LP visit. Abandon it without a cut,
+                        // witness or negative, and return to ordinary search.
+                        numerical.close();
+                        clearProjection();
+                    } else continuationWork = Math.max(2048, 2 * Math.min(32768, Math.max(0, maximumWork)));
+                }
+                if (!retainCold) numerical.close();
                 return null;
             } catch (RuntimeException | Error failure) {
                 numerical.close();
+                clearProjection();
                 clearStructure();
                 throw failure;
             }
+        }
+
+        boolean pending() { return numerical.pending() || ready != null; }
+        long continuationWork() { return continuationWork; }
+
+        private void retainProjection(Projection next) {
+            if (!retainCold || projection != null) return;
+            long terms = 0;
+            for (var row : next.reduced()) terms += row.terms().size();
+            long bytes = 4096L + 512L * next.map().length + 640L * next.reduced().size() + 512L * terms;
+            if (!budget.tryReserve(bytes)) {
+                numerical.close();
+                return;
+            }
+            projectionMemory = bytes;
+            projection = next.snapshot();
+        }
+
+        private void clearProjection() {
+            projection = null;
+            ready = null;
+            continuationWork = 2048;
+            if (budget != null) budget.release(projectionMemory);
+            projectionMemory = 0;
         }
 
         private void clearStructure() {
@@ -95,11 +179,36 @@ final class CountLpLearning {
         @Override
         public void close() {
             numerical.close();
+            clearProjection();
             clearStructure();
             if (budget != null) budget.note("count_lp_basis", "reused=" + reused() + "; rebuilt=" + rebuilt() +
-                    "; invalidated=" + invalidated() + "; restored=" + numerical.restored() + "; fallbacks=" + fallbacks());
+                    "; invalidated=" + invalidated() + "; restored=" + numerical.restored() + "; fallbacks=" + fallbacks() +
+                    "; cold_resumes=" + numerical.resumed() + "; warm_resumes=" + numerical.warmResumed());
             if (budget != null) budget.note("count_lp_structure", "prepared=" + prepared + "; hits=" + structureHits);
             budget = null;
+        }
+    }
+
+    private record Projection(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high,
+                              int[] map, List<ExactLinearProgram.Constraint> reduced, List<Integer> source,
+                              BigInteger[] cost, int objective, int originals) {
+        Projection snapshot() {
+            return new Projection(List.copyOf(rows), low.clone(), high.clone(), map,
+                    List.copyOf(reduced), List.copyOf(source), cost, objective, originals);
+        }
+
+        boolean matches(List<ExactLinearProgram.Constraint> next, BigInteger[] lower, BigInteger[] upper,
+                        CountLpLearning helper) {
+            if (next.size() != rows.size() || lower.length != low.length || upper.length != high.length) return false;
+            for (int r = 0; r < rows.size(); r++) {
+                helper.check();
+                if (rows.get(r) != next.get(r)) return false;
+            }
+            for (int i = 0; i < low.length; i++) {
+                helper.check();
+                if (!low[i].equals(lower[i]) || !high[i].equals(upper[i])) return false;
+            }
+            return true;
         }
     }
 
@@ -137,8 +246,15 @@ final class CountLpLearning {
 
     private static final class Stop extends RuntimeException {
 
+        final boolean workExhausted;
+
         Stop() {
+            this(false);
+        }
+
+        Stop(boolean workExhausted) {
             super(null, null, false, false);
+            this.workExhausted = workExhausted;
         }
     }
 
@@ -154,12 +270,12 @@ final class CountLpLearning {
 
     static Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                         PlanningBudget budget, long maximumWork) {
-        return solve(rows, lower, upper, budget, maximumWork, null, null, false);
+        return solve(rows, lower, upper, budget, maximumWork, null, null, false, null);
     }
 
     private static Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                                 PlanningBudget budget, long maximumWork, CountNumericRelaxation.Session numerical,
-                                CountLpStructure structure, boolean integerDomains) {
+                                CountLpStructure structure, boolean integerDomains, Session owner) {
         if (lower.length < 2 || lower.length > 128 || upper.length != lower.length || rows.size() > 512 || maximumWork < 1024) return null;
         long bytes = 0;
         try {
@@ -182,10 +298,14 @@ final class CountLpLearning {
             long requested = 4096L + 256L * lower.length + 384L * rows.size() + 320L * terms;
             if (!budget.tryReserve(requested)) return null;
             bytes = requested;
-            Result result = helper.solve(rows, lower, upper, bytes, numerical, structure);
+            Result result = helper.solve(rows, lower, upper, bytes, numerical, structure, owner);
             if (result != null) bytes = 0;
             return result;
         } catch (Stop stopped) {
+            if (owner != null && !stopped.workExhausted) {
+                owner.numerical.close();
+                owner.clearProjection();
+            }
             return null;
         } finally {
             budget.release(bytes);
@@ -193,7 +313,7 @@ final class CountLpLearning {
     }
 
     private Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high, long bytes,
-                         CountNumericRelaxation.Session session, CountLpStructure structure) {
+                         CountNumericRelaxation.Session session, CountLpStructure structure, Session owner) {
         int variables = low.length;
         int[] map = new int[variables];
         Arrays.fill(map, -1);
@@ -274,10 +394,34 @@ final class CountLpLearning {
             check();
             if (map[term.getKey()] >= 0) cost[map[term.getKey()]] = term.getValue().negate();
         }
+        return solveProjected(rows, low, high, bytes, session,
+                new Projection(rows, low, high, map,
+                        owner != null && owner.retainCold ? List.copyOf(reduced) : reduced,
+                        source, cost, objective, originals), owner);
+    }
+
+    private Result solveProjected(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high,
+                                  long bytes, CountNumericRelaxation.Session session, Projection projection, Session owner) {
+        int variables = low.length, originals = projection.originals(), objective = projection.objective();
+        int[] map = projection.map();
+        var source = projection.source();
+        var reduced = projection.reduced();
+        var cost = projection.cost();
         long numericalAllowance = Math.max(1, allowance - spent());
-        var numerical = session == null ? CountNumericRelaxation.solve(free.size(), reduced, cost, budget, numericalAllowance) :
-                session.solve(free.size(), reduced, cost, budget, numericalAllowance);
-        if (numerical == null) return null;
+        var numerical = owner != null && owner.ready != null ? owner.ready :
+                session == null ? CountNumericRelaxation.solve(cost.length, reduced, cost, budget, numericalAllowance) :
+                session.solve(cost.length, reduced, cost, budget, numericalAllowance);
+        if (numerical == null) {
+            if (owner != null && session.pending()) owner.retainProjection(projection);
+            return null;
+        }
+        // Completing the floating tableau near the end of a visit must not
+        // discard its proposal while exact coordinate lifting/cut checks pause.
+        // This state is still only a proposal and shares the projection's scope.
+        if (owner != null && owner.retainCold) {
+            owner.retainProjection(projection);
+            if (owner.projection != null) owner.ready = numerical;
+        }
         double[] point = null;
         BigInteger[] integerPoint = null;
         if (numerical.point() != null) {
@@ -333,6 +477,7 @@ final class CountLpLearning {
                 if (cut != null) break;
             }
         }
+        if (owner != null) owner.ready = null;
         return new Result(point, cut, numerical.phaseOneInfeasible(), numerical.work(), budget, bytes, integerPoint);
     }
 
@@ -441,7 +586,7 @@ final class CountLpLearning {
         // explicit nonnegative integer and the only division is exact on all
         // coefficients, with the right-hand side rounded down. Current branch
         // bounds affected proposal selection only, never the consequence.
-        return new Cut(consequence, Collections.unmodifiableMap(new TreeMap<>(weights)), divisor);
+        return new Cut(consequence, weights, divisor);
     }
 
     private BigInteger multiply(BigInteger a, BigInteger b) {
@@ -461,12 +606,12 @@ final class CountLpLearning {
     }
 
     private void integer(int bits) {
-        if (spent() >= allowance) throw new Stop();
+        if (spent() >= allowance) throw new Stop(true);
         budget.operation(PlanningBudget.Operation.INTEGER, bits);
     }
 
     private void check() {
-        if (spent() >= allowance) throw new Stop();
+        if (spent() >= allowance) throw new Stop(true);
         budget.check();
     }
 

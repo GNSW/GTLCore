@@ -25,6 +25,7 @@ final class CountKernelSearch implements AutoCloseable {
     private ExactRational minimum = ExactRational.ZERO, maximum = ExactRational.ZERO;
     private int phase, row, coordinate;
     private CountJump search;
+    private CountRangedKernel ranged;
     private BigInteger[] counts;
     private long memory, work, started, checkpoints;
     private boolean complete, retaining, paused;
@@ -117,15 +118,24 @@ final class CountKernelSearch implements AutoCloseable {
             checkpoints++;
             return;
         }
+        if (d == 2) {
+            ranged = new CountRangedKernel(projected, low, high, budget);
+            phase = 6;
+            return;
+        }
+        beginJump();
+    }
+
+    private void beginJump() {
         long remaining = allowance - work - (budget.threadWork() - started);
         if (retaining) remaining = Math.max(2048, remaining);
         else if (remaining < 1024) throw new Stop();
-        var initial = new BigInteger[d];
+        var initial = new BigInteger[basis.size()];
         Arrays.fill(initial, BigInteger.ZERO);
         search = new CountJump(projected, low, high, budget, remaining, initial);
         if (retaining) search.retained();
         phase = 3;
-        budget.note("count_kernel", "admitted; original=" + n + "; coordinates=" + d + "; rows=" + projected.size());
+        budget.note("count_kernel", "admitted; original=" + lower.length + "; coordinates=" + basis.size() + "; rows=" + projected.size());
     }
 
     private void project(ExactLinearProgram.Constraint row, List<ExactLinearProgram.Constraint> result) {
@@ -160,6 +170,20 @@ final class CountKernelSearch implements AutoCloseable {
                 return complete = true;
             }
             if (phase < 3) { prepareStep(); return false; }
+            if (phase == 6) {
+                if (!ranged.step()) return false;
+                values = ranged.counts();
+                checkpoints += ranged.progress();
+                ranged.close();
+                ranged = null;
+                if (values == null) beginJump();
+                else {
+                    restored = point.clone();
+                    coordinate = 0;
+                    phase = 4;
+                }
+                return false;
+            }
             if (phase == 3) {
                 if (!search.step()) return false;
                 if (search.paused()) {
@@ -223,7 +247,7 @@ final class CountKernelSearch implements AutoCloseable {
     BigInteger[] counts() { return counts; }
     CountKernelSearch retained() { retaining = true; return this; }
     boolean paused() { return paused; }
-    long progress() { return checkpoints + (search == null ? 0 : search.progress()); }
+    long progress() { return checkpoints + (search == null ? 0 : search.progress()) + (ranged == null ? 0 : ranged.progress()); }
     void resume(long quantum) {
         if (!retaining || !paused || complete) throw new IllegalStateException("Kernel search is not paused");
         allowance = CountContinuation.deadline(work, quantum, budget);
@@ -232,6 +256,8 @@ final class CountKernelSearch implements AutoCloseable {
     }
     @Override public void close() {
         if (search != null) search.close();
+        if (ranged != null) ranged.close();
+        ranged = null;
         search = null;
         orthogonal = dual = null;
         projected.clear();

@@ -99,6 +99,9 @@ final class CountMeetInMiddle implements CountContinuation {
     private long latticeProgress;
     private long entryBytes;
     private Entry[] ranged;
+    private CountRangeIndex rangeIndex;
+    private boolean rangeIndexAttempted, rangeIndexReady;
+    private long rangeWork;
     private BigInteger[] queryLow, queryHigh;
     private int[] pointWidths;
     private int pointStates, pointCursor;
@@ -384,6 +387,18 @@ final class CountMeetInMiddle implements CountContinuation {
                     }
                 }
                 case 2 -> {
+                    if (ranged != null && !rangeIndexAttempted && rangeWork >= rangeIndexCost()) {
+                        rangeIndexAttempted = true;
+                        rangeIndex = CountRangeIndex.create(ranged.length, goalHigh.length,
+                                i -> ranged[i].values(), budget, this::charge);
+                        // The pending box is restarted over the same immutable
+                        // table. No candidate is removed by switching indexes.
+                        if (rangeIndex != null) rangeCursor = -1;
+                    }
+                    if (rangeIndex != null && !rangeIndexReady) {
+                        rangeIndexReady = rangeIndex.buildStep();
+                        return false;
+                    }
                     if (!enumeratingRight.step()) return false;
                     if (enumeratingRight.done) return finish(true, "exhaustive_infeasible");
                     sum = enumeratingRight.values;
@@ -417,9 +432,16 @@ final class CountMeetInMiddle implements CountContinuation {
                         if (rangeCursor < 0) beginRange();
                         // Yield between candidates; broad intervals obey the same
                         // scheduler slices and work accounting as exact matching.
-                        if (rangeCursor < ranged.length && (queryHigh[0] == null || ranged[rangeCursor].values()[0].compareTo(queryHigh[0]) <= 0)) {
+                        if (rangeIndex != null) {
+                            if (!rangeIndex.queryStep()) return false;
+                            int id = rangeIndex.match();
+                            matched = id < 0 ? null : ranged[id].code();
+                        } else if (rangeCursor < ranged.length && (queryHigh[0] == null || ranged[rangeCursor].values()[0].compareTo(queryHigh[0]) <= 0)) {
+                            long before = work;
                             Entry candidate = ranged[rangeCursor++];
-                            if (!inside(candidate.values())) return false;
+                            boolean found = inside(candidate.values());
+                            rangeWork += work - before + 1;
+                            if (!found) return false;
                             matched = candidate.code();
                         } else matched = null;
                     }
@@ -1054,6 +1076,15 @@ final class CountMeetInMiddle implements CountContinuation {
         }
     }
 
+    private long rangeIndexCost() {
+        // Leave cheap first witnesses on the original path. Pay for an index
+        // only after repeated scans cover the linear tree and correlation sample.
+        // Spatial refinement has its own admission based on actual query work.
+        int dimensions = goalHigh.length;
+        return Math.max(4096L, ranged.length * (2L * dimensions + 12) +
+                16L * dimensions * dimensions + 64L * dimensions);
+    }
+
     private void beginRange() {
         queryLow = new BigInteger[sum.length];
         queryHigh = new BigInteger[sum.length];
@@ -1061,6 +1092,11 @@ final class CountMeetInMiddle implements CountContinuation {
             charge();
             queryLow[d] = goalLow[d] == null ? null : goalLow[d].subtract(sum[d]);
             queryHigh[d] = goalHigh[d] == null ? null : goalHigh[d].subtract(sum[d]);
+        }
+        if (rangeIndex != null) {
+            rangeIndex.begin(queryLow, queryHigh);
+            rangeCursor = 0;
+            return;
         }
         int lo = 0, hi = ranged.length;
         while (lo < hi) {
@@ -1090,7 +1126,7 @@ final class CountMeetInMiddle implements CountContinuation {
         complete = true;
         budget.note("count_match", detail + "; choices=" + domains.size() + "; dimensions=" + (goalHigh == null ? 0 : goalHigh.length) +
                 "; left_states=" + leftStates + "; right_states=" + rightStates + "; trial_counts=" + trials +
-                "; proven_infeasible=" + infeasible + "; work=" + work);
+                "; proven_infeasible=" + infeasible + "; range_index=" + (rangeIndex != null) + "; work=" + work);
         return true;
     }
 
@@ -1142,6 +1178,8 @@ final class CountMeetInMiddle implements CountContinuation {
     public void close() {
         complete = true;
         paused = false;
+        if (rangeIndex != null) rangeIndex.close();
+        rangeIndex = null;
         left.clear();
         compactLeft.clear();
         scalar = null;

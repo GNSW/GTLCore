@@ -9,6 +9,7 @@ import net.minecraft.nbt.Tag;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
+import org.cgse.core.StateReturn;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -34,14 +35,22 @@ public final class PatternFingerprint {
         for (var input : pattern.getInputs()) {
             var choices = new ArrayList<Choice>();
             long multiplier = input.getMultiplier();
-            for (var possible : input.getPossibleInputs()) choices.add(new Choice(possible, input.getRemainingKey(possible.what())));
+            for (var possible : input.getPossibleInputs()) {
+                var returned = GtlStateReturns.capture(pattern, input, possible.what());
+                choices.add(new Choice(possible, returned.nominal(), returned.contract()));
+            }
             inputs.add(new Input(multiplier, List.copyOf(choices)));
         }
         return new Values(pattern.getClass().getName(), pattern.getDefinition(), pattern.supportsPushInputsToExternalInventory(),
                 List.copyOf(inputs), List.of(pattern.getOutputs().clone()));
     }
 
-    public record Choice(GenericStack stack, AEKey remaining) {}
+    public record Choice(GenericStack stack, AEKey remaining, StateReturn<AEKey> contract) {
+
+        public Choice(GenericStack stack, AEKey remaining) {
+            this(stack, remaining, StateReturn.exact(GtlStateReturns.STATIC, remaining == null ? Map.of() : Map.of(remaining, 1L)));
+        }
+    }
 
     public record Input(long multiplier, List<Choice> choices) {
 
@@ -108,8 +117,10 @@ public final class PatternFingerprint {
                 text.append(";i:").append(input.getMultiplier());
                 for (var possible : input.getPossibleInputs()) {
                     text.append('|').append(key(possible.what())).append(':').append(possible.amount());
-                    AEKey remaining = input.getRemainingKey(possible.what());
+                    var returned = GtlStateReturns.capture(pattern, input, possible.what());
+                    AEKey remaining = returned.nominal();
                     text.append('>').append(remaining == null ? "-" : key(remaining));
+                    returns(returned.contract(), text);
                 }
             }
             for (var output : pattern.getOutputs()) text.append(";o:").append(key(output.what())).append(':').append(output.amount());
@@ -126,10 +137,27 @@ public final class PatternFingerprint {
                 for (var choice : input.choices()) {
                     text.append('|').append(key(choice.stack().what())).append(':').append(choice.stack().amount());
                     text.append('>').append(choice.remaining() == null ? "-" : key(choice.remaining()));
+                    returns(choice.contract(), text);
                 }
             }
             for (var output : pattern.outputs()) text.append(";o:").append(key(output.what())).append(':').append(output.amount());
             return hash(text.toString());
+        }
+
+        private void returns(StateReturn<AEKey> contract, StringBuilder text) {
+            // Keep existing static-container/processing bindings compatible.
+            if (contract.semantics().equals(GtlStateReturns.STATIC)) return;
+            text.append(";r:").append(contract.semantics().length()).append(':').append(contract.semantics())
+                    .append(':').append(contract.complete());
+            var outcomes = new ArrayList<String>();
+            for (var outcome : contract.outcomes()) {
+                var keys = new ArrayList<String>();
+                outcome.forEach((key, amount) -> keys.add(key(key) + ':' + amount));
+                keys.sort(String::compareTo);
+                outcomes.add(keys.toString());
+            }
+            outcomes.sort(String::compareTo);
+            text.append(outcomes);
         }
     }
 

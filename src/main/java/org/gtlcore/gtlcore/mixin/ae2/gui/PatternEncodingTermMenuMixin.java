@@ -10,8 +10,6 @@ import org.gtlcore.gtlcore.integration.ae2.pattern.PatternQuickUploadSelectionMe
 import org.gtlcore.gtlcore.integration.ae2.pattern.PatternQuickUploadService;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAePackets;
 
-import com.gregtechceu.gtceu.common.data.GTItems;
-
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -37,7 +35,6 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.LinkedHashSet;
@@ -155,23 +152,6 @@ public abstract class PatternEncodingTermMenuMixin extends MEStorageMenu impleme
         } else {
             clearPattern();
         }
-    }
-
-    @Redirect(method = "encodeProcessingPattern",
-              at = @At(value = "INVOKE",
-                       target = "Lappeng/util/ConfigInventory;getStack(I)Lappeng/api/stacks/GenericStack;",
-                       ordinal = 0),
-              remap = false)
-    private GenericStack filterData(ConfigInventory instance, int slot) {
-        var stack = instance.getStack(slot);
-        if (stack != null && stack.what() instanceof AEItemKey aeItemKey) {
-            if (aeItemKey.hasTag() &&
-                    (aeItemKey.getItem() == GTItems.TOOL_DATA_STICK.asItem() ||
-                            aeItemKey.getItem() == GTItems.TOOL_DATA_ORB.asItem() ||
-                            aeItemKey.getItem() == GTItems.TOOL_DATA_MODULE.asItem()))
-                return new GenericStack(AEItemKey.of(aeItemKey.getItem()), stack.amount());
-        }
-        return stack;
     }
 
     @Override

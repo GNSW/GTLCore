@@ -18,7 +18,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
     private final Map<String, GraphRecipe<K>> recipes;
     private final PlanningBudget budget;
     private final Map<PlanStep, SequenceSummary<K>> known;
-    private final Map<PlanStep, SequenceSummary<K>> shared = new IdentityHashMap<>();
+    private Map<PlanStep, SequenceSummary<K>> shared;
     private long sharedBytes;
     private final Deque<Frame> stack = new ArrayDeque<>();
     private SequenceSummary<K> result;
@@ -59,6 +59,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
                 if (frame.ordinaryEntries.hasNext()) {
                     var entry = frame.ordinaryEntries.next();
                     K key = entry.getKey();
+                    if (foldOrdinaryLong(frame, key, entry.getValue())) continue;
                     BigInteger quantity = entry.getValue() == 1 ? frame.ordinaryRuns :
                             BigInteger.valueOf(entry.getValue()).multiply(frame.ordinaryRuns);
                     BigInteger change = frame.change.getOrDefault(key, BigInteger.ZERO);
@@ -155,21 +156,25 @@ public final class SummaryComputation<K> implements AutoCloseable {
         if (frame.keys.hasNext()) {
             K key = frame.keys.next();
             BigInteger delta = frame.change.get(key);
-            BigInteger n = BigInteger.valueOf(frame.repeat);
             if (frame.repeat == 0) {
                 frame.need.put(key, BigInteger.ZERO);
                 frame.change.put(key, BigInteger.ZERO);
                 frame.peak.put(key, BigInteger.ZERO);
             } else {
                 BigInteger peak = frame.step instanceof PlanStep.Batch ? delta.max(BigInteger.ZERO) : frame.peak.getOrDefault(key, BigInteger.ZERO);
-                require(frame.need, key, frame.need.getOrDefault(key, BigInteger.ZERO)
-                        .add(delta.negate().max(BigInteger.ZERO).multiply(n.subtract(BigInteger.ONE))));
-                frame.change.put(key, delta.multiply(n));
-                require(frame.peak, key, peak.add(delta.max(BigInteger.ZERO).multiply(n.subtract(BigInteger.ONE))));
+                if (frame.repetitions == null) {
+                    frame.repetitions = BigInteger.valueOf(frame.repeat);
+                    frame.preceding = BigInteger.valueOf(frame.repeat - 1);
+                }
+                if (delta.signum() < 0 && frame.repeat > 1)
+                    require(frame.need, key, frame.need.getOrDefault(key, BigInteger.ZERO).subtract(delta.multiply(frame.preceding)));
+                frame.change.put(key, delta.multiply(frame.repetitions));
+                require(frame.peak, key, delta.signum() > 0 && frame.repeat > 1 ? peak.add(delta.multiply(frame.preceding)) : peak);
             }
             return false;
         }
-        SequenceSummary<K> complete = new SequenceSummary<>(frame.need, frame.change, frame.peak);
+        // The completed frame relinquishes these vectors to the immutable summary.
+        SequenceSummary<K> complete = SequenceSummary.owned(frame.need, frame.change, frame.peak);
         complete(complete);
         return result != null;
     }
@@ -178,14 +183,15 @@ public final class SummaryComputation<K> implements AutoCloseable {
         Frame finished = stack.pop();
         if (stack.isEmpty()) {
             result = complete;
-            shared.clear();
+            if (shared != null) shared.clear();
             budget.release(sharedBytes);
             sharedBytes = 0;
         } else {
-            if (!(finished.step instanceof PlanStep.Batch) && !shared.containsKey(finished.step)) {
+            if (!(finished.step instanceof PlanStep.Batch) && (shared == null || !shared.containsKey(finished.step))) {
                 long bytes = 128L + 128L * (complete.required().size() + complete.delta().size() + complete.peak().size());
                 budget.reserve(bytes);
                 sharedBytes += bytes;
+                if (shared == null) shared = new IdentityHashMap<>();
                 shared.put(finished.step, complete);
             }
             Frame parent = stack.peek();
@@ -201,6 +207,36 @@ public final class SummaryComputation<K> implements AutoCloseable {
         if (amount.signum() > 0) values.merge(key, amount, BigInteger::max);
     }
 
+    /** Ordinary ports use exact machine arithmetic when both product and prefix fit. */
+    private boolean foldOrdinaryLong(Frame frame, K key, long amount) {
+        long runs = frame.ordinaryRuns.longValue(), quantity = amount * runs;
+        if (Math.multiplyHigh(amount, runs) != quantity >> 63) return false;
+        BigInteger change = frame.change.getOrDefault(key, BigInteger.ZERO);
+        if (change.bitLength() > 63) return false;
+        long before = change.longValue();
+        long after = frame.ordinaryInputs ? before - quantity : before + quantity;
+        if (frame.ordinaryInputs) {
+            if (((before ^ quantity) & (before ^ after)) < 0 || after == Long.MIN_VALUE) return false;
+            require(frame.need, key, -after);
+            require(frame.peak, key, before);
+        } else {
+            if (((before ^ after) & (quantity ^ after)) < 0 || before == Long.MIN_VALUE) return false;
+            require(frame.need, key, -before);
+            require(frame.peak, key, after);
+        }
+        frame.change.put(key, BigInteger.valueOf(after));
+        return true;
+    }
+
+    private static <K> void require(Map<K, BigInteger> values, K key, long amount) {
+        if (amount <= 0) return;
+        BigInteger previous = values.get(key);
+        // Requirements and peaks are nonnegative. A wide previous value is
+        // already larger; avoid allocating a temporary just to compare it.
+        if (previous == null || previous.bitLength() <= 63 && previous.longValue() < amount)
+            values.put(key, BigInteger.valueOf(amount));
+    }
+
     public SequenceSummary<K> result() {
         if (result == null) throw new IllegalStateException("Summary is incomplete");
         return result;
@@ -209,7 +245,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
     /** Release a suspended fold when its owning strategy is abandoned. */
     @Override
     public void close() {
-        shared.clear();
+        if (shared != null) shared.clear();
         stack.clear();
         budget.release(sharedBytes);
         sharedBytes = 0;
@@ -219,7 +255,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
 
         private final PlanStep step;
         private final SequenceSummary<K> cached;
-        private final Map<K, BigInteger> need = new LinkedHashMap<>(), change = new LinkedHashMap<>(), peak = new LinkedHashMap<>();
+        private final Map<K, BigInteger> need, change, peak;
         private Iterator<Map.Entry<K, Long>> entries;
         private Iterator<K> keys;
         private SequenceSummary<K> pending;
@@ -227,13 +263,19 @@ public final class SummaryComputation<K> implements AutoCloseable {
         private Iterator<Map.Entry<K, Long>> ordinaryEntries;
         private boolean ordinaryInputs;
         private BigInteger ordinaryRuns;
+        private BigInteger repetitions, preceding;
         private int child, phase;
         private long repeat = 1;
 
         private Frame(PlanStep step) {
             this.step = step;
-            SequenceSummary<K> previous = shared.get(step);
+            SequenceSummary<K> previous = shared == null ? null : shared.get(step);
             cached = previous == null ? known.get(step) : previous;
+            // A flat sequence never shares a composite child. A cached frame
+            // similarly needs no mutable fold vectors of its own.
+            need = cached == null ? new LinkedHashMap<>() : null;
+            change = cached == null ? new LinkedHashMap<>() : null;
+            peak = cached == null ? new LinkedHashMap<>() : null;
         }
     }
 }

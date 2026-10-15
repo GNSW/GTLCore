@@ -30,6 +30,9 @@ final class DemandExpansion<K> {
     private PlanStep result;
     private Frame satisfiedAncestor;
     private final boolean preview;
+    private boolean completingPreview;
+    private K completionTarget;
+    private BigInteger completionTargetLoans = BigInteger.ZERO;
 
     DemandExpansion(Map<String, GraphRecipe<K>> recipes, Map<K, BigInteger> held, Map<K, BigInteger> goals, PlanningBudget budget) {
         this(recipes, held, goals, budget, false);
@@ -61,7 +64,7 @@ final class DemandExpansion<K> {
         // the shared budget delta also counted scheduler/parent steps, making
         // a plan fail depending on slice boundaries or the worker count.
         // All arithmetic and summary work still charge the global budget.
-        if (failed || expansionWork > allowance) return true;
+        if (!completingPreview && (failed || expansionWork > allowance)) return true;
         if (phase == 0) {
             if (indexing.hasNext()) {
                 GraphRecipe<K> recipe = indexing.next();
@@ -74,6 +77,7 @@ final class DemandExpansion<K> {
             }
             phase = 1;
         }
+        if (completingPreview) return completeDemand();
         if (satisfiedAncestor != null) {
             Frame satisfied = satisfiedAncestor;
             satisfiedAncestor = null;
@@ -282,6 +286,94 @@ final class DemandExpansion<K> {
 
     private BigInteger amount(K key) {
         return held.getOrDefault(key, BigInteger.ZERO);
+    }
+
+    /** Finish a diagnostic program with explicit intermediate refills, never physical stock. */
+    void completePreview(K target) {
+        if (!preview) throw new IllegalStateException("Refill completion requires a missing preview");
+        if (!goals.containsKey(target)) throw new IllegalArgumentException("Missing completion target");
+        completionTarget = target;
+        completingPreview = true;
+    }
+
+    private boolean completeDemand() {
+        if (frames.isEmpty()) {
+            for (var goal : goals.entrySet()) {
+                budget.check();
+                // The order must be produced. Residual seeds may instead be
+                // supplied explicitly; Candidate derives their exact initial
+                // reserve from the entire program. Manufacturing them here can
+                // rotate forever through mutually consuming seed goals.
+                if (!goal.getKey().equals(completionTarget)) continue;
+                if (amount(goal.getKey()).compareTo(goal.getValue().add(completionTargetLoans)) < 0) {
+                    push(goal.getKey(), goal.getValue());
+                    return false;
+                }
+            }
+            result = new PlanStep.Sequence(path);
+            return true;
+        }
+        Frame frame = frames.peek();
+        BigInteger wanted = frame.wanted.add(frame.key.equals(completionTarget) ? completionTargetLoans : BigInteger.ZERO);
+        // The path and ledger already contain each executed batch. A pending
+        // summary only proposes future repetitions; it owns no extra output.
+        if (frame.summary != null) {
+            frame.summary.close();
+            frame.summary = null;
+        }
+        if (amount(frame.key).compareTo(wanted) >= 0) {
+            pop(true);
+            return false;
+        }
+        GraphRecipe<K> recipe = frame.recipe;
+        if (recipe == null || gain(recipe, frame.key).signum() <= 0) {
+            recipe = null;
+            for (GraphRecipe<K> alternative : frame.alternatives) {
+                budget.check();
+                if (gain(alternative, frame.key).signum() > 0) {
+                    recipe = alternative;
+                    break;
+                }
+            }
+        }
+        if (recipe == null) {
+            // A stalled child may be supplied directly. The requested target must
+            // still be produced: supplying the order itself is no witness.
+            if (frame.key.equals(completionTarget)) return true;
+            set(frame.key, frame.wanted);
+            pop(true);
+            return false;
+        }
+        BigInteger runs = CheckedAmounts.ceilDiv(wanted.subtract(amount(frame.key)), gain(recipe, frame.key));
+        for (var input : recipe.inputs().entrySet()) {
+            budget.check();
+            BigInteger need = BigInteger.valueOf(input.getValue()).add(gain(recipe, input.getKey()).negate()
+                    .max(BigInteger.ZERO).multiply(runs.subtract(BigInteger.ONE)));
+            if (amount(input.getKey()).compareTo(need) < 0) {
+                // A returned target can be borrowed to start a recipe, but the
+                // borrowed units must never satisfy the production obligation.
+                if (input.getKey().equals(completionTarget))
+                    completionTargetLoans = completionTargetLoans.add(need.subtract(amount(input.getKey())));
+                set(input.getKey(), need);
+            }
+        }
+        for (K key : recipe.inputs().keySet()) {
+            budget.check();
+            set(key, amount(key).add(gain(recipe, key).multiply(runs)));
+        }
+        for (var output : recipe.outputs().entrySet()) {
+            budget.check();
+            if (!recipe.inputs().containsKey(output.getKey()))
+                set(output.getKey(), amount(output.getKey()).add(BigInteger.valueOf(output.getValue()).multiply(runs)));
+        }
+        append(PlanStep.batch(recipe.id(), runs));
+        pop(true);
+        return false;
+    }
+
+    private BigInteger gain(GraphRecipe<K> recipe, K key) {
+        return BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L))
+                .subtract(BigInteger.valueOf(recipe.inputs().getOrDefault(key, 0L)));
     }
 
     private boolean supplementable(K key, Frame frame) {

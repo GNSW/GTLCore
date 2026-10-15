@@ -51,14 +51,17 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private final BooleanSupplier cancelled;
     private final Consumer<FallbackReport<K>> fallbackReporter;
     private final Set<K> emitable;
-    private final Map<K, Long> available;
+    private Map<K, Long> available;
     private final CatalystPolicy catalysts;
-    private final boolean directEmission;
-    private final boolean unavailableTarget;
+    private boolean directEmission;
+    private boolean unavailableTarget;
+    private final long capturedTargetStock;
     private final Map<K, Long> recoverySeeds;
-    private final ReuseScope<K> requestScope;
-    private CatalystPlanningWork<K> current;
+    private ReuseScope<K> requestScope;
+    private CapturedCatalog<K> capturedCatalog;
+    private PlanningScheduler.Work<GraphPlan<K>> current;
     private GraphPlan<K> selected;
+    private boolean currentIncomplete, selectedIncomplete;
     private GraphPlan<K> reuseCandidate;
     private boolean reuseAttempted;
     private boolean completed;
@@ -84,19 +87,48 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         this.catalysts = catalysts;
         this.fallbackEnabled = fallbackEnabled;
         this.boundedAlternatives = boundedAlternatives;
+        currentIncomplete = selectedIncomplete = boundedAlternatives;
         this.budget = budget;
         this.cancelled = cancelled;
         this.fallbackReporter = fallbackReporter;
-        available = PlanningInventory.availability(stock, checkpoint == null ? Map.of() : checkpoint.forecast());
-        directEmission = emitable.contains(target) && compiler.producers(target).isEmpty();
-        unavailableTarget = checkpoint == null && !emitable.contains(target) && compiler.producers(target).isEmpty();
-        recoverySeeds = checkpoint == null ? Map.of() : GraphRecipe.amounts(checkpoint.recoverySeeds());
+        directEmission = this.emitable.contains(target) && compiler.producers(target).isEmpty();
+        unavailableTarget = checkpoint == null && !this.emitable.contains(target) && compiler.producers(target).isEmpty();
+        capturedTargetStock = stock.getOrDefault(target, 0L);
+        available = PlanningInventory.availability(stock, checkpoint == null ? Map.of() : checkpoint.forecast(),
+                directEmission && checkpoint == null ? target : null);
+        recoverySeeds = PlanningInventory.snapshot(checkpoint == null ? Map.of() : checkpoint.recoverySeeds());
+        updateReuseScope();
+    }
+
+    private void updateReuseScope() {
         requestScope = new ReuseScope<>(target, amount, preserve, craftLess, strategy, catalysts,
                 checkpoint == null && !directEmission, checkpoint != null, fallbackEnabled, boundedAlternatives,
                 this.emitable, recoverySeeds);
     }
 
-    /** Availability used for extraction accounting after planning. */
+    /**
+     * Retain the whole captured candidate domain, not only the compiler's first
+     * concrete window. Configure before submitting this request. The compiler
+     * remains available for explicitly marked ordinary fallback previews.
+     */
+    public RequestPlanningWork<K> capturedCatalog(CapturedCatalog<K> catalog) {
+        if (current != null || selected != null || reuseAttempted) throw new IllegalStateException("Planning already started");
+        capturedCatalog = java.util.Objects.requireNonNull(catalog);
+        boolean produced = catalog.hasPotentialProducer(target);
+        boolean emittedBefore = directEmission;
+        directEmission = emitable.contains(target) && !produced;
+        unavailableTarget = checkpoint == null && !emitable.contains(target) && !produced;
+        if (checkpoint == null && emittedBefore != directEmission) {
+            var updated = new java.util.LinkedHashMap<>(available);
+            if (directEmission || capturedTargetStock <= 0) updated.remove(target);
+            else updated.put(target, capturedTargetStock);
+            available = Map.copyOf(updated);
+        }
+        updateReuseScope();
+        return this;
+    }
+
+    /** Immutable captured availability used for extraction accounting after planning. */
     public Map<K, Long> availability() {
         return available;
     }
@@ -138,13 +170,13 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
         if (current == null) {
-            if (directEmission && checkpoint == null) available.remove(target);
             current = calculation(amount);
         }
         if (!current.advance(slice)) return false;
         GraphPlan<K> candidate = current.result();
         if (!partialSearch) {
             selected = candidate;
+            selectedIncomplete = currentIncomplete;
             if (selected.feasible() || unavailableTarget || !craftLess || selected.missing().isEmpty()) return finish();
             partialSearch = true;
             low = 1;
@@ -155,6 +187,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         } else {
             if (candidate.feasible()) {
                 selected = candidate;
+                selectedIncomplete = currentIncomplete;
                 low = middle + 1;
             } else if (candidate.missing().isEmpty()) {
                 budget.note("craft_less", "undecided_probe=" + middle + "; retained_amount=" + selected.amount());
@@ -178,15 +211,38 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         return false;
     }
 
-    private CatalystPlanningWork<K> calculation(long count) {
+    private PlanningScheduler.Work<GraphPlan<K>> calculation(long count) {
         budget.note("request", "target=" + target + "; amount=" + count + "; strategy=" + strategy + "; preserve_seeds=" + preserve);
+        currentIncomplete = boundedAlternatives;
+        CatalystPolicy policy = checkpoint != null || craftLess ? CatalystPolicy.MINIMAL : catalysts;
+        if (capturedCatalog != null) {
+            // The concrete compiler's identities/coverage cannot establish a
+            // witness in a different candidate domain. Scoped catalog reuse can
+            // be added separately; ordinary requests retain their existing reuse.
+            if (reuseCandidate != null) budget.note("plan_reuse", "declined; reason=captured_domain");
+            reuseAttempted = true;
+            reuseCandidate = null;
+            var captured = capturedCatalog.begin(target, count, available, emitable, recoverySeeds,
+                    preserve, checkpoint == null && !directEmission, budget).catalysts(policy);
+            return new PlanningScheduler.Work<>() {
+                @Override public boolean advance(PlanningScheduler.Slice slice) { return captured.advance(slice); }
+                @Override public GraphPlan<K> result() { return consume(captured.result()); }
+                @Override public GraphPlan<K> limited(PlanningBudget.Exhausted limit) { return consume(captured.limited(limit)); }
+                @Override public CompletableFuture<?> waitingFor() { return captured.waitingFor(); }
+                @Override public void close() { captured.close(); }
+                private GraphPlan<K> consume(CapturedCatalog.Result<K> result) {
+                    currentIncomplete = !result.coverage().complete();
+                    return result.plan();
+                }
+            };
+        }
         // Feasibility probes share the order budget and must not each repeat
         // the optional catalyst acceleration search.
-        return new CatalystPlanningWork<>(checkpoint != null || craftLess ? CatalystPolicy.MINIMAL : catalysts, budget,
-                policy -> {
+        return new CatalystPlanningWork<>(policy, budget,
+                selectedPolicy -> {
                     var work = new GraphPlanningWork<>(compiler, target, count, available, emitable,
                             recoverySeeds, preserve,
-                            checkpoint == null && !directEmission, budget).catalysts(policy);
+                            checkpoint == null && !directEmission, budget).catalysts(selectedPolicy);
                     // A rejection consumes the proposal only, never an ordinary
                     // search attempt or the remainder of craft-less probes.
                     if (!reuseAttempted) {
@@ -219,17 +275,42 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         return finish();
     }
 
-    private RuntimeException limitOrUnknown(GraphPlan<K> plan) {
-        return switch (plan.result()) {
-            case TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT, QUEUE_LIMIT -> new PlanningBudget.Exhausted(PlanningBudget.Limit.valueOf(plan.result().name()), budget.failureDetail());
-            default -> new PlanningFailure(plan.result(), budget.failureDetail());
+    private RuntimeException limitOrUnknown(GraphPlan.Result reason) {
+        return switch (reason) {
+            case TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT, QUEUE_LIMIT -> new PlanningBudget.Exhausted(PlanningBudget.Limit.valueOf(reason.name()), budget.failureDetail());
+            default -> new PlanningFailure(reason, budget.failureDetail());
         };
     }
 
+    private GraphPlan.Result failureReason() {
+        GraphPlan.Result reason = selected.result();
+        if (selectedIncomplete && switch (reason) {
+            case INFEASIBLE, MISSING_INPUT, MISSING_SEED, UNKNOWN -> true;
+            default -> false;
+        }) {
+            budget.failureDetail("input_alternatives_bounded; captured_result=" + reason +
+                    "; omitted alternatives have not been disproved");
+            return GraphPlan.Result.INCOMPLETE_MODEL;
+        }
+        return reason;
+    }
+
     private boolean finish() {
-        if (!selected.feasible() && selected.missing().isEmpty() && !fallback(selected.result())) throw limitOrUnknown(selected);
-        if (!selected.feasible() && boundedAlternatives && !fallbackMode && !fallback(GraphPlan.Result.SEARCH_LIMIT))
-            throw budget.exhausted(PlanningBudget.Limit.SEARCH_LIMIT, "input_alternatives_bounded; missing preview is not a proof for omitted alternatives");
+        if (!selected.feasible() && (selected.missingExact().isEmpty() || selectedIncomplete && !fallbackMode)) {
+            // Coverage applies before every negative exit, including a completed
+            // child proof without a refill preview. Exhausted search and omitted
+            // alternatives are separate reasons, not interchangeable budgets.
+            GraphPlan.Result reason = failureReason();
+            if (!fallback(reason)) throw limitOrUnknown(reason);
+        }
+        if (selected.feasible() && selectedIncomplete) {
+            // A restricted positive witness is valid, but its seed/material
+            // optimality cannot cover routes absent from the captured model.
+            selected = new GraphPlan<>(selected.target(), selected.amount(), selected.preserveSeeds(), selected.steps(),
+                    selected.recipes(), selected.initialExact(), selected.seeds(), selected.missingExact(),
+                    GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL, selected.searchNodes(), selected.planningNanos())
+                    .withAlternatives(selected.alternatives());
+        }
         completed = true;
         return true;
     }
@@ -238,7 +319,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private boolean fallback(GraphPlan.Result reason) {
         if (!fallbackEnabled || fallbackAttempted || cancelled.getAsBoolean()) return false;
         if (!switch (reason) {
-            case UNKNOWN, INFEASIBLE, TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT -> true;
+            case UNKNOWN, INFEASIBLE, INCOMPLETE_MODEL, TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT -> true;
             default -> false;
         }) return false;
         fallbackAttempted = true;
@@ -288,7 +369,18 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     public GraphPlan<K> limited(PlanningBudget.Exhausted limit) {
         if (current != null) {
             GraphPlan<K> retained = current.limited(limit);
-            if (retained.feasible()) selected = retained;
+            if (retained.feasible()) {
+                selected = retained;
+                selectedIncomplete = currentIncomplete;
+            } else if (capturedCatalog != null && retained.result() == GraphPlan.Result.INFEASIBLE && !currentIncomplete &&
+                    (selected == null || !selected.feasible() && selected.missingExact().isEmpty())) {
+                // Catalog work has already certified that this is a complete
+                // original-domain proof, not a restricted allocation/prefix.
+                selected = retained;
+                selectedIncomplete = false;
+                finish();
+                return selected;
+            }
         }
         if (selected == null || !selected.feasible() && (!partialSearch || selected.missingExact().isEmpty())) {
             if (!fallback(GraphPlan.Result.valueOf(limit.limit().name()))) throw limit;

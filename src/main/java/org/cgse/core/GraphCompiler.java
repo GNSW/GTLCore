@@ -6,6 +6,7 @@ package org.cgse.core;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,10 +32,14 @@ public final class GraphCompiler<K> {
     private GraphSourceIndex<K> sourceIndex;
     private boolean catalogIndexRequested, catalogIndexReusable;
     private final List<QuantityCertificate<K>> quantityCertificates = new ArrayList<>();
+    private final Map<ConservationKey<K>, ConservationEntry<K>> conservationBases = new LinkedHashMap<>(16, 0.75f, true);
+    private boolean preparingConservation;
     final CountSessions countSessions = new CountSessions();
     final CountRowTemplates rowTemplates = new CountRowTemplates();
     final CountRecoveryTemplates<K> recoveryTemplates = new CountRecoveryTemplates<>();
     private final List<DemandEntry<K>> demandPrograms = new ArrayList<>();
+    private static final long DEMAND_CACHE_BYTES = 8L << 20;
+    private boolean preparingDemand;
     private final Map<String, long[]> cacheCounters = new LinkedHashMap<>();
     private long activeSearches;
 
@@ -90,6 +95,8 @@ public final class GraphCompiler<K> {
         values.put("compiled", entry("compiled", cache.size(), graphWeight, graphBytes));
         values.put("topology", entry("topology", topologies.size(), topologyWeight, 64L * topologyWeight));
         values.put("count_catalog", entry("count_catalog", countCatalogs.size(), countCatalogWeight, 128L * countCatalogWeight));
+        // Overlap reuse borrows existing count catalogs; it owns no extra cache.
+        values.put("count_overlap", entry("count_overlap", 0, 0, 0));
         values.put("count_closure", entry("count_closure", countClosures.size(), countClosureWeight, 64L * countClosureWeight));
         long cutoffWeight = countClosureLimits.keySet().stream().mapToLong(k -> 1L + k.additional.size() + k.excluded.size()).sum();
         values.put("closure_cutoff", entry("closure_cutoff", countClosureLimits.size(), cutoffWeight, 128L * cutoffWeight));
@@ -100,12 +107,24 @@ public final class GraphCompiler<K> {
                 catalogIndex == null ? 0 : catalogIndex.resourceCount(), packedBytes));
         long demandWeight = 0, demandBytes = 0;
         for (var demand : demandPrograms) {
-            demandWeight += demand.graph.recipes().size() + (demand.program == null ? 0 : demand.program.weight);
-            demandBytes += demand.graph.estimatedBytes() + (demand.program == null ? 0 : 64L * demand.program.weight);
+            demandWeight += demand.recipes + (demand.program == null ? 0 : demand.program.weight);
+            demandBytes += demand.bytes();
         }
         values.put("demand_program", entry("demand_program", demandPrograms.size(), demandWeight, demandBytes));
+        values.put("demand_preparation", entry("demand_preparation", preparingDemand ? 1 : 0,
+                0, preparingDemand ? GraphDemandProgram.MAX_BYTES : 0));
         long certificateWeight = quantityCertificates.stream().mapToLong(c -> c.weights.size() + c.excluded.size()).sum();
         values.put("quantity_certificate", entry("quantity_certificate", quantityCertificates.size(), certificateWeight, 192L * certificateWeight));
+        long conservationWeight = 0, conservationBytes = 0;
+        for (var item : conservationBases.entrySet()) {
+            var kernel = item.getValue().kernel;
+            conservationWeight += 1L + item.getKey().excluded.size() + (kernel == null ? 0 : kernel.weight);
+            conservationBytes += conservationBytes(item.getKey(), item.getValue());
+        }
+        values.put("conservation_basis", entry("conservation_basis", conservationBases.size(), conservationWeight, conservationBytes));
+        values.put("conservation_overlap", entry("conservation_overlap", 0, 0, 0));
+        values.put("conservation_preparation", entry("conservation_preparation", preparingConservation ? 1 : 0,
+                0, preparingConservation ? ConservationKernel.MAX_BYTES : 0));
         // Catalog recipes and user keys are shared immutable inputs. Count the
         // index containers here, not arbitrary host objects reachable from them.
         long catalogWeight = catalog.size() + producers.size() + producers.values().stream().mapToLong(List::size).sum();
@@ -130,56 +149,78 @@ public final class GraphCompiler<K> {
             aggregate.merge("count_row_template", compiler.rowTemplates.cacheMetrics(), CacheEntry::plus);
             var recovery = compiler.recoveryTemplates.cacheMetrics();
             aggregate.merge("recovery_template", recovery.entry(), CacheEntry::plus);
+            aggregate.merge("recovery_preparation", recovery.preparation(), CacheEntry::plus);
             pending.addAll(recovery.compilers());
         }
         return new CacheMetrics(seen.size(), active, aggregate);
     }
 
-    private record DemandEntry<K>(Compiled<K> graph, GraphDemandProgram<K> program) {}
+    // Retain the immutable partition, not a request's selected-source map. The
+    // same port program can serve all compiled views with this exact partition.
+    private record DemandEntry<K>(List<Region<K>> regions, int recipes, GraphDemandProgram<K> program) {
+        long bytes() { return 256L + 72L * recipes + 64L * regions.size() + (program == null ? 0 : program.bytes); }
+    }
 
     /** Compile only an observed repeated graph; failed optional preparation is never cached as final. */
     GraphDemandProgram<K> demandProgram(Compiled<K> graph, PlanningBudget budget) {
+        if (graph.regions().isEmpty() || graph.regions().size() > 8192 ||
+                256L + 72L * graph.recipes().size() + 64L * graph.regions().size() > DEMAND_CACHE_BYTES) return null;
         synchronized (this) {
             int found = -1;
-            for (int i = 0; i < demandPrograms.size(); i++) if (demandPrograms.get(i).graph.regions() == graph.regions()) {
+            for (int i = 0; i < demandPrograms.size(); i++) if (demandPrograms.get(i).regions == graph.regions()) {
                 found = i;
                 break;
             }
             if (found < 0) {
                 lookup("demand_program", null);
-                demandPrograms.add(0, new DemandEntry<>(graph, null));
+                demandPrograms.add(0, new DemandEntry<>(graph.regions(), graph.recipes().size(), null));
                 trimDemandPrograms();
                 return null;
             }
             var entry = demandPrograms.remove(found);
             demandPrograms.add(0, entry);
-            if (lookup("demand_program", entry.program) != null) return entry.program.forGraph(graph);
+            if (lookup("demand_program", entry.program) != null) return entry.program;
+            if (preparingDemand) return null;
+            preparingDemand = true;
         }
-        var program = GraphDemandProgram.create(graph, budget);
+        GraphDemandProgram<K> program = null;
+        try {
+            program = GraphDemandProgram.create(graph, budget);
+        } finally {
+            synchronized (this) {
+                preparingDemand = false;
+                if (program != null) {
+                    demandPrograms.removeIf(entry -> entry.regions == graph.regions());
+                    demandPrograms.add(0, new DemandEntry<>(graph.regions(), graph.recipes().size(), program));
+                    trimDemandPrograms();
+                }
+            }
+        }
         if (program == null) return null;
-        synchronized (this) {
-            demandPrograms.removeIf(entry -> entry.graph.regions() == graph.regions());
-            demandPrograms.add(0, new DemandEntry<>(graph, program));
-            trimDemandPrograms();
-        }
         budget.note("demand_program", "compiled; regions=" + graph.regions().size() + "; weight=" + program.weight);
         return program;
     }
 
     private void trimDemandPrograms() {
-        long weight = 0;
-        for (var entry : demandPrograms) weight += entry.graph.recipes().size() + (entry.program == null ? 0 : entry.program.weight);
-        while (demandPrograms.size() > 1 && (demandPrograms.size() > 8 || weight > 65536)) {
+        long weight = 0, bytes = 0;
+        for (var entry : demandPrograms) {
+            weight += entry.recipes + (entry.program == null ? 0 : entry.program.weight);
+            bytes += entry.bytes();
+        }
+        while (!demandPrograms.isEmpty() && (demandPrograms.size() > 8 || weight > 65536 || bytes > DEMAND_CACHE_BYTES)) {
             var removed = demandPrograms.remove(demandPrograms.size() - 1);
             evicted("demand_program");
-            weight -= removed.graph.recipes().size() + (removed.program == null ? 0 : removed.program.weight);
+            weight -= removed.recipes + (removed.program == null ? 0 : removed.program.weight);
+            bytes -= removed.bytes();
         }
     }
 
     public GraphCompiler(List<GraphRecipe<K>> catalog) {
         this.catalog = List.copyOf(catalog);
         this.producers = new LinkedHashMap<>();
-        for (GraphRecipe<K> recipe : catalog) {
+        Set<String> ids = new HashSet<>();
+        for (GraphRecipe<K> recipe : this.catalog) {
+            if (!ids.add(recipe.id())) throw new IllegalArgumentException("Duplicate recipe ID: " + recipe.id());
             for (K output : recipe.executionOutputs().keySet()) producers.computeIfAbsent(output, key -> new ArrayList<>()).add(recipe);
         }
         producers.replaceAll((key, values) -> List.copyOf(values));
@@ -367,6 +408,17 @@ public final class GraphCompiler<K> {
         return weight <= 32_768 && seeds <= 256 && excluded <= 256 && external <= 256;
     }
 
+    /** Snapshot the newest retained donor; matching host keys happens outside the monitor. */
+    synchronized CountCatalog<K> countRowDonor() {
+        CountCatalog<K> donor = null;
+        for (var entry : countCatalogs.values()) donor = entry;
+        return donor;
+    }
+
+    synchronized void countOverlap(boolean reused) {
+        lookup("count_overlap", reused ? Boolean.TRUE : null);
+    }
+
     synchronized List<QuantityCertificate<K>> quantityCertificates(Set<String> excluded) {
         var matches = quantityCertificates.stream().filter(certificate -> certificate.excluded().equals(excluded)).toList();
         lookup("quantity_certificate", matches.isEmpty() ? null : matches);
@@ -387,6 +439,70 @@ public final class GraphCompiler<K> {
     }
 
     record QuantityCertificate<K>(Set<String> excluded, Map<K, BigInteger> weights) {}
+
+    private record ConservationKey<K>(K target, Set<String> excluded) {}
+
+    private static final class ConservationEntry<K> {
+        boolean repeated;
+        ConservationKernel<K> kernel;
+    }
+
+    synchronized ConservationKernel<K> conservationBasis(K target, Set<String> excluded) {
+        if (excluded.size() > 192) return null;
+        var key = new ConservationKey<>(target, excluded);
+        var entry = conservationBases.get(key);
+        if (entry == null) {
+            entry = new ConservationEntry<>();
+            conservationBases.put(new ConservationKey<>(target, Set.copyOf(excluded)), entry);
+            trimConservationBases();
+        } else entry.repeated = true;
+        return lookup("conservation_basis", entry.kernel);
+    }
+
+    synchronized ConservationKernel<K> conservationDonor(Set<String> excluded) {
+        ConservationKey<K> donor = null;
+        for (var item : conservationBases.entrySet()) if (item.getKey().excluded.equals(excluded) && item.getValue().kernel != null)
+            donor = item.getKey();
+        return lookup("conservation_overlap", donor == null ? null : conservationBases.get(donor).kernel);
+    }
+
+    void rememberConservationBasis(K target, Set<String> excluded, List<K> keys, List<BigInteger[]> basis, PlanningBudget budget) {
+        var key = new ConservationKey<>(target, excluded);
+        synchronized (this) {
+            var entry = conservationBases.get(key);
+            if (entry == null || !entry.repeated || entry.kernel != null || preparingConservation) return;
+            preparingConservation = true;
+            trimConservationBases();
+        }
+        // One optional preparation per compiler, with memory reserved against
+        // the cache cap. Other orders continue without waiting for a clone.
+        // Cancellation callbacks never run while holding the compiler monitor.
+        ConservationKernel<K> kernel = null;
+        try {
+            kernel = ConservationKernel.capture(keys, basis, budget);
+        } finally {
+            synchronized (this) {
+                preparingConservation = false;
+                var entry = conservationBases.get(key);
+                if (kernel != null && entry != null && entry.kernel == null) entry.kernel = kernel;
+                trimConservationBases();
+            }
+        }
+    }
+
+    private static long conservationBytes(ConservationKey<?> key, ConservationEntry<?> entry) {
+        return 96L + 32L * key.excluded.size() + (entry.kernel == null ? 0 : entry.kernel.bytes);
+    }
+
+    private void trimConservationBases() {
+        long bytes = preparingConservation ? ConservationKernel.MAX_BYTES : 0;
+        for (var entry : conservationBases.entrySet()) bytes += conservationBytes(entry.getKey(), entry.getValue());
+        while (conservationBases.size() > 8 || bytes > (1L << 20)) {
+            var key = conservationBases.keySet().iterator().next();
+            bytes -= conservationBytes(key, conservationBases.remove(key));
+            evicted("conservation_basis");
+        }
+    }
 
     public Compiled<K> compile(K target, Map<K, Integer> choices, Set<String> excluded, PlanningBudget budget) {
         Compiled<K> cached = cached(target, choices, excluded);

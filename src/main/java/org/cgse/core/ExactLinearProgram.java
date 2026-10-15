@@ -6,6 +6,7 @@ package org.cgse.core;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 /**
  * Bounded two-phase rational simplex for sparse Ax <= b, x >= 0. Bland's
@@ -27,13 +28,109 @@ final class ExactLinearProgram implements AutoCloseable {
             // Propagation and bounded candidate search must not depend on the
             // per-JVM iteration salt of Map.copyOf. Keep coordinate order stable
             // across launches, while retaining immutable constant-time lookup.
-            if (terms.size() < 2) terms = Map.copyOf(terms);
+            if (terms instanceof Coefficients) {
+                // This private representation has already copied, ordered and
+                // frozen its keys and values. RHS overlays can borrow it.
+            } else if (terms.size() < 2) terms = Map.copyOf(terms);
             else {
+                int[] keys = new int[terms.size()];
+                int count = 0;
+                boolean ascending = true;
+                for (int key : terms.keySet()) {
+                    if (count > 0 && keys[count - 1] > key) ascending = false;
+                    keys[count++] = key;
+                }
                 Map<Integer, BigInteger> ordered = new LinkedHashMap<>();
-                terms.entrySet().stream().sorted(Map.Entry.comparingByKey())
-                        .forEach(entry -> ordered.put(entry.getKey(), Objects.requireNonNull(entry.getValue())));
-                terms = Collections.unmodifiableMap(ordered);
+                if (ascending) {
+                    for (var entry : terms.entrySet())
+                        ordered.put(entry.getKey(), Objects.requireNonNull(entry.getValue()));
+                } else {
+                    Arrays.sort(keys);
+                    for (int key : keys) ordered.put(key, Objects.requireNonNull(terms.get(key)));
+                }
+                terms = new Coefficients(ordered);
             }
+        }
+
+        boolean hasZeroCoefficient() {
+            return terms instanceof Coefficients values ? values.hasZero() : terms.containsValue(BigInteger.ZERO);
+        }
+
+        BigInteger coefficientGcd() {
+            return terms instanceof Coefficients values ? values.gcd() : gcd(terms);
+        }
+
+        private static BigInteger gcd(Map<Integer, BigInteger> terms) {
+            var result = BigInteger.ZERO;
+            for (var value : terms.values()) {
+                result = result.gcd(value);
+                if (result.equals(BigInteger.ONE)) break;
+            }
+            return result;
+        }
+    }
+
+    /** A sparse row with a single ownership transfer; ordered rows need no second copy. */
+    static final class RowBuilder {
+        private Map<Integer, BigInteger> terms = new LinkedHashMap<>();
+        private int previous = -1;
+        private boolean ordered = true;
+
+        void add(int column, BigInteger coefficient) {
+            if (terms == null) throw new IllegalStateException("Row already frozen");
+            if (column < 0) throw new IllegalArgumentException("Negative row coordinate");
+            terms.put(column, Objects.requireNonNull(coefficient));
+            ordered &= column > previous;
+            previous = column;
+        }
+
+        Constraint build(BigInteger upper) {
+            if (terms == null) throw new IllegalStateException("Row already frozen");
+            // The map never escapes this builder before freezing. The same
+            // immutable representation supports cached coefficient analysis.
+            var owned = terms;
+            terms = null;
+            return new Constraint(owned.size() < 2 || !ordered ? owned : new Coefficients(owned), upper);
+        }
+    }
+
+    /** Only the enclosing row factories can construct this immutable coefficient value. */
+    private static final class Coefficients extends AbstractMap<Integer, BigInteger> {
+        private final Map<Integer, BigInteger> values;
+        private volatile byte zeros; // 0 unknown, 1 absent, 2 present
+        private volatile BigInteger gcd;
+        private int hash;
+        private volatile boolean hashed;
+
+        Coefficients(Map<Integer, BigInteger> owned) {
+            values = Collections.unmodifiableMap(owned);
+        }
+
+        // Compiler-owned rows and request RHS overlays share this immutable
+        // analysis. It contains no stock, domains, learned bounds or row proofs.
+        // Concurrent first readers may calculate twice, then publish the same value.
+        BigInteger gcd() {
+            var result = gcd;
+            if (result == null) gcd = result = Constraint.gcd(values);
+            return result;
+        }
+
+        boolean hasZero() {
+            byte result = zeros;
+            if (result == 0) zeros = result = (byte) (values.containsValue(BigInteger.ZERO) ? 2 : 1);
+            return result == 2;
+        }
+
+        @Override public Set<Entry<Integer, BigInteger>> entrySet() { return values.entrySet(); }
+        @Override public Set<Integer> keySet() { return values.keySet(); }
+        @Override public Collection<BigInteger> values() { return values.values(); }
+        @Override public void forEach(BiConsumer<? super Integer, ? super BigInteger> action) { values.forEach(action); }
+        @Override public BigInteger get(Object key) { return values.get(key); }
+        @Override public boolean containsKey(Object key) { return values.containsKey(key); }
+        @Override public int size() { return values.size(); }
+        @Override public int hashCode() {
+            if (!hashed) { hash = values.hashCode(); hashed = true; }
+            return hash;
         }
     }
 

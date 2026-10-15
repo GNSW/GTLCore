@@ -3,6 +3,8 @@ package org.gtlcore.gtlcore.integration.ae2.graph;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 
+import com.gregtechceu.gtceu.api.item.IGTTool;
+
 import net.minecraft.world.level.Level;
 
 import appeng.api.config.Actionable;
@@ -11,20 +13,24 @@ import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
+import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.core.AEConfig;
 import appeng.me.service.CraftingService;
+import org.cgse.core.CapturedRecipe;
+import org.cgse.core.GraphPlan;
 import org.cgse.core.GraphRecipe;
 import org.cgse.core.PlanningBudget;
+import org.cgse.core.PlanningFailure;
 
 import java.util.*;
 
 /** Snapshot creation and pattern methods run on the server thread, never the solver thread. */
 public final class GtlPatternCatalog {
 
-    private static final int MAX_VARIANTS = CapturedPattern.MAX_VARIANTS;
+    private static final int MAX_CAPTURE_STATES = 100_000;
 
     private record Roots(AEKey target, Set<AEKey> recovery, boolean discoverByproducts) {}
 
@@ -66,8 +72,14 @@ public final class GtlPatternCatalog {
 
     public Capture begin(IGrid grid, CraftingService service, Level level, IActionSource source, AEKey target,
                          Set<AEKey> recovery, PlanningBudget budget, boolean refreshInventory) {
+        return begin(grid, service, level, source, target, recovery, budget, refreshInventory, Set.of());
+    }
+
+    /** Additional identities are already owned/owed by a job; this never credits their quantity as ME stock. */
+    public Capture begin(IGrid grid, CraftingService service, Level level, IActionSource source, AEKey target,
+                         Set<AEKey> recovery, PlanningBudget budget, boolean refreshInventory, Set<AEKey> discoveryOnly) {
         return new Capture(grid, service, level, source,
-                new Roots(target, Set.copyOf(recovery), ConfigHolder.INSTANCE.ae.ae2GraphDiscoverByproducts), budget, refreshInventory);
+                new Roots(target, Set.copyOf(recovery), ConfigHolder.INSTANCE.ae.ae2GraphDiscoverByproducts), budget, refreshInventory, discoveryOnly);
     }
 
     /** World access is split between ticks; each request keeps its frontier and captured bindings. */
@@ -81,6 +93,8 @@ public final class GtlPatternCatalog {
         private final Roots roots;
         private final PlanningBudget budget;
         private KeyCounter available;
+        private final KeyCounter additionalDiscovery = new KeyCounter();
+        private final Iterator<AEKey> discoveryKeys;
         private long revision;
         private final long dataRevision;
         private final long invalidationRevision;
@@ -94,6 +108,21 @@ public final class GtlPatternCatalog {
         private final Set<IPatternDetails> seenPatterns = Collections.newSetFromMap(new IdentityHashMap<>());
         private final Deque<AEKey> pending = new ArrayDeque<>();
         private final List<CapturedPatternCatalog.Entry> entries = new ArrayList<>();
+        // Candidate discovery is deliberately separate from physical inventory.
+        private final KeyCounter potential = new KeyCounter();
+        private int potentialCount, freezing;
+        private ByproductPatternIndex potentialSource;
+        private Iterator<AEKey> producerCandidates;
+        private Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> stockCandidates;
+        private Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> additionalCandidates;
+        private final Map<IPatternDetails, CandidateCapture> captures = new IdentityHashMap<>();
+        private final Map<IPatternDetails, Signature> capturedSignatures = new IdentityHashMap<>();
+        private final List<IPatternDetails> captureOrder = new ArrayList<>();
+        private final Map<Object, List<IPatternDetails>> watchers = new HashMap<>();
+        private final Deque<IPatternDetails> recaptures = new ArrayDeque<>();
+        private final Set<IPatternDetails> queuedCaptures = Collections.newSetFromMap(new IdentityHashMap<>());
+        private final Set<Object> flexible = new HashSet<>(), expandedFamilies = new HashSet<>();
+        private final Map<Object, List<AEKey>> searchedFamilies = new HashMap<>();
         private int recipeCount;
         private final Map<AEKey, Long> stock = new LinkedHashMap<>();
         private final Set<AEKey> emitted = new LinkedHashSet<>(), fuzzy = new HashSet<>();
@@ -107,15 +136,12 @@ public final class GtlPatternCatalog {
         private List<Signature> versions;
         private Snapshot result;
         private CandidateCapture normalizing;
-        private Iterator<AEKey> normalized;
-        private IPatternDetails normalizingPattern;
-        private Signature normalizingSignature;
         private ByproductPatternIndex sourceIndex;
         private ByproductPatternIndex.Build indexing;
         private long indexingRevision = -1;
 
         Capture(IGrid grid, CraftingService service, Level level, IActionSource source, Roots roots, PlanningBudget budget,
-                boolean refreshInventory) {
+                boolean refreshInventory, Set<AEKey> discoveryOnly) {
             if (!level.getServer().isSameThread()) throw new IllegalStateException("Graph snapshot requires server thread");
             this.grid = grid;
             this.service = service;
@@ -125,6 +151,9 @@ public final class GtlPatternCatalog {
             this.roots = roots;
             this.budget = budget;
             this.refreshInventory = refreshInventory;
+            if (discoveryOnly.size() > MAX_CAPTURE_STATES)
+                throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "job_discovery_keys");
+            discoveryKeys = Set.copyOf(discoveryOnly).iterator();
             available = source == null ? new KeyCounter() : storage.getCachedInventory();
             revision = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
             dataRevision = dataGeneration;
@@ -140,7 +169,8 @@ public final class GtlPatternCatalog {
             structure = cache.get(roots);
             if (structure != null) {
                 hit = true;
-                if (structure.providerRevision() != revision) keys = structure.resources().iterator();
+                for (AEKey template : structure.inputTemplates()) flexible.add(template.getPrimaryKey());
+                if (structure.providerRevision() != revision) keys = structure.dependencies().keySet().iterator();
                 else {
                     phase = 2;
                     keys = structure.inputTemplates().iterator();
@@ -157,6 +187,14 @@ public final class GtlPatternCatalog {
             budget.compilationCheck();
             budget.phase(PlanningBudget.Phase.SNAPSHOT);
             if (!prepareSources()) return false;
+            if (!hit && potentialSource != null && potentialSource != sourceIndex)
+                throw new IllegalStateException("GRAPH_PATTERN_CHANGED_DURING_SNAPSHOT");
+            if (discoveryKeys.hasNext()) {
+                budget.reserve(96);
+                additionalDiscovery.add(discoveryKeys.next(), 1);
+                return false;
+            }
+            if (!hit && phase == 1 && !preparePotential()) return false;
             switch (phase) {
                 case 0 -> { // Revalidate only this target's dependency signatures after a provider edit.
                     if (patterns != null && patterns.hasNext()) {
@@ -182,21 +220,23 @@ public final class GtlPatternCatalog {
                 case 1 -> {
                     if (normalizing != null) {
                         if (!normalizing.step()) return false;
-                        CapturedPattern captured = normalizing.result();
-                        bounded |= captured.bounded();
-                        recipeCount += captured.size();
-                        if (recipeCount > 100_000) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT);
-                        entries.add(new CapturedPatternCatalog.Entry(normalizingPattern, normalizingSignature.values(),
-                                normalizingSignature.priority(), captured));
-                        normalized = captured.dependencies();
-                        normalizing = null;
-                    }
-                    if (normalized != null) {
-                        if (normalized.hasNext()) {
-                            pending.add(normalized.next());
+                        AEKey dependency = normalizing.dependencies.pollFirst();
+                        if (dependency != null) {
+                            pending.add(dependency);
                             return false;
                         }
-                        normalized = null;
+                        AEKey returned = normalizing.returns.pollFirst();
+                        if (returned != null) {
+                            offerPotential(returned);
+                            return false;
+                        }
+                        normalizing = null;
+                    }
+                    if (!recaptures.isEmpty()) {
+                        IPatternDetails pattern = recaptures.removeFirst();
+                        queuedCaptures.remove(pattern);
+                        normalizing = captures.get(pattern);
+                        return false;
                     }
                     if (patterns != null && patterns.hasNext()) {
                         IPatternDetails pattern = patterns.next();
@@ -204,13 +244,19 @@ public final class GtlPatternCatalog {
                         versions.add(signature);
                         if (!seenPatterns.add(pattern)) return false;
                         budget.reserve(64);
-                        normalizingPattern = pattern;
-                        normalizingSignature = signature;
-                        normalizing = new CandidateCapture(pattern, signature.values(), available, level, budget);
+                        normalizing = new CandidateCapture(pattern, signature.values(), potential, level, budget);
+                        captures.put(pattern, normalizing);
+                        capturedSignatures.put(pattern, signature);
+                        captureOrder.add(pattern);
+                        Set<Object> watched = new HashSet<>();
                         for (int slot = 0; slot < signature.values().inputs().size(); slot++) {
                             for (var possible : signature.values().inputs().get(slot).choices()) {
-                                if (!normalizing.exactInputs[slot])
-                                    templates.putIfAbsent(possible.stack().what().getPrimaryKey(), possible.stack().what());
+                                if (!normalizing.exactInputs[slot]) {
+                                    AEKey template = possible.stack().what();
+                                    registerTemplate(template);
+                                    if (watched.add(template.getPrimaryKey()))
+                                        watchers.computeIfAbsent(template.getPrimaryKey(), ignored -> new ArrayList<>()).add(pattern);
+                                }
                                 pending.add(possible.stack().what());
                             }
                         }
@@ -221,22 +267,40 @@ public final class GtlPatternCatalog {
                         patterns = null;
                     }
                     if (pending.isEmpty()) {
-                        phase = 2;
-                        keys = templates.values().iterator();
+                        phase = 5;
                         return false;
                     }
                     key = pending.removeFirst();
                     if (!seen.add(key)) return false;
                     if (seen.size() > 100_000) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT);
                     budget.reserve(96);
+                    Object family = key.getPrimaryKey();
+                    if (flexible.contains(family) && !expandedFamilies.add(family)) return false;
+                    searchedFamilies.computeIfAbsent(family, ignored -> new ArrayList<>()).add(key);
                     versions = new ArrayList<>();
                     patterns = sources(key).iterator();
+                }
+                case 5 -> {
+                    if (freezing < captureOrder.size()) {
+                        IPatternDetails pattern = captureOrder.get(freezing++);
+                        CapturedPattern captured = captures.get(pattern).result();
+                        Signature signature = capturedSignatures.get(pattern);
+                        bounded |= captured.bounded();
+                        recipeCount += captured.size();
+                        if (recipeCount > 100_000) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT);
+                        entries.add(new CapturedPatternCatalog.Entry(pattern, signature.values(), signature.priority(), captured));
+                    } else {
+                        phase = 2;
+                        keys = templates.values().iterator();
+                    }
                 }
                 case 2 -> {
                     if (keys.hasNext()) {
                         AEKey template = keys.next();
-                        if (fuzzyPrimary.add(template.getPrimaryKey()))
-                            for (var entry : available.findFuzzy(template, FuzzyMode.IGNORE_ALL)) if (entry.getLongValue() > 0) fuzzy.add(entry.getKey());
+                        if (fuzzyPrimary.add(template.getPrimaryKey())) {
+                            includeFuzzyKeys(fuzzy, available, template);
+                            includeFuzzyKeys(fuzzy, additionalDiscovery, template);
+                        }
                     } else if (hit && !fuzzy.equals(structure.fuzzyKeys())) resetBuild();
                     else {
                         if (!hit) {
@@ -285,7 +349,7 @@ public final class GtlPatternCatalog {
                         if (revision != latest) {
                             revision = latest;
                             phase = 7;
-                            keys = structure.resources().iterator();
+                            keys = structure.dependencies().keySet().iterator();
                             patterns = null;
                             return false;
                         }
@@ -332,7 +396,6 @@ public final class GtlPatternCatalog {
         }
 
         private boolean prepareSources() {
-            if (!roots.discoverByproducts()) return true;
             if (dataRevision != dataGeneration) throw new IllegalStateException("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
             if (invalidationRevision != invalidationGeneration) throw new IllegalStateException("GRAPH_BINDING_INVALIDATED_DURING_SNAPSHOT");
             long latest = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
@@ -356,7 +419,58 @@ public final class GtlPatternCatalog {
 
         private List<IPatternDetails> sources(AEKey resource) {
             var primary = service.getCraftingFor(resource);
+            if (flexible.contains(resource.getPrimaryKey()))
+                return sourceIndex.fuzzySources(resource, primary, roots.discoverByproducts());
             return roots.discoverByproducts() ? sourceIndex.sources(resource, primary) : List.copyOf(primary);
+        }
+
+        private boolean preparePotential() {
+            if (potentialSource != sourceIndex) {
+                potentialSource = sourceIndex;
+                producerCandidates = sourceIndex.candidates(roots.discoverByproducts());
+                stockCandidates = available.iterator();
+                additionalCandidates = additionalDiscovery.iterator();
+            }
+            if (producerCandidates != null && producerCandidates.hasNext()) {
+                offerPotential(producerCandidates.next());
+                return false;
+            }
+            producerCandidates = null;
+            if (stockCandidates != null && stockCandidates.hasNext()) {
+                var entry = stockCandidates.next();
+                if (entry.getLongValue() > 0) offerPotential(entry.getKey());
+                return false;
+            }
+            stockCandidates = null;
+            if (additionalCandidates != null && additionalCandidates.hasNext()) {
+                offerPotential(additionalCandidates.next().getKey());
+                return false;
+            }
+            additionalCandidates = null;
+            return true;
+        }
+
+        private void offerPotential(AEKey key) {
+            if (potential.get(key) > 0) return;
+            if (++potentialCount > MAX_CAPTURE_STATES) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "candidate_discovery_keys");
+            budget.reserve(96);
+            potential.add(key, 1);
+            for (IPatternDetails pattern : watchers.getOrDefault(key.getPrimaryKey(), List.of())) {
+                if (captures.get(pattern).offer(key) && queuedCaptures.add(pattern)) recaptures.addLast(pattern);
+            }
+        }
+
+        private void registerTemplate(AEKey key) {
+            Object family = key.getPrimaryKey();
+            templates.putIfAbsent(family, key);
+            if (!flexible.add(family)) return;
+            // A family first encountered as an exact root must be revisited once
+            // a flexible consumer makes its other producer variants relevant.
+            for (AEKey previous : searchedFamilies.getOrDefault(family, List.of())) {
+                dependencies.remove(previous);
+                seen.remove(previous);
+                pending.addLast(previous);
+            }
         }
 
         private Signature signature(IPatternDetails pattern) {
@@ -374,6 +488,9 @@ public final class GtlPatternCatalog {
             patterns = null;
             fuzzy.clear();
             fuzzyPrimary.clear();
+            flexible.clear();
+            expandedFamilies.clear();
+            searchedFamilies.clear();
             pending.add(roots.target());
             pending.addAll(roots.recovery());
         }
@@ -384,14 +501,9 @@ public final class GtlPatternCatalog {
         }
     }
 
-    private static Set<AEKey> fuzzyKeys(KeyCounter available, Set<AEKey> templates) {
-        Set<AEKey> result = new HashSet<>();
-        Set<Object> primary = new HashSet<>();
-        for (AEKey key : templates) {
-            if (!primary.add(key.getPrimaryKey())) continue;
-            for (var entry : available.findFuzzy(key, FuzzyMode.IGNORE_ALL)) if (entry.getLongValue() > 0) result.add(entry.getKey());
-        }
-        return Set.copyOf(result);
+    static void includeFuzzyKeys(Set<AEKey> target, KeyCounter source, AEKey template) {
+        for (var entry : source.findFuzzy(template, FuzzyMode.IGNORE_ALL))
+            if (entry.getLongValue() > 0) target.add(entry.getKey());
     }
 
     private static List<GraphRecipe<AEKey>> normalize(IPatternDetails pattern, String binding, KeyCounter available, Level level) {
@@ -410,120 +522,194 @@ public final class GtlPatternCatalog {
 
     static final class CandidateCapture {
 
+        final IPatternDetails pattern;
         final PatternFingerprint.Values values;
         final KeyCounter available;
         final Level level;
         final PlanningBudget budget;
-        final List<CapturedPattern.Input> capturedInputs = new ArrayList<>();
-        final List<CapturedPattern.Candidate> capturedCandidates = new ArrayList<>();
-        final Map<AEKey, GenericStack> candidates = new LinkedHashMap<>();
         final IPatternDetails.IInput[] inputs;
         final boolean[] exactInputs;
+        final InputDomain[] domains;
+        final Deque<AEKey> dependencies = new ArrayDeque<>(), returns = new ArrayDeque<>();
+        final CapturedRecipe.InputMode mode;
         int inputSlot;
-        boolean bounded;
-        Iterator<PatternFingerprint.Choice> possibilities;
-        Iterator<GenericStack> capturing;
-        Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> fuzzy;
-        GenericStack possible;
+        boolean bounded, done;
         CapturedPattern result;
 
         CandidateCapture(IPatternDetails pattern, PatternFingerprint.Values values, KeyCounter available, Level level, PlanningBudget budget) {
+            this.pattern = pattern;
             this.values = values;
             this.available = available;
             this.level = level;
             this.budget = budget;
             inputs = pattern.getInputs();
             if (inputs.length > 256 || values.outputs().size() > 256) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT);
-            budget.reserve(96L + 32L * (inputs.length + values.outputs().size()));
-            // Exactness belongs to the input implementation, not its enclosing
-            // pattern. Native processing Input.isValid is AEKey.matches even
-            // inside an addon wrapper or alongside fuzzy inputs. Custom input
-            // implementations retain the full candidate/validation path.
+            budget.reserve(96L + 40L * (inputs.length + values.outputs().size()));
             exactInputs = new boolean[inputs.length];
+            domains = new InputDomain[inputs.length];
             for (int slot = 0; slot < inputs.length; slot++)
                 exactInputs[slot] = inputs[slot].getClass().getName().equals("appeng.crafting.pattern.AEProcessingPattern$Input");
+            mode = independentExternal(pattern) ? CapturedRecipe.InputMode.MIXED : CapturedRecipe.InputMode.LEGACY;
+        }
+
+        private static boolean independentExternal(IPatternDetails pattern) {
+            if (!pattern.supportsPushInputsToExternalInventory()) return false;
+            try {
+                return pattern.getClass().getMethod("pushInputsToExternalInventory", KeyCounter[].class,
+                        IPatternDetails.PatternInputSink.class).getDeclaringClass() == IPatternDetails.class;
+            } catch (ReflectiveOperationException e) {
+                return false;
+            }
+        }
+
+        /** Add a newly discovered physical key to relevant domains, never to stock. */
+        boolean offer(AEKey key) {
+            boolean changed = false;
+            for (int slot = 0; slot < domains.length; slot++) {
+                InputDomain domain = domains[slot];
+                if (domain != null && !exactInputs[slot]) changed |= domain.offer(key);
+            }
+            if (changed) {
+                inputSlot = 0;
+                done = false;
+                result = null;
+            }
+            return changed;
         }
 
         boolean step() {
             budget.compilationCheck();
-            if (result != null) return true;
+            if (done) return true;
             if (inputSlot == inputs.length) {
-                result = new CapturedPattern(capturedInputs, values.outputs(), values.external(), bounded);
+                done = true;
                 return true;
             }
-            var input = inputs[inputSlot];
-            var inputValues = values.inputs().get(inputSlot);
-            if (exactInputs[inputSlot] && inputValues.choices().size() == 1) {
-                var choice = inputValues.choices().get(0);
-                List<CapturedPattern.Candidate> selected;
-                if (input.isValid(choice.stack().what(), level)) {
-                    budget.reserve(64);
-                    selected = List.of(new CapturedPattern.Candidate(choice.stack(), choice.remaining(),
-                            values.external() && GtlDispatchPolicy.configuration(choice.stack().what()),
-                            values.external() && GtlDispatchPolicy.reusable(choice.stack().what())));
-                } else selected = List.of();
-                capturedInputs.add(new CapturedPattern.Input(inputValues.multiplier(), selected));
-                if (++inputSlot == inputs.length || selected.isEmpty()) {
-                    result = new CapturedPattern(capturedInputs, values.outputs(), values.external(), bounded);
-                    return true;
-                }
-                return false;
-            }
-            if (capturing == null) {
-                if (fuzzy != null) {
-                    if (fuzzy.hasNext() && candidates.size() < MAX_VARIANTS) {
-                        var entry = fuzzy.next();
-                        if (entry.getLongValue() > 0 && input.isValid(entry.getKey(), level))
-                            candidates.putIfAbsent(entry.getKey(), new GenericStack(entry.getKey(), possible.amount()));
-                        return false;
-                    }
-                    bounded |= fuzzy.hasNext();
-                    fuzzy = null;
-                }
-                if (possibilities == null) possibilities = inputValues.choices().iterator();
-                if (possibilities.hasNext() && candidates.size() < MAX_VARIANTS) {
-                    possible = possibilities.next().stack();
-                    if (input.isValid(possible.what(), level)) candidates.put(possible.what(), possible);
-                    if (!exactInputs[inputSlot]) fuzzy = available.findFuzzy(possible.what(), FuzzyMode.IGNORE_ALL).iterator();
-                    return false;
-                }
-                bounded |= possibilities.hasNext();
-                if (candidates.isEmpty()) {
-                    capturedInputs.add(new CapturedPattern.Input(inputValues.multiplier(), List.of()));
-                    result = new CapturedPattern(capturedInputs, values.outputs(), values.external(), bounded);
-                    return true;
-                }
-                capturing = candidates.values().iterator();
-            }
-            GenericStack candidate = capturing.next();
-            // Declared remainders were already captured for the binding signature.
-            // Only fuzzy alternatives need another callback, still on this thread.
-            AEKey remaining = null;
-            boolean declared = false;
-            for (var choice : inputValues.choices()) if (choice.stack().what().equals(candidate.what())) {
-                remaining = choice.remaining();
-                declared = true;
-                break;
-            }
-            if (!declared) remaining = input.getRemainingKey(candidate.what());
-            budget.reserve(64);
-            capturedCandidates.add(new CapturedPattern.Candidate(candidate, remaining,
-                    values.external() && GtlDispatchPolicy.configuration(candidate.what()),
-                    values.external() && GtlDispatchPolicy.reusable(candidate.what())));
-            if (!capturing.hasNext()) {
-                capturedInputs.add(new CapturedPattern.Input(inputValues.multiplier(), capturedCandidates));
-                capturedCandidates.clear();
-                inputSlot++;
-                possibilities = null;
-                capturing = null;
-                candidates.clear();
-            }
+            InputDomain domain = domains[inputSlot];
+            if (domain == null) domains[inputSlot] = domain = new InputDomain(inputSlot);
+            if (domain.step()) inputSlot++;
             return false;
         }
 
         CapturedPattern result() {
-            if (result == null) throw new IllegalStateException("Candidate capture incomplete");
+            if (!done) throw new IllegalStateException("Candidate capture incomplete");
+            if (result == null) {
+                List<CapturedPattern.Input> captured = new ArrayList<>();
+                for (int slot = 0; slot < domains.length; slot++) {
+                    InputDomain domain = domains[slot];
+                    captured.add(new CapturedPattern.Input(values.inputs().get(slot).multiplier(),
+                            new ArrayList<>(domain.candidates.values()), mode));
+                }
+                result = new CapturedPattern(captured, values.outputs(), values.external(), bounded);
+            }
             return result;
+        }
+
+        final class InputDomain {
+
+            final int slot;
+            final IPatternDetails.IInput input;
+            final Map<Object, GenericStack> families = new LinkedHashMap<>();
+            final Map<AEKey, PatternFingerprint.Choice> declared = new HashMap<>();
+            final Set<AEKey> offered = new HashSet<>();
+            final Deque<GenericStack> pending = new ArrayDeque<>();
+            final Map<AEKey, CapturedPattern.Candidate> candidates = new LinkedHashMap<>();
+            final Iterator<PatternFingerprint.Choice> choices;
+            Iterator<GenericStack> templates;
+            Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> fuzzy;
+            GenericStack template;
+            boolean seeded;
+
+            InputDomain(int slot) {
+                this.slot = slot;
+                input = inputs[slot];
+                choices = values.inputs().get(slot).choices().iterator();
+            }
+
+            boolean offer(AEKey key) {
+                GenericStack family = families.get(key.getPrimaryKey());
+                return family != null && enqueue(new GenericStack(key, family.amount()));
+            }
+
+            private boolean enqueue(GenericStack stack) {
+                if (offered.contains(stack.what())) return false;
+                if (offered.size() >= MAX_CAPTURE_STATES) {
+                    bounded = true;
+                    return false;
+                }
+                budget.reserve(96);
+                offered.add(stack.what());
+                pending.addLast(stack);
+                return true;
+            }
+
+            boolean step() {
+                // Native processing inputs have exactly one identity and no
+                // implicit remainder. Preserve their allocation-light path.
+                if (!seeded && exactInputs[slot] && values.inputs().get(slot).choices().size() == 1) {
+                    seeded = true;
+                    var choice = values.inputs().get(slot).choices().get(0);
+                    capture(choice.stack(), choice);
+                    return true;
+                }
+                if (!seeded) {
+                    if (choices.hasNext()) {
+                        var choice = choices.next();
+                        declared.putIfAbsent(choice.stack().what(), choice);
+                        GenericStack previous = families.putIfAbsent(choice.stack().what().getPrimaryKey(), choice.stack());
+                        // The API gives no amount for an undeclared key when one
+                        // family has several weights. Keep that uncertainty visible.
+                        if (previous != null && previous.amount() != choice.stack().amount() && !exactInputs[slot]) bounded = true;
+                        enqueue(choice.stack());
+                        return false;
+                    }
+                    if (!exactInputs[slot]) {
+                        if (fuzzy != null && fuzzy.hasNext()) {
+                            var entry = fuzzy.next();
+                            if (entry.getLongValue() > 0) enqueue(new GenericStack(entry.getKey(), template.amount()));
+                            return false;
+                        }
+                        fuzzy = null;
+                        if (templates == null) templates = families.values().iterator();
+                        if (templates.hasNext()) {
+                            template = templates.next();
+                            fuzzy = available.findFuzzy(template.what(), FuzzyMode.IGNORE_ALL).iterator();
+                            return false;
+                        }
+                    }
+                    seeded = true;
+                }
+                if (pending.isEmpty()) return true;
+                GenericStack candidate = pending.removeFirst();
+                capture(candidate, declared.get(candidate.what()));
+                return false;
+            }
+
+            private void capture(GenericStack candidate, PatternFingerprint.Choice declaration) {
+                if (!input.isValid(candidate.what(), level)) return;
+                GtlStateReturns.Capture returned = declaration == null ? GtlStateReturns.capture(pattern, input, candidate.what()) :
+                        new GtlStateReturns.Capture(declaration.contract(), declaration.remaining(), !declaration.contract().deterministic());
+                if (!returned.contract().complete()) throw new PlanningFailure(GraphPlan.Result.UNSUPPORTED_PATTERN_SEMANTICS,
+                        "input_return_contract_incomplete; slot=" + slot + "; semantics=" + returned.contract().semantics());
+                bounded |= returned.uncertain();
+                if (values.external() && mode == CapturedRecipe.InputMode.LEGACY &&
+                        values.inputs().get(slot).multiplier() > 1 && candidates.size() > 0)
+                    bounded = true;
+                budget.reserve(64);
+                var stateFamily = GtlStateReturns.family(pattern, input, candidate.what());
+                candidates.put(candidate.what(), new CapturedPattern.Candidate(candidate, returned.nominal(),
+                        values.external() && GtlDispatchPolicy.configuration(candidate.what()),
+                        values.external() && GtlDispatchPolicy.reusable(candidate.what()), stateFamily));
+                dependencies.addLast(candidate.what());
+                boolean tool = !exactInputs[slot] && candidate.what() instanceof AEItemKey item && item.getItem() instanceof IGTTool;
+                // Tool durability/charge is a symbolic capacity domain. Do not
+                // enumerate thousands or billions of unused future tool states.
+                if (tool) {
+                    if (stateFamily == null && returned.nominal() != null && !returned.nominal().equals(candidate.what())) bounded = true;
+                } else for (AEKey successor : returned.contract().successors()) {
+                    returns.addLast(successor);
+                    if (!exactInputs[slot]) offer(successor);
+                }
+            }
         }
     }
 

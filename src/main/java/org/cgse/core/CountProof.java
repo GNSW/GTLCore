@@ -404,7 +404,21 @@ public final class CountProof {
         try {
             Set<Row> known = new HashSet<>(proof.axioms);
             for (Row row : proof.axioms) if (!valid(row, proof.variables)) return Verdict.INVALID;
-            for (int id = 0; id < proof.variables; id++) {
+            // A clique certificate only relies on the coordinates in its
+            // literals and pair witnesses. Unrelated ambient variables need
+            // no artificial Boolean bounds or domain axioms.
+            BitSet support = new BitSet(proof.variables);
+            for (int literal : proof.literals) {
+                tick(work);
+                if (literal < 0 || literal / 2 >= proof.variables) return Verdict.INVALID;
+                support.set(literal / 2);
+            }
+            for (int index : proof.witnesses) {
+                tick(work);
+                if (index < 0 || index >= proof.axioms.size()) return Verdict.INVALID;
+                for (int id : proof.axioms.get(index).terms.keySet()) { tick(work); support.set(id); }
+            }
+            for (int id = support.nextSetBit(0); id >= 0; id = support.nextSetBit(id + 1)) {
                 tick(work);
                 var low = proof.lower.get(id);
                 var high = proof.upper.get(id);
@@ -531,6 +545,10 @@ public final class CountProof {
     }
 
     public static Verdict verify(Divisibility proof, long maximumWork) {
+        return verify(proof, maximumWork, ignored -> {});
+    }
+
+    static Verdict verify(Divisibility proof, long maximumWork, java.util.function.LongConsumer charged) {
         if (proof.variables < 0 || proof.variables > 16384 || maximumWork <= 0 ||
                 proof.axioms.size() != proof.multipliers.size())
             return Verdict.INVALID;
@@ -563,6 +581,8 @@ public final class CountProof {
                     Verdict.VERIFIED : Verdict.INVALID;
         } catch (CheckLimit limit) {
             return Verdict.INCOMPLETE;
+        } finally {
+            charged.accept(maximumWork - work[0]);
         }
     }
 

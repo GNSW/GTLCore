@@ -547,9 +547,9 @@ final class CountBounds implements AutoCloseable {
             int variable = term.getKey();
             BigInteger bound = term.getValue().signum() >= 0 ? lower[variable] : upper[variable];
             if (bound == null) unknown++;
-            else finite = finite.add(term.getValue().multiply(bound));
-            if (lower[variable].equals(upper[variable])) fixed = fixed.add(term.getValue().multiply(lower[variable]));
-            else gcd = gcd.gcd(term.getValue());
+            else finite = addProduct(finite, term.getValue(), bound);
+            if (lower[variable].equals(upper[variable])) fixed = addProduct(fixed, term.getValue(), lower[variable]);
+            else if (!gcd.equals(BigInteger.ONE)) gcd = gcd.gcd(term.getValue());
         }
         // Once counts become fixed, the remaining terms may share a new GCD.
         // Keep their integer residue instead of reintroducing fractional slack.
@@ -563,11 +563,11 @@ final class CountBounds implements AutoCloseable {
             if (coefficient.signum() == 0) continue;
             BigInteger old = coefficient.signum() > 0 ? lower[variable] : upper[variable];
             if (unknown - (old == null ? 1 : 0) != 0) continue;
-            BigInteger others = old == null ? finite : finite.subtract(coefficient.multiply(old));
-            BigInteger limit = rowLimit.subtract(others);
+            BigInteger limit = residual(rowLimit, finite, coefficient, old);
             if (coefficient.signum() > 0) {
                 if (limit.signum() < 0) return contradiction(id);
-                BigInteger next = limit.divide(coefficient);
+                BigInteger next = limit.bitLength() <= 63 && coefficient.bitLength() <= 63 ?
+                        BigInteger.valueOf(limit.longValue() / coefficient.longValue()) : limit.divide(coefficient);
                 if (next.bitLength() > 2048) return finish(false);
                 if (upper[variable] == null || next.compareTo(upper[variable]) < 0) {
                     if (explain) upperReasons[variable] = reason(id, variable);
@@ -576,7 +576,7 @@ final class CountBounds implements AutoCloseable {
                     affected.get(variable).forEach(this::enqueue);
                 }
             } else {
-                BigInteger next = CheckedAmounts.ceilDiv(limit.negate(), coefficient.negate());
+                BigInteger next = lowerQuotient(limit, coefficient);
                 if (next.bitLength() > 2048) return finish(false);
                 if (next.compareTo(lower[variable]) > 0) {
                     if (explain) lowerReasons[variable] = reason(id, variable);
@@ -595,6 +595,42 @@ final class CountBounds implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    /** No saturation: promote the entire operation if the product or sum overflows. */
+    private static BigInteger addProduct(BigInteger sum, BigInteger coefficient, BigInteger bound) {
+        if (coefficient.signum() == 0 || bound.signum() == 0) return sum;
+        if (sum.signum() == 0 && coefficient.equals(BigInteger.ONE)) return bound;
+        if (sum.bitLength() <= 63 && coefficient.bitLength() <= 63 && bound.bitLength() <= 63) {
+            long a = coefficient.longValue(), b = bound.longValue(), s = sum.longValue();
+            long product = a * b, result = s + product;
+            if (Math.multiplyHigh(a, b) == product >> 63 && ((s ^ result) & (product ^ result)) >= 0)
+                return BigInteger.valueOf(result);
+        }
+        return sum.add(coefficient.multiply(bound));
+    }
+
+    private static BigInteger residual(BigInteger rowLimit, BigInteger finite, BigInteger coefficient, BigInteger bound) {
+        if (bound == null || bound.signum() == 0) return rowLimit.subtract(finite);
+        if (rowLimit.bitLength() <= 63 && finite.bitLength() <= 63 && coefficient.bitLength() <= 63 && bound.bitLength() <= 63) {
+            long a = rowLimit.longValue(), b = finite.longValue(), c = coefficient.longValue(), d = bound.longValue();
+            long difference = a - b, product = c * d, result = difference + product;
+            if (((a ^ b) & (a ^ difference)) >= 0 && Math.multiplyHigh(c, d) == product >> 63 &&
+                    ((difference ^ result) & (product ^ result)) >= 0) return BigInteger.valueOf(result);
+        }
+        return rowLimit.subtract(finite.subtract(coefficient.multiply(bound)));
+    }
+
+    /** A negative coefficient derives max(0, ceil(limit/coefficient)). */
+    private static BigInteger lowerQuotient(BigInteger limit, BigInteger coefficient) {
+        if (limit.signum() >= 0) return BigInteger.ZERO;
+        if (limit.bitLength() <= 63 && coefficient.bitLength() <= 63) {
+            long n = limit.longValue(), d = coefficient.longValue(), quotient = n / d;
+            // MIN_VALUE / -1 is the only overflowing signed division. Keep
+            // MIN_VALUE operands otherwise: negating either would overflow.
+            if (quotient >= 0) return BigInteger.valueOf(quotient + (n % d == 0 ? 0 : 1));
+        }
+        return CheckedAmounts.ceilDiv(limit.negate(), coefficient.negate());
     }
 
     private void propagateConflict(CountConflict learned) {

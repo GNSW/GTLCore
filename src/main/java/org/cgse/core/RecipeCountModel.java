@@ -85,7 +85,8 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 return null;
             }
             workspace += sparseBytes;
-            var model = new RecipeCountModel<>(recipes, keys, stock, external, budget, goals(target, amount, seeds), compiler.catalogIndex());
+            var model = new RecipeCountModel<>(recipes, keys, stock, external, budget, goals(target, amount, seeds),
+                    compiler.catalogIndex(), compiler.reuseCountCatalogs() ? compiler : null);
             model.recoveryTemplates = compiler.recoveryTemplates;
             model.rowTemplates = compiler.rowTemplates;
             if (force && !external.contains(target)) model.requireProduction(target, amount);
@@ -177,13 +178,21 @@ final class RecipeCountModel<K> implements AutoCloseable {
      */
     private void requireProduction(K target, long amount) {
         boolean positiveGain = BigInteger.valueOf(stock.getOrDefault(target, 0L)).compareTo(goal(target)) >= 0;
+        // Unit flows decompose into paths and cycles. Omit cycles, paths that
+        // export existing target stock into optional products, and matching
+        // surplus target paths: the same target gain then needs only that many
+        // fresh outputs. All read arcs are fixed funded tools and no second
+        // flow goal may require an exported target token. This is not true for
+        // general startup/growth recipes; check the complete model's sources.
+        boolean unitProduction = amount > 1 && stock.getOrDefault(target, 0L) > 0 &&
+                CountUnitFlow.requiresNetProduction(this, target);
         Map<Integer, BigInteger> terms = new LinkedHashMap<>();
-        Map<Integer, BigInteger> gain = positiveGain ? new LinkedHashMap<>() : null;
+        Map<Integer, BigInteger> gain = positiveGain || unitProduction ? new LinkedHashMap<>() : null;
         for (int i = 0; i < recipes.size(); i++) {
             budget.check();
             long output = recipes.get(i).executionOutputs().getOrDefault(target, 0L);
             if (output != 0) terms.put(i, BigInteger.valueOf(output).negate());
-            if (positiveGain) {
+            if (gain != null) {
                 budget.check();
                 // Match the final ForceCraftProof's strictly positive gain.
                 // delta() deliberately omits per-push configuration charges:
@@ -197,21 +206,23 @@ final class RecipeCountModel<K> implements AutoCloseable {
         // If stock is below the final goal, the material row already requires
         // positive gain. Otherwise reject unproductive turnover here instead
         // of enumerating counts that candidate verification always rejects.
-        if (positiveGain) constraints.add(new ExactLinearProgram.Constraint(gain, BigInteger.ONE.negate()));
+        if (gain != null) constraints.add(new ExactLinearProgram.Constraint(gain,
+                unitProduction ? BigInteger.valueOf(amount).negate() : BigInteger.ONE.negate()));
     }
 
     private static long productionBytes(int recipes, long stock, long amount, long seed) {
         boolean positiveGain = stock >= amount && stock - amount >= seed;
-        return (128L + 96L * recipes) * (positiveGain ? 2 : 1);
+        return (128L + 96L * recipes) * (positiveGain || amount > 1 && stock > 0 ? 2 : 1);
     }
 
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
                              Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals) {
-        this(recipes, keys, stock, external, budget, goals, null);
+        this(recipes, keys, stock, external, budget, goals, null, null);
     }
 
     private RecipeCountModel(List<GraphRecipe<K>> recipes, List<K> keys, Map<K, Long> stock,
-                             Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals, GraphCatalogIndex<K> index) {
+                             Set<K> external, PlanningBudget budget, Map<K, BigInteger> goals,
+                             GraphCatalogIndex<K> index, GraphCompiler<K> rowOwner) {
         this.recipes = recipes;
         this.keys = keys;
         this.stock = stock;
@@ -221,8 +232,32 @@ final class RecipeCountModel<K> implements AutoCloseable {
         var indices = new LinkedHashMap<K, Integer>();
         for (K key : keys) indices.put(key, indices.size());
         ids = Collections.unmodifiableMap(indices);
-        Map<K, Map<Integer, BigInteger>> rows = new LinkedHashMap<>();
-        for (K key : keys) if (!external.contains(key)) rows.put(key, new LinkedHashMap<>());
+        var donor = rowOwner == null ? null : rowOwner.countRowDonor();
+        if (donor != null) {
+            var shared = donor.unchangedRows(recipes, keys, external, budget);
+            rowOwner.countOverlap(!shared.isEmpty());
+            if (!shared.isEmpty()) {
+                for (K key : keys) {
+                    budget.check();
+                    if (external.contains(key)) continue;
+                    var terms = shared.get(key);
+                    if (terms == null) {
+                        terms = new LinkedHashMap<>();
+                        for (int i = 0; i < recipes.size(); i++) {
+                            budget.check();
+                            BigInteger value = coefficient(recipes.get(i), key);
+                            if (value.signum() != 0) terms.put(i, value);
+                        }
+                    }
+                    constraints.add(new ExactLinearProgram.Constraint(terms,
+                            BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
+                    rowKeys.add(key);
+                }
+                return;
+            }
+        }
+        Map<K, ExactLinearProgram.RowBuilder> rows = new LinkedHashMap<>();
+        for (K key : keys) if (!external.contains(key)) rows.put(key, new ExactLinearProgram.RowBuilder());
         // Cold construction and unshared regions keep the original sparse
         // incidence pass. A completed request may lend its immutable row terms
         // to the catalog cache; no second matrix is constructed for that cache.
@@ -233,7 +268,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 for (int p = 0; p < ports.changed().length; p++) {
                     budget.check();
                     var terms = rows.get(index.resource(ports.changed()[p]));
-                    if (terms != null) terms.put(i, ports.changes()[p].negate());
+                    if (terms != null) terms.add(i, ports.changes()[p].negate());
                 }
                 continue;
             }
@@ -241,15 +276,15 @@ final class RecipeCountModel<K> implements AutoCloseable {
             used.addAll(recipe.outputs().keySet());
             for (K key : used) {
                 budget.check();
-                Map<Integer, BigInteger> terms = rows.get(key);
+                var terms = rows.get(key);
                 if (terms == null) continue;
-                BigInteger value = delta(recipe, key).negate();
-                if (value.signum() != 0) terms.put(i, value);
+                BigInteger value = coefficient(recipe, key);
+                if (value.signum() != 0) terms.add(i, value);
             }
         }
         for (var row : rows.entrySet()) {
             K key = row.getKey();
-            constraints.add(new ExactLinearProgram.Constraint(row.getValue(), BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
+            constraints.add(row.getValue().build(BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
             rowKeys.add(key);
         }
     }
@@ -273,10 +308,22 @@ final class RecipeCountModel<K> implements AutoCloseable {
     }
 
     static <K> BigInteger delta(GraphRecipe<K> recipe, K key) {
+        return BigInteger.valueOf(change(recipe, key));
+    }
+
+    static <K> BigInteger coefficient(GraphRecipe<K> recipe, K key) {
+        return BigInteger.valueOf(-change(recipe, key));
+    }
+
+    private static <K> long change(GraphRecipe<K> recipe, K key) {
         // Configurations are charged per real push, so omitting their consumption
         // is a safe relaxation for impossibility proofs. Witnesses retain them.
-        return BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L)).subtract(BigInteger.valueOf(
-                recipe.inputs().getOrDefault(key, 0L) - recipe.configurationInputs().getOrDefault(key, 0L) + recipe.reusableInputs().getOrDefault(key, 0L)));
+        // GraphRecipe validates 0 <= reusable <= configuration <= input <= MAX.
+        // Thus consumed and output are nonnegative longs; their difference and
+        // its negation fit a long even when either side equals Long.MAX_VALUE.
+        long consumed = recipe.inputs().getOrDefault(key, 0L) - recipe.configurationInputs().getOrDefault(key, 0L) +
+                recipe.reusableInputs().getOrDefault(key, 0L);
+        return recipe.outputs().getOrDefault(key, 0L) - consumed;
     }
 
     BigInteger goal(K key) {

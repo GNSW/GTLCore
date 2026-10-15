@@ -67,7 +67,10 @@ final class CountBoundedSchedule<K> implements AutoCloseable {
             var assignment = search.counts();
             if (assignment == null) return finish(search.infeasible() ? CountSchedule.Result.DEAD : CountSchedule.Result.UNKNOWN);
             Map<K, BigInteger> held = new LinkedHashMap<>();
-            model.stock.forEach((key, value) -> held.put(key, BigInteger.valueOf(value)));
+            for (K key : resources) {
+                long amount = model.stock.getOrDefault(key, 0L);
+                if (amount != 0) held.put(key, BigInteger.valueOf(amount));
+            }
             var used = new BigInteger[counts.length];
             Arrays.fill(used, BigInteger.ZERO);
             List<PlanStep> sequence = new ArrayList<>();

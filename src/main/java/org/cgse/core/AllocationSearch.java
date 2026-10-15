@@ -21,6 +21,7 @@ final class AllocationSearch<K> {
     private final Map<K, Long> requiredSeeds;
     private final Set<K> external;
     private final boolean preserve, force;
+    private final BigInteger productionGoal;
     private final PlanningBudget budget;
     private final Set<String> excluded;
     private final Map<K, BigInteger> goals = new LinkedHashMap<>();
@@ -52,9 +53,11 @@ final class AllocationSearch<K> {
     private LinearMacroCompilation<K> macros;
     private GraphPlan<K> result;
     private final boolean preview;
+    private boolean completingPreview;
     private final List<GraphCompiler.QuantityCertificate<K>> certificates;
     private long allocationStarted;
     private long work, stepStarted;
+    private long searchWork;
     private OrderProofs<K> proofs;
 
     AllocationSearch<K> proofs(OrderProofs<K> value) {
@@ -77,6 +80,7 @@ final class AllocationSearch<K> {
         this.external = external;
         this.preserve = preserve;
         this.force = force;
+        productionGoal = force ? BigInteger.valueOf(stock.getOrDefault(target, 0L)).add(BigInteger.valueOf(amount)) : null;
         this.excluded = excluded;
         this.budget = budget;
         this.started = started;
@@ -90,6 +94,7 @@ final class AllocationSearch<K> {
 
     boolean step() {
         stepStarted = budget.threadWork();
+        long searchBefore = budget.threadSearchWork();
         String previousFailure = budget.failureDetail();
         try {
             return advance();
@@ -104,8 +109,25 @@ final class AllocationSearch<K> {
             return true;
         } finally {
             work += budget.threadWork() - stepStarted;
+            searchWork += budget.threadSearchWork() - searchBefore;
         }
     }
+
+    /** Work performed by this retained frontier, excluding other strategies' turns. */
+    long searchWork() { return searchWork; }
+
+    /** Retain the demand prefix while finishing a conservative, verifiable refill. */
+    boolean completePreview() {
+        if (!preview || phase == 3 || phase == 2 && checking == null) return false;
+        if (!completingPreview) {
+            completingPreview = true;
+            if (expansion != null) expansion.completePreview(target);
+            budget.note("missing_preview", "complete_retained_prefix; intermediate_refills_allowed");
+        }
+        return true;
+    }
+
+    boolean usedPreviewCompletion() { return completingPreview; }
 
     private long usedWork() {
         return work + budget.threadWork() - stepStarted;
@@ -163,6 +185,7 @@ final class AllocationSearch<K> {
                 required.put(target, targetGoal);
                 requiredSeeds.forEach((key, count) -> required.merge(key, BigInteger.valueOf(count), BigInteger::max));
                 expansion = new DemandExpansion<>(relevant, held, required, budget, preview);
+                if (completingPreview) expansion.completePreview(target);
                 phase = 4;
             }
             return false;
@@ -180,6 +203,10 @@ final class AllocationSearch<K> {
             if (!expansion.step()) return false;
             if (expansion.result() != null) checking = candidate(expansion.result());
             else {
+                if (preview && !completingPreview) {
+                    completePreview();
+                    return false;
+                }
                 expansion.close();
                 expansion = null;
             }
@@ -309,26 +336,46 @@ final class AllocationSearch<K> {
 
     private long maximum(int index) {
         SequenceSummary<K> summary = summaries.get(index);
-        BigInteger bound = BigInteger.valueOf(Long.MAX_VALUE), useful = BigInteger.ZERO;
-        for (K key : summary.keys()) {
+        long bound = Long.MAX_VALUE, useful = 0;
+        boolean changed = false;
+        // These are one-recipe summaries (also for compiled macro recipes).
+        // Their delta map retains every input, including zero net changes, in
+        // the same order as keys(). No per-node union or support cache is needed.
+        for (var term : summary.delta().entrySet()) {
             budget.check();
+            K key = term.getKey();
             BigInteger current = held.getOrDefault(key, BigInteger.ZERO);
-            if (current.compareTo(summary.required(key)) < 0) return 0;
-            BigInteger delta = summary.delta(key);
-            if (delta.signum() < 0) bound = bound.min(current.subtract(summary.required(key)).divide(delta.negate()).add(BigInteger.ONE));
+            BigInteger required = summary.required(key);
+            if (current.compareTo(required) < 0) return 0;
+            BigInteger delta = term.getValue();
+            changed |= delta.signum() != 0;
+            if (delta.signum() < 0) {
+                if (current.bitLength() <= 63 && required.bitLength() <= 63 && delta.bitLength() <= 63 &&
+                        delta.longValue() != Long.MIN_VALUE) {
+                    long subsequent = (current.longValue() - required.longValue()) / -delta.longValue();
+                    // Compare before adding: MAX subsequent runs already reach
+                    // the long batch cap and MAX + 1 would overflow.
+                    if (subsequent < bound) bound = Math.min(bound, subsequent + 1);
+                } else bound = Math.min(bound, ExactAmounts.capped(current.subtract(required).divide(delta.negate()).add(BigInteger.ONE)));
+            }
             else if (delta.signum() > 0) {
                 BigInteger goal = goals.getOrDefault(key, BigInteger.ZERO);
-                if (force && key.equals(target)) goal = goal.max(BigInteger.valueOf(stock.getOrDefault(target, 0L)).add(BigInteger.valueOf(amount)));
-                useful = useful.max(CheckedAmounts.ceilDiv(goal.subtract(current), delta));
+                if (force && key.equals(target)) goal = goal.max(productionGoal);
+                if (goal.compareTo(current) > 0) {
+                    long needed = goal.bitLength() <= 63 && current.bitLength() <= 63 && delta.bitLength() <= 63 ?
+                            CheckedAmounts.ceilDiv(goal.longValue() - current.longValue(), delta.longValue()) :
+                            ExactAmounts.capped(CheckedAmounts.ceilDiv(goal.subtract(current), delta));
+                    useful = Math.max(useful, needed);
+                }
             }
         }
         // A transformation with an identically zero vector cannot help a material
         // objective. A catalyst-returning productive recipe has nonzero other keys.
-        if (summary.delta().values().stream().allMatch(value -> value.signum() == 0)) return 0;
-        bound = bound.min(useful.max(BigInteger.ONE));
+        if (!changed) return 0;
+        bound = Math.min(bound, Math.max(useful, 1));
         if (proofs != null && proofs.hasPrefixConflicts())
-            bound = proofs.maximumAdditional(cumulativeCounts(), actionCounts.get(recipes.get(index).id()), bound);
-        return ExactAmounts.capped(bound);
+            return ExactAmounts.capped(proofs.maximumAdditional(cumulativeCounts(), actionCounts.get(recipes.get(index).id()), BigInteger.valueOf(bound)));
+        return bound;
     }
 
     private void set(K key, BigInteger value, boolean record) {

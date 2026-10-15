@@ -242,6 +242,17 @@ final class GraphStockViewPortfolio<K> implements AutoCloseable {
         return paused;
     }
 
+    long searchWork() { return work; }
+
+    IntegerCountSearch<K> takeFullSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
+                                         Map<K, Long> seeds, Set<K> external, Set<String> excluded,
+                                         boolean preserve, boolean force, PlanningBudget budget, long started,
+                                         OrderProofs<K> proofs) {
+        if (!paused || complete || jointActive || result != null) return null;
+        return neighborhood.takeFullSearch(compiler, target, amount, stock, seeds, external, excluded,
+                preserve, force, budget, started, proofs);
+    }
+
     int missingKeys() {
         return pausedMissingKeys;
     }

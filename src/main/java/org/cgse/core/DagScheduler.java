@@ -11,18 +11,20 @@ final class DagScheduler<K> {
 
     private final List<String> recipes;
     private final BigInteger[] remaining;
-    private final boolean[] queued;
     private final long[] generation;
-    private final Deque<Integer> ready = new ArrayDeque<>();
+    private final ReadyQueue ready;
+    private final ReadyQueue awakened;
     private final PriorityQueue<Retry> retries = new PriorityQueue<>(Comparator.comparingLong(Retry::tick));
     private final Map<K, List<Integer>> consumers = new HashMap<>();
     private int unfinished;
     private int active = -1;
+    private boolean preferAwakened = true;
 
     private DagScheduler(Map<String, BigInteger> counts, Map<String, GraphRecipe<K>> recipes, Map<String, BigInteger> accepted) {
         this.recipes = List.copyOf(counts.keySet());
         remaining = new BigInteger[counts.size()];
-        queued = new boolean[counts.size()];
+        ready = new ReadyQueue(counts.size());
+        awakened = new ReadyQueue(counts.size());
         generation = new long[counts.size()];
         for (int i = 0; i < this.recipes.size(); i++) {
             String recipe = this.recipes.get(i);
@@ -82,34 +84,53 @@ final class DagScheduler<K> {
             Retry retry = retries.remove();
             if (generation[retry.index] == retry.generation) enqueue(retry.index);
         }
-        if (ready.isEmpty()) {
+        if (ready.isEmpty() && awakened.isEmpty()) {
             active = -1;
             return null;
         }
-        active = ready.removeFirst();
-        queued[active] = false;
+        // Actual receipts should not wait behind the initial scan of thousands
+        // of known-unfunded states. Alternate lanes while both have work so a
+        // busy return stream cannot starve unrelated nodes or due retries.
+        boolean wake = !awakened.isEmpty() && (preferAwakened || ready.isEmpty());
+        active = (wake ? awakened : ready).removeFirst();
+        preferAwakened = !wake;
         return new PlanStep.Batch(recipes.get(active), ExactAmounts.capped(remaining[active]));
     }
 
     void accepted(long runs) {
         if (active < 0 || runs <= 0 || BigInteger.valueOf(runs).compareTo(remaining[active]) > 0) throw new IllegalArgumentException("No prepared DAG batch");
         remaining[active] = remaining[active].subtract(BigInteger.valueOf(runs));
-        if (remaining[active].signum() == 0) unfinished--;
+        if (remaining[active].signum() == 0) {
+            unfinished--;
+            // A synchronous return may have woken this very batch before the
+            // provider returned. It must not leave a zero-run ready entry.
+            ready.remove(active);
+            awakened.remove(active);
+            generation[active]++;
+        }
         else enqueue(active);
     }
 
     void retry(long tick) {
-        if (active >= 0) retries.add(new Retry(active, tick, ++generation[active]));
+        if (active >= 0 && remaining[active].signum() > 0) {
+            ready.remove(active);
+            awakened.remove(active);
+            retries.add(new Retry(active, tick, ++generation[active]));
+        }
     }
 
     void resourceChanged(K key) {
-        for (int index : consumers.getOrDefault(key, List.of())) enqueue(index);
+        for (int index : consumers.getOrDefault(key, List.of())) {
+            if (remaining[index].signum() <= 0 || awakened.contains(index)) continue;
+            ready.remove(index);
+            generation[index]++;
+            awakened.addLast(index);
+        }
     }
 
     private void enqueue(int index) {
-        if (remaining[index].signum() <= 0 || queued[index]) return;
+        if (remaining[index].signum() <= 0 || ready.contains(index) || awakened.contains(index)) return;
         generation[index]++;
-        queued[index] = true;
         ready.addLast(index);
     }
 
@@ -118,4 +139,44 @@ final class DagScheduler<K> {
     }
 
     private record Retry(int index, long tick, long generation) {}
+
+    /** Intrusive indexed FIFO: O(1) dedup/removal/promotion, no stale queue nodes. */
+    private static final class ReadyQueue {
+        private final int[] previous, next;
+        private int head = -1, tail = -1;
+
+        ReadyQueue(int size) {
+            previous = new int[size];
+            next = new int[size];
+            Arrays.fill(previous, -2);
+        }
+
+        boolean isEmpty() { return head < 0; }
+        boolean contains(int index) { return previous[index] != -2; }
+
+        void addLast(int index) {
+            if (contains(index)) return;
+            previous[index] = tail;
+            next[index] = -1;
+            if (tail < 0) head = index;
+            else next[tail] = index;
+            tail = index;
+        }
+
+        int removeFirst() {
+            int index = head;
+            remove(index);
+            return index;
+        }
+
+        void remove(int index) {
+            if (!contains(index)) return;
+            int before = previous[index], after = next[index];
+            if (before < 0) head = after;
+            else next[before] = after;
+            if (after < 0) tail = before;
+            else previous[after] = before;
+            previous[index] = -2;
+        }
+    }
 }

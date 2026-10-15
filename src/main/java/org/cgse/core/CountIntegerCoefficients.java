@@ -23,8 +23,8 @@ final class CountIntegerCoefficients {
             prefix[0] = suffix[n] = BigInteger.ZERO;
             for (int i = 0; i < n; i++) {
                 budget.check();
-                prefix[i + 1] = prefix[i].gcd(terms.get(i).getValue());
-                suffix[n - i - 1] = suffix[n - i].gcd(terms.get(n - i - 1).getValue());
+                prefix[i + 1] = gcd(prefix[i], terms.get(i).getValue());
+                suffix[n - i - 1] = gcd(suffix[n - i], terms.get(n - i - 1).getValue());
             }
             int probes = 0;
             for (int i = 0; i < n; i++) {
@@ -34,7 +34,7 @@ final class CountIntegerCoefficients {
                 if (upper[id] == null) continue;
                 BigInteger span = upper[id].subtract(lower[id]);
                 if (span.signum() <= 0 || span.compareTo(BigInteger.valueOf(16)) > 0) continue;
-                BigInteger gcd = prefix[i].gcd(suffix[i + 1]);
+                BigInteger gcd = gcd(prefix[i], suffix[i + 1]);
                 if (gcd.compareTo(BigInteger.ONE) <= 0 || term.getValue().remainder(gcd).signum() == 0) continue;
                 if (++probes > 8) break;
                 BigInteger residual = row.upper().subtract(term.getValue().multiply(lower[id]));
@@ -64,6 +64,10 @@ final class CountIntegerCoefficients {
         } finally {
             budget.release(bytes);
         }
+    }
+
+    private static BigInteger gcd(BigInteger a, BigInteger b) {
+        return a.equals(BigInteger.ONE) || b.equals(BigInteger.ONE) ? BigInteger.ONE : a.gcd(b);
     }
 
     private static BigInteger floor(BigInteger numerator, BigInteger denominator) {

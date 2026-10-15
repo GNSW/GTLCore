@@ -21,6 +21,7 @@ final class RegionCounts<K> implements AutoCloseable {
     private final Map<K, Long> reserve = new LinkedHashMap<>();
     private RecipeCountModel<K> model;
     private CountBounds bounds;
+    private CountLcg alternatives;
     private CountSchedule<K> schedule;
     private CountProgram<K> countedProgram;
     private CountRecurrence<K> recurrence;
@@ -42,9 +43,12 @@ final class RegionCounts<K> implements AutoCloseable {
         long before = budget.threadWork();
         this.recipes = recipes;
         this.demand = new LinkedHashMap<>(demand);
-        if (force && recipes.stream().anyMatch(recipe -> recipe.outputs().containsKey(target)))
-            this.demand.merge(target, BigInteger.valueOf(stock.getOrDefault(target, 0L)).add(BigInteger.valueOf(amount)), BigInteger::max);
         this.goals = new LinkedHashMap<>(this.demand);
+        if (force && recipes.stream().anyMatch(recipe -> recipe.outputs().containsKey(target)))
+            this.goals.merge(target, BigInteger.valueOf(stock.getOrDefault(target, 0L)).add(BigInteger.valueOf(amount)), BigInteger::max);
+        // The force-craft stock offset is a production floor, not another
+        // delivery obligation. Seed refinement adds to the real demand only;
+        // adding it to stock + amount repeatedly manufactures excess stock.
         this.stock = stock;
         this.external = external;
         this.preserve = preserve;
@@ -80,6 +84,7 @@ final class RegionCounts<K> implements AutoCloseable {
             if (!bounds.step()) return false;
             if (bounds.blocked()) return finish("selected_counts_blocked");
             counts = bounds.lowerBounds();
+            BigInteger[] upper = bounds.upperBounds();
             bounds.close();
             bounds = null;
             // Multiple producers or a propagation cutoff can leave a lower
@@ -90,8 +95,24 @@ final class RegionCounts<K> implements AutoCloseable {
                     budget.check();
                     sum = sum.add(term.getValue().multiply(counts[term.getKey()]));
                 }
-                if (sum.compareTo(row.upper()) > 0) return finish("counts_incomplete");
+                if (sum.compareTo(row.upper()) > 0) {
+                    if (recipes.size() > 64 || allowance - currentWork() < 1024) return finish("counts_incomplete");
+                    alternatives = new CountLcg(model.constraints, counts, upper, budget,
+                            Math.min(32768, allowance - currentWork()));
+                    return false;
+                }
             }
+            recurrence = new CountRecurrence<>(model, counts, recipes.stream().map(SequenceSummary::recipe).toList(), budget);
+        }
+        if (alternatives != null) {
+            if (!alternatives.step()) return false;
+            counts = alternatives.counts();
+            alternatives.close();
+            alternatives = null;
+            if (counts == null) return finish("count_alternatives_incomplete");
+            // This selected-region solution is only a proposal. Preserve all
+            // upstream boundary ports in its program and check startup/seed
+            // requirements before the enclosing graph can accept it.
             recurrence = new CountRecurrence<>(model, counts, recipes.stream().map(SequenceSummary::recipe).toList(), budget);
         }
         if (recurrence != null) {
@@ -178,6 +199,7 @@ final class RegionCounts<K> implements AutoCloseable {
         computation = null;
         if (recurrence != null) recurrence.close();
         if (bounds != null) bounds.close();
+        if (alternatives != null) alternatives.close();
         if (schedule != null) schedule.close();
         if (countedProgram != null) countedProgram.close();
         if (model != null) model.close();

@@ -48,6 +48,7 @@ final class CountModelViews implements AutoCloseable {
     private View reduced;
     private final List<View> views = new ArrayList<>();
     private final List<View> auxiliaryViews = new ArrayList<>();
+    private final Map<View, CountPackingStructure> packingStructures = new IdentityHashMap<>();
     private boolean lightAttempted;
     private long memory;
     private BigInteger[] sharedLower, sharedUpper;
@@ -102,6 +103,19 @@ final class CountModelViews implements AutoCloseable {
 
     boolean compiledAlternatives() { return lightAttempted || reduced != null; }
 
+    /** Demand-driven auxiliary analysis; scoped to the immutable declared view.
+     * Learned bounds need not reshape a candidate neighborhood on every handoff.
+     * A new inventory/request gets a new owner and recomputes its shifted rows. */
+    CountPackingStructure packingStructure(View view) {
+        if (!views.contains(view)) throw new IllegalArgumentException("Foreign packing view");
+        if (packingStructures.containsKey(view)) return packingStructures.get(view);
+        var structure = CountPackingStructure.create(view, new Domains(view.lower, view.upper, 0), budget);
+        packingStructures.put(view, structure);
+        if (structure != null) budget.note("count_packing_analysis", "view=" + view.name + "; variables=" + view.lower.length +
+                "; free=" + structure.columns.length + "; rows=" + view.rows.size() + "->" + structure.matrix.length + "; scope=declared_view");
+        return structure;
+    }
+
     /** Integer-equivalent row simplification without changing variable coordinates. */
     void compileLight() {
         if (lightAttempted) return;
@@ -117,14 +131,23 @@ final class CountModelViews implements AutoCloseable {
             if (previous == null || normalized.upper().compareTo(previous.upper()) < 0) unique.put(normalized.terms(), normalized);
         }
         var rows = List.copyOf(unique.values());
-        if (rows.equals(original.rows)) {
+        if (!rows.equals(original.rows)) {
+            views.add(new View("normalized", rows, original.lower, original.upper, shape(rows, original.lower, original.upper, budget), null, Semantics.EQUIVALENT, null));
+            budget.note("count_light_compile", "rows=" + original.rows.size() + "->" + rows.size() +
+                    "; terms=" + original.shape.terms + "->" + views.get(views.size() - 1).shape.terms);
+        } else {
             budget.release(bytes);
             memory -= bytes;
-            return;
         }
-        views.add(new View("normalized", rows, original.lower, original.upper, shape(rows, original.lower, original.upper, budget), null, Semantics.EQUIVALENT, null));
-        budget.note("count_light_compile", "rows=" + original.rows.size() + "->" + rows.size() +
-                "; terms=" + original.shape.terms + "->" + views.get(views.size() - 1).shape.terms);
+        try (var compiler = new CountRowSparsifier(rows, budget)) {
+            var sparse = compiler.compile();
+            if (sparse == rows) return;
+            long retained = 512L + 192L * sparse.size() + 192L * sparse.stream().mapToLong(row -> row.terms().size()).sum();
+            if (!budget.tryReserve(retained)) return;
+            memory += retained;
+            views.add(new View("sparse_equalities", sparse, original.lower, original.upper,
+                    shape(sparse, original.lower, original.upper, budget), null, Semantics.EQUIVALENT, null));
+        }
     }
 
     private ExactLinearProgram.Constraint simplify(ExactLinearProgram.Constraint row) {
@@ -478,6 +501,8 @@ final class CountModelViews implements AutoCloseable {
 
     @Override
     public void close() {
+        for (var structure : packingStructures.values()) if (structure != null) structure.close();
+        packingStructures.clear();
         if (cuts != null) cuts.close();
         cuts = null;
         if (conflicts != null) conflicts.close();

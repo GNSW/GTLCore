@@ -14,6 +14,9 @@ final class CountHall implements AutoCloseable {
     private final PlanningBudget budget;
     private final List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] lower, upper;
+    private final int[] active;
+    private final int[] position;
+    private final boolean localSupport;
     private final List<ExactLinearProgram.Constraint> cuts = new ArrayList<>();
     private final List<ExactLinearProgram.Constraint> capacityCuts = new ArrayList<>();
     private final List<Integer> demands = new ArrayList<>(), capacities = new ArrayList<>();
@@ -29,25 +32,55 @@ final class CountHall implements AutoCloseable {
     private boolean complete, initialized, matchingReady, exhausted;
 
     CountHall(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper, PlanningBudget budget) {
-        this.rows = rows;
         this.lower = lower;
         this.upper = upper;
         this.budget = budget;
         allowance = Math.min(32768, budget.remainingWork() / 64);
-        if (lower.length > 512 || rows.size() > 2048 || allowance < 4096) {
-            complete = true;
-            return;
+        boolean direct = lower.length <= 512 && rows.size() <= 2048;
+        for (int j = 0; j < lower.length && direct; j++)
+            direct = lower[j].signum() >= 0 && upper[j] != null && upper[j].compareTo(BigInteger.ONE) <= 0;
+        localSupport = !direct;
+        List<ExactLinearProgram.Constraint> chosen = rows;
+        int[] variables = null;
+        int[] positions = null;
+        try {
+            if (allowance < 4096 || lower.length > 8192 || rows.size() > 32768) complete = true;
+            else if (!direct) {
+                // Indexing remains bounded by the ambient model; the matching
+                // and its quadratic pair workspace depend only on used terms.
+                long scratch = 4096L + 32L * lower.length + 32L * Math.min(2048, rows.size());
+                if (scratch > budget.availableBytes() / 8 || !budget.tryReserve(scratch)) complete = true;
+                else {
+                    memory = scratch;
+                    var support = CountHallSupport.select(rows, lower, upper, budget, Math.min(8192, allowance / 4));
+                    work += support.work();
+                    chosen = support.rows();
+                    variables = support.variables();
+                    complete = chosen.isEmpty();
+                    if (!complete) {
+                        budget.charge((long) lower.length + variables.length);
+                        work += (long) lower.length + variables.length;
+                        positions = new int[lower.length];
+                        Arrays.fill(positions, -1);
+                        for (int i = 0; i < variables.length; i++) positions[variables[i]] = i;
+                        budget.note("count_hall_support", "variables=" + lower.length + "->" + variables.length +
+                                "; rows=" + rows.size() + "->" + chosen.size() + "; complete_rows_original_coordinates");
+                    }
+                }
+            }
+            if (!complete) {
+                long bytes = 4096L + 32L * lower.length + 736L * (direct ? lower.length : variables.length) + 128L * chosen.size();
+                if (!budget.tryReserve(bytes)) complete = true;
+                else memory += bytes;
+            }
+            if (complete) { budget.release(memory); memory = 0; }
+        } catch (RuntimeException | Error failure) {
+            budget.release(memory); memory = 0;
+            throw failure;
         }
-        for (int j = 0; j < lower.length; j++) if (lower[j].signum() < 0 || upper[j] == null || upper[j].compareTo(BigInteger.ONE) > 0) {
-            complete = true;
-            return;
-        }
-        long bytes = 4096L + 768L * lower.length + 128L * rows.size();
-        if (!budget.tryReserve(bytes)) {
-            complete = true;
-            return;
-        }
-        memory = bytes;
+        this.rows = chosen;
+        active = variables;
+        position = positions;
     }
 
     boolean step() {
@@ -257,6 +290,7 @@ final class CountHall implements AutoCloseable {
         zeroAxioms = new int[lower.length];
         Arrays.fill(zeroAxioms, -1);
         for (int j = 0; j < lower.length; j++) {
+            if (localSupport && position[j] < 0) continue;
             nonnegativeAxioms[j] = axioms.size();
             axioms.add(new CountProof.Row(Map.of(j, BigInteger.ONE.negate()), BigInteger.ZERO));
             if (upper[j].signum() == 0) {
@@ -269,7 +303,7 @@ final class CountHall implements AutoCloseable {
 
     /** Disjoint complete conflict components are certified unit-capacity resources. */
     private void compilePairCapacities() {
-        int n = lower.length;
+        int n = localSupport ? active.length : lower.length;
         long bytes = 1024L + 96L * n + 5L * n * n;
         // Leave room for the original matching and its row-sum certificate.
         // The request and this propagator's existing allowance do not increase.
@@ -292,9 +326,10 @@ final class CountHall implements AutoCloseable {
                 if (owner[a] < 0 || owner[b] < 0 || owner[a] == owner[b] ||
                         lower[a].signum() != 0 || lower[b].signum() != 0 ||
                         !BigInteger.ONE.equals(upper[a]) || !BigInteger.ONE.equals(upper[b])) continue;
-                adjacent[a].set(b);
-                adjacent[b].set(a);
-                reasons[a][b] = reasons[b][a] = r;
+                int pa = localSupport ? position[a] : a, pb = localSupport ? position[b] : b;
+                adjacent[pa].set(pb);
+                adjacent[pb].set(pa);
+                reasons[pa][pb] = reasons[pb][pa] = r;
             }
             var visited = new BitSet(n);
             for (int root = 0; root < n && work < capacityLimit; root++) {
@@ -325,8 +360,8 @@ final class CountHall implements AutoCloseable {
         long pairs = (long) component.size() * (component.size() - 1) / 2;
         // Account for the compact pair premises, domain axioms and independent
         // replay. Do not charge a copy of the unrelated full row catalog here.
-        long checks = 128L + 4L * lower.length + 8L * pairs;
-        long bytes = 1024L + 512L * lower.length + 512L * pairs;
+        long checks = 128L + 4L * (localSupport ? component.size() : lower.length) + 8L * pairs;
+        long bytes = 1024L + 16L * lower.length + 496L * (localSupport ? component.size() : lower.length) + 512L * pairs;
         if (work + checks > capacityLimit || !budget.tryReserve(bytes)) return;
         try {
             var premises = new ArrayList<CountProof.Row>();
@@ -335,15 +370,17 @@ final class CountHall implements AutoCloseable {
                 witnesses.add(premises.size());
                 premises.add(axioms.get(reasons[component.get(i)][component.get(j)]));
             }
-            for (int id = 0; id < lower.length; id++) {
+            var members = localSupport ? component.stream().map(id -> active[id]).toList() : component;
+            for (int index = 0; index < (localSupport ? members.size() : lower.length); index++) {
+                int id = localSupport ? members.get(index) : index;
                 premises.add(new CountProof.Row(Map.of(id, BigInteger.ONE.negate()), lower[id].negate()));
                 premises.add(new CountProof.Row(Map.of(id, BigInteger.ONE), upper[id]));
             }
             var terms = new TreeMap<Integer, BigInteger>();
-            component.forEach(id -> terms.put(id, BigInteger.ONE));
+            members.forEach(id -> terms.put(id, BigInteger.ONE));
             var cut = new ExactLinearProgram.Constraint(terms, BigInteger.ONE);
             var proof = new CountProof.Clique("hall_pair_capacity", lower.length, premises, Arrays.asList(lower),
-                    Arrays.asList(upper), component.stream().map(id -> 2 * id + 1).toList(), witnesses, CountProof.row(cut));
+                    Arrays.asList(upper), members.stream().map(id -> 2 * id + 1).toList(), witnesses, CountProof.row(cut));
             budget.charge(checks);
             work += checks;
             if (CountProof.verify(proof, checks) != CountProof.Verdict.VERIFIED) return;
@@ -352,7 +389,7 @@ final class CountHall implements AutoCloseable {
             capacities.add(axioms.size());
             axioms.add(proof.consequence());
             capacityCuts.add(cut);
-            component.forEach(id -> resource[id] = resourceId);
+            members.forEach(id -> resource[id] = resourceId);
         } finally { budget.release(bytes); }
     }
 

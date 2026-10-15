@@ -349,6 +349,9 @@ final class CountPacking implements AutoCloseable {
         return counts;
     }
 
+    /** Actual charged operations, retained across caller/worker handoffs. */
+    long work() { return work; }
+
     @Override
     public void close() {
         budget.release(memory);

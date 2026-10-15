@@ -21,6 +21,7 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
     private int searchedSize, proposals;
     private long memory, work, until, expansionUntil;
     private boolean running, expanding, turnDeclined, expandedSupport, retrySearch;
+    private boolean transferred;
 
     GraphSupportNeighborhood(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external,
                              Map<K, Long> seeds, Set<String> excluded, boolean preserve, boolean force, PlanningBudget budget, long started) {
@@ -37,7 +38,7 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
     }
 
     void offer(GraphCompiler.Compiled<K> graph, GraphPlan<K> candidate) {
-        if (candidate.feasible() || candidate.missingExact().isEmpty() || pool.size() >= 512) return;
+        if (transferred || candidate.feasible() || candidate.missingExact().isEmpty() || pool.size() >= 512) return;
         // Candidate counts identify the actually used support, even when the
         // selected source graph contains thousands of irrelevant recipes.
         var used = candidate.patternTimesExact();
@@ -74,6 +75,7 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
     }
 
     boolean beginTurn(long allowance) {
+        if (transferred) return false;
         turnDeclined = allowance < 32768;
         boolean frontier = pool.size() < 512 && residual.pending();
         if (allowance < 32768 || proposals < 1 || pool.size() < 1 || running || result != null) return false;
@@ -185,11 +187,25 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
         return result;
     }
 
+    IntegerCountSearch<K> takeFullSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
+                                         Map<K, Long> seeds, Set<K> external, Set<String> excluded,
+                                         boolean preserve, boolean force, PlanningBudget budget, long started,
+                                         OrderProofs<K> proofs) {
+        if (transferred || running || result != null || search == null ||
+                search.joinFullSearch(compiler, target, amount, stock, seeds, external, excluded,
+                        preserve, force, budget, started, proofs) != IntegerCountSearch.Handoff.TRANSFERRED) return null;
+        var result = search;
+        search = null;
+        transferred = true;
+        close();
+        return result;
+    }
+
     boolean retained() {
         // A catalog cursor is not runnable work when the caller cannot grant
         // even the admission slice. Let the original planner use that budget;
         // repeatedly parking this optional view would otherwise starve it.
-        return !turnDeclined && (search != null || retrySearch || pool.size() < 512 && residual.pending());
+        return !transferred && !turnDeclined && (search != null || retrySearch || pool.size() < 512 && residual.pending());
     }
 
     @Override

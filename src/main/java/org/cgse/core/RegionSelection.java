@@ -45,6 +45,7 @@ public final class RegionSelection<K> implements AutoCloseable {
     private Map<K, Long> reserve;
     private boolean possible, needsWork;
     private Choice<K> best;
+    private Choice<K> fundedStartup;
     private PlanPreference<K> preference;
     private CatalystPolicy catalystPolicy = CatalystPolicy.MINIMAL;
     private boolean scaled;
@@ -407,6 +408,16 @@ public final class RegionSelection<K> implements AutoCloseable {
             counts = new RegionCounts<>(region.recipes(), demand, stock, external, target, amount, forceTarget, preserve, budget).scoutRegions(regionScout);
             phase = 13;
         }
+        // Keep the ordinary material preference and exact ratio repair first.
+        // If their chosen parallel seed loan cannot start, an already funded
+        // ordering must survive incomparable upstream-feed costs. That feed is
+        // expanded by the enclosing graph; the original seed policy is retained.
+        if (phase == 8 && fundedStartup != null && best != null && !regionFunded(best) &&
+                best.seeds().entrySet().stream().anyMatch(e ->
+                        !external.contains(e.getKey()) && e.getValue() > stock.getOrDefault(e.getKey(), 0L))) {
+            best = fundedStartup;
+            preference = null;
+        }
         // Parallel working copies are a separate, deliberate recovery contract.
         // Only the minimum-startup strategy may shrink its seed set here.
         if (phase == 8 && !triedBootstrap && preserve && catalystPolicy.parallelism() == 1 && best != null && best.runs().signum() > 0 &&
@@ -433,6 +444,7 @@ public final class RegionSelection<K> implements AutoCloseable {
     }
 
     private void consider(Choice<K> choice) {
+        if (fundedStartup == null && regionFunded(choice)) fundedStartup = choice;
         if (best != null && preference == null) preference = PlanPreference.of(best, produced, demand, stock, external, budget);
         if (preference != null && cannotPreferStartup(choice)) return;
         PlanPreference<K> next = PlanPreference.of(choice, produced, demand, stock, external, budget);

@@ -8,6 +8,9 @@ import java.util.*;
 /** Completed private-seam programs owned by one immutable catalog. Never caches a solve result. */
 final class CountRecoveryTemplates<K> {
 
+    private static final long MAX_WEIGHT = 32768;
+    private static final long PREPARATION_BYTES = 128L * MAX_WEIGHT;
+
     static final class Template<K> {
 
         final List<GraphRecipe<K>> sources, recipes, retained;
@@ -26,7 +29,7 @@ final class CountRecoveryTemplates<K> {
             external = Set.copyOf(model.external);
             this.weight = weight;
             completeCompiler = new GraphCompiler<>(this.recipes);
-            retainedCompiler = retained.size() == recipes.size() ? completeCompiler : new GraphCompiler<>(this.retained);
+            retainedCompiler = this.retained.equals(this.recipes) ? completeCompiler : new GraphCompiler<>(this.retained);
         }
 
         GraphCompiler<K> compiler(Collection<GraphRecipe<K>> view) {
@@ -35,11 +38,12 @@ final class CountRecoveryTemplates<K> {
     }
 
     private final List<Template<K>> templates = new ArrayList<>();
-    private boolean requested, reusable;
+    private boolean requested, reusable, preparing;
     private long weight;
     private long hits, misses, evictions;
 
-    record CacheMetrics(GraphCompiler.CacheEntry entry, List<GraphCompiler<?>> compilers) {}
+    record CacheMetrics(GraphCompiler.CacheEntry entry, GraphCompiler.CacheEntry preparation,
+                        List<GraphCompiler<?>> compilers) {}
 
     synchronized CacheMetrics cacheMetrics() {
         List<GraphCompiler<?>> compilers = new ArrayList<>();
@@ -47,22 +51,22 @@ final class CountRecoveryTemplates<K> {
             compilers.add(template.completeCompiler);
             compilers.add(template.retainedCompiler);
         }
-        return new CacheMetrics(new GraphCompiler.CacheEntry(templates.size(), weight, 128L * weight, hits, misses, evictions), List.copyOf(compilers));
+        return new CacheMetrics(new GraphCompiler.CacheEntry(templates.size(), weight, 128L * weight, hits, misses, evictions),
+                new GraphCompiler.CacheEntry(preparing ? 1 : 0, 0, preparing ? PREPARATION_BYTES : 0, 0, 0, 0), List.copyOf(compilers));
     }
 
-    synchronized Template<K> reuse(RecipeCountModel<K> model) {
-        var result = reuseChecked(model);
-        if (result == null) misses++; else hits++;
-        return result;
-    }
-
-    private Template<K> reuseChecked(RecipeCountModel<K> model) {
-        reusable |= requested;
-        requested = true;
-        if (templates.isEmpty()) return null;
+    Template<K> reuse(RecipeCountModel<K> model) {
+        List<Template<K>> snapshot;
+        synchronized (this) {
+            reusable |= requested;
+            requested = true;
+            if (templates.isEmpty()) { misses++; return null; }
+            snapshot = List.copyOf(templates);
+        }
+        // Match the current order outside the catalog monitor. In particular,
+        // budget callbacks may wait or cancel without blocking another request.
         Set<K> goals = boundaries(model);
-        for (int at = 0; at < templates.size(); at++) {
-            Template<K> value = templates.get(at);
+        for (var value : snapshot) {
             if (value.sources.size() != model.recipes.size() || !value.goals.equals(goals) || !value.external.equals(model.external)) continue;
             boolean same = true;
             for (int i = 0; i < value.sources.size(); i++) {
@@ -75,31 +79,69 @@ final class CountRecoveryTemplates<K> {
                 }
             }
             if (!same) continue;
-            templates.remove(at);
-            templates.add(0, value);
+            synchronized (this) {
+                // An evicted immutable snapshot remains valid for this caller,
+                // but must not be reinserted over newer resident entries.
+                if (templates.remove(value)) templates.add(0, value);
+                hits++;
+            }
             return value;
         }
+        synchronized (this) { misses++; }
         return null;
     }
 
-    synchronized Template<K> remember(RecipeCountModel<K> model, Collection<GraphRecipe<K>> recipes,
-                                      Collection<GraphRecipe<K>> retained, Map<String, PlanStep> bodies) {
-        if (!reusable || recipes.isEmpty() || recipes.size() > 2048 || model.recipes.size() > 2048 || bodies.size() > 4096) return null;
-        long size = model.recipes.size() + recipes.size() + retained.size() + 4L * bodies.size();
+    Template<K> remember(RecipeCountModel<K> model, Collection<GraphRecipe<K>> recipes,
+                         Collection<GraphRecipe<K>> retained, Map<String, PlanStep> bodies) {
+        if (recipes.isEmpty() || recipes.size() > 2048 || retained.size() > 2048 ||
+                model.recipes.size() > 2048 || bodies.size() > 4096 || model.external.size() > 256) return null;
+        synchronized (this) {
+            if (!reusable || preparing) return null;
+            preparing = true;
+        }
+        Template<K> value = null;
+        try {
+            value = prepare(model, recipes, retained, bodies);
+            return value;
+        } finally {
+            synchronized (this) {
+                preparing = false;
+                if (value != null) {
+                    templates.add(0, value);
+                    weight += value.weight;
+                    while (templates.size() > 8 || weight > MAX_WEIGHT) {
+                        weight -= templates.remove(templates.size() - 1).weight;
+                        evictions++;
+                    }
+                }
+            }
+        }
+    }
+
+    private Template<K> prepare(RecipeCountModel<K> model, Collection<GraphRecipe<K>> recipes,
+                                Collection<GraphRecipe<K>> retained, Map<String, PlanStep> bodies) {
+        // One bounded independent workspace per catalog. Discovery and current
+        // source matching still use solver work; these copies only benefit reuse.
+        long size = model.recipes.size() + recipes.size() + retained.size() + 4L * bodies.size()
+                + model.goals.size() + model.external.size();
+        if (size > MAX_WEIGHT || !model.budget.tryCacheScan((int) size)) return null;
         for (var recipe : recipes) {
-            model.budget.check();
-            size += recipe.inputs().size() + recipe.outputs().size();
-            if (size > 32768) return null;
+            long ports = recipe.inputs().size() + (long) recipe.outputs().size();
+            size += ports;
+            if (size > MAX_WEIGHT || !model.budget.tryCacheScan(1 + (int) ports * 2)) return null;
         }
-        Set<K> goals = boundaries(model);
-        if (goals.size() > 256 || model.external.size() > 256) return null;
-        var value = new Template<>(model, List.copyOf(recipes), List.copyOf(retained), bodies, goals, size);
-        templates.add(0, value);
-        weight += size;
-        while (templates.size() > 8 || weight > 32768) {
-            weight -= templates.remove(templates.size() - 1).weight;
-            evictions++;
+        var complete = List.copyOf(recipes);
+        var kept = List.copyOf(retained);
+        if (!complete.equals(kept)) for (var recipe : kept) {
+            int outputs = recipe.executionOutputs().size();
+            size += outputs;
+            if (size > MAX_WEIGHT || !model.budget.tryCacheScan(1 + outputs * 2)) return null;
         }
+        Set<K> goals = new HashSet<>();
+        for (var goal : model.goals.entrySet()) if (goal.getValue().signum() != 0) goals.add(goal.getKey());
+        if (goals.size() > 256) return null;
+        var value = new Template<>(model, complete, kept, bodies, Set.copyOf(goals), size);
+        model.budget.checkpoint();
         return value;
     }
 

@@ -5,12 +5,14 @@ package org.cgse.core;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
@@ -75,14 +77,37 @@ public final class PlanningBudget {
     // cumulative across every worker, share memory/time/cancellation, and feed
     // the same local work clock so compilation still yields fairly.
     private final AtomicLong compilationNodes = new AtomicLong();
-    // Branch quanta run contiguously on one worker. A shared thread counter
-    // avoids creating weak ThreadLocal keys for every order on the long-lived
-    // worker pool; per-order cumulative limits remain in nodes below.
-    private static final ThreadLocal<long[]> THREAD_NODES = ThreadLocal.withInitial(() -> new long[4]);
+    // Optional retention has its own small request-wide account. It must never
+    // consume search/compilation slices or abort an order when this cap is full.
+    static final long CACHE_PREPARATION_WORK = 8192;
+    private long cachePreparationTicks;
+    // Keep one ThreadLocal key, but never carry a previous order's fractional
+    // ticks into this one's slice boundaries. The request owns the worker clocks;
+    // the last-clock fast path must not retain a completed request on idle pools.
+    private static final ThreadLocal<WorkerWork> THREAD_WORK = new ThreadLocal<>();
+    private final Map<Thread, WorkerWork> workerWork = new ConcurrentHashMap<>();
     private volatile boolean countThreadWork;
+
+    private static final class WorkerWork {
+        final WeakReference<PlanningBudget> owner;
+        long total, fraction, search, searchFraction;
+
+        WorkerWork(PlanningBudget owner) { this.owner = new WeakReference<>(owner); }
+    }
+
+    private WorkerWork workerWork() {
+        WorkerWork counter = THREAD_WORK.get();
+        if (counter == null || counter.owner.get() != this) {
+            counter = workerWork.computeIfAbsent(Thread.currentThread(), ignored -> new WorkerWork(this));
+            THREAD_WORK.set(counter);
+        }
+        return counter;
+    }
     private final AtomicLong reservedBytes = new AtomicLong();
     private final AtomicLong peakBytes = new AtomicLong();
     private final AtomicBoolean cancelRequested = new AtomicBoolean();
+    private final AtomicBoolean lpProximityClaimed = new AtomicBoolean();
+    private final AtomicBoolean lpCoreClaimed = new AtomicBoolean();
     private volatile Phase phase = Phase.QUEUED;
     private volatile String failureDetail = "";
     private final Deque<String> diagnostics = new ArrayDeque<>();
@@ -106,6 +131,12 @@ public final class PlanningBudget {
     CountProof.Journal proofJournal() {
         return proofJournal;
     }
+
+    /** One optional root neighborhood per request, shared by views, branches and workers. */
+    boolean claimLpProximity() { return lpProximityClaimed.compareAndSet(false, true); }
+
+    /** One bounded conflict-learning core across all representations and workers. */
+    boolean claimLpCore() { return lpCoreClaimed.compareAndSet(false, true); }
 
     public PlanningBudget(long milliseconds, long maxNodes, BooleanSupplier cancelled) {
         this(milliseconds, maxNodes, 64L << 20, cancelled, System::nanoTime);
@@ -165,6 +196,36 @@ public final class PlanningBudget {
         return Operation.SCAN.ticks;
     }
 
+    /** Optional cache preparation only; deduction, restoration and validation still use search work. */
+    boolean tryCacheScan(int count) {
+        return tryCacheOperations(Operation.SCAN, 0, count);
+    }
+
+    boolean tryCacheOperations(Operation operation, int bits, int count) {
+        if (count < 0) throw new IllegalArgumentException("Negative operation count");
+        int words = (int) Math.max(1, Math.min(32, (Math.max(0, bits) + 63L) / 64));
+        long ticks = (long) count * operation.ticks * (operation == Operation.SCAN ? 1 : words);
+        return tryCacheTicks(ticks);
+    }
+
+    /** Checking a saved copy for future use is retention, not a current-order deduction. */
+    boolean tryCacheCharge(long units) {
+        if (units < 0) throw new IllegalArgumentException("Negative work");
+        return tryCacheTicks(units > CACHE_PREPARATION_WORK ? CACHE_PREPARATION_WORK * WORK_SCALE + 1 : units * WORK_SCALE);
+    }
+
+    private boolean tryCacheTicks(long ticks) {
+        checkpoint();
+        synchronized (this) {
+            if (ticks > CACHE_PREPARATION_WORK * WORK_SCALE - cachePreparationTicks) return false;
+            cachePreparationTicks += ticks;
+            return true;
+        }
+    }
+
+    /** Independent retention work; excluded from search, compilation and continuation quotas. */
+    public synchronized long cachePreparationWork() { return units(cachePreparationTicks); }
+
     void compilationCharge(long units) {
         if (units < 0) throw new IllegalArgumentException("Negative work");
         if (units > Long.MAX_VALUE / WORK_SCALE) {
@@ -194,6 +255,16 @@ public final class PlanningBudget {
         return ticks;
     }
 
+    /** Same exact ticks as individual operations, for a bounded primitive loop.
+     * Call before mutating its state; callers keep cancellation boundaries small. */
+    long operations(Operation operation, int bits, int count) {
+        if (count < 0) throw new IllegalArgumentException("Negative operation count");
+        int words = (int) Math.max(1, Math.min(32, (Math.max(0, bits) + 63L) / 64));
+        long ticks = (long) count * operation.ticks * (operation == Operation.SCAN ? 1 : words);
+        chargeTicks(ticks);
+        return ticks;
+    }
+
     private void chargeTicks(long ticks) {
         chargeTicks(ticks, false);
     }
@@ -215,16 +286,16 @@ public final class PlanningBudget {
             if (account.compareAndSet(previous, total)) break;
         }
         if (countThreadWork) {
-            long[] counter = THREAD_NODES.get();
-            long fraction = counter[1] + ticks % WORK_SCALE;
+            WorkerWork counter = workerWork();
+            long fraction = counter.fraction + ticks % WORK_SCALE;
             // This clock is read only through bounded differences, like
             // nanoTime. Unit wrap is intentional; fractional ticks never wrap.
-            counter[0] += ticks / WORK_SCALE + fraction / WORK_SCALE;
-            counter[1] = fraction % WORK_SCALE;
+            counter.total += ticks / WORK_SCALE + fraction / WORK_SCALE;
+            counter.fraction = fraction % WORK_SCALE;
             if (!compilation) {
-                long searchFraction = counter[3] + ticks % WORK_SCALE;
-                counter[2] += ticks / WORK_SCALE + searchFraction / WORK_SCALE;
-                counter[3] = searchFraction % WORK_SCALE;
+                long searchFraction = counter.searchFraction + ticks % WORK_SCALE;
+                counter.search += ticks / WORK_SCALE + searchFraction / WORK_SCALE;
+                counter.searchFraction = searchFraction % WORK_SCALE;
             }
         }
         traceCharge(ticks, compilation);
@@ -244,15 +315,15 @@ public final class PlanningBudget {
     /** Per-thread accounting prevents concurrent branches charging one another's work. */
     long threadWork() {
         countThreadWork = true;
-        long[] counter = THREAD_NODES.get();
-        return counter[0] + (counter[1] == 0 ? 0 : 1);
+        WorkerWork counter = workerWork();
+        return counter.total + (counter.fraction == 0 ? 0 : 1);
     }
 
     /** Search continuation quotas exclude structural cache misses as well. */
     long threadSearchWork() {
         countThreadWork = true;
-        long[] counter = THREAD_NODES.get();
-        return counter[2] + (counter[3] == 0 ? 0 : 1);
+        WorkerWork counter = workerWork();
+        return counter.search + (counter.searchFraction == 0 ? 0 : 1);
     }
 
     public Exhausted exhausted(Limit limit, String detail) {

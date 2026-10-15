@@ -136,6 +136,8 @@ public final class GraphPlan<K> {
         GRAPH_LIMIT,
         QUEUE_LIMIT,
         UNKNOWN,
+        /** Captured alternatives are incomplete; a restricted failure is not a full-model proof. */
+        INCOMPLETE_MODEL,
         UNSUPPORTED_PATTERN_SEMANTICS,
         AMOUNT_LIMIT,
         /** The captured order is impossible; no verified refill program is available. */

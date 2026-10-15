@@ -10,7 +10,7 @@ import java.util.*;
 final class CountIntegerLpLearning implements AutoCloseable {
 
     private static final int MAX_COLUMNS = 128, MAX_ROWS = 512, MAX_TERMS = 4096;
-    private final CountLpLearning.Session numerical = new CountLpLearning.Session(true);
+    private CountLpLearning.Session numerical = new CountLpLearning.Session(true);
     private PlanningBudget budget;
     private List<ExactLinearProgram.Constraint> sources = List.of(), projected = List.of();
     private int[] columns = new int[0], rowIds = new int[0];
@@ -55,6 +55,10 @@ final class CountIntegerLpLearning implements AutoCloseable {
         if (this.budget != budget) {
             close();
             this.budget = budget;
+            // Large ambient models can repeatedly exceed one numerical visit
+            // even after complete-row support projection. Keep their cold basis
+            // continuation without changing the established small-model arm.
+            numerical = new CountLpLearning.Session(true, low.length > MAX_COLUMNS);
         }
         started = budget.threadWork();
         allowance = Math.min(maximumWork, budget.remainingWork());
@@ -103,7 +107,7 @@ final class CountIntegerLpLearning implements AutoCloseable {
                             parents.put(rowIds[parent.getKey()], parent.getValue());
                         }
                         cut = new CountLpLearning.Cut(new ExactLinearProgram.Constraint(terms, result.cut.row().upper()),
-                                Map.copyOf(parents), result.cut.divisor());
+                                parents, result.cut.divisor());
                     }
                     var lifted = new CountLpLearning.Result(point, cut, result.numericalInfeasible, result.numericalWork, budget, bytes, integerPoint);
                     bytes = 0;
@@ -113,6 +117,16 @@ final class CountIntegerLpLearning implements AutoCloseable {
         } catch (Stop ignored) {
             return null;
         }
+    }
+
+    boolean pending() { return numerical.pending(); }
+
+    long continuationWork() {
+        return Math.min(65536, numerical.continuationWork() + 1024L + 2L * (columns.length + rowIds.length));
+    }
+
+    void abandonPending() {
+        if (numerical.pending()) numerical.close();
     }
 
     private boolean matches(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high, int focus) {
@@ -226,6 +240,10 @@ final class CountIntegerLpLearning implements AutoCloseable {
     }
 
     private void clearKernel() {
+        // A partial numeric tableau belongs to this exact lifted support.
+        // Failed preparation of a replacement must not leave a stale pending
+        // flag that prevents the LCG owner from continuing its search.
+        if (numerical.pending()) numerical.close();
         if (budget != null) budget.release(memory);
         memory = 0;
         sources = projected = List.of();

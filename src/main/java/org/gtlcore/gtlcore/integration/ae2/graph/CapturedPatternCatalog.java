@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEKey;
+import org.cgse.core.CapturedCatalog;
 import org.cgse.core.GraphCompiler;
 import org.cgse.core.GraphRecipe;
 import org.cgse.core.PlanningBudget;
@@ -32,7 +33,8 @@ public final class CapturedPatternCatalog {
 
     public record Entry(IPatternDetails handle, PatternFingerprint.Values values, int priority, CapturedPattern pattern) {}
 
-    public record Prepared(GraphCompiler<AEKey> compiler, Map<String, IPatternDetails> bindings) {}
+    public record Prepared(GraphCompiler<AEKey> compiler, Map<String, IPatternDetails> bindings,
+                           CapturedCatalog<AEKey> candidates) {}
 
     private volatile List<Entry> entries;
     private final int size;
@@ -65,6 +67,9 @@ public final class CapturedPatternCatalog {
         private final Map<String, Integer> priorities = new HashMap<>();
         private final Set<String> seen = new HashSet<>();
         private final List<GraphRecipe<AEKey>> recipes = new ArrayList<>();
+        private final List<CapturedCatalog.Entry<AEKey>> domains = new ArrayList<>();
+        private final Set<String> domainBindings = new HashSet<>();
+        private boolean domainRequired;
         private int cursor;
         private String binding;
         private CapturedPattern.Expansion variants;
@@ -103,6 +108,7 @@ public final class CapturedPatternCatalog {
                     Encoded entry = encoded.next();
                     bindings.putIfAbsent(entry.binding(), entry.entry().handle());
                     priorities.put(entry.binding(), entry.entry().priority());
+                    domain(entry.entry(), entry.binding());
                     merging = entry.recipes().iterator();
                     parallelActiveNanos += entry.nanos();
                 } else if (batches != null && batches.hasNext()) encoded = batches.next().iterator();
@@ -134,11 +140,16 @@ public final class CapturedPatternCatalog {
                     binding = fingerprints.of(entry.values());
                     bindings.putIfAbsent(binding, entry.handle());
                     priorities.put(binding, entry.priority());
+                    domain(entry, binding);
                     variants = entry.pattern().expand(budget);
                 } else indexing = new PreparedCatalog<>(recipes, priorities).build(budget);
             }
             if (indexing == null || !indexing.advance(slice)) return false;
-            Prepared complete = new Prepared(indexing.result(), Collections.unmodifiableMap(new LinkedHashMap<>(bindings)));
+            // Full captured inputs survive preparation when a concrete window is
+            // incomplete; ordinary exact catalogs keep their established warm path.
+            domains.sort(Comparator.comparingInt((CapturedCatalog.Entry<AEKey> entry) -> priorities.getOrDefault(entry.binding(), 0)).reversed());
+            Prepared complete = new Prepared(indexing.result(), Collections.unmodifiableMap(new LinkedHashMap<>(bindings)),
+                    domainRequired ? new CapturedCatalog<>(domains, true) : null);
             synchronized (CapturedPatternCatalog.this) {
                 if (prepared == null) {
                     prepared = complete;
@@ -150,6 +161,11 @@ public final class CapturedPatternCatalog {
                 result = prepared;
             }
             return true;
+        }
+
+        private void domain(Entry entry, String binding) {
+            if (domainBindings.add(binding)) domains.add(new CapturedCatalog.Entry<>(binding, binding, entry.pattern().core()));
+            domainRequired |= entry.pattern().bounded();
         }
 
         private List<Encoded> encode(int start, int end) {

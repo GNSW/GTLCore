@@ -42,6 +42,72 @@ final class CountLpHint {
         Outcome outcome = Outcome.UNSUPPORTED;
     }
 
+    /**
+     * A frozen branch-direction proposal. Later branch bounds may change while
+     * this LP progresses, so its point is only a hint, never a domain fact.
+     * Only one worker owns a visit; the request may hand it to another worker.
+     */
+    static final class Session implements AutoCloseable {
+        private final CountNumericRelaxation.Session numerical = new CountNumericRelaxation.Session(true);
+        private PlanningBudget budget;
+        private Projection projection;
+        private CountNumericRelaxation.Result ready;
+        private long memory;
+
+        boolean pending() { return projection != null; }
+        long resumptions() { return numerical.resumed(); }
+
+        Result start(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high,
+                     PlanningBudget budget, long maximumWork, Attempt attempt) {
+            if (pending()) throw new IllegalStateException("Hint already started");
+            return CountLpHint.solve(rows, low, high, budget, maximumWork, attempt, this);
+        }
+
+        Result resume(long maximumWork, Attempt attempt) {
+            if (!pending()) throw new IllegalStateException("No pending hint");
+            attempt.outcome = Outcome.ATTEMPTED;
+            var helper = new CountLpHint(budget, Math.min(maximumWork, budget.remainingWork()), attempt);
+            try {
+                budget.checkpoint();
+                if (helper.allowance < 1024) {
+                    attempt.outcome = Outcome.WORK_LIMIT;
+                    return null;
+                }
+                if (ready == null) {
+                    ready = numerical.solve(projection.cost.length, projection.rows, projection.cost, budget, helper.allowance);
+                    if (ready == null) {
+                        if (numerical.pending()) attempt.outcome = Outcome.WORK_LIMIT;
+                        else close();
+                        return null;
+                    }
+                }
+                Result result = helper.lift(projection, ready, memory);
+                if (result != null) memory = 0; // Result owns the point until its caller copies it.
+                close();
+                return result;
+            } catch (Stop stopped) {
+                if (stopped.workLimited) attempt.outcome = Outcome.WORK_LIMIT;
+                else close();
+                return null;
+            } catch (RuntimeException | Error failure) {
+                close();
+                throw failure;
+            }
+        }
+
+        @Override
+        public void close() {
+            numerical.close();
+            projection = null;
+            ready = null;
+            if (budget != null) budget.release(memory);
+            memory = 0;
+        }
+    }
+
+    private record Projection(int[] map, BigInteger[] low, List<ExactLinearProgram.Constraint> rows,
+                              BigInteger[] cost) {}
+
     private static final class Stop extends RuntimeException {
 
         final boolean workLimited;
@@ -70,8 +136,13 @@ final class CountLpHint {
 
     static Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
                         PlanningBudget budget, long maximumWork, Attempt attempt) {
+        return solve(rows, lower, upper, budget, maximumWork, attempt, null);
+    }
+
+    private static Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
+                                PlanningBudget budget, long maximumWork, Attempt attempt, Session session) {
         if (attempt != null) attempt.outcome = Outcome.UNSUPPORTED;
-        if (lower.length < 2 || lower.length > 256 || upper.length != lower.length || rows.size() > 1024) return null;
+        if (lower.length < 2 || lower.length > 512 || upper.length != lower.length || rows.size() > 1024) return null;
         if (maximumWork < 1024) {
             if (attempt != null) attempt.outcome = Outcome.WORK_LIMIT;
             return null;
@@ -105,7 +176,19 @@ final class CountLpHint {
                 return null;
             }
             bytes = requested;
-            Result result = helper.solve(rows, lower, upper, bytes);
+            var projection = helper.project(rows, lower, upper);
+            if (projection == null) return null;
+            if (session != null) {
+                session.projection = projection;
+                session.budget = budget;
+                session.memory = bytes;
+                bytes = 0;
+                return session.resume(Math.max(0, helper.allowance - helper.spent()), attempt);
+            }
+            if (attempt != null) attempt.outcome = Outcome.ATTEMPTED;
+            var numerical = CountNumericRelaxation.solve(projection.cost.length, projection.rows, projection.cost,
+                    budget, Math.max(1, helper.allowance - helper.spent()));
+            Result result = numerical == null ? null : helper.lift(projection, numerical, bytes);
             if (result != null) bytes = 0;
             return result;
         } catch (Stop stopped) {
@@ -117,7 +200,7 @@ final class CountLpHint {
         }
     }
 
-    private Result solve(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high, long bytes) {
+    private Projection project(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high) {
         int variables = low.length;
         int[] map = new int[variables];
         Arrays.fill(map, -1);
@@ -178,16 +261,18 @@ final class CountLpHint {
             check();
             if (map[term.getKey()] >= 0) cost[map[term.getKey()]] = term.getValue().negate();
         }
-        long numericalAllowance = Math.max(1, allowance - spent());
-        if (attempt != null) attempt.outcome = Outcome.ATTEMPTED;
-        var numerical = CountNumericRelaxation.solve(free.size(), reduced, cost, budget, numericalAllowance);
-        if (numerical == null) return null;
+        return new Projection(map, low.clone(), List.copyOf(reduced), cost);
+    }
+
+    private Result lift(Projection projection, CountNumericRelaxation.Result numerical, long bytes) {
+        int variables = projection.low.length;
         double[] point = null;
         if (numerical.point() != null) {
             point = new double[variables];
             for (int i = 0; i < variables; i++) {
                 check();
-                point[i] = map[i] < 0 ? low[i].doubleValue() : low[i].doubleValue() + numerical.point()[map[i]];
+                int id = projection.map[i];
+                point[i] = id < 0 ? projection.low[i].doubleValue() : projection.low[i].doubleValue() + numerical.point()[id];
             }
         }
         return point == null ? null : new Result(point, budget, bytes);

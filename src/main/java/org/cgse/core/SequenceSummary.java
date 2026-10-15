@@ -4,22 +4,51 @@
 package org.cgse.core;
 
 import java.math.BigInteger;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 /** Exact prefix requirements, including inputs returned by the very same operation. */
 public record SequenceSummary<K>(Map<K, BigInteger> required, Map<K, BigInteger> delta,
                                  Map<K, BigInteger> peak) {
 
     public SequenceSummary {
-        required = Collections.unmodifiableMap(new LinkedHashMap<>(required));
-        delta = Collections.unmodifiableMap(new LinkedHashMap<>(delta));
-        peak = Collections.unmodifiableMap(new LinkedHashMap<>(peak));
+        required = freeze(required);
+        delta = freeze(delta);
+        peak = freeze(peak);
+    }
+
+    private static <K> Map<K, BigInteger> freeze(Map<K, BigInteger> source) {
+        if (source.isEmpty()) return Map.of();
+        if (source instanceof FrozenValues<?>) return source;
+        return new FrozenValues<>(new LinkedHashMap<>(source));
+    }
+
+    /** Transfer freshly built maps; the caller must never mutate them again. */
+    static <K> SequenceSummary<K> owned(Map<K, BigInteger> required, Map<K, BigInteger> delta, Map<K, BigInteger> peak) {
+        return new SequenceSummary<>(new FrozenValues<>(required), new FrozenValues<>(delta), new FrozenValues<>(peak));
+    }
+
+    private static final class FrozenValues<K> extends AbstractMap<K, BigInteger> {
+        private final Map<K, BigInteger> values;
+
+        FrozenValues(Map<K, BigInteger> owned) { values = Collections.unmodifiableMap(owned); }
+        @Override public Set<Entry<K, BigInteger>> entrySet() { return values.entrySet(); }
+        @Override public Set<K> keySet() { return values.keySet(); }
+        @Override public Collection<BigInteger> values() { return values.values(); }
+        @Override public void forEach(BiConsumer<? super K, ? super BigInteger> action) { values.forEach(action); }
+        @Override public int size() { return values.size(); }
+        @Override public int hashCode() { return values.hashCode(); }
+        @Override public BigInteger get(Object key) { return values.get(key); }
+        @Override public BigInteger getOrDefault(Object key, BigInteger fallback) { return values.getOrDefault(key, fallback); }
+        @Override public boolean containsKey(Object key) { return values.containsKey(key); }
     }
 
     public static <K> SequenceSummary<K> empty() {
@@ -35,7 +64,7 @@ public record SequenceSummary<K>(Map<K, BigInteger> required, Map<K, BigInteger>
         recipe.outputs().forEach((key, value) -> delta.merge(key, BigInteger.valueOf(value), BigInteger::add));
         Map<K, BigInteger> peak = new LinkedHashMap<>();
         delta.forEach((key, value) -> peak.put(key, value.max(BigInteger.ZERO)));
-        return new SequenceSummary<>(required, delta, peak);
+        return owned(required, delta, peak);
     }
 
     public SequenceSummary<K> then(SequenceSummary<K> next) {
@@ -47,21 +76,22 @@ public record SequenceSummary<K>(Map<K, BigInteger> required, Map<K, BigInteger>
             change.put(key, delta(key).add(next.delta(key)));
             maximum.put(key, peak(key).max(delta(key).add(next.peak(key))));
         }
-        return new SequenceSummary<>(need, change, maximum);
+        return owned(need, change, maximum);
     }
 
     public SequenceSummary<K> repeat(long count) {
         CheckedAmounts.nonNegative(count);
         if (count == 0) return empty();
         BigInteger n = BigInteger.valueOf(count);
+        BigInteger preceding = BigInteger.valueOf(count - 1);
         Map<K, BigInteger> need = new LinkedHashMap<>(), change = new LinkedHashMap<>(), maximum = new LinkedHashMap<>();
         for (K key : keys()) {
-            need.put(key, required(key).add(delta(key).negate().max(BigInteger.ZERO)
-                    .multiply(n.subtract(BigInteger.ONE))));
-            change.put(key, delta(key).multiply(n));
-            maximum.put(key, peak(key).add(delta(key).max(BigInteger.ZERO).multiply(n.subtract(BigInteger.ONE))));
+            BigInteger delta = delta(key);
+            need.put(key, delta.signum() < 0 ? required(key).subtract(delta.multiply(preceding)) : required(key));
+            change.put(key, delta.multiply(n));
+            maximum.put(key, delta.signum() > 0 ? peak(key).add(delta.multiply(preceding)) : peak(key));
         }
-        return new SequenceSummary<>(need, change, maximum);
+        return owned(need, change, maximum);
     }
 
     public BigInteger required(K key) {
@@ -120,7 +150,7 @@ public record SequenceSummary<K>(Map<K, BigInteger> required, Map<K, BigInteger>
                 change.put(key, previous.add(next.delta(key)));
             }
         }
-        return new SequenceSummary<>(need, change, maximum);
+        return owned(need, change, maximum);
     }
 
     private static final class SummaryFrame {

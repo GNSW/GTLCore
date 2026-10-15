@@ -1,14 +1,18 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
+import org.gtlcore.gtlcore.integration.ae2.BlankDataMedia;
+
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 
+import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import org.cgse.core.*;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -22,7 +26,7 @@ import java.util.Set;
 public final class GraphJobCodec {
 
     public static final String NBT_KEY = "gtlcoreGraphJob";
-    private static final int SCHEMA = 10;
+    private static final int SCHEMA = 11;
     private static final int MAX_ENTRIES = 100_000;
 
     private GraphJobCodec() {}
@@ -101,6 +105,7 @@ public final class GraphJobCodec {
         tag.putString("state", state.state().name());
         tag.putString("reason", state.reason());
         tag.putBoolean("suspended", state.suspended());
+        tag.putBoolean("needsStateReplan", state.needsStateReplan());
         tag.put("externalWaiting", amounts(state.obligations().external()));
         tag.putLong("nextOutputOwner", state.obligations().nextId());
         ListTag flights = new ListTag();
@@ -111,6 +116,19 @@ public final class GraphJobCodec {
             row.putLong("runs", flight.runs());
             row.putBoolean("ambiguous", flight.ambiguous());
             row.put("remaining", amounts(flight.remaining()));
+            ListTag choices = new ListTag();
+            for (var choice : flight.choices()) {
+                CompoundTag returned = new CompoundTag();
+                returned.putInt("inputSlot", choice.inputSlot());
+                returned.put("predicted", choice.predicted().toTagGeneric());
+                returned.putLong("amount", choice.amount());
+                ListTag allowed = new ListTag();
+                choice.allowed().stream().sorted(Comparator.comparing(PatternFingerprint::key))
+                        .forEach(key -> allowed.add(key.toTagGeneric()));
+                returned.put("allowed", allowed);
+                choices.add(returned);
+            }
+            row.put("returnChoices", choices);
             flights.add(row);
         }
         tag.put("inFlight", flights);
@@ -125,30 +143,38 @@ public final class GraphJobCodec {
     }
 
     public static GraphJobRuntime.Snapshot<AEKey> read(CompoundTag tag) {
+        ResourceKeys keys = new ResourceKeys();
         int schema = tag.getInt("schemaVersion");
         if ((schema < 1 || schema > SCHEMA) || !tag.getString("engineKind").equals("graph"))
             throw new IllegalArgumentException("Unsupported graph task schema");
+        if (schema >= 11 && !tag.contains("needsStateReplan", Tag.TAG_BYTE))
+            throw new IllegalArgumentException("Missing state return barrier");
         Map<String, GraphRecipe<AEKey>> recipes = new LinkedHashMap<>();
         for (Tag entry : list(tag, "recipes")) {
             CompoundTag row = (CompoundTag) entry;
             List<GraphRecipe.Slot<AEKey>> slots = new ArrayList<>();
             for (Tag input : list(row, "slots")) {
                 CompoundTag value = (CompoundTag) input;
-                slots.add(new GraphRecipe.Slot<>(key(value.getCompound("key")), amount(value, "amount"), value.getInt("inputSlot"), value.getBoolean("configuration"), schema >= 6 && value.getBoolean("reusable")));
+                slots.add(new GraphRecipe.Slot<>(keys.read(value.getCompound("key")), amount(value, "amount"), value.getInt("inputSlot"), value.getBoolean("configuration"), schema >= 6 && value.getBoolean("reusable")));
             }
             String id = row.getString("id");
             if (id.isEmpty() || recipes.put(id, new GraphRecipe<>(id, row.getString("binding"), slots,
-                    amounts(row, "outputs"))) != null)
+                    amounts(row, "outputs", keys))) != null)
                 throw new IllegalArgumentException("Duplicate recipe");
         }
-        GraphPlan<AEKey> plan = new GraphPlan<>(key(tag.getCompound("target")), amount(tag, "amount"),
+        GraphPlan<AEKey> plan = new GraphPlan<>(keys.read(tag.getCompound("target")), amount(tag, "amount"),
                 tag.getBoolean("preserve"), step(tag.getCompound("steps"), 0), recipes,
-                schema >= 7 ? exactAmounts(tag, "initialExact") : amounts(tag, "initial"), amounts(tag, "seeds"), Map.of(), GraphPlan.Result.FEASIBLE, 0, 0);
+                schema >= 7 ? exactAmounts(tag, "initialExact", keys) : amounts(tag, "initial", keys), amounts(tag, "seeds", keys), Map.of(), GraphPlan.Result.FEASIBLE, 0, 0);
         if (tag.contains("seedOptimality", Tag.TAG_COMPOUND)) {
             CompoundTag proof = tag.getCompound("seedOptimality");
-            if (proof.getInt("types") != plan.seeds().size()) throw new IllegalArgumentException("Seed proof differs from saved plan");
-            plan = plan.withSeedOptimality(new GraphPlan.SeedOptimality(proof.getInt("lowerTypes"), proof.getInt("types"),
-                    proof.getBoolean("cardinalityProven"), proof.getBoolean("quantitiesProven"), proof.getBoolean("fundedPreview"), proof.getBoolean("baseMaterialTradeoff")));
+            int originalTypes = 0;
+            for (Tag entry : list(tag, "seeds")) if (amount((CompoundTag) entry, "amount") > 0) originalTypes++;
+            if (proof.getInt("types") != originalTypes) throw new IllegalArgumentException("Seed proof differs from saved plan");
+            var optimality = new GraphPlan.SeedOptimality(proof.getInt("lowerTypes"), proof.getInt("types"),
+                    proof.getBoolean("cardinalityProven"), proof.getBoolean("quantitiesProven"), proof.getBoolean("fundedPreview"), proof.getBoolean("baseMaterialTradeoff"));
+            // Resource equivalence changed. Preserve every physical seed, but
+            // do not transfer an old type-cardinality proof to the new model.
+            if (!keys.normalized) plan = plan.withSeedOptimality(optimality);
         }
         PlanVerifier.verify(plan);
         Map<String, BigInteger> accepted = new LinkedHashMap<>();
@@ -174,28 +200,57 @@ public final class GraphJobCodec {
         if (schema == 1) {
             // The old format mixed external and machine returns. Preserve their
             // exact amounts as an unknown owner; never infer another dispatch.
-            Map<AEKey, Long> expected = amounts(tag, "expected");
+            Map<AEKey, Long> expected = amounts(tag, "expected", keys);
             obligations = new OutputObligations.Snapshot<>(Map.of(), expected.isEmpty() ? List.of() : List.of(
                     new OutputObligations.Flight<>(1, "legacy_unknown", 1, expected, true)), 2);
             recovery = new RecoveryObligation<>(java.util.UUID.randomUUID().toString(), "order", plan.seeds(), 0,
                     RecoveryObligation.Status.INTERMEDIATE);
         } else {
             List<OutputObligations.Flight<AEKey>> flights = new ArrayList<>();
+            int returnKeys = 0;
             for (Tag entry : list(tag, "inFlight")) {
                 CompoundTag row = (CompoundTag) entry;
+                List<OutputObligations.ReturnChoice<AEKey>> choices = new ArrayList<>();
+                ListTag savedChoices = schema >= 11 || row.contains("returnChoices") ?
+                        requiredList(row, "returnChoices") : new ListTag();
+                if (schema < 11 && !savedChoices.isEmpty()) throw new IllegalArgumentException("Return contract in legacy task schema");
+                if (savedChoices.size() > 256) throw new IllegalArgumentException("Too many state return choices");
+                for (Tag savedChoice : savedChoices) {
+                    CompoundTag choice = (CompoundTag) savedChoice;
+                    ListTag allowedTags = requiredList(choice, "allowed");
+                    returnKeys += allowedTags.size();
+                    if (allowedTags.isEmpty() || allowedTags.size() > 4096 || returnKeys > MAX_ENTRIES)
+                        throw new IllegalArgumentException("Too many state return alternatives");
+                    Set<AEKey> allowed = new HashSet<>();
+                    for (Tag allowedKey : allowedTags)
+                        if (!allowed.add(keys.read((CompoundTag) allowedKey))) throw new IllegalArgumentException("Repeated state return alternative");
+                    if (!choice.contains("inputSlot", Tag.TAG_INT)) throw new IllegalArgumentException("Missing state return slot");
+                    int inputSlot = choice.getInt("inputSlot");
+                    var recipe = recipes.get(row.getString("recipe"));
+                    if (recipe == null) throw new IllegalArgumentException("State return recipe is absent");
+                    boolean present = false;
+                    for (int at = 0; at < recipe.slots().size(); at++) {
+                        int index = recipe.slots().get(at).inputSlot();
+                        if ((index < 0 ? at : index) == inputSlot) present = true;
+                    }
+                    if (!present) throw new IllegalArgumentException("State return input slot is absent");
+                    choices.add(new OutputObligations.ReturnChoice<>(inputSlot, keys.read(choice.getCompound("predicted")),
+                            allowed, amount(choice, "amount")));
+                }
                 flights.add(new OutputObligations.Flight<>(amount(row, "id"), row.getString("recipe"), amount(row, "runs"),
-                        amounts(row, "remaining"), row.getBoolean("ambiguous")));
+                        amounts(row, "remaining", keys), row.getBoolean("ambiguous"), choices));
             }
-            obligations = new OutputObligations.Snapshot<>(amounts(tag, "externalWaiting"), flights, amount(tag, "nextOutputOwner"));
+            obligations = new OutputObligations.Snapshot<>(amounts(tag, "externalWaiting", keys), flights, amount(tag, "nextOutputOwner"));
             CompoundTag row = tag.getCompound("recovery");
-            recovery = new RecoveryObligation<>(row.getString("owner"), row.getString("scope"), amounts(row, "seeds"),
+            recovery = new RecoveryObligation<>(row.getString("owner"), row.getString("scope"), amounts(row, "seeds", keys),
                     amount(row, "stage"), RecoveryObligation.Status.valueOf(row.getString("status")));
         }
-        return new GraphJobRuntime.Snapshot<>(plan, amounts(tag, "owned"), amounts(tag, "expected"),
-                amounts(tag, "uncertainInputs"), accepted, cursor, pipeline, amount(tag, "remainingDelivery"),
+        return new GraphJobRuntime.Snapshot<>(plan, amounts(tag, "owned", keys), amounts(tag, "expected", keys),
+                amounts(tag, "uncertainInputs", keys), accepted, cursor, pipeline, amount(tag, "remainingDelivery"),
                 GraphJobRuntime.State.valueOf(tag.getString("state")), tag.getBoolean("suspended"), tag.getString("reason"), obligations, recovery, committed,
-                schema >= 7 ? exactAmounts(tag, "deferredExternal") : Map.of(),
-                schema >= 10 && tag.contains("pendingSteps", Tag.TAG_COMPOUND) ? step(tag.getCompound("pendingSteps"), 0) : null);
+                schema >= 7 ? exactAmounts(tag, "deferredExternal", keys) : Map.of(),
+                schema >= 10 && tag.contains("pendingSteps", Tag.TAG_COMPOUND) ? step(tag.getCompound("pendingSteps"), 0) : null,
+                schema >= 11 && tag.getBoolean("needsStateReplan"));
     }
 
     private static ListTag exactAmounts(Map<AEKey, BigInteger> amounts) {
@@ -209,14 +264,25 @@ public final class GraphJobCodec {
         return entries;
     }
 
-    private static Map<AEKey, BigInteger> exactAmounts(CompoundTag tag, String name) {
+    private static Map<AEKey, BigInteger> exactAmounts(CompoundTag tag, String name, ResourceKeys keys) {
         Map<AEKey, BigInteger> result = new LinkedHashMap<>();
+        ResourceSources sources = new ResourceSources();
         for (Tag entry : list(tag, name)) {
             CompoundTag row = (CompoundTag) entry;
-            if (result.putIfAbsent(key(row.getCompound("key")), exact(row, "amount")) != null)
-                throw new IllegalArgumentException("Duplicate resource");
+            CompoundTag source = row.getCompound("key");
+            AEKey key = keys.read(source);
+            BigInteger count = exact(row, "amount");
+            sources.claim(key, source);
+            result.merge(key, count, GraphJobCodec::addExactResource);
         }
         return ExactAmounts.copy(result);
+    }
+
+    private static BigInteger addExactResource(BigInteger left, BigInteger right) {
+        BigInteger sum = left.add(right);
+        // A migrated total must remain readable after the next ordinary save.
+        if (sum.toByteArray().length > 4096) throw new IllegalArgumentException("Invalid integer size after resource migration");
+        return sum;
     }
 
     public static ListTag amounts(Map<AEKey, Long> amounts) {
@@ -231,14 +297,60 @@ public final class GraphJobCodec {
     }
 
     public static Map<AEKey, Long> amounts(CompoundTag tag, String name) {
+        return amounts(tag, name, new ResourceKeys());
+    }
+
+    private static Map<AEKey, Long> amounts(CompoundTag tag, String name, ResourceKeys keys) {
         Map<AEKey, Long> result = new LinkedHashMap<>();
+        ResourceSources sources = new ResourceSources();
         for (Tag entry : list(tag, name)) {
             CompoundTag row = (CompoundTag) entry;
-            AEKey key = key(row.getCompound("key"));
+            CompoundTag source = row.getCompound("key");
+            AEKey key = keys.read(source);
             long count = amount(row, "amount");
-            if (result.putIfAbsent(key, count) != null) throw new IllegalArgumentException("Duplicate resource");
+            sources.claim(key, source);
+            result.merge(key, count, CheckedAmounts::add);
         }
         return GraphRecipe.amounts(result);
+    }
+
+    /** Old blank media keys differed only by an absent versus empty root tag. */
+    private static final class ResourceKeys {
+
+        boolean normalized;
+
+        AEKey read(CompoundTag source) {
+            AEKey key = Objects.requireNonNull(AEKey.fromTagGeneric(source), "Unknown AE key");
+            normalized |= key instanceof AEItemKey item && BlankDataMedia.isMedia(item.getItem()) &&
+                    source.contains("tag", Tag.TAG_COMPOUND) && source.getCompound("tag").isEmpty();
+            return key;
+        }
+    }
+
+    private static final class ResourceSources {
+
+        private final Map<AEKey, CompoundTag> first = new HashMap<>();
+        private final Set<AEKey> merged = new HashSet<>();
+
+        void claim(AEKey key, CompoundTag source) {
+            CompoundTag previous = first.putIfAbsent(key, source);
+            if (previous == null) return;
+            if (!blankAliases(key, previous, source) || !merged.add(key))
+                throw new IllegalArgumentException("Duplicate resource");
+        }
+
+        private static boolean blankAliases(AEKey key, CompoundTag first, CompoundTag second) {
+            if (!(key instanceof AEItemKey item) || !BlankDataMedia.isMedia(item.getItem())) return false;
+            if (first.contains("tag") == second.contains("tag")) return false;
+            CompoundTag absent = first.contains("tag") ? second : first;
+            CompoundTag present = first.contains("tag") ? first : second;
+            if (!present.contains("tag", Tag.TAG_COMPOUND) || !present.getCompound("tag").isEmpty()) return false;
+            CompoundTag normalized = present.copy();
+            normalized.remove("tag");
+            // Compare the whole source payload: capabilities, key type, item id
+            // and all other fields must match, not just the decoded item kind.
+            return absent.equals(normalized);
+        }
     }
 
     private static CompoundTag step(PlanStep step) {
@@ -377,6 +489,14 @@ public final class GraphJobCodec {
         return result;
     }
 
+    private static ListTag requiredList(CompoundTag tag, String name) {
+        if (!(tag.get(name) instanceof ListTag result) ||
+                (!result.isEmpty() && result.getElementType() != Tag.TAG_COMPOUND))
+            throw new IllegalArgumentException("Expected compound list: " + name);
+        if (result.size() > MAX_ENTRIES) throw new IllegalArgumentException("Graph task too large");
+        return result;
+    }
+
     private static void exact(CompoundTag tag, String name, BigInteger count) {
         ExactAmounts.of(count);
         if (count.compareTo(ExactAmounts.LONG_MAX) <= 0) tag.putLong(name, count.longValueExact());
@@ -394,9 +514,5 @@ public final class GraphJobCodec {
     private static long amount(CompoundTag tag, String name) {
         if (!tag.contains(name, Tag.TAG_LONG)) throw new IllegalArgumentException("Expected exact long: " + name);
         return CheckedAmounts.nonNegative(tag.getLong(name));
-    }
-
-    private static AEKey key(CompoundTag tag) {
-        return Objects.requireNonNull(AEKey.fromTagGeneric(tag), "Unknown AE key");
     }
 }

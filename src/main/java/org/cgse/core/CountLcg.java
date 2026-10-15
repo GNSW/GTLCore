@@ -241,10 +241,15 @@ final class CountLcg implements AutoCloseable {
     private CountProof.Certificate certificate;
     private CountProof.Certificate differenceProof;
     private boolean lockBranching;
+    private CountLockBranch.Session lockScores;
+    private boolean lockVisited;
     private BigInteger[] savedValues;
     private boolean finiteHintTried;
     private long finiteHintDeferredAllowance = -1, finiteHintPreparationWork;
     private double[] finiteHint;
+    private CountLpHint.Session finiteHintSession;
+    private long finiteHintNextWork;
+    private boolean retainFiniteHint;
     private int fixedPeak;
     private boolean learnedRelaxation;
     private boolean integerRelaxation;
@@ -252,6 +257,7 @@ final class CountLcg implements AutoCloseable {
     private int originalRows, relaxationDecisions = -1, relaxationConflicts = -1;
     private long relaxationCalls, relaxationCuts, relaxationMisses, relaxationNumericalWork;
     private double[] relaxationPoint;
+    private ExactLinearProgram.Constraint relaxationPreference;
     private Set<ExactLinearProgram.Constraint> relaxationKnown;
     private final List<CountProof.Combination> derivedRows = new ArrayList<>();
     private final Set<ExactLinearProgram.Constraint> cycleRows = new HashSet<>();
@@ -342,6 +348,12 @@ final class CountLcg implements AutoCloseable {
     /** The auxiliary portfolio arm uses shorter integer clauses; other arms retain their ordering. */
     CountLcg minimizeIntegerConflicts() {
         minimizationEnabled = true;
+        return this;
+    }
+
+    /** A complementary root arm may retain its numerical direction proposal. */
+    CountLcg retainedFiniteHint() {
+        retainFiniteHint = true;
         return this;
     }
 
@@ -488,7 +500,13 @@ final class CountLcg implements AutoCloseable {
                 counts = low.clone();
                 return finish("verified_witness");
             }
-            if (learnedRelaxation && (relaxationDecisions != decisions || relaxationConflicts != conflicts) && relax())
+            if (integerRelaxation && integerLpSession.pending()) {
+                long required = integerLpSession.continuationWork();
+                if (required > Math.min(65536, budget.remainingWork() / 8)) integerLpSession.abandonPending();
+                else if (allowance - work < required) return paused = true;
+            }
+            if (learnedRelaxation && (relaxationDecisions != decisions || relaxationConflicts != conflicts ||
+                    integerRelaxation && integerLpSession.pending()) && relax())
                 return counts != null ? finish("verified_lp_rounding") : complete;
             finiteHint();
             CountLockBranch.Decision preferred = null;
@@ -504,7 +522,16 @@ final class CountLcg implements AutoCloseable {
                 fixedPeak = Math.max(fixedPeak, fixed);
                 long before = budget.threadWork();
                 try {
-                    preferred = CountLockBranch.choose(rows, low, high, activity, budget);
+                    // Keep the first, often sufficient, rounding decision cheap.
+                    // Longer dives retain row/column scores across propagation,
+                    // restarts and local scheduler handoffs.
+                    if (!lockVisited) {
+                        lockVisited = true;
+                        preferred = CountLockBranch.choose(rows, low, high, activity, budget);
+                    } else {
+                        if (lockScores == null) lockScores = new CountLockBranch.Session(low.length, budget);
+                        preferred = lockScores.choose(rows, low, high, activity);
+                    }
                 } finally {
                     workTicks += (budget.threadWork() - before) * PlanningBudget.WORK_SCALE;
                     work = PlanningBudget.units(workTicks);
@@ -696,6 +723,7 @@ final class CountLcg implements AutoCloseable {
 
     private void finiteHint() {
         if (finiteHintTried || learnedRelaxation || lockBranching || allowance <= finiteHintDeferredAllowance) return;
+        if (finiteHintSession != null && finiteHintSession.pending() && work < finiteHintNextWork) return;
         long remaining = 262144 - finiteHintPreparationWork;
         long maximumWork = Math.min(Math.max(0, allowance - work), Math.min(remaining, budget.remainingWork() / 16));
         if (maximumWork < 1024) {
@@ -703,6 +731,7 @@ final class CountLcg implements AutoCloseable {
             // Retry only after resume changes the local allowance; exhausted
             // lifetime/global budgets cannot improve on a later decision.
             finiteHintTried = remaining < 1024 || budget.remainingWork() / 16 < 1024;
+            if (finiteHintTried && finiteHintSession != null) finiteHintSession.close();
             finiteHintDeferredAllowance = allowance;
             return;
         }
@@ -723,8 +752,14 @@ final class CountLcg implements AutoCloseable {
         }
         long before = budget.threadWork(), oldTicks = workTicks;
         var attempt = new CountLpHint.Attempt();
-        try (var result = CountLpHint.solve(rows, low, high, budget,
-                Math.min(Math.max(0, allowance - work), Math.min(remaining - (before - preparationStarted), budget.remainingWork() / 16)), attempt)) {
+        long grant = Math.min(Math.max(0, allowance - work), Math.min(remaining - (before - preparationStarted), budget.remainingWork() / 16));
+        // The ordinary search keeps its inexpensive trajectory. A complementary
+        // root arm retains large cold hints across visits, without blocking its
+        // integer decisions or treating the old point as a later domain fact.
+        if (retainFiniteHint && low.length > 128 && finiteHintSession == null) finiteHintSession = new CountLpHint.Session();
+        try (var result = finiteHintSession == null ? CountLpHint.solve(rows, low, high, budget, grant, attempt) :
+                finiteHintSession.pending() ? finiteHintSession.resume(grant, attempt) :
+                        finiteHintSession.start(rows, low, high, budget, grant, attempt)) {
             if (attempt.outcome == CountLpHint.Outcome.WORK_LIMIT) {
                 finiteHintTried = false;
                 finiteHintDeferredAllowance = allowance;
@@ -742,6 +777,11 @@ final class CountLcg implements AutoCloseable {
             finiteHintPreparationWork += budget.threadWork() - preparationStarted;
             workTicks = oldTicks + spent * PlanningBudget.WORK_SCALE;
             work = PlanningBudget.units(workTicks);
+            // Charge cold hints against useful integer-search time as well as
+            // their lifetime cap. A scheduler granting many small visits must
+            // not spend every new visit advancing the optional LP.
+            if (finiteHintSession != null && finiteHintSession.pending())
+                finiteHintNextWork = work + Math.max(1024, spent);
         }
     }
 
@@ -759,10 +799,14 @@ final class CountLcg implements AutoCloseable {
             relaxationCalls++;
             if (result == null) {
                 relaxationMisses++;
-                return false;
+                // Finish the exact same cold numerical problem on the next
+                // visit before branching changes its bounds. A pause is neither
+                // numerical infeasibility nor an integer-search conclusion.
+                return integerRelaxation && integerLpSession.pending();
             }
             relaxationNumericalWork += result.numericalWork;
             relaxationPoint = result.point;
+            relaxationPreference = null;
             if (result.numericalInfeasible && result.cut == null) relaxationMisses++;
             if (result.cut != null && rows.size() < rowActivity.length && !relaxationKnown.contains(result.cut.row())) {
                 var cut = result.cut.row();
@@ -773,6 +817,7 @@ final class CountLcg implements AutoCloseable {
                 reserve(bytes);
                 int id = rows.size();
                 rows.add(cut);
+                relaxationPreference = cut;
                 if (rowPool != null) rowPool.added(id, decisions);
                 relaxationKnown.add(cut);
                 relaxationCuts++;
@@ -1423,13 +1468,31 @@ final class CountLcg implements AutoCloseable {
 
     private boolean satisfies(BigInteger[] value) {
         for (var row : rows) {
-            BigInteger sum = BigInteger.ZERO;
+            long small = 0;
+            BigInteger sum = null;
             for (var term : row.terms().entrySet()) {
                 charge();
-                integerCost(term.getValue(), value[term.getKey()]);
-                sum = sum.add(term.getValue().multiply(value[term.getKey()]));
+                BigInteger coefficient = term.getValue(), count = value[term.getKey()];
+                integerCost(coefficient, count);
+                // Keep the exact dot product in a machine word while it fits.
+                // Promote the accumulated prefix once on overflow; never
+                // truncate large counts or repeat already charged terms.
+                if (sum == null) {
+                    if (coefficient.bitLength() <= 63 && count.bitLength() <= 63) {
+                        long a = coefficient.longValue(), b = count.longValue();
+                        long product = a * b, total = small + product;
+                        if (Math.multiplyHigh(a, b) == product >> 63 && ((small ^ total) & (product ^ total)) >= 0) {
+                            small = total;
+                            continue;
+                        }
+                    }
+                    sum = BigInteger.valueOf(small);
+                }
+                sum = sum.add(coefficient.multiply(count));
             }
-            if (sum.compareTo(row.upper()) > 0) return false;
+            if (sum == null && row.upper().bitLength() <= 63) {
+                if (small > row.upper().longValue()) return false;
+            } else if ((sum == null ? BigInteger.valueOf(small) : sum).compareTo(row.upper()) > 0) return false;
         }
         // Covering relaxations may admit assignments that original-model
         // nogoods exclude. Checking rows alone would accept such a low point
@@ -1490,7 +1553,14 @@ final class CountLcg implements AutoCloseable {
     void resume(long quantum) {
         if (!paused || quantum <= 0) throw new IllegalStateException("Integer search is not paused");
         if (budget.remainingWork() == 0) budget.check();
-        allowance = work + Math.min(quantum, budget.remainingWork());
+        if (integerRelaxation && integerLpSession.pending()) {
+            // Waiting for a complete exact interpretation must accumulate the
+            // unspent part of prior local grants. Resetting it on each resume
+            // would make any requirement above the scheduler's quantum stall.
+            long room = Math.min(budget.remainingWork(), Long.MAX_VALUE - work);
+            long carried = Math.min(room, Math.max(0, allowance - work));
+            allowance = work + carried + Math.min(quantum, room - carried);
+        } else allowance = work + Math.min(quantum, budget.remainingWork());
         paused = false;
         complete = false;
         certificate = null;
@@ -1498,6 +1568,24 @@ final class CountLcg implements AutoCloseable {
 
     /** Only distinct, exactly certified LP consequences count toward continued sampling. */
     long cutProgress() { return relaxationCuts; }
+
+    /** Borrowed until the next step; a proximity owner snapshots the chosen coordinates. */
+    double[] relaxationPoint() { return relaxationPoint; }
+    ExactLinearProgram.Constraint relaxationPreference() { return relaxationPreference; }
+
+    /** A detached neighborhood may offer a witness, never a negative or a branch bound. */
+    boolean offerCandidate(BigInteger[] value) {
+        if (complete && !paused || value == null || value.length != rootLow.length) return false;
+        for (int i = 0; i < value.length; i++) {
+            charge();
+            if (value[i] == null || value[i].compareTo(rootLow[i]) < 0 ||
+                    rootHigh[i] != null && value[i].compareTo(rootHigh[i]) > 0) return false;
+        }
+        if (!satisfies(value)) return false;
+        counts = value.clone();
+        finish("verified_lp_proximity");
+        return true;
+    }
 
     /** Search feedback, never a proof or a reason to exclude a model. */
     long progress() {
@@ -1608,8 +1696,10 @@ final class CountLcg implements AutoCloseable {
 
     /** Only the owner's certified, unconditional original-model consequences may enter here. */
     boolean learn(ExactLinearProgram.Constraint row) {
-        if (complete && !paused || importedRows.size() >= 64 || row.terms().size() > 64 ||
+        if (complete && !paused || importedRows.size() >= 64 || row.terms().size() > 512 ||
                 row.upper().bitLength() > 2048 || importedRows.contains(row) || rows.contains(row))
+            return false;
+        if (row.terms().size() > 64 && importedRows.stream().filter(value -> value.terms().size() > 64).count() >= 4)
             return false;
         if (learnedRelaxation && rows.size() >= rowActivity.length) return false;
         CountConflict explanation = null;
@@ -1648,6 +1738,8 @@ final class CountLcg implements AutoCloseable {
     @Override
     public void close() {
         finiteHint = null;
+        if (finiteHintSession != null) finiteHintSession.close();
+        if (lockScores != null) lockScores.close();
         if (lpSession != null) lpSession.close();
         if (integerLpSession != null) integerLpSession.close();
         if (reliability != null) reliability.close();

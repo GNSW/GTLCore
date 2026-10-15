@@ -238,7 +238,7 @@ public final class GraphCpuController {
         if (mode == Actionable.MODULATE && accepted > 0) {
             ((ElapsedTimeTrackerAccessor) tracker).invokeDecrementItems(accepted, key.getType());
             host.changed(key);
-            host.requesting(key, runtime.waiting(key) > 0);
+            host.requesting(key, runtime.receivable(key) > 0);
             host.dirty();
             modifiedTick = TickHandler.instance().getCurrentTick();
         }
@@ -287,7 +287,7 @@ public final class GraphCpuController {
     private void publish(boolean force) {
         if (runtime == null || !force && runtime.version() == observedVersion) return;
         observedVersion = runtime.version();
-        Set<AEKey> next = Set.copyOf(runtime.expected().keySet());
+        Set<AEKey> next = runtime.receivableKeys();
         Set<AEKey> changed = new HashSet<>(indexed);
         changed.addAll(next);
         changed.addAll(runtime.drainChangedKeys());
@@ -317,7 +317,7 @@ public final class GraphCpuController {
             // here can ask GT's holder to synchronously load the same chunk,
             // deadlocking its onLoad callback. Restore only the in-memory
             // return index now; the first live tick publishes the UI and save.
-            Set<AEKey> next = Set.copyOf(runtime.expected().keySet());
+            Set<AEKey> next = runtime.receivableKeys();
             for (AEKey key : indexed) if (!next.contains(key)) host.requesting(key, false);
             for (AEKey key : next) host.requesting(key, true);
             indexed = next;
@@ -372,11 +372,11 @@ public final class GraphCpuController {
     }
 
     public long waiting(AEKey key) {
-        return runtime == null ? 0 : runtime.waiting(key);
+        return runtime == null ? 0 : runtime.receivable(key);
     }
 
     public void waitingKeys(Set<AEKey> out) {
-        if (runtime != null) out.addAll(runtime.expected().keySet());
+        if (runtime != null) out.addAll(runtime.receivableKeys());
     }
 
     public boolean suspended() {
@@ -407,7 +407,7 @@ public final class GraphCpuController {
             // UI totals only; never used for transfer/accounting.
             long amount;
             try {
-                amount = CheckedAmounts.add(CheckedAmounts.add(stored(key), waiting(key)), pending(key));
+                amount = CheckedAmounts.add(CheckedAmounts.add(stored(key), runtime.waiting(key)), pending(key));
             } catch (ArithmeticException e) {
                 amount = Long.MAX_VALUE;
             }
@@ -422,7 +422,7 @@ public final class GraphCpuController {
                 CraftingDispatchReason.DISPATCH_IN_DOUBT.mask() : CraftingDispatchReason.PLAN_STALE.mask();
         if (runtime.suspended()) return CraftingDispatchReason.JOB_SUSPENDED.mask();
         if (!host.active()) return CraftingDispatchReason.CPU_INACTIVE.mask();
-        if (runtime.reason().startsWith("REPLAN")) return CraftingDispatchReason.PLAN_STALE.mask();
+        if (runtime.reason().startsWith("REPLAN") || runtime.needsStateReplan()) return CraftingDispatchReason.PLAN_STALE.mask();
         int waiting = 0;
         if (runtime.externalWaiting(key) > 0) waiting |= CraftingDispatchReason.WAITING_FOR_EXTERNAL.mask();
         if (runtime.inFlight(key) > 0) waiting |= CraftingDispatchReason.WAITING_FOR_OUTPUTS.mask();
@@ -473,6 +473,9 @@ public final class GraphCpuController {
             clearReplan();
             return;
         }
+        // A predicted tool state is not funded inventory until its physical
+        // return has resolved. Keep accepting old flights before replanning.
+        if (runtime.pendingStateReturns()) return;
         long generation = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
         long tick = TickHandler.instance().getCurrentTick();
         if (generation != providerGeneration) {
@@ -502,6 +505,11 @@ public final class GraphCpuController {
                 return;
             }
             case IDLE -> {}
+        }
+        if (runtime.stateReplanReady()) {
+            replanOrigin = "actual_return_state_changed";
+            startReplan(service);
+            return;
         }
         if (runtime.suspended() || bindingsToCheck == null) return;
         long deadline = System.nanoTime() + 1_000_000L;

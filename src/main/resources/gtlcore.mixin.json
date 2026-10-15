@@ -245,6 +245,7 @@
     "gtm.api.capability.FluidRecipeCapabilityMixin",
     "gtm.api.capability.ItemRecipeCapabilityMixin",
     "gtm.api.item.tool.GTToolTypeMixin",
+    "gtm.api.blockentity.MetaMachineBlockEntityMixin",
     "gtm.api.machine.FluidDrillLogicMixin",
     "gtm.api.machine.IMultiblockStateInvoker",
     "gtm.api.machine.MetaMachineMixin",

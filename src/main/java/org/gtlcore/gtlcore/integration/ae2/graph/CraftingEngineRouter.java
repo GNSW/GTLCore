@@ -84,14 +84,14 @@ public final class CraftingEngineRouter {
     }
 
     private static synchronized PlanningScheduler scheduler() {
-        if (scheduler == null) scheduler = new PlanningScheduler(ConfigHolder.INSTANCE.performance.ae2GraphPlannerThreads,
-                ConfigHolder.INSTANCE.performance.ae2GraphPlannerMaxRequests, 4096, 2_000_000L);
+        if (scheduler == null) scheduler = new PlanningScheduler(ConfigHolder.INSTANCE.ae.ae2GraphPlannerThreads,
+                ConfigHolder.INSTANCE.ae.ae2GraphPlannerMaxRequests, 4096, 2_000_000L);
         return scheduler;
     }
 
     static CompletableFuture<GraphRingView> describe(GraphRingView.Builder work) {
         return scheduler().submit(work, new PlanningBudget(0, 1_000_000,
-                ConfigHolder.INSTANCE.performance.ae2GraphPlannerMemoryMiB * (1L << 20), () -> false, System::nanoTime));
+                ConfigHolder.INSTANCE.ae.ae2GraphPlannerMemoryMiB * (1L << 20), () -> false, System::nanoTime));
     }
 
     @SubscribeEvent
@@ -142,10 +142,10 @@ public final class CraftingEngineRouter {
                                               RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
         if (amount <= 0) throw new IllegalArgumentException("Non-positive crafting request");
         PlanningScheduler planner = scheduler();
-        long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.performance.ae2GraphPlannerMaxSteps,
-                planner.parallelism(), ConfigHolder.INSTANCE.performance.ae2GraphPlannerParallelWorkBudget);
-        PlanningBudget budget = new PlanningBudget(ConfigHolder.INSTANCE.performance.ae2GraphPlannerTimeoutMs,
-                workLimit, ConfigHolder.INSTANCE.performance.ae2GraphPlannerMemoryMiB * (1L << 20),
+        long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.ae.ae2GraphPlannerMaxSteps,
+                planner.parallelism(), ConfigHolder.INSTANCE.ae.ae2GraphPlannerParallelWorkBudget);
+        PlanningBudget budget = new PlanningBudget(ConfigHolder.INSTANCE.ae.ae2GraphPlannerTimeoutMs,
+                workLimit, ConfigHolder.INSTANCE.ae.ae2GraphPlannerMemoryMiB * (1L << 20),
                 () -> false, System::nanoTime);
         GraphPlanningRequest result = new GraphPlanningRequest(budget);
         if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) budget.enableMetrics();
@@ -232,7 +232,7 @@ public final class CraftingEngineRouter {
             this.checkpoint = checkpoint;
             this.preserve = preserve;
             this.request = request;
-            this.fallbackEnabled = ConfigHolder.INSTANCE.performance.ae2GraphFallback;
+            this.fallbackEnabled = ConfigHolder.INSTANCE.ae.ae2GraphFallback;
             this.reuseCandidate = reuseCandidate;
         }
 

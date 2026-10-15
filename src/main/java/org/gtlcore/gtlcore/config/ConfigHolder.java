@@ -187,7 +187,40 @@ public class ConfigHolder {
         @Configurable
         @Configurable.Range(min = 0, max = 4096)
         @Configurable.Comment("config.gtlcore.option.ae2GraphMaxExtraCatalystCopies.comment")
-        public int ae2GraphMaxExtraCatalystCopies = 64;
+        public int ae2GraphMaxExtraCatalystCopies = 1024;
+
+        @Configurable
+        @Configurable.Range(min = 0, max = 86400000)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerTimeoutMs.comment")
+        public int ae2GraphPlannerTimeoutMs = 0;
+
+        @Configurable
+        @Configurable.Range(min = 1, max = 16)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerThreads.comment")
+        public int ae2GraphPlannerThreads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 2));
+
+        @Configurable
+        @Configurable.Range(min = 1, max = 128)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxRequests.comment")
+        public int ae2GraphPlannerMaxRequests = 96;
+
+        @Configurable
+        @Configurable.Range(min = 10000, max = Integer.MAX_VALUE)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxSteps.comment")
+        public int ae2GraphPlannerMaxSteps = 67108864;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerParallelWorkBudget.comment")
+        public boolean ae2GraphPlannerParallelWorkBudget = false;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2GraphFallback.comment")
+        public boolean ae2GraphFallback = true;
+
+        @Configurable
+        @Configurable.Range(min = 16, max = 1024)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMemoryMiB.comment")
+        public int ae2GraphPlannerMemoryMiB = 128;
 
         @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2PatternProviderAutoExpandDefault.comment")
@@ -205,39 +238,6 @@ public class ConfigHolder {
         @Configurable.Comment("config.gtlcore.option.ae2StorageServiceUpdateInterval.comment")
         @Configurable.Range(min = 1, max = 16)
         public int ae2StorageServiceUpdateInterval = 8;
-
-        @Configurable
-        @Configurable.Range(min = 0, max = 86400000)
-        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerTimeoutMs.comment")
-        public int ae2GraphPlannerTimeoutMs = 0;
-
-        @Configurable
-        @Configurable.Range(min = 1, max = 16)
-        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerThreads.comment")
-        public int ae2GraphPlannerThreads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 2));
-
-        @Configurable
-        @Configurable.Range(min = 1, max = 128)
-        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxRequests.comment")
-        public int ae2GraphPlannerMaxRequests = 16;
-
-        @Configurable
-        @Configurable.Range(min = 10000, max = Integer.MAX_VALUE)
-        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMaxSteps.comment")
-        public int ae2GraphPlannerMaxSteps = 40000000;
-
-        @Configurable
-        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerParallelWorkBudget.comment")
-        public boolean ae2GraphPlannerParallelWorkBudget = false;
-
-        @Configurable
-        @Configurable.Comment("config.gtlcore.option.ae2GraphFallback.comment")
-        public boolean ae2GraphFallback = true;
-
-        @Configurable
-        @Configurable.Range(min = 16, max = 1024)
-        @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMemoryMiB.comment")
-        public int ae2GraphPlannerMemoryMiB = 128;
 
         @Configurable
         @Configurable.Comment("config.gtlcore.option.enableMachineStartupTickBudget.comment")

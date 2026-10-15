@@ -6,17 +6,36 @@ import org.cgse.core.PlanningBudget;
 
 import java.util.*;
 
-/** Only declared secondary outputs are discoverable; execution still owns the complete recipe. */
+/** Declared output identities support candidate discovery, never synthetic stock. */
 final class ByproductPatternIndex {
 
     private final Map<AEKey, List<IPatternDetails>> outputs;
+    private final Map<Object, List<IPatternDetails>> fuzzyPrimary, fuzzyAll;
+    private final Map<AEKey, Boolean> candidates;
 
-    private ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> outputs) {
+    private ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> outputs,
+                                  Map<Object, List<IPatternDetails>> fuzzyPrimary,
+                                  Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates) {
         this.outputs = Collections.unmodifiableMap(outputs);
+        this.fuzzyPrimary = Collections.unmodifiableMap(fuzzyPrimary);
+        this.fuzzyAll = Collections.unmodifiableMap(fuzzyAll);
+        this.candidates = Collections.unmodifiableMap(candidates);
+    }
+
+    Iterator<AEKey> candidates(boolean includeSecondary) {
+        return candidates.entrySet().stream().filter(entry -> includeSecondary || entry.getValue())
+                .map(Map.Entry::getKey).iterator();
+    }
+
+    List<IPatternDetails> fuzzySources(AEKey key, Collection<IPatternDetails> primary, boolean includeSecondary) {
+        return merge(primary, (includeSecondary ? fuzzyAll : fuzzyPrimary).getOrDefault(key.getPrimaryKey(), List.of()));
     }
 
     List<IPatternDetails> sources(AEKey key, Collection<IPatternDetails> primary) {
-        var secondary = outputs.getOrDefault(key, List.of());
+        return merge(primary, outputs.getOrDefault(key, List.of()));
+    }
+
+    private static List<IPatternDetails> merge(Collection<IPatternDetails> primary, List<IPatternDetails> secondary) {
         if (secondary.isEmpty()) return List.copyOf(primary);
         // Some integrations already register secondary outputs. Count each
         // effective pattern once, retaining AE's order for primary sources.
@@ -31,8 +50,12 @@ final class ByproductPatternIndex {
 
         private final Iterator<IPatternDetails> patterns;
         private final Map<AEKey, List<IPatternDetails>> outputs = new LinkedHashMap<>();
+        private final Map<Object, List<IPatternDetails>> fuzzyPrimary = new LinkedHashMap<>(), fuzzyAll = new LinkedHashMap<>();
+        private final Map<AEKey, Boolean> candidates = new LinkedHashMap<>();
         private final Set<IPatternDetails> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         private Iterator<Map.Entry<AEKey, List<IPatternDetails>>> freezing;
+        private Iterator<Map.Entry<Object, List<IPatternDetails>>> freezingFamilies;
+        private int freezePhase;
         private ByproductPatternIndex result;
 
         Build(Iterable<IPatternDetails> patterns) {
@@ -51,11 +74,17 @@ final class ByproductPatternIndex {
                 if (values.length > 256) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "byproduct_index_outputs");
                 Set<AEKey> keys = new HashSet<>();
                 var primary = pattern.getPrimaryOutput().what();
+                Set<Object> primaryKeys = new HashSet<>();
                 for (var output : values) {
                     budget.compilationCheck();
-                    if (output.amount() <= 0 || output.what().equals(primary) || !keys.add(output.what())) continue;
+                    if (output.amount() <= 0 || !keys.add(output.what())) continue;
                     budget.reserve(96);
-                    outputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
+                    boolean isPrimary = output.what().equals(primary);
+                    candidates.merge(output.what(), isPrimary, (left, right) -> left || right);
+                    Object family = output.what().getPrimaryKey();
+                    if (primaryKeys.add(family)) fuzzyAll.computeIfAbsent(family, ignored -> new ArrayList<>()).add(pattern);
+                    if (isPrimary) fuzzyPrimary.computeIfAbsent(family, ignored -> new ArrayList<>()).add(pattern);
+                    else outputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
                 }
                 return false;
             }
@@ -65,7 +94,17 @@ final class ByproductPatternIndex {
                 entry.setValue(List.copyOf(entry.getValue()));
                 return false;
             }
-            result = new ByproductPatternIndex(outputs);
+            if (freezingFamilies == null) freezingFamilies = fuzzyPrimary.entrySet().iterator();
+            if (freezingFamilies.hasNext()) {
+                var entry = freezingFamilies.next();
+                entry.setValue(List.copyOf(entry.getValue()));
+                return false;
+            }
+            if (freezePhase++ == 0) {
+                freezingFamilies = fuzzyAll.entrySet().iterator();
+                return false;
+            }
+            result = new ByproductPatternIndex(outputs, fuzzyPrimary, fuzzyAll, candidates);
             budget.note("byproduct_index", "patterns=" + seen.size() + "; secondary_keys=" + outputs.size());
             return true;
         }

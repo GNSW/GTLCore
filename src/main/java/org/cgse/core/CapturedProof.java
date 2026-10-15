@@ -81,7 +81,7 @@ public final class CapturedProof {
                             candidate.stack().amount()), candidate.remaining() == null ? null : key.apply(candidate.remaining()),
                             candidate.configuration(), candidate.reusable()));
                 }
-                inputs.add(new CapturedRecipe.Input<>(input.multiplier(), candidates));
+                inputs.add(new CapturedRecipe.Input<>(input.multiplier(), candidates, input.mode()));
             }
             var outputs = new ArrayList<CapturedRecipe.Amount<Integer>>();
             for (var output : entry.recipe().outputs()) {
@@ -264,16 +264,41 @@ public final class CapturedProof {
         }
 
         BigInteger choices(Pattern pattern, CapturedRecipe.Input<Integer> input) {
-            return !pattern.external() && input.multiplier() <= 9 ?
-                    compositions(input.candidates().size(), (int) input.multiplier()) : BigInteger.valueOf(input.candidates().size());
+            return mixed(pattern, input) ?
+                    compositions(input.candidates().size(), input.multiplier()) : BigInteger.valueOf(input.candidates().size());
         }
 
-        BigInteger compositions(int choices, int copies) {
+        boolean mixed(Pattern pattern, CapturedRecipe.Input<Integer> input) {
+            return switch (input.mode()) {
+                case LEGACY -> !pattern.external() && input.multiplier() <= 9;
+                case INDIVISIBLE -> false;
+                case MIXED -> true;
+            };
+        }
+
+        BigInteger compositions(int choices, long copies) {
             if (copies == 0) return BigInteger.ONE;
             if (choices == 0) return BigInteger.ZERO;
             BigInteger count = BigInteger.ONE;
-            for (int i = 1; i <= copies; i++) { guard.work(); count = count.multiply(BigInteger.valueOf((long) choices + i - 1)).divide(BigInteger.valueOf(i)); }
+            long terms = Math.min(choices - 1L, copies);
+            BigInteger top = BigInteger.valueOf(copies).add(BigInteger.valueOf(choices - 1L));
+            for (int i = 1; i <= terms; i++) {
+                guard.work();
+                // Replay uses a cumulative allocation cap. Admit both numerator
+                // and quotient before long-domain arithmetic allocates either.
+                long bits = count.bitLength() + (long) top.bitLength() + 1;
+                guard.keep(256L + 2L * ((bits + 32) / 8));
+                count = count.multiply(top.subtract(BigInteger.valueOf(i - 1L))).divide(BigInteger.valueOf(i));
+            }
             guard.integer(count); return count;
+        }
+
+        /** Number of full vectors whose current coordinate is at least minimum. */
+        BigInteger vectorPrefix(int tail, long left, long minimum, boolean selected) {
+            guard.work();
+            BigInteger count = compositions(tail + 1, left - minimum);
+            if (!selected) count = count.subtract(BigInteger.valueOf(minimum == 0 ? tail + 1L : 1));
+            return count;
         }
 
         GraphRecipe<Integer> restore(String id) {
@@ -301,27 +326,24 @@ public final class CapturedProof {
                 BigInteger rank = ranks[slot];
                 if (rank.compareTo(BigInteger.valueOf(n)) < 0) add(inputs, outputs, slot, input.candidates().get(rank.intValueExact()), input.multiplier());
                 else {
-                    require(!pattern.external() && input.multiplier() <= 9);
+                    require(mixed(pattern, input));
                     // Independently unrank full weak-composition vectors, removing
                     // the singletons that occupy the first n canonical positions.
                     rank = rank.subtract(BigInteger.valueOf(n));
-                    int left = (int) input.multiplier(); boolean selected = false;
+                    long left = input.multiplier(); boolean selected = false;
                     for (int at = 0; at < n; at++) {
-                        boolean found = false;
-                        for (int count = left; count >= 0; count--) {
+                        int tail = n - at - 1;
+                        long low = 0, high = left;
+                        require(vectorPrefix(tail, left, 0, selected).compareTo(rank) > 0);
+                        while (low < high) {
                             guard.work();
-                            BigInteger block = compositions(n - at - 1, left - count);
-                            if (!selected) {
-                                if (count == left) block = BigInteger.ZERO;
-                                else if (count == 0) block = block.subtract(BigInteger.valueOf(n - at - 1));
-                            }
-                            if (rank.compareTo(block) >= 0) rank = rank.subtract(block);
-                            else {
-                                if (count > 0) { add(inputs, outputs, slot, input.candidates().get(at), count); selected = true; }
-                                left -= count; found = true; break;
-                            }
+                            long middle = low + (high - low) / 2 + (high - low) % 2;
+                            if (vectorPrefix(tail, left, middle, selected).compareTo(rank) > 0) low = middle;
+                            else high = middle - 1;
                         }
-                        require(found);
+                        if (low < left) rank = rank.subtract(vectorPrefix(tail, left, low + 1, selected));
+                        if (low > 0) { add(inputs, outputs, slot, input.candidates().get(at), low); selected = true; }
+                        left -= low;
                     }
                     require(left == 0 && rank.signum() == 0);
                 }

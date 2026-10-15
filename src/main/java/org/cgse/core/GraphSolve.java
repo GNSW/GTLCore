@@ -80,7 +80,7 @@ final class GraphSolve<K> implements AutoCloseable {
     }
 
     GraphSolve<K> program(GraphDemandProgram<K> program) {
-        if (program != null && program.graph != graph) throw new IllegalArgumentException("Foreign demand program");
+        if (program != null && program.topology != graph.regions()) throw new IllegalArgumentException("Foreign demand program");
         if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
         demandProgram = program;
         return this;

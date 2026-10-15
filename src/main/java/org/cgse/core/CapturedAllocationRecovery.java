@@ -81,7 +81,7 @@ final class CapturedAllocationRecovery<K> implements AutoCloseable {
         return done = decomposed.equals(firings);
     }
 
-    private boolean mixed(int slot) { return !recipe.external() && recipe.inputs().get(slot).multiplier() <= 9; }
+    private boolean mixed(int slot) { return recipe.mixed(recipe.inputs().get(slot)); }
 
     private void nextGroup(int slot) {
         var amounts = counts.get(slot);

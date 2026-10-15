@@ -24,7 +24,7 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
     private final PlanningBudget budget;
     private final BigInteger[] choices;
     private BigInteger size = ONE, next = BigInteger.ZERO;
-    private long memory;
+    private long memory, compositionScratch;
     private boolean closed;
 
     CapturedRecipeDomain(CapturedRecipe<K> recipe, PlanningBudget budget) {
@@ -40,12 +40,24 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
                 var input = recipe.inputs().get(slot);
                 if (input.multiplier() <= 0) throw new IllegalArgumentException("Non-positive input multiplier");
                 int n = input.candidates().size();
-                choices[slot] = mixed(input) ? compositions(n, (int) input.multiplier()) : BigInteger.valueOf(n);
+                long bits = mixed(input) ? compositionBits(n, input.multiplier()) : 32;
+                // Both the per-slot cardinality and the Cartesian product remain
+                // live. Long MIXED cardinalities no longer fit in slot metadata.
+                reserve(integerBytes(bits));
+                long scratch = mixed(input) ? 256L + 6L * integerBytes(bits + 64) : 0;
+                compositionScratch = Math.max(compositionScratch, scratch);
+                reserve(scratch);
+                try {
+                    choices[slot] = mixed(input) ? compositions(n, input.multiplier()) : BigInteger.valueOf(n);
+                } finally { release(scratch); }
                 // Retain one growing product, not the sum of all obsolete
                 // intermediate products (quadratic space for a wide recipe).
                 long nextBytes = 64L + (size.bitLength() + (long) choices[slot].bitLength() + 7L) / 8;
                 reserve(nextBytes);
-                size = size.multiply(choices[slot]);
+                long productScratch = 256L + 8L * integerBytes(size.bitLength() + (long) choices[slot].bitLength() + 64);
+                reserve(productScratch);
+                try { size = size.multiply(choices[slot]); }
+                finally { release(productScratch); }
                 budget.release(productBytes);
                 memory -= productBytes;
                 productBytes = nextBytes;
@@ -76,6 +88,16 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
     BigInteger ordinal(List<Map<Integer, Long>> allocation) {
         if (closed) throw new IllegalStateException("Closed candidate domain");
         if (allocation.size() != choices.length) throw new IllegalArgumentException("Slot count differs");
+        long terms = 0;
+        for (var slot : allocation) { budget.compilationCheck(); terms += slot.size(); }
+        long scratch = compositionScratch + 6L * integerBytes(size.bitLength() + 64L) + 128L * terms;
+        reserve(scratch);
+        try {
+            return ordinalReserved(allocation);
+        } finally { release(scratch); }
+    }
+
+    private BigInteger ordinalReserved(List<Map<Integer, Long>> allocation) {
         BigInteger ordinal = BigInteger.ZERO;
         for (int slot = 0; slot < choices.length; slot++) {
             budget.compilationCheck();
@@ -93,19 +115,17 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
             BigInteger rank;
             if (selected.size() == 1) rank = BigInteger.valueOf(selected.firstKey());
             else {
-                int n = input.candidates().size(), start = 0, left = (int) input.multiplier();
+                int n = input.candidates().size(), start = 0;
+                long left = input.multiplier();
                 boolean first = true;
                 rank = BigInteger.valueOf(n);
                 for (var e : selected.entrySet()) {
-                    for (int at = start; at <= e.getKey(); at++) {
-                        int stop = at == e.getKey() ? Math.toIntExact(e.getValue()) : 0;
-                        for (int count = first ? left - 1 : left; count > stop; count--) {
-                            budget.compilationCheck();
-                            rank = rank.add(compositions(n - at - 1, left - count));
-                        }
-                    }
+                    long minimumTail = first ? 1 : 0;
+                    for (int at = start; at < e.getKey(); at++)
+                        rank = rank.add(tails(n - at - 1, minimumTail, left - 1));
+                    rank = rank.add(tails(n - e.getKey() - 1, minimumTail, left - e.getValue() - 1));
                     start = e.getKey() + 1;
-                    left -= Math.toIntExact(e.getValue());
+                    left -= e.getValue();
                     first = false;
                 }
             }
@@ -119,8 +139,16 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
         if (closed) throw new IllegalStateException("Closed candidate domain");
         if (ordinal.signum() < 0 || ordinal.compareTo(size) >= 0) throw new IndexOutOfBoundsException(ordinal.toString());
         budget.compilationCheck();
+        long scratch = compositionScratch + 6L * integerBytes(size.bitLength() + 64L) + 64L * choices.length;
+        reserve(scratch);
+        try {
+            return resolveReserved(ordinal);
+        } finally { release(scratch); }
+    }
+
+    private CapturedRecipe.Resolved<K> resolveReserved(BigInteger ordinal) {
         long maxSlots = 0;
-        for (var input : recipe.inputs()) maxSlots += mixed(input) ? input.multiplier() : 1;
+        for (var input : recipe.inputs()) maxSlots += mixed(input) ? Math.min(input.multiplier(), input.candidates().size()) : 1;
         // Includes resolved slots/returns, GraphRecipe's aggregate maps, and index references.
         long bytes = 512L + 256L * (maxSlots + recipe.outputs().size()) + 16L * choices.length;
         reserve(bytes);
@@ -147,24 +175,30 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
                 } else {
                     // Singles precede the old descending-copy DFS of mixed weak compositions.
                     rank = rank.subtract(BigInteger.valueOf(candidates.size()));
-                    int start = 0, left = (int) input.multiplier();
+                    int start = 0;
+                    long left = input.multiplier();
                     boolean first = true;
                     while (left > 0) {
                         boolean found = false;
                         for (int at = start; at < candidates.size() && !found; at++) {
-                            for (int copies = first ? left - 1 : left; copies > 0; copies--) {
+                            budget.compilationCheck();
+                            int remaining = candidates.size() - at - 1;
+                            long minimumTail = first ? 1 : 0;
+                            BigInteger block = tails(remaining, minimumTail, left - 1);
+                            if (rank.compareTo(block) >= 0) { rank = rank.subtract(block); continue; }
+                            long low = minimumTail, high = left - 1;
+                            while (low < high) {
                                 budget.compilationCheck();
-                                BigInteger block = compositions(candidates.size() - at - 1, left - copies);
-                                if (rank.compareTo(block) >= 0) rank = rank.subtract(block);
-                                else {
-                                    add(slots, outputs, slot, candidates.get(at), copies);
-                                    left -= copies;
-                                    start = at + 1;
-                                    first = false;
-                                    found = true;
-                                    break;
-                                }
+                                long middle = low + (high - low) / 2;
+                                if (rank.compareTo(tails(remaining, minimumTail, middle)) < 0) high = middle;
+                                else low = middle + 1;
                             }
+                            rank = rank.subtract(tails(remaining, minimumTail, low - 1));
+                            add(slots, outputs, slot, candidates.get(at), left - low);
+                            left = low;
+                            start = at + 1;
+                            first = false;
+                            found = true;
                         }
                         if (!found) throw new IllegalStateException("Invalid mixed candidate rank");
                     }
@@ -188,23 +222,49 @@ public final class CapturedRecipeDomain<K> implements AutoCloseable {
     }
 
     private boolean mixed(CapturedRecipe.Input<K> input) {
-        return !recipe.external() && input.multiplier() <= 9 && input.candidates().size() > 1;
+        return recipe.mixed(input) && input.candidates().size() > 1;
     }
 
-    private BigInteger compositions(int candidates, int copies) {
+    /** Sum weak-composition blocks over a tail-copy interval, never over each copy. */
+    private BigInteger tails(int candidates, long from, long through) {
+        budget.compilationCheck();
+        if (through < from) return BigInteger.ZERO;
+        if (candidates == 0) return from == 0 ? ONE : BigInteger.ZERO;
+        BigInteger total = compositions(candidates + 1, through);
+        return from == 0 ? total : total.subtract(compositions(candidates + 1, from - 1));
+    }
+
+    private BigInteger compositions(int candidates, long copies) {
         if (copies == 0) return ONE;
         if (candidates == 0) return BigInteger.ZERO;
         BigInteger count = ONE;
-        for (int k = 1; k <= copies; k++) {
+        long terms = Math.min(copies, candidates - 1L);
+        BigInteger base = BigInteger.valueOf(copies).add(BigInteger.valueOf(candidates - 1L - terms));
+        for (int k = 1; k <= terms; k++) {
             budget.compilationCheck();
-            count = count.multiply(BigInteger.valueOf((long) candidates - 1 + k)).divide(BigInteger.valueOf(k));
+            count = count.multiply(base.add(BigInteger.valueOf(k))).divide(BigInteger.valueOf(k));
         }
         return count;
     }
 
+    /** Binomial numerator bound, computed without allocating a large integer first. */
+    private static long compositionBits(int candidates, long copies) {
+        long terms = Math.min(copies, Math.max(0, candidates - 1L));
+        int topBits = Math.max(64 - Long.numberOfLeadingZeros(copies),
+                32 - Integer.numberOfLeadingZeros(Math.max(0, candidates - 1))) + 1;
+        return Math.max(1, terms * topBits);
+    }
+
+    private static long integerBytes(long bits) { return 64L + (bits + 7L) / 8; }
+
     private void reserve(long bytes) {
         budget.reserve(bytes);
         memory += bytes;
+    }
+
+    private void release(long bytes) {
+        budget.release(bytes);
+        memory -= bytes;
     }
 
     @Override

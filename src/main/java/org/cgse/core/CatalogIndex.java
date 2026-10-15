@@ -10,6 +10,7 @@ public final class CatalogIndex<K> {
 
     private final List<GraphRecipe<K>> catalog;
     private final Map<K, List<GraphRecipe<K>>> producers = new LinkedHashMap<>();
+    private final Set<String> ids = new HashSet<>();
     private int cursor;
     private Iterator<Map.Entry<K, List<GraphRecipe<K>>>> freezing;
     private GraphCompiler<K> result;
@@ -21,7 +22,9 @@ public final class CatalogIndex<K> {
     public boolean step(PlanningBudget budget) {
         budget.compilationCheck();
         if (cursor < catalog.size()) {
-            GraphRecipe<K> recipe = catalog.get(cursor++);
+            GraphRecipe<K> recipe = catalog.get(cursor);
+            if (!ids.add(recipe.id())) throw new IllegalArgumentException("Duplicate recipe ID: " + recipe.id());
+            cursor++;
             for (K output : recipe.executionOutputs().keySet()) producers.computeIfAbsent(output, ignored -> new ArrayList<>()).add(recipe);
         } else {
             if (freezing == null) freezing = producers.entrySet().iterator();
@@ -30,6 +33,7 @@ public final class CatalogIndex<K> {
                 entry.setValue(List.copyOf(entry.getValue()));
             } else {
                 result = new GraphCompiler<>(catalog, Collections.unmodifiableMap(producers));
+                ids.clear();
                 return true;
             }
         }

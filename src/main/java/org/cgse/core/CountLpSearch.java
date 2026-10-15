@@ -14,7 +14,7 @@ final class CountLpSearch implements AutoCloseable {
     private final CountLcg search;
     private final CountReduction.Coordinates coordinates;
     private final int[] representatives;
-    private long memory, work, until;
+    private long memory, work, until, sliceStarted;
     private boolean complete;
     private final long progressLimit;
     private long lastCuts;
@@ -22,6 +22,13 @@ final class CountLpSearch implements AutoCloseable {
     private boolean progressFinished;
     private CountModelViews.View sharingView;
     private int publishedCuts;
+    private CountLpProximity proximity;
+    private boolean proximityTried;
+    private boolean pricedProximityTried;
+    private long pricedAfter = Long.MAX_VALUE;
+    private long proximityWork;
+    private CountLpCoreSearch core;
+    private long coreAfter = Long.MAX_VALUE;
 
     private CountLpSearch(PlanningBudget budget, CountCanonicalModel canonical, CountLcg search,
                           CountReduction.Coordinates coordinates, int[] representatives, long memory) {
@@ -117,19 +124,80 @@ final class CountLpSearch implements AutoCloseable {
     boolean step() {
         if (complete || work >= until) return true;
         long before = budget.threadWork();
+        boolean proximityVisit = false;
         try {
+            if (proximity != null && (!pricedProximityTried || work >= pricedAfter)) {
+                proximityVisit = true;
+                if (!proximity.step()) return false;
+                var candidate = proximity.counts();
+                proximity.close();
+                proximity = null;
+                if (search.offerCandidate(candidate)) return complete = true;
+                // Only the owner of the original request-wide scout may extend
+                // it. Preserve the shallow opportunity before trying the LP
+                // aggregate's cheaper, deeper changes; never regrant on resume.
+                if (!pricedProximityTried) {
+                    pricedProximityTried = true;
+                    // Retain this LP point, but leave the rest of the initial
+                    // LP sample available for a cheap proof/witness. Spending
+                    // the deeper neighborhood here could park that proof and
+                    // dispatch millions of work to unrelated scouts first.
+                    pricedAfter = until;
+                    proximity = CountLpProximity.createPriced(canonical.rows(), canonical.lower(), canonical.upper(),
+                            search.relaxationPoint(), search.relaxationPreference(), budget);
+                }
+                return false;
+            }
+            if (core != null && work >= coreAfter) {
+                proximityVisit = true;
+                if (!core.step()) return false;
+                var candidate = core.counts();
+                core.close();
+                core = null;
+                if (search.offerCandidate(candidate)) return complete = true;
+                return false;
+            }
+            if (!proximityTried && search.relaxationPoint() != null) {
+                proximityVisit = true;
+                proximityTried = true;
+                proximity = CountLpProximity.create(canonical.rows(), canonical.lower(), canonical.upper(),
+                        search.relaxationPoint(), search.relaxationPreference(), budget);
+                if (proximity != null && !budget.claimLpProximity()) {
+                    proximity.close();
+                    proximity = null;
+                }
+                core = CountLpCoreSearch.create(canonical.rows(), canonical.lower(), canonical.upper(),
+                        search.relaxationPoint(), search.relaxationPreference(), budget);
+                if (core != null && !budget.claimLpCore()) { core.close(); core = null; }
+                // Keep the initial LP proof/witness sample ahead of the larger
+                // candidate core, just as for the price-ordered neighborhood.
+                coreAfter = until;
+                return false;
+            }
             if (search.paused()) search.resume(Math.min(262144, until - work));
             if (!search.step()) return false;
             complete = !search.paused();
             return complete || work + budget.threadWork() - before >= until;
         } finally {
-            work += budget.threadWork() - before;
+            long spent = budget.threadWork() - before;
+            work += spent;
+            if (proximityVisit) proximityWork += spent;
         }
     }
 
     /** Extend a completed sample only while it is producing certified new cuts. */
     boolean continueOnCuts() {
-        if (progressFinished || !retained() || work >= progressLimit) return false;
+        // The candidate scout has its own small request-wide cap. Its work is
+        // charged globally and in every visit, but must not also consume the
+        // productive LP frontier's separate preferential-search allowance.
+        long searchWork = work - proximityWork;
+        if (progressFinished || !retained() || searchWork >= progressLimit) return false;
+        // Finish at most one bounded root neighborhood. This is retained work,
+        // not a fresh grant on each resume or a claimed cut/proof improvement.
+        if (proximity != null && !proximity.complete() || core != null && !core.complete()) {
+            resume(Math.min(262144, progressLimit - searchWork));
+            return true;
+        }
         long cuts = search.cutProgress();
         if (cuts > lastCuts) idleProgressTurns = 0;
         else idleProgressTurns++;
@@ -140,12 +208,17 @@ final class CountLpSearch implements AutoCloseable {
             progressFinished = true;
             return false;
         }
-        resume(Math.min(262144, progressLimit - work));
+        resume(Math.min(262144, progressLimit - searchWork));
         return true;
     }
 
     boolean retained() {
         return !complete;
+    }
+
+    String activeStrategy() {
+        if (core != null && work >= coreAfter && proximity == null) return "count_lp_core";
+        return proximity == null || pricedProximityTried && work < pricedAfter ? "count_lp_lcg" : "count_lp_proximity";
     }
 
     void shareRows() {
@@ -163,7 +236,13 @@ final class CountLpSearch implements AutoCloseable {
 
     void resume(long allowance) {
         if (!retained() || allowance <= 0) throw new IllegalStateException("No retained LP search");
+        sliceStarted = work;
         until = work + Math.min(allowance, budget.remainingWork());
+    }
+
+    /** Owned effort since the last handoff, excluding work in other frontiers. */
+    long sliceWork() {
+        return work - sliceStarted;
     }
 
     boolean infeasible() {
@@ -184,6 +263,10 @@ final class CountLpSearch implements AutoCloseable {
 
     @Override
     public void close() {
+        if (core != null) core.close();
+        core = null;
+        if (proximity != null) proximity.close();
+        proximity = null;
         search.close();
         canonical.close();
         budget.release(memory);

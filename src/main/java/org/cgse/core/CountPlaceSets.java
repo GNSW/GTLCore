@@ -6,12 +6,19 @@ package org.cgse.core;
 import java.math.BigInteger;
 import java.util.*;
 
-/** SAT separation of siphons and traps over every original transition. */
+/** Bounded resource-pool separation over every original transition. */
 final class CountPlaceSets {
 
     private CountPlaceSets() {}
 
     static <K> List<List<K>> separate(RecipeCountModel<K> model, PlanningBudget budget) {
+        // Small models already receive complement pools in CountExecution.
+        // In larger models, a joint return above the available seed suggests
+        // pooled startup pressure. Spend the extra separation grant there;
+        // this admission heuristic never establishes an infeasibility claim.
+        var conserved = model.keys.size() > 16 && jointReturn(model, budget)
+                ? CountConservationPools.separate(model, budget) : List.<List<K>>of();
+        if (!conserved.isEmpty()) return conserved;
         List<K> keys = model.keys.stream().filter(key -> !model.external.contains(key)).toList();
         if (keys.size() < 3 || keys.size() > 96 || model.recipes.size() > 128 || budget.remainingWork() < 32768) return List.of();
         long start = budget.threadWork(), allowance = Math.min(16384, budget.remainingWork() / 32);
@@ -71,6 +78,19 @@ final class CountPlaceSets {
         } finally {
             budget.release(bytes);
         }
+    }
+
+    private static <K> boolean jointReturn(RecipeCountModel<K> model, PlanningBudget budget) {
+        // Match the optional separator's size limits before scanning a model
+        // that it cannot admit. All inspections still charge the shared budget.
+        if (model.keys.size() > 96 || model.recipes.size() > 128) return false;
+        for (var recipe : model.recipes) if (recipe.inputs().size() > 1)
+            for (var output : recipe.outputs().entrySet()) {
+                budget.check();
+                long held = model.stock.getOrDefault(output.getKey(), 0L);
+                if (held > 0 && output.getValue() > held && !model.external.contains(output.getKey())) return true;
+            }
+        return false;
     }
 
     static <K> boolean valid(List<GraphRecipe<K>> recipes, Set<K> pool, boolean trap, PlanningBudget budget) {

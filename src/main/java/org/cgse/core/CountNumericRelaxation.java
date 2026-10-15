@@ -27,6 +27,14 @@ final class CountNumericRelaxation {
         private BigInteger[] objective;
         private Saved previous;
         private long memory, reused, rebuilt, invalidated, fallbacks, restored;
+        private final boolean retainCold;
+        private boolean coldPending, warmPending;
+        private long resumed, warmResumed;
+
+        Session() { this(false); }
+
+        /** Explicit opt-in: retain primal and dual progress at safe continuation boundaries. */
+        Session(boolean retainCold) { this.retainCold = retainCold; }
 
         Result solve(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] costs,
                      PlanningBudget budget, long maximumWork) {
@@ -41,9 +49,43 @@ final class CountNumericRelaxation {
                     clear();
                     return null;
                 }
-                boolean matching = solver != null && matches(solver, matrix, objective, variables, rows, costs, started, Math.max(1, maximumWork / 8));
+                boolean matching = solver != null && matches(solver, matrix, objective, variables, rows, costs, started,
+                        Math.max(1, maximumWork / 8), pending());
+                if (pending()) {
+                    // A partial primal OR dual tableau belongs to one exact
+                    // RHS. It is not a completed basis for a different branch.
+                    if (matching) {
+                        boolean wasWarm = warmPending;
+                        solver.resetWork(Math.max(1, maximumWork - (budget.threadWork() - started)));
+                        Result result = null;
+                        try {
+                            if (warmPending) {
+                                warmResumed++;
+                                result = solver.warmRetained(rows);
+                                if (result != null) reused++;
+                            } else {
+                                resumed++;
+                                result = solver.solveRetained();
+                            }
+                            coldPending = warmPending = false;
+                        } catch (Pause ignored) {
+                            // Every mutation and basis swap of this pivot committed.
+                        } catch (Stop ignored) {
+                            coldPending = warmPending = false;
+                        } finally { solver.flush(); }
+                        if (pending() || result != null || !wasWarm) {
+                            if (!pending() && (result == null || result.phaseOneInfeasible())) clearActive();
+                            return result == null ? null : accounted(result, started);
+                        }
+                        // Numerical trouble or an unproductive dual run may
+                        // still try a cold solve with this visit's remainder.
+                        fallbacks++;
+                    } else invalidated++;
+                    clearActive();
+                    matching = false;
+                }
                 if (!matching && previous != null && matches(previous.solver(), previous.matrix(), previous.objective(),
-                        variables, rows, costs, started, Math.max(1, maximumWork / 8))) {
+                        variables, rows, costs, started, Math.max(1, maximumWork / 8), false)) {
                     var saved = previous;
                     previous = solver == null ? null : new Saved(solver, matrix, objective, memory);
                     solver = saved.solver();
@@ -58,12 +100,22 @@ final class CountNumericRelaxation {
                         solver.resetWork(Math.max(1, (maximumWork - (budget.threadWork() - started)) / 2));
                         Result result = null;
                         try {
-                            result = solver.warm(rows);
+                            solver.beginWarm();
+                            if (retainCold) {
+                                matrix = List.copyOf(rows);
+                                warmPending = true;
+                                result = solver.warmRetained(rows);
+                                warmPending = false;
+                            } else result = solver.warm(rows);
+                        } catch (Pause ignored) {
+                            // Keep the RHS transformation and complete dual
+                            // pivots under the same request's existing budget.
                         } catch (Stop ignored) {
-                            // A partially updated tableau must never be retained.
+                            warmPending = false;
                         } finally {
                             solver.flush();
                         }
+                        if (warmPending) return null;
                         if (result != null) {
                             reused++;
                             return accounted(result, started);
@@ -100,8 +152,17 @@ final class CountNumericRelaxation {
                 Result result;
                 try {
                     solver.initialize(rows, costs);
-                    result = solver.solve();
+                    if (retainCold) {
+                        matrix = List.copyOf(rows);
+                        objective = costs.clone();
+                        coldPending = true;
+                    }
+                    result = retainCold ? solver.solveRetained() : solver.solve();
+                    coldPending = false;
+                } catch (Pause ignored) {
+                    result = null;
                 } catch (Stop ignored) {
+                    coldPending = false;
                     result = null;
                 } finally {
                     solver.flush();
@@ -110,7 +171,7 @@ final class CountNumericRelaxation {
                 if (result != null && !result.phaseOneInfeasible()) {
                     matrix = List.copyOf(rows);
                     objective = costs.clone();
-                } else clearActive();
+                } else if (!coldPending) clearActive();
                 return result == null ? null : accounted(result, started);
             } catch (RuntimeException | Error failure) {
                 clear();
@@ -118,13 +179,22 @@ final class CountNumericRelaxation {
             }
         }
 
+        boolean pending() { return coldPending || warmPending; }
+        long resumed() { return resumed; }
+        long warmResumed() { return warmResumed; }
+
         private boolean matches(CountNumericRelaxation solver, List<ExactLinearProgram.Constraint> matrix, BigInteger[] objective,
                                 int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] costs,
-                                long started, long allowance) {
+                                long started, long allowance, boolean sameBounds) {
             if (solver.variables != variables || matrix.size() != rows.size() || !Arrays.equals(objective, costs)) return false;
+            // matrix is an immutable List.copyOf snapshot of immutable rows.
+            // An owned prepared projection can hand that very list back; no
+            // repeated row scan is needed to prove an unchanged pending scope.
+            if (sameBounds && matrix == rows) return true;
             for (int r = 0; r < rows.size(); r++) {
                 if (budget.threadWork() - started >= allowance) return false;
                 budget.operation(PlanningBudget.Operation.SCAN, 0);
+                if (sameBounds && !matrix.get(r).upper().equals(rows.get(r).upper())) return false;
                 var old = matrix.get(r).terms();
                 var next = rows.get(r).terms();
                 if (old == next) continue;
@@ -187,6 +257,7 @@ final class CountNumericRelaxation {
         }
 
         private void clearActive() {
+            coldPending = warmPending = false;
             solver = null;
             matrix = null;
             objective = null;
@@ -210,6 +281,10 @@ final class CountNumericRelaxation {
         }
     }
 
+    private static final class Pause extends RuntimeException {
+        Pause() { super(null, null, false, false); }
+    }
+
     private final int variables, rowCount;
     private final double[][] tableau;
     private final int[] basic, nonbasic, pivotColumns;
@@ -219,6 +294,12 @@ final class CountNumericRelaxation {
     private double objectiveScale;
     private long operations, charged;
     private int pivots;
+    private int coldPhase, coldRow, coldIterations;
+    private int warmPhase, warmRow, warmColumn, warmIterations;
+    private double warmObjective;
+    private Result warmResult;
+    private long coldWork, warmWork;
+    private boolean retainedCold, atomicPivot;
 
     static Result solve(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective,
                         PlanningBudget budget, long maximumWork) {
@@ -309,40 +390,92 @@ final class CountNumericRelaxation {
         pivots = 0;
     }
 
-    /** Recompute B^-1*b from the implicit basic/nonbasic slack columns, then dual-simplex. */
+    private void beginWarm() {
+        warmPhase = warmRow = warmColumn = warmIterations = 0;
+        warmObjective = 0;
+        warmResult = null;
+        warmWork = 0;
+    }
+
+    private Result warmRetained(List<ExactLinearProgram.Constraint> rows) {
+        retainedCold = true;
+        try { return warm(rows); }
+        catch (Pause pause) {
+            // A reusable basis can still be badly degenerate for the new RHS.
+            // Bound a continued warm attempt by its measured cold construction
+            // cost, rather than letting it monopolize every scheduler visit.
+            long spent = warmWork + (operations + OPERATIONS_PER_UNIT - 1) / OPERATIONS_PER_UNIT;
+            if (spent >= Math.max(2048, 2 * Math.min(Long.MAX_VALUE / 2, coldWork))) throw new Stop();
+            throw pause;
+        } finally {
+            warmWork += (operations + OPERATIONS_PER_UNIT - 1) / OPERATIONS_PER_UNIT;
+            retainedCold = false;
+        }
+    }
+
+    /** Recompute B^-1*b, then dual-simplex. Every cursor commits after its scalar update. */
     private Result warm(List<ExactLinearProgram.Constraint> rows) {
-        for (int column = 0; column <= variables; column++) {
-            operation();
-            if (nonbasic[column] != -1 && tableau[rowCount][column] < -EPSILON) throw new Stop();
-        }
-        for (int row = 0; row < rowCount; row++) {
-            operation();
-            if (basic[row] < 0) throw new Stop();
-            rightHandSides[row] = finite(rows.get(row).upper().doubleValue() / rowScales[row]);
-        }
-        double objectiveValue = 0;
-        for (int row = 0; row < rowCount; row++) {
-            operation();
-            transformedBounds[row] = basic[row] >= variables ? rightHandSides[basic[row] - variables] : 0;
-        }
-        for (int column = 0; column <= variables; column++) if (nonbasic[column] >= variables) {
-            double value = rightHandSides[nonbasic[column] - variables];
-            operation();
-            objectiveValue = finite(objectiveValue + tableau[rowCount][column] * value);
-            for (int row = 0; row < rowCount; row++) {
+        if (warmPhase == 0) {
+            while (warmColumn <= variables) {
                 operation();
-                transformedBounds[row] = finite(transformedBounds[row] + tableau[row][column] * value);
+                if (nonbasic[warmColumn] != -1 && tableau[rowCount][warmColumn] < -EPSILON) throw new Stop();
+                warmColumn++;
             }
+            warmPhase = 1;
         }
-        for (int row = 0; row < rowCount; row++) {
-            operation();
-            tableau[row][variables + 1] = transformedBounds[row];
+        if (warmPhase == 1) {
+            while (warmRow < rowCount) {
+                operation();
+                if (basic[warmRow] < 0) throw new Stop();
+                rightHandSides[warmRow] = finite(rows.get(warmRow).upper().doubleValue() / rowScales[warmRow]);
+                warmRow++;
+            }
+            warmRow = 0;
+            warmPhase = 2;
         }
-        tableau[rowCount][variables + 1] = objectiveValue;
-        // Phase one has no role in an existing basis. Its old objective is not
-        // a valid objective after changing bounds and must not drift on pivots.
-        Arrays.fill(tableau[rowCount + 1], 0);
-        for (int iteration = 0; iteration < 8192; iteration++) {
+        if (warmPhase == 2) {
+            while (warmRow < rowCount) {
+                operation();
+                transformedBounds[warmRow] = basic[warmRow] >= variables ? rightHandSides[basic[warmRow] - variables] : 0;
+                warmRow++;
+            }
+            warmColumn = 0;
+            warmRow = -1;
+            warmPhase = 3;
+        }
+        if (warmPhase == 3) {
+            while (warmColumn <= variables) {
+                if (nonbasic[warmColumn] >= variables) {
+                    double value = rightHandSides[nonbasic[warmColumn] - variables];
+                    if (warmRow < 0) {
+                        operation();
+                        warmObjective = finite(warmObjective + tableau[rowCount][warmColumn] * value);
+                        warmRow = 0;
+                    }
+                    while (warmRow < rowCount) {
+                        operation();
+                        transformedBounds[warmRow] = finite(transformedBounds[warmRow] + tableau[warmRow][warmColumn] * value);
+                        warmRow++;
+                    }
+                }
+                warmColumn++;
+                warmRow = -1;
+            }
+            warmRow = 0;
+            warmPhase = 4;
+        }
+        if (warmPhase == 4) {
+            while (warmRow < rowCount) {
+                operation();
+                tableau[warmRow][variables + 1] = transformedBounds[warmRow];
+                warmRow++;
+            }
+            tableau[rowCount][variables + 1] = warmObjective;
+            // The old phase-I objective is invalid after changing the RHS.
+            Arrays.fill(tableau[rowCount + 1], 0);
+            warmPhase = 5;
+        }
+        while (warmPhase == 5 && warmIterations < 8192) {
             int leaving = -1;
             for (int row = 0; row < rowCount; row++) {
                 operation();
@@ -351,10 +484,10 @@ final class CountNumericRelaxation {
                     leaving = row;
             }
             if (leaving < 0) {
-                var result = optimum();
-                if (!validPoint(rows, result.point())) throw new Stop();
-                flush();
-                return new Result(result.point(), result.dual(), false, charged, pivots);
+                warmResult = optimum();
+                warmPhase = 6;
+                warmColumn = warmRow = 0;
+                break;
             }
             int entering = -1;
             double ratio = 0;
@@ -384,27 +517,43 @@ final class CountNumericRelaxation {
                 flush();
                 return new Result(null, ray, true, charged, pivots);
             }
-            pivot(leaving, entering);
+            warmIterations++;
+            if (retainedCold) pivotRetained(leaving, entering);
+            else pivot(leaving, entering);
         }
-        throw new Stop();
-    }
-
-    private boolean validPoint(List<ExactLinearProgram.Constraint> rows, double[] point) {
-        for (double value : point) {
+        if (warmPhase == 5) throw new Stop();
+        // Validation also resumes. A large sparse matrix must not repeatedly
+        // redo its entire scan after the dual solve has already finished.
+        while (warmColumn < variables) {
             operation();
-            if (!Double.isFinite(value) || value < -EPSILON) return false;
+            double value = warmResult.point()[warmColumn];
+            if (!Double.isFinite(value) || value < -EPSILON) throw new Stop();
+            warmColumn++;
         }
-        for (int row = 0; row < rowCount; row++) {
-            double sum = 0, magnitude = 1 + Math.abs(rightHandSides[row]);
-            for (var term : rows.get(row).terms().entrySet()) {
-                operation();
-                double contribution = finite(term.getValue().doubleValue() / rowScales[row] * point[term.getKey()]);
-                sum = finite(sum + contribution);
-                magnitude = finite(magnitude + Math.abs(contribution));
+        while (warmRow < rowCount) {
+            // At most one row (512 terms) completes past a local slice; the
+            // request's cancellation, time and total work checks remain active.
+            atomicPivot = retainedCold;
+            try {
+                double sum = 0, magnitude = 1 + Math.abs(rightHandSides[warmRow]);
+                for (var term : rows.get(warmRow).terms().entrySet()) {
+                    operation();
+                    double contribution = finite(term.getValue().doubleValue() / rowScales[warmRow] * warmResult.point()[term.getKey()]);
+                    sum = finite(sum + contribution);
+                    magnitude = finite(magnitude + Math.abs(contribution));
+                }
+                if (sum > rightHandSides[warmRow] + EPSILON * magnitude) throw new Stop();
+                warmRow++;
+            } finally { atomicPivot = false; }
+            if (retainedCold && warmRow < rowCount && (operations + OPERATIONS_PER_UNIT - 1) / OPERATIONS_PER_UNIT >= maximumWork) {
+                flush();
+                throw new Pause();
             }
-            if (sum > rightHandSides[row] + EPSILON * magnitude) return false;
         }
-        return true;
+        flush();
+        var result = new Result(warmResult.point(), warmResult.dual(), false, charged, pivots);
+        warmResult = null;
+        return result;
     }
 
     private void initialize(List<ExactLinearProgram.Constraint> rows, BigInteger[] objective) {
@@ -470,6 +619,100 @@ final class CountNumericRelaxation {
         return optimum();
     }
 
+    /**
+     * The cold phase, cleanup cursor and iteration limit survive visits. Local
+     * allowance may yield between complete pivots, never halfway through the
+     * in-place tableau update. The shared request budget still interrupts every
+     * scalar batch; that terminal exception discards the entire workspace.
+     */
+    private Result solveRetained() {
+        retainedCold = true;
+        try {
+            if (coldPhase == 0) {
+                int worst = -1;
+                for (int row = 0; row < rowCount; row++) {
+                    operation();
+                    if (worst < 0 || tableau[row][variables + 1] < tableau[worst][variables + 1]) worst = row;
+                }
+                if (worst >= 0 && tableau[worst][variables + 1] < -EPSILON) {
+                    coldPhase = 1;
+                    pivotRetained(worst, variables);
+                } else coldPhase = 3;
+            }
+            if (coldPhase == 1) {
+                if (!simplexRetained(rowCount + 1)) return null;
+                if (tableau[rowCount + 1][variables + 1] < -EPSILON) {
+                    var dual = dual(rowCount + 1);
+                    flush();
+                    return new Result(null, dual, true, charged, pivots);
+                }
+                if (Math.abs(tableau[rowCount + 1][variables + 1]) > EPSILON) return null;
+                coldPhase = 2;
+                coldIterations = 0;
+            }
+            if (coldPhase == 2) {
+                while (coldRow < rowCount) {
+                    int row = coldRow;
+                    if (basic[row] == -1) {
+                        int chosen = -1;
+                        for (int column = 0; column <= variables; column++) {
+                            operation();
+                            if (nonbasic[column] != -1 && Math.abs(tableau[row][column]) > EPSILON &&
+                                    (chosen < 0 || nonbasic[column] < nonbasic[chosen])) chosen = column;
+                        }
+                        if (chosen < 0) return null;
+                        coldRow++;
+                        pivotRetained(row, chosen);
+                    } else coldRow++;
+                }
+                coldPhase = 3;
+            }
+            if (!simplexRetained(rowCount)) return null;
+            return optimum();
+        } finally {
+            coldWork += (operations + OPERATIONS_PER_UNIT - 1) / OPERATIONS_PER_UNIT;
+            retainedCold = false;
+        }
+    }
+
+    private boolean simplexRetained(int objectiveRow) {
+        while (coldIterations < 8192) {
+            int entering = -1;
+            for (int column = 0; column <= variables; column++) {
+                operation();
+                if (nonbasic[column] != -1 && tableau[objectiveRow][column] < -EPSILON &&
+                        (entering < 0 || tableau[objectiveRow][column] < tableau[objectiveRow][entering] - EPSILON ||
+                                Math.abs(tableau[objectiveRow][column] - tableau[objectiveRow][entering]) <= EPSILON &&
+                                        nonbasic[column] < nonbasic[entering])) entering = column;
+            }
+            if (entering < 0) return true;
+            int leaving = -1;
+            double ratio = 0;
+            for (int row = 0; row < rowCount; row++) {
+                operation();
+                if (tableau[row][entering] <= EPSILON) continue;
+                double next = finite(tableau[row][variables + 1] / tableau[row][entering]);
+                if (leaving < 0 || next < ratio - EPSILON ||
+                        Math.abs(next - ratio) <= EPSILON && basic[row] < basic[leaving]) {
+                    leaving = row;
+                    ratio = next;
+                }
+            }
+            if (leaving < 0) return false;
+            coldIterations++;
+            pivotRetained(leaving, entering);
+        }
+        return false;
+    }
+
+    private void pivotRetained(int row, int column) {
+        atomicPivot = true;
+        try { pivot(row, column); }
+        finally { atomicPivot = false; }
+        flush();
+        if (charged >= maximumWork) throw new Pause();
+    }
+
     private Result optimum() {
         var point = new double[variables];
         for (int row = 0; row < rowCount; row++) {
@@ -527,7 +770,8 @@ final class CountNumericRelaxation {
     }
 
     private void pivot(int row, int column) {
-        double pivot = finite(tableau[row][column]);
+        double[] pivotRow = tableau[row];
+        double pivot = finite(pivotRow[column]);
         if (Math.abs(pivot) < 1e-15) throw new Stop();
         pivots++;
         int columns = 0;
@@ -535,27 +779,46 @@ final class CountNumericRelaxation {
         // scan merely to rediscover the same zero columns in every row.
         for (int target = 0; target < variables + 2; target++) {
             operation();
-            if (target != column && tableau[row][target] != 0) pivotColumns[columns++] = target;
+            if (target != column && pivotRow[target] != 0) pivotColumns[columns++] = target;
         }
         for (int other = 0; other < rowCount + 2; other++) {
             operation();
-            if (other == row || tableau[other][column] == 0) continue;
-            double factor = finite(tableau[other][column] / pivot);
-            for (int index = 0; index < columns; index++) {
-                operation();
-                int target = pivotColumns[index];
-                tableau[other][target] = finite(tableau[other][target] - tableau[row][target] * factor);
+            double[] values = tableau[other];
+            if (other == row || values[column] == 0) continue;
+            double factor = finite(values[column] / pivot);
+            for (int index = 0; index < columns;) {
+                // Keep the original check BEFORE each 256th scalar operation.
+                // Between those boundaries, count locally so the hot cell loop
+                // need not update the solver object or call operation each time.
+                int end = index + Math.min(columns - index, 255 - (int) (operations & 255));
+                int visited = 0;
+                try {
+                    while (index < end) {
+                        int target = pivotColumns[index++];
+                        visited++;
+                        values[target] = finite(values[target] - pivotRow[target] * factor);
+                    }
+                } finally {
+                    // A non-finite cell still consumes its scalar operation,
+                    // exactly as the original operation(); finite(...) order.
+                    operations += visited;
+                }
+                if (index < columns) {
+                    operation();
+                    int target = pivotColumns[index++];
+                    values[target] = finite(values[target] - pivotRow[target] * factor);
+                }
             }
         }
         for (int target = 0; target < variables + 2; target++) if (target != column) {
             operation();
-            tableau[row][target] = finite(tableau[row][target] / pivot);
+            pivotRow[target] = finite(pivotRow[target] / pivot);
         }
         for (int other = 0; other < rowCount + 2; other++) if (other != row) {
             operation();
             tableau[other][column] = finite(tableau[other][column] / -pivot);
         }
-        tableau[row][column] = 1 / pivot;
+        pivotRow[column] = 1 / pivot;
         int previous = basic[row];
         basic[row] = nonbasic[column];
         nonbasic[column] = previous;
@@ -570,7 +833,10 @@ final class CountNumericRelaxation {
         operations++;
         if ((operations & 255) == 0) {
             flush();
-            if (charged >= maximumWork) throw new Stop();
+            if (charged >= maximumWork && !atomicPivot) {
+                if (retainedCold) throw new Pause();
+                throw new Stop();
+            }
         }
     }
 

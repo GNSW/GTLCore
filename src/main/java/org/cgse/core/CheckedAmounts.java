@@ -36,6 +36,9 @@ public final class CheckedAmounts {
     public static BigInteger ceilDiv(BigInteger value, BigInteger divisor) {
         if (divisor.signum() <= 0) throw new IllegalArgumentException("Non-positive divisor");
         if (value.signum() <= 0) return BigInteger.ZERO;
+        if (divisor.equals(BigInteger.ONE)) return value;
+        if (value.bitLength() <= 63 && divisor.bitLength() <= 63)
+            return BigInteger.valueOf(ceilDiv(value.longValue(), divisor.longValue()));
         return value.subtract(BigInteger.ONE).divide(divisor).add(BigInteger.ONE);
     }
 }

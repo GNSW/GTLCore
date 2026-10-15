@@ -12,7 +12,8 @@ import java.util.*;
 /** Versioned, bounded data codec; no Java object deserialization or live key lookup. */
 final class CapturedProofCodec {
 
-    private static final int MAGIC = 0x43474431; // CGD1, separate from scoped CGP arithmetic proofs
+    private static final int LEGACY_MAGIC = 0x43474431; // CGD1 has implicit LEGACY input modes
+    private static final int MAGIC = 0x43474432; // CGD2, separate from scoped CGP arithmetic proofs
     private static final long MAX_FILE = 64L << 20;
     private final CapturedProof.Guard guard = new CapturedProof.Guard(20_000_000, 128L << 20);
 
@@ -53,7 +54,7 @@ final class CapturedProofCodec {
             text(out, pattern.id()); text(out, pattern.binding()); out.writeBoolean(pattern.external()); out.writeBoolean(pattern.complete());
             count(out, pattern.inputs().size(), 128);
             for (var input : pattern.inputs()) {
-                out.writeLong(input.multiplier()); count(out, input.candidates().size(), 192);
+                out.writeLong(input.multiplier()); out.writeByte(input.mode().ordinal()); count(out, input.candidates().size(), 192);
                 for (var candidate : input.candidates()) {
                     out.writeInt(candidate.stack().what()); out.writeLong(candidate.stack().amount());
                     out.writeInt(candidate.remaining() == null ? -1 : candidate.remaining());
@@ -102,21 +103,25 @@ final class CapturedProofCodec {
     }
 
     private CapturedProof.Certificate decode(DataInputStream in) throws IOException {
-        if (in.readInt() != MAGIC) throw new IOException("Unknown captured proof format");
+        int format = in.readInt();
+        if (format != MAGIC && format != LEGACY_MAGIC) throw new IOException("Unknown captured proof format");
         int resources = in.readInt(); boolean complete = in.readBoolean();
         var patterns = new ArrayList<CapturedProof.Pattern>();
         for (int n = count(in, 256); n > 0; n--) {
             String id = text(in), binding = text(in); boolean external = in.readBoolean(), captured = in.readBoolean();
             var inputs = new ArrayList<CapturedRecipe.Input<Integer>>();
             for (int m = count(in, 128); m > 0; m--) {
-                long multiplier = in.readLong(); var candidates = new ArrayList<CapturedRecipe.Candidate<Integer>>();
+                long multiplier = in.readLong();
+                int mode = format == LEGACY_MAGIC ? CapturedRecipe.InputMode.LEGACY.ordinal() : in.readUnsignedByte();
+                if (mode >= CapturedRecipe.InputMode.values().length) throw new IOException("Unknown captured input mode");
+                var candidates = new ArrayList<CapturedRecipe.Candidate<Integer>>();
                 for (int k = count(in, 192); k > 0; k--) {
                     int key = in.readInt(); long amount = in.readLong(); int remaining = in.readInt();
                     if (remaining < -1) throw new IOException("Invalid return resource");
                     candidates.add(new CapturedRecipe.Candidate<>(new CapturedRecipe.Amount<>(key, amount),
                             remaining == -1 ? null : remaining, in.readBoolean(), in.readBoolean()));
                 }
-                inputs.add(new CapturedRecipe.Input<>(multiplier, candidates));
+                inputs.add(new CapturedRecipe.Input<>(multiplier, candidates, CapturedRecipe.InputMode.values()[mode]));
             }
             var outputs = new ArrayList<CapturedRecipe.Amount<Integer>>();
             for (int m = count(in, 64); m > 0; m--) outputs.add(new CapturedRecipe.Amount<>(in.readInt(), in.readLong()));

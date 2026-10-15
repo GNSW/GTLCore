@@ -147,7 +147,7 @@ final class CapturedFlowAllocation<K> implements AutoCloseable {
 
     private void buildSlot(CapturedRecipe<K> recipe) {
         var input = recipe.inputs().get(slot);
-        boolean mixed = !recipe.external() && input.multiplier() <= 9;
+        boolean mixed = recipe.mixed(input);
         if (candidate == 0 && building.slots.size() == slot) {
             if (!reserve(256)) return;
             building.slots.add(new LinkedHashMap<>());

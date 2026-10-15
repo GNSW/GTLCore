@@ -5,6 +5,7 @@ package org.cgse.core;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /** Only physically held material lives here. Expected returns are a separate account. */
 public final class ResourceLedger<K> {
@@ -51,7 +52,19 @@ public final class ResourceLedger<K> {
         return GraphRecipe.amounts(escrow);
     }
 
+    /**
+     * Restore one escrow atomically with respect to invalid keys/amounts and
+     * arithmetic overflow. Validate and compute every balance before publishing
+     * any of them. Keys must retain stable equals/hashCode behavior; this is not
+     * a rollback guarantee for allocation failures or arbitrary key callbacks.
+     */
     public void restore(Map<K, Long> escrow) {
-        escrow.forEach(this::add);
+        Map<K, Long> balances = new LinkedHashMap<>();
+        escrow.forEach((key, amount) -> {
+            Objects.requireNonNull(key, "Null material key");
+            long next = CheckedAmounts.add(get(key), Objects.requireNonNull(amount, "Null material amount"));
+            if (next != 0) balances.put(key, next);
+        });
+        owned.putAll(balances);
     }
 }

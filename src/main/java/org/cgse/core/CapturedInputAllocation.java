@@ -100,7 +100,7 @@ final class CapturedInputAllocation<K> implements AutoCloseable {
 
     private void buildSlot() {
         var input = recipe.inputs().get(slot);
-        boolean mix = !recipe.external() && input.multiplier() <= 9;
+        boolean mix = recipe.mixed(input);
         if (candidate < input.candidates().size()) {
             int at = candidate++;
             var value = input.candidates().get(at);

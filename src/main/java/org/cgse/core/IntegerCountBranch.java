@@ -35,6 +35,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     final List<CountGuard> supportConflicts = new ArrayList<>();
     /** Newly proved original-coordinate clauses awaiting coordinator publication. */
     final Set<CountConflict> learnedChoices = new LinkedHashSet<>();
+    private long executionConflictMemory;
     private List<CountConflict> knownChoices = List.of();
     private List<ExactLinearProgram.Constraint> knownMaterials = List.of();
     List<ExactLinearProgram.Constraint> linearConstraints;
@@ -62,6 +63,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     boolean structureScouted, structureEarly, structureResuming, preferStructureResume;
     CountCongruence congruence;
     CountPacking packing;
+    private long packingViewWork, packingServiceCredit;
     CountJump jumping;
     CountProbing probing;
     boolean probed, jumpCandidate, jumpLate;
@@ -138,7 +140,9 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     State state = State.OPEN;
     PlanningBudget.Exhausted limit;
     boolean initialized, partitioned, rescue, retried, choicePruned, needsRepair;
+    boolean executionRefined;
     private boolean candidateOnly;
+    boolean autonomousSchedule;
     private CountViewSearch.CandidateOrigin candidateOrigin;
     private long candidateStarted, runStarted, observedWork;
     private boolean measuringRun;
@@ -360,6 +364,13 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 case DEAD -> CountViewSearch.CandidateOutcome.SCHEDULE_DEAD;
                 case UNKNOWN -> CountViewSearch.CandidateOutcome.SCHEDULE_UNKNOWN;
             });
+            if (autonomousSchedule && status != CountSchedule.Result.WITNESS) {
+                // This is a positive-only continuation, not a subtree of the
+                // count domain. It cannot close that domain or publish a cut.
+                state = State.UNRESOLVED;
+                return;
+            }
+            if (status == CountSchedule.Result.DEAD) learnUnexecutableCounts();
             if (speculativeCandidate() && status != CountSchedule.Result.WITNESS) {
                 // Failure to schedule a local-search candidate must leave the
                 // original count domain and all the other strategies available.
@@ -374,15 +385,6 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             if (status == CountSchedule.Result.DEAD) {
                 execution.refine(model);
                 for (var proof : execution.proofs()) if (!supportConflicts.contains(proof.guard())) supportConflicts.add(proof.guard());
-                // This fixed vector was exhausted or rejected by a checked
-                // optimistic startup proof. Share the exact exclusion; an
-                // UNKNOWN scheduling result must never create this clause.
-                var fixed = new ArrayList<ExactLinearProgram.Constraint>();
-                for (int i = 0; i < counts.length; i++) {
-                    fixed.add(bound(i, counts[i], false));
-                    if (counts[i].signum() > 0) fixed.add(bound(i, counts[i], true));
-                }
-                learnedChoices.add(new CountConflict(fixed));
                 needsRepair = true;
                 supportSearch = new CountSupportSearch<>(model, counts, budget);
             } else if (status == CountSchedule.Result.UNKNOWN) unresolved();
@@ -433,11 +435,26 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         }
         if (lpActive) {
             if (!lpSearch.step()) return;
+            long completedLpWork = lpSearch.sliceWork();
             lpSearch.publishCuts(modelViews, reduction);
             // Leave the initial sample bounded so cheap candidate strategies
             // can run. Later, productive cuts earn a bounded continuation
             // before branch fan-out disperses the remaining budget.
-            if ((lpResuming || lpScoutsSampled) && lpSearch.continueOnCuts()) return;
+            if ((lpResuming || lpScoutsSampled) && lpSearch.continueOnCuts()) {
+                // Keep the admitted candidate frontier alongside productive
+                // LP learning. Both retain their existing nonrenewable limits;
+                // a new cut alone must not postpone all packing work until
+                // the LP has consumed its entire preferential allowance. Offer
+                // one bounded policy batch, accounting for the LP work just
+                // completed. Read it before continueOnCuts() resumes the LP.
+                long candidateQuantum = packingQuantum(completedLpWork);
+                if (candidateQuantum > 0) {
+                    lpActive = false;
+                    viewSearch.resume(candidateQuantum);
+                    viewStage = 9;
+                }
+                return;
+            }
             lpActive = false;
             counts = lpSearch.counts();
             boolean impossible = lpSearch.infeasible();
@@ -461,7 +478,11 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             return;
         }
         if (viewStage != 0) {
-            if (!viewSearch.step()) return;
+            long before = viewSearch.work();
+            boolean done;
+            try { done = viewSearch.step(); }
+            finally { if (viewStage == 10) packingServiceCredit += viewSearch.work() - before; }
+            if (!done) return;
             int continuation = viewStage;
             viewStage = 0;
             counts = viewSearch.counts();
@@ -554,7 +575,25 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             return;
         }
         if (packing != null) {
-            if (!packing.step()) return;
+            long before = packing.work();
+            boolean done;
+            try { done = packing.step(); }
+            finally { packingViewWork += packing.work() - before; }
+            if (!done) {
+                // Service an already admitted initial frontier alongside the
+                // ordinary packing search. Credit only this tool's measured
+                // work; neither the portfolio nor either local cap is reset.
+                if (packingViewWork >= CountPortfolioPolicy.MAX_QUANTUM) {
+                    long quantumForViews = viewSearch == null ? 0 : viewSearch.packingScoutQuantum(packingViewWork);
+                    packingViewWork = 0;
+                    if (quantumForViews > 0) {
+                        viewSearch.resume(quantumForViews);
+                        viewStage = 10;
+                    }
+                }
+                return;
+            }
+            packingViewWork = 0;
             counts = reduction.expand(packing.counts());
             packing.close();
             packing = null;
@@ -726,6 +765,10 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 else beginScheduling();
             } else if (impossible) {
                 learnedChoices.add(new CountConflict(current));
+                // Component infeasibility covers the complete reduced domain.
+                // A closed unrestricted root remains a proof even if a sibling
+                // previously paused; guarded component proofs stay local.
+                proofContradiction = current.isEmpty();
                 state = State.DEAD;
             } else {
                 separatorPartial = partial;
@@ -1009,6 +1052,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 }
                 auxiliaryLcg = new CountLcg(reduction.rows(), reduction.lower(), reduction.upper(), budget, 131072)
                         .minimizeIntegerConflicts();
+                if (auxiliaryMode == 2) auxiliaryLcg.retainedFiniteHint();
                 // Root witness arms own longer retained slices. Give bounded
                 // integer LP proposals an owned frontier rather
                 // than restarting a numerical probe in every short view visit.
@@ -1069,26 +1113,42 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     private String activeStrategy() {
+        // Match the dispatch precedence in advance(), including parked tools.
+        // In particular lpSearch is retained while other tools run; lpActive
+        // selects its visits. An unlisted tool must not masquerade as compiling.
         if (verifying != null) return "count_verify";
         if (assembling != null || program != null) return "count_assemble";
-        if (scheduling != null || supportSearch != null) return "count_schedule";
-        if (matching != null) return "count_mitm";
-        if (binary != null) return "count_boolean";
+        if (scheduling != null) return "count_schedule";
+        if (failureNeighborhood != null && !failureCandidate) return "count_failure_repair";
+        if (supportSearch != null) return "count_support";
+        if (rescue) return "count_assemble";
+        if (lpActive) return lpSearch.activeStrategy();
         if (viewStage != 0) return "count_views";
-        if (cdcl != null) return "count_cdcl";
-        if (auxiliaryLcg != null) return "count_portfolio_lcg";
-        if (linear != null) return "count_lp";
-        if (propagating != null) return "count_bounds";
+        if (congruence != null) return "count_congruence";
+        if (diophantine != null) return "count_diophantine";
+        if (structural != null) return "count_structure";
+        if (sourceFace != null) return "count_source_face";
+        if (packing != null) return "count_dp";
+        if (covering != null || cliques != null || rounding != null || zeroHalf != null) return "count_cuts";
+        if (neighborhood != null) return "count_heuristics";
+        if (branchProbe != null) return "count_probing";
+        if (jumping != null) return "count_heuristics";
+        if (probing != null) return "count_probing";
+        if (recovery != null || scaling != null) return "count_recovery";
+        if (groups != null || components != null) return "count_decompose";
         if (separator != null) return "count_separator";
         if (network != null) return "count_network";
-        if (covering != null || cliques != null || rounding != null || zeroHalf != null) return "count_cuts";
-        if (probing != null || branchProbe != null) return "count_probing";
-        if (neighborhood != null || repair != null || jumping != null) return "count_heuristics";
-        if (recovery != null || scaling != null) return "count_recovery";
-        if (components != null || groups != null || conditioning != null || sourceFace != null) return "count_decompose";
-        if (structural != null) return "count_structure";
-        if (partition != null || packing != null) return "count_dp";
-        return "count_compile";
+        if (conditioning != null) return "count_decompose";
+        if (partition != null) return "count_dp";
+        if (matching != null) return "count_mitm";
+        if (binary != null) return "count_boolean";
+        if (auxiliaryLcg != null) return "count_portfolio_lcg";
+        if (cdcl != null) return "count_cdcl";
+        if (obbt != null) return "count_obbt";
+        if (diagram != null) return "count_diagram";
+        if (repair != null) return "count_heuristics";
+        if (propagating != null) return "count_bounds";
+        return compiled ? "count_lp" : "count_compile";
     }
 
     private void useRelaxation(ExactRational[] point) {
@@ -1419,6 +1479,36 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         return failureCandidate || jumpCandidate || neighborhoodCandidate || domainCandidate || separatorCandidate || structuralCandidate || viewCandidateStage != 0;
     }
 
+    private void learnUnexecutableCounts() {
+        // DEAD exhausts this original multiset (or checks an optimistic startup
+        // obstruction). It is equally useful when a primal heuristic supplied
+        // the counts. Publish before discarding that candidate, never on UNKNOWN
+        // or after rejecting just one executable order during seed assembly.
+        long bytes = 256L + 768L * counts.length;
+        for (var count : counts) {
+            budget.check();
+            bytes += (count.bitLength() + 7L) / 8;
+        }
+        if (!budget.tryReserve(bytes)) return;
+        executionConflictMemory += bytes;
+        var fixed = new ArrayList<ExactLinearProgram.Constraint>();
+        for (int i = 0; i < counts.length; i++) {
+            budget.check();
+            fixed.add(bound(i, counts[i], false));
+            if (counts[i].signum() > 0) fixed.add(bound(i, counts[i], true));
+        }
+        learnedChoices.add(new CountConflict(fixed));
+        // A fixed-count exclusion is not a generalized startup explanation.
+        // Keep its publication separate from the trigger for a global state
+        // search; launching that search here preempts productive continuations.
+        budget.note("count_execution_conflict", "exact_original_multiset; speculative=" + speculativeCandidate());
+    }
+
+    void releaseExecutionConflicts() {
+        budget.release(executionConflictMemory);
+        executionConflictMemory = 0;
+    }
+
     private void rejectSpeculativeCandidate() {
         rejectSpeculativeCandidate(false);
     }
@@ -1608,6 +1698,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         beginAssembly(witness);
     }
 
+    /** Continue the already paid execution search independently of its proposer. */
+    void scheduledCandidate(CountSchedule<K> continuation) {
+        initialized = partitioned = candidateOnly = autonomousSchedule = true;
+        compileRecovery = false;
+        scheduling = continuation;
+        counts = continuation.counts();
+    }
+
     private void unresolved() {
         if (candidateOnly) {
             plan = null;
@@ -1626,6 +1724,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     }
 
     boolean resume() {
+        if (autonomousSchedule) return false;
         // A split root keeps its already-paid searches. Its children cover the
         // full domain; this continuation must never create the same children
         // again or make a local cutoff invalidate their coverage.
@@ -1877,12 +1976,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         if (refineMaterials(point)) return true;
         CountGuard condition = execution.violated(point);
         if (condition != null) {
+            executionRefined = true;
             learn(condition);
             branch(condition);
             return true;
         }
         var startup = CountStartup.separateAll(model, counts, budget);
         if (!startup.isEmpty()) {
+            executionRefined = true;
             for (var proof : startup) learn(proof.guard());
             branch(startup.get(0).guard());
             return true;
@@ -1996,6 +2097,15 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         children.add(List.copyOf(next));
     }
 
+    /** Early service advances an existing companion's opportunity. Offset its
+     * later LP service once; never subtract from actual/global work counters. */
+    private long packingQuantum(long completedLpWork) {
+        long quantum = viewSearch == null ? 0 : viewSearch.packingContinuationQuantum(completedLpWork);
+        long credited = Math.min(quantum, packingServiceCredit);
+        packingServiceCredit -= credited;
+        return quantum - credited;
+    }
+
     private void afterViewSearch(int continuation) {
         if (continuation == 2) congruence = new CountCongruence(reduction.rows(), reduction.variables(), budget);
         else if (continuation == 3) diagram = new CountDecisionDiagram(reduction.rows(), reduction.lower(), reduction.upper(), budget, 65536).retained();
@@ -2003,6 +2113,11 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         else if (continuation == 5) beginCompiledPortfolio();
         else if (continuation == 7) groups = new CountGroups(reduction.rows(), reduction.lower(), reduction.upper(), budget);
         else if (continuation == 8) beginBoolean();
+        // A rejected packing candidate also returns to the same LP batch.
+        // Its prior resume has already charged/granted the next local slice.
+        else if (continuation == 9) lpActive = true;
+        // Completion or rejection returns to the same ordinary packing stack.
+        else if (continuation == 10) return;
         // Stage 1 resumes compilation, preserving the untouched original model.
     }
 
@@ -2013,6 +2128,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         viewSearch = null;
         modelViews = null;
         viewStage = viewCandidateStage = 0;
+        packingServiceCredit = 0;
     }
 
     private static ExactLinearProgram.Constraint bound(int variable, BigInteger value, boolean lower) {
@@ -2021,6 +2137,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
 
     @Override
     public void close() {
+        releaseExecutionConflicts();
         candidateFeedback(CountViewSearch.CandidateOutcome.UNRESOLVED);
         if (auxiliaryLcg != null) auxiliaryLcg.close();
         auxiliaryLcg = null;

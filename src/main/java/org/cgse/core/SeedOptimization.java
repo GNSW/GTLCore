@@ -274,6 +274,7 @@ final class SeedOptimization<K> implements AutoCloseable {
             case 4 -> {
                 if (verifying != null) {
                     if (!verifying.step()) return false;
+                    verifying.close();
                     best = candidate;
                     if (options.stream().noneMatch(old -> SeedPortfolio.dominates(old, candidate))) {
                         options.removeIf(old -> SeedPortfolio.dominates(candidate, old));
@@ -523,6 +524,8 @@ final class SeedOptimization<K> implements AutoCloseable {
         selectionRows = null;
         if (summarizing != null) summarizing.close();
         summarizing = null;
+        if (verifying != null) verifying.close();
+        verifying = null;
         if (selecting != null) selecting.close();
         selecting = null;
         if (searching != null) searching.close();

@@ -15,6 +15,9 @@ final class CountRecovery<K> implements AutoCloseable {
     private final IntegerCountBranch<K> owner;
     private final Deque<Collection<GraphRecipe<K>>> candidates = new ArrayDeque<>();
     private CountRecoveryFuel<K> fuel;
+    private CountChainSchedule<K> entry;
+    private Map<K, Long> entryStock;
+    private boolean entryTried, entryActive;
     private CountRecoveryTemplates.Template<K> template;
     private boolean completeRetention;
     private boolean pricedFuel;
@@ -255,12 +258,34 @@ final class CountRecovery<K> implements AutoCloseable {
         GraphCompiler<K> compiler = template == null ? null : template.compiler(recipes);
         if (compiler == null) compiler = new GraphCompiler<>(List.copyOf(recipes));
         search = new IntegerCountSearch<>(compiler, owner.target, owner.amount,
-                pricedFuel && fuel != null ? fuel.pricedStock() : owner.stock, owner.seeds, owner.external, Set.of(), owner.preserve, owner.force, budget, owner.started, null, false);
+                pricedFuel && fuel != null ? fuel.pricedStock() : entryActive ? entryStock : owner.stock,
+                owner.seeds, owner.external, Set.of(), owner.preserve, owner.force, budget, owner.started, null, false);
         if (fuel == null) search.importProgramConflicts(owner.model, bodies, owner.knownChoices());
     }
 
     private static boolean ordinary(GraphRecipe<?> recipe) {
         return recipe.configurationInputs().isEmpty() && recipe.reusableInputs().isEmpty();
+    }
+
+    private boolean prepareEntry() {
+        if (entryTried || fuel == null) return false;
+        entryTried = true;
+        entry = CountChainSchedule.entries(owner.model, budget);
+        if (entry == null) return false;
+        while (!entry.step()) { /* Bounded funded suffix discovery; no new raw-fed route. */ }
+        entryStock = entry.entryStock();
+        if (entryStock == null) { entry.close(); entry = null; return false; }
+        budget.note("count_recovery_entries", "original_prefix_verified; stocked_phase_returns");
+        return true;
+    }
+
+    private boolean activateEntry() {
+        if (entryActive) return false;
+        if (!entryTried) prepareEntry();
+        if (entryStock == null) return false;
+        entryActive = true;
+        fuel.initialStock(entryStock);
+        return true;
     }
 
     boolean step() {
@@ -269,10 +294,10 @@ final class CountRecovery<K> implements AutoCloseable {
         boolean done = false;
         if (viewWork < viewAllowance) done = search.step();
         viewWork += budget.threadWork() - before;
-        if (search.hasIndependentProgress()) {
+        if (search.hasCandidateProgress()) {
             if (viewWork >= viewAllowance && viewAllowance < viewMaximum) {
                 viewAllowance = Math.min(viewMaximum, viewAllowance + 1_000_000);
-                budget.note("count_recovery", "independent_components_progress; allowance=" + viewAllowance);
+                budget.note("count_recovery", "candidate_progress; allowance=" + viewAllowance);
             }
             if (done && search.paused() && viewWork < viewAllowance) {
                 search.resume();
@@ -286,16 +311,43 @@ final class CountRecovery<K> implements AutoCloseable {
         if (!done && viewWork < viewAllowance) return false;
         if (!done) budget.note("count_recovery", "candidate_work_limit; work=" + viewWork + "; alternatives=" + candidates.size());
         var plan = search.result();
+        boolean expanded = false;
         if (plan != null && plan.feasible()) {
             try (var costs = budget.trace(PlanningCostTrace.Stage.RESTORE)) {
                 PlanStep candidate = fuel == null ? plan.steps() : fuel.lift(plan, bytes -> memory += bytes);
+                if (candidate == null && !pricedFuel && fuel != null && !entryActive && activateEntry()) {
+                    // Reuse the existing counts before searching a changed
+                    // stock view. An unsuccessful lift leaves original pricing
+                    // and source order intact, while keeping the paid prefix.
+                    candidate = fuel.lift(plan, bytes -> memory += bytes);
+                    if (candidate == null) candidate = fuel.repair(plan, bytes -> memory += bytes);
+                    if (candidate == null) { entryActive = false; fuel.initialStock(owner.model.stock); }
+                }
+                if (candidate == null && pricedFuel && fuel != null) {
+                    // Preserve the original free/priced witnesses. A stock entry
+                    // changes source preferences, and belongs to a later trial.
+                    expanded = activateEntry();
+                    if (expanded) candidate = fuel.lift(plan, bytes -> memory += bytes);
+                    if (candidate == null) candidate = fuel.repair(plan, bytes -> memory += bytes);
+                }
                 if (candidate != null) witness = PlanRewrite.batches(candidate, batch -> bodies.containsKey(batch.recipe()) ?
                         PlanStep.repeat(bodies.get(batch.recipe()), BigInteger.valueOf(batch.runs())) : batch, budget, bytes -> memory += bytes);
+                if (witness != null && entryActive) {
+                    budget.reserve(128);
+                    memory += 128;
+                    witness = new PlanStep.Sequence(List.of(entry.witness(), witness));
+                }
             }
             budget.note("count_recovery", (witness != null ? "lifted_witness" : "account_allocation_unresolved") + "; macros=" + bodies.size());
         }
         search.close();
         search = null;
+        if (witness == null && pricedFuel && fuel != null && !entryActive) expanded = activateEntry();
+        if (witness == null && expanded) {
+            pricedFuel = false;
+            begin(fuel.recipes());
+            return false;
+        }
         if (witness == null && fuel != null && !pricedFuel) {
             pricedFuel = true;
             begin(fuel.pricedRecipes());
@@ -303,6 +355,7 @@ final class CountRecovery<K> implements AutoCloseable {
         }
         if (witness == null && !candidates.isEmpty()) {
             fuel = null;
+            if (entry != null) { entry.close(); entry = null; entryStock = null; entryActive = false; }
             begin(candidates.removeFirst());
             return false;
         }
@@ -313,12 +366,13 @@ final class CountRecovery<K> implements AutoCloseable {
         return witness;
     }
 
-    boolean hasIndependentProgress() {
-        return search != null && search.hasIndependentProgress();
+    boolean hasCandidateProgress() {
+        return search != null && search.hasCandidateProgress();
     }
 
     @Override
     public void close() {
+        if (entry != null) { entry.close(); entry = null; }
         if (search != null) search.close();
         search = null;
         budget.release(memory);

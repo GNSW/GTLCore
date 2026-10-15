@@ -46,6 +46,7 @@ public final class CapturedCatalog<K> {
 
     private final List<Entry<K>> entries;
     private final boolean captureComplete;
+    private final boolean stateFamilies;
 
     public CapturedCatalog(List<Entry<K>> entries) { this(entries, true); }
 
@@ -53,11 +54,29 @@ public final class CapturedCatalog<K> {
     public CapturedCatalog(List<Entry<K>> entries, boolean complete) {
         this.entries = List.copyOf(entries);
         Set<String> ids = new HashSet<>();
+        boolean families = false;
         for (var entry : entries) {
             if (!ids.add(entry.id())) throw new IllegalArgumentException("Duplicate captured recipe id: " + entry.id());
             complete &= !entry.recipe().captureBounded();
+            for (var input : entry.recipe().inputs()) for (var candidate : input.candidates())
+                families |= candidate.family() != null;
         }
         captureComplete = complete;
+        stateFamilies = families;
+    }
+
+    /** Same potential-output scope as Work's index, including unexpanded returns. */
+    boolean hasPotentialProducer(K target) {
+        for (var entry : entries) {
+            var recipe = entry.recipe();
+            if (recipe.size() == 0) continue;
+            for (var output : recipe.outputs())
+                if (output.amount() > 0 && target.equals(output.what())) return true;
+            for (var input : recipe.inputs())
+                for (var candidate : input.candidates())
+                    if (target.equals(candidate.remaining())) return true;
+        }
+        return false;
     }
 
     public Work begin(K target, long amount, Map<K, Long> stock, boolean preserve, boolean forceCraft, PlanningBudget budget) {
@@ -107,11 +126,17 @@ public final class CapturedCatalog<K> {
         private int flowVariant;
         private final Map<String, BigInteger> flowCounts = new LinkedHashMap<>();
         private CapturedFlowWitness<K> flowWitness;
+        private CapturedReachableWitness<K> reachable;
+        private CapturedStatePlanning<K> statePlanning;
+        private boolean reachableTried;
+        private GraphPlan<K> reachablePlan;
+        private List<CapturedReachableWitness.Variant<K>> reachableVariants = List.of();
+        private int reachableVariant;
         private DomainState expanding;
         private List<Integer> providers = List.of();
         private int provider;
         private int entry, output, input, candidate;
-        private int phase; // 0 index, 1 discover, 2 freeze, 3 solve, 4 stock, 5 flow, 6 recovered counts
+        private int phase; // 0 index, 1 discover, 2 freeze, 3 solve, 4 stock, 5 flow, 6 recovered counts, 7 reachable, 8 state capacity
         private int flattenEntry, flattenVariant;
         private List<GraphRecipe<K>> concrete = new ArrayList<>();
         private List<GraphRecipe<K>> allocationRecipes = new ArrayList<>();
@@ -129,9 +154,9 @@ public final class CapturedCatalog<K> {
             if (amount <= 0) throw new IllegalArgumentException("Non-positive order");
             this.target = Objects.requireNonNull(target);
             this.amount = amount;
-            this.stock = GraphRecipe.amounts(stock);
+            this.stock = PlanningInventory.snapshot(stock);
             this.external = Set.copyOf(external);
-            this.requiredSeeds = GraphRecipe.amounts(requiredSeeds);
+            this.requiredSeeds = PlanningInventory.snapshot(requiredSeeds);
             this.preserve = preserve;
             this.forceCraft = forceCraft;
             this.budget = budget;
@@ -152,6 +177,7 @@ public final class CapturedCatalog<K> {
          * Scoped CountProof journals remain separate, with their original assumptions.
          */
         public CapturedProof.Certificate certificate(long maximumWork, long maximumBytes) {
+            if (stateFamilies) throw new UnsupportedOperationException("Captured state-family algebra is not portable; finite-domain certificates cannot certify dynamic states");
             return CapturedProof.capture(entries, captureComplete, target, amount, stock, external, requiredSeeds,
                     preserve, forceCraft, result(), maximumWork, maximumBytes);
         }
@@ -188,6 +214,16 @@ public final class CapturedCatalog<K> {
                     if (plan != null) finish(plan, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
                     else { allocationView = false; phase = 2; }
                 }
+            } else if (phase == 7) {
+                recoverReachable();
+            } else if (phase == 8) {
+                if (statePlanning.step()) {
+                    var plan = statePlanning.result(); statePlanning.close(); statePlanning = null;
+                    if (plan != null) {
+                        allocationView = true;
+                        finish(plan, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
+                    } else phase = 1;
+                }
             } else {
                 boolean done = slice == null ? solving.step() : solving.advance(slice);
                 if (done) acceptOrExpand(solving.result());
@@ -205,7 +241,11 @@ public final class CapturedCatalog<K> {
             if (entry == entries.size()) {
                 discover(target);
                 for (K key : requiredSeeds.keySet()) discover(key);
-                phase = 1;
+                if (stateFamilies) {
+                    statePlanning = new CapturedStatePlanning<>(entries, target, amount, stock, external, requiredSeeds,
+                            preserve, forceCraft, budget);
+                    phase = 8;
+                } else phase = 1;
                 return;
             }
             var recipe = entries.get(entry).recipe();
@@ -347,20 +387,64 @@ public final class CapturedCatalog<K> {
                 allocationView = false;
                 phase = 2;
             } else if (remaining && budget.remainingWork() > 0 && expandable(plan.result())) {
-                for (var state : active.values()) {
-                    budget.compilationCheck();
-                    if (state.domain.hasNext() && !state.allocationTried) {
-                        state.allocationTried = true;
-                        pendingAllocations.addLast(state);
-                    }
-                }
-                addedAllocation = false;
-                phase = 4;
+                if (!reachableTried) {
+                    reachableTried = true;
+                    reachable = new CapturedReachableWitness<>(entries, producers, target, amount, stock, external,
+                            requiredSeeds, preserve, forceCraft, budget);
+                    phase = 7;
+                } else beginInputAllocation();
             } else {
                 var reason = plan.result();
                 if (!coverage.complete() && negative(reason)) reason = GraphPlan.Result.UNKNOWN;
                 finish(plan, reason);
             }
+        }
+
+        private void beginInputAllocation() {
+            for (var state : active.values()) {
+                budget.compilationCheck();
+                if (state.domain.hasNext() && !state.allocationTried) {
+                    state.allocationTried = true;
+                    pendingAllocations.addLast(state);
+                }
+            }
+            addedAllocation = false;
+            phase = 4;
+        }
+
+        private void recoverReachable() {
+            if (reachablePlan == null) {
+                if (!reachable.step()) return;
+                reachablePlan = reachable.result();
+                if (reachablePlan == null) {
+                    reachable.close(); reachable = null;
+                    beginInputAllocation();
+                } else reachableVariants = reachable.variants();
+                return;
+            }
+            if (reachableVariant < reachableVariants.size()) {
+                budget.compilationCheck();
+                var variant = reachableVariants.get(reachableVariant++);
+                var state = active.get(variant.entry());
+                if (state == null) {
+                    reserve(160); state = new DomainState(variant.entry()); active.put(variant.entry(), state);
+                }
+                if (variant.ordinal().compareTo(state.domain.coveredPrefix()) >= 0 && state.additional.add(variant.ordinal())) {
+                    reserve(128); state.recipes.add(variant.recipe());
+                }
+                return;
+            }
+            var scopes = new ArrayList<DomainCoverage>();
+            boolean complete = captureComplete;
+            for (var state : active.values()) {
+                budget.compilationCheck();
+                complete &= !state.domain.hasNext();
+                scopes.add(new DomainCoverage(entries.get(state.index).id(), state.domain.coveredPrefix(), state.domain.size(),
+                        List.copyOf(state.additional), state.domain.captureComplete()));
+            }
+            coverage = new Coverage(++revision, scopes, complete);
+            allocationView = true;
+            finish(reachablePlan, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
         }
 
         private void allocateInput() {
@@ -472,7 +556,9 @@ public final class CapturedCatalog<K> {
         }
 
         @Override
-        public CompletableFuture<?> waitingFor() { return solving == null ? null : solving.waitingFor(); }
+        public CompletableFuture<?> waitingFor() {
+            return statePlanning != null ? statePlanning.waitingFor() : solving == null ? null : solving.waitingFor();
+        }
 
         @Override
         public Result<K> result() {
@@ -483,8 +569,16 @@ public final class CapturedCatalog<K> {
         @Override
         public Result<K> limited(PlanningBudget.Exhausted limit) {
             if (result != null) return result;
+            checkHandoffCancellation();
             GraphPlan<K> retained = solving == null ? null : solving.limited(limit);
+            checkHandoffCancellation();
             if (retained != null && retained.feasible()) finish(retained, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
+            // Only the canonical model with complete relevant capture coverage
+            // can close the order. A completed root proof must survive the same
+            // budget handoff as a verified witness; restricted support/prefix
+            // failures and ordinary missing previews carry no such authority.
+            else if (retained != null && retained.result() == GraphPlan.Result.INFEASIBLE &&
+                    coverage.complete() && !allocationView) finish(retained, GraphPlan.Result.INFEASIBLE);
             else {
                 var reason = GraphPlan.Result.valueOf(limit.limit().name());
                 var empty = new GraphPlan<K>(target, amount, preserve, new PlanStep.Sequence(List.of()), Map.of(), Map.of(),
@@ -492,6 +586,15 @@ public final class CapturedCatalog<K> {
                 finish(empty, reason);
             }
             return result;
+        }
+
+        private void checkHandoffCancellation() {
+            try {
+                budget.checkpoint();
+            } catch (PlanningBudget.Exhausted exhausted) {
+                // This method handles an exhausted budget. Cancellation remains
+                // exceptional, including cancellation during child harvesting.
+            }
         }
 
         private void reserve(long bytes) {
@@ -513,6 +616,12 @@ public final class CapturedCatalog<K> {
             flowVariants = List.of();
             if (flowWitness != null) flowWitness.close();
             flowWitness = null;
+            if (reachable != null) reachable.close();
+            reachable = null;
+            if (statePlanning != null) statePlanning.close();
+            statePlanning = null;
+            reachablePlan = null;
+            reachableVariants = List.of();
             flowCounts.clear();
             allocating = null;
             allocated = List.of();

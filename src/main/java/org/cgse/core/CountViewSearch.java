@@ -26,6 +26,11 @@ final class CountViewSearch implements AutoCloseable {
     private Search candidateSource;
     private boolean strideScoutAttempted;
     private boolean integerLpAttempted;
+    private boolean groupedPartitionAttempted;
+    private boolean relaxationNeighborhoodAttempted;
+    private boolean packingCoreAttempted;
+    private final Set<CountModelViews.View> partitionViews = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<CountModelViews.View> wideAllocationViews = Collections.newSetFromMap(new IdentityHashMap<>());
     private long commonWork, reportedCommonWork, restorationWork;
     private CountPortfolioPolicy.Mode candidateMode;
 
@@ -70,6 +75,7 @@ final class CountViewSearch implements AutoCloseable {
         PlanningBudget proposalBudget;
         long proposalBytes;
         long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
+        int repairCompletionObserved;
         long continuationLimit, continuationProgress, continuationCheckpoint;
         long publishedRoots;
         long importedBounds;
@@ -135,8 +141,8 @@ final class CountViewSearch implements AutoCloseable {
             var learned = solver != null ? solver.learnedConflicts() : cdcl != null ? cdcl.learnedConflicts() : List.<CountConflict>of();
             models.publishConflicts(view, scope, learned, publishedConflicts, this);
             publishedConflicts = learned.size();
-            if (solver != null) {
-                var cuts = solver.sharedRows();
+            if (solver != null || specialist instanceof CountPackingCore) {
+                var cuts = solver != null ? solver.sharedRows() : ((CountPackingCore) specialist).sharedRows();
                 models.publishCuts(view, cuts, publishedCuts, this);
                 publishedCuts = cuts.size();
             }
@@ -193,6 +199,9 @@ final class CountViewSearch implements AutoCloseable {
         JUMP,
         SEPARATOR,
         MITM,
+        GROUPED_PARTITION,
+        RELAXATION_NEIGHBORHOOD,
+        PACKING_CORE,
         DOMAIN,
         DIAGRAM,
         BOOLEAN,
@@ -227,6 +236,75 @@ final class CountViewSearch implements AutoCloseable {
             }
         }
         addStrideScout();
+        addGroupedPartition();
+        // Once the compiler exposes finite original domains, a small packing
+        // core need not wait for every unrelated representation to stall twice.
+        long packingStarted = budget.threadWork();
+        try { addPackingCore(); }
+        finally { commonWork(budget.threadWork() - packingStarted); }
+    }
+
+    /** Observe an already owned, eligible frontier; do not construct a new scout. */
+    long packingContinuationQuantum() {
+        return packingContinuationQuantum(0);
+    }
+
+    long packingContinuationQuantum(long completedCompetingWork) {
+        return packingContinuationQuantum(completedCompetingWork, false);
+    }
+
+    /** Complement an ordinary packing search until the first trial closes.
+     * Later repairs retain their normal portfolio and LP continuation routes. */
+    long packingScoutQuantum(long completedCompetingWork) {
+        return packingContinuationQuantum(completedCompetingWork, true);
+    }
+
+    private long packingContinuationQuantum(long completedCompetingWork, boolean initialOnly) {
+        if (completedCompetingWork < 0) throw new IllegalArgumentException("Negative completed effort");
+        for (Search search : searches) {
+            if (!search.done && search.scheduling.eligible && search.progress > 0 &&
+                    search.specialist instanceof CountPackingCore packing && packing.remainingAllowance() > 0 &&
+                    (!initialOnly || packing.initialOpportunity())) {
+                // A productive LP can spend a much larger batch outside this
+                // portfolio. One repeatedly tiny candidate sample need not be
+                // fair service, even when both frontiers retain their state.
+                // Compensate for measured competing work, capped at one normal
+                // portfolio batch and the candidate's original local ceiling.
+                long quantum = Math.max(policy.quantum(search.scheduling, budget.remainingWork()),
+                        Math.min(CountPortfolioPolicy.MAX_QUANTUM, completedCompetingWork));
+                return Math.min(quantum, Math.min(packing.remainingAllowance(), budget.remainingWork()));
+            }
+        }
+        return 0;
+    }
+
+    boolean hasGroupedPartition() {
+        return searches.stream().anyMatch(search -> !search.done && search.scheduling.eligible &&
+                search.engine == Engine.GROUPED_PARTITION);
+    }
+
+    private void addGroupedPartition() {
+        if (groupedPartitionAttempted || policy.mode() == CountPortfolioPolicy.Mode.PROOF) return;
+        long before = budget.threadWork();
+        try {
+            for (var view : models.available()) {
+                // Capacity groups are often clearer before substitution. Keep
+                // that original representation eligible before compilation,
+                // while allowing a later new view one admission check too.
+                if (!partitionViews.add(view)) continue;
+                var domains = models.domains(view);
+                var partition = wideAllocationViews.contains(view) ?
+                        CountGroupedPartition.createWide(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MIN_QUANTUM) :
+                        CountGroupedPartition.createMultiway(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MIN_QUANTUM);
+                if (partition == null) continue;
+                Search search = new Search(view, policy.add(view.shape().cost(), Engine.GROUPED_PARTITION), Engine.GROUPED_PARTITION);
+                search.specialist = partition;
+                search.scope = domains;
+                searches.add(search);
+                groupedPartitionAttempted = true;
+                return;
+            }
+        } finally { commonWork(budget.threadWork() - before); }
     }
 
     /** Do not displace cheap compilation or existing engines' initial visits with another LCG. */
@@ -407,7 +485,19 @@ final class CountViewSearch implements AutoCloseable {
         if (view.lower().length > 1024 || view.rows().size() > 4096 || view.shape().terms() > 65536) return false;
         for (int i = 0; i < view.lower().length; i++) {
             budget.check();
-            if (view.upper()[i] == null || view.upper()[i].subtract(view.lower()[i]).compareTo(BigInteger.ONE) > 0) return false;
+            var upper = view.upper()[i];
+            if (upper == null) {
+                wideAllocationViews.add(view);
+                return false;
+            }
+            var width = upper.subtract(view.lower()[i]);
+            if (width.compareTo(BigInteger.ONE) > 0) {
+                // Reuse this paid domain observation at candidate admission.
+                // Unsupported wide models need no duplicate inventory scan.
+                if (width.compareTo(BigInteger.valueOf(CountGroupedPartition.MAX_CAPACITY)) > 0)
+                    wideAllocationViews.add(view);
+                return false;
+            }
         }
         return true;
     }
@@ -494,7 +584,11 @@ final class CountViewSearch implements AutoCloseable {
             if ((stalled || sampled) && counts == null && !infeasible) {
                 long scoutStarted = budget.threadWork();
                 boolean added;
-                try { added = addIntegerLp(); }
+                try {
+                    added = addIntegerLp();
+                    if (!added) added = addRelaxationNeighborhood();
+                    if (!added) added = addPackingCore();
+                }
                 finally {
                     integerScoutWork = budget.threadWork() - scoutStarted;
                     commonWork(integerScoutWork);
@@ -532,6 +626,42 @@ final class CountViewSearch implements AutoCloseable {
         }
     }
 
+    private boolean addRelaxationNeighborhood() {
+        if (relaxationNeighborhoodAttempted || !models.compiledAlternatives() ||
+                policy.mode() == CountPortfolioPolicy.Mode.PROOF) return false;
+        relaxationNeighborhoodAttempted = true;
+        var views = new ArrayList<>(models.available());
+        views.sort(Comparator.comparingLong(view -> view.shape().cost()));
+        for (var view : views) {
+            var domains = models.domains(view);
+            var repair = CountRelaxationNeighborhood.create(view, domains, budget, CountPortfolioPolicy.MIN_QUANTUM);
+            if (repair == null) continue;
+            Search search = new Search(view, policy.add(view.shape().cost(), Engine.RELAXATION_NEIGHBORHOOD), Engine.RELAXATION_NEIGHBORHOOD);
+            search.scope = domains; search.specialist = repair; searches.add(search);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean addPackingCore() {
+        if (packingCoreAttempted || !models.compiledAlternatives() ||
+                policy.mode() == CountPortfolioPolicy.Mode.PROOF) return false;
+        packingCoreAttempted = true;
+        var views = new ArrayList<>(models.available());
+        views.sort(Comparator.comparingLong(view -> view.shape().cost()));
+        for (var view : views) {
+            var structure = models.packingStructure(view);
+            if (structure == null) continue;
+            var core = CountPackingCore.create(structure, budget, CountPortfolioPolicy.MIN_QUANTUM);
+            if (core == null) continue;
+            Search search = new Search(view, policy.add(view.shape().cost(), Engine.PACKING_CORE), Engine.PACKING_CORE);
+            search.scope = new CountModelViews.Domains(view.lower(), view.upper(), 0);
+            search.specialist = core; searches.add(search);
+            return true;
+        }
+        return false;
+    }
+
     private boolean addIntegerJump() {
         if (policy.mode() == CountPortfolioPolicy.Mode.PROOF) return false;
         // Give general integer local search one bounded initial opportunity
@@ -560,6 +690,35 @@ final class CountViewSearch implements AutoCloseable {
         boolean sampled = searches.stream().noneMatch(search -> !search.done && search.scheduling.eligible &&
                 policy.selections(search.scheduling) == 0);
         if (sampled) for (Search search : searches) {
+            if (search.done || !search.scheduling.eligible ||
+                    !(search.specialist instanceof CountGroupedPartition || search.specialist instanceof CountRelaxationNeighborhood ||
+                            search.specialist instanceof CountPackingCore) ||
+                    search.progress == 0) continue;
+            // Reachable sums or a usable LP point leave an owned candidate
+            // frontier. Give it one bounded completion opportunity after all
+            // mandatory first visits. Handoffs never replenish this ceiling.
+            // A newly compiled repair is distinct from another slice of the
+            // same search. Observe it once, inside the tool's fixed total cap;
+            // its local assumptions are never evidence for switching to PROOF.
+            if (search.specialist instanceof CountPackingCore packing && packing.completionEpoch() > search.repairCompletionObserved) {
+                search.repairCompletionObserved = packing.completionEpoch();
+                // Restoring the saved PB frontier is a distinct event. Only
+                // the final repair preference compensates for the completed
+                // scout's measured cost, once. Request and local caps still pay
+                // every operation, including the scout itself.
+                long interrupted = packing.phase() == CountPackingCore.Phase.DISTANCE_REPAIR ? packing.restoredScoutWork() : 0;
+                search.continuationLimit = Math.max(search.continuationLimit, saturatedAdd(search.work,
+                        Math.min(packing.remainingAllowance(), saturatedAdd(budget.remainingWork() / 3, interrupted))));
+            }
+            if (search.continuationLimit == 0) {
+                long opportunity = search.specialist instanceof CountPackingCore packing ?
+                        Math.min(packing.remainingAllowance(), budget.remainingWork() / 3) :
+                        Math.min(4_194_304, budget.remainingWork() / 8);
+                search.continuationLimit = saturatedAdd(search.work, opportunity);
+            }
+            if (search.work < search.continuationLimit) return search;
+        }
+        if (sampled) for (Search search : searches) {
             if (search.done || !search.scheduling.eligible || !(search.specialist instanceof CountDiophantine numeric) ||
                     !numeric.hasCoupledElimination()) continue;
             if (search.continuationLimit == 0) {
@@ -581,6 +740,9 @@ final class CountViewSearch implements AutoCloseable {
         var chosen = policy.select();
         return searches.stream().filter(search -> search.scheduling == chosen).findFirst().orElse(null);
     }
+
+    /** Charged work in completed or retained portfolio steps. */
+    long work() { return work; }
 
     BigInteger[] counts() {
         return counts == null ? null : counts.clone();

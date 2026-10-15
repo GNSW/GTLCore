@@ -7,10 +7,11 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.function.Predicate;
 
-/** Small exact linear consequences, certified before crossing a model's coordinate boundary. */
+/** Bounded exact linear consequences, certified before crossing a model's coordinate boundary. */
 final class CountViewCuts implements AutoCloseable {
 
-    private static final int MAX_FACTS = 64, MAX_TERMS = 64, MAX_BITS = 2048;
+    private static final int MAX_FACTS = 64, MAX_TERMS = 512, MAX_BITS = 2048;
+    private static final int MAX_WIDE_FACTS = 4, MAX_PARENT_TERMS = 16384;
 
     private record Fact(Object origin, ExactLinearProgram.Constraint row, CountProof.Derivation source, List<CountProof.Row> mapping) {}
 
@@ -23,6 +24,7 @@ final class CountViewCuts implements AutoCloseable {
     private final Map<CountModelViews.View, Coordinate[]> lifts = new IdentityHashMap<>();
     private long memory;
     private long started, allowance;
+    private int wideFacts;
 
     private static final class Stop extends RuntimeException {
 
@@ -33,7 +35,7 @@ final class CountViewCuts implements AutoCloseable {
 
     private void start() {
         started = budget.threadWork();
-        allowance = Math.min(32768, budget.remainingWork() / 32);
+        allowance = Math.min(65536, budget.remainingWork() / 32);
     }
 
     private void check() {
@@ -81,6 +83,8 @@ final class CountViewCuts implements AutoCloseable {
             if (row == null || !bounded(row)) continue;
             row = CountReduction.normalize(row);
             if (row.terms().isEmpty() && row.upper().signum() >= 0 || known.contains(row)) continue;
+            boolean wide = row.terms().size() > 64;
+            if (wide && wideFacts >= MAX_WIDE_FACTS) continue;
             long bytes = 256L + 512L * row.terms().size() + (row.upper().bitLength() + 7L) / 8;
             if (budget.proofJournal() != null) bytes += 512L + 192L * view.rows().size() + 384L * view.shape().terms() +
                     (view.substitution() == null ? 0 : 512L * view.substitution().coordinates().size());
@@ -91,6 +95,7 @@ final class CountViewCuts implements AutoCloseable {
                     view.lower().length, view.rows().stream().map(CountProof::row).toList(),
                     List.of(new CountProof.Combination(cut.parents(), cut.divisor(), CountProof.row(cut.row()))));
             facts.add(new Fact(origin, row, proof, proof == null ? List.of() : CountAffineProof.mapping(view)));
+            if (wide) wideFacts++;
         }
     }
 
@@ -101,12 +106,15 @@ final class CountViewCuts implements AutoCloseable {
             return false;
         Map<Integer, BigInteger> sum = new TreeMap<>();
         BigInteger upper = BigInteger.ZERO;
+        int terms = 0;
         for (var parent : cut.parents().entrySet()) {
             check();
             int id = parent.getKey();
             BigInteger weight = parent.getValue();
             if (id < 0 || id >= source.size() || weight.signum() < 0 || weight.bitLength() > MAX_BITS) return false;
             var row = source.get(id);
+            terms += row.terms().size();
+            if (terms > MAX_PARENT_TERMS) return false;
             if (!bounded(row)) return false;
             upper = upper.add(row.upper().multiply(weight));
             if (upper.bitLength() > MAX_BITS) return false;
@@ -116,7 +124,9 @@ final class CountViewCuts implements AutoCloseable {
                 if (value.bitLength() > MAX_BITS) return false;
                 if (value.signum() == 0) sum.remove(term.getKey());
                 else sum.put(term.getKey(), value);
-                if (sum.size() > 2 * MAX_TERMS) return false;
+                // The scratch reservation covers at most this many live
+                // coefficients, including terms cancelled by later parents.
+                if (sum.size() > MAX_TERMS) return false;
             }
         }
         for (var term : sum.entrySet()) {
@@ -217,6 +227,7 @@ final class CountViewCuts implements AutoCloseable {
         facts.clear();
         known.clear();
         lifts.clear();
+        wideFacts = 0;
         budget.release(memory);
         memory = 0;
     }

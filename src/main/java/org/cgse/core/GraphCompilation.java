@@ -294,6 +294,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
             if (packedTargets != null) {
                 var packed = catalogIndex.ports(recipe);
                 ports.add(packed);
+                var physicalKeys = recipe.executionOutputs().keySet().iterator();
                 for (int key : packed.physicalOutputs()) {
                     budget.compilationCheck();
                     if (firstProducers[key] == 0) firstProducers[key] = nodes.size();
@@ -307,7 +308,12 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                     // Keep the cold traversal's material order without its
                     // boxed producer lists. Hub order can affect later plan
                     // heuristics even when the SCC partition is unchanged.
-                    outputIds.putIfAbsent(catalogIndex.resource(key), List.of());
+                    // Use the cold path's insertion operation as well: HashMap
+                    // computeIfAbsent and putIfAbsent order colliding keys
+                    // differently, which otherwise changes hub/SCC priority.
+                    // Retain the original key object too: a canonical catalog
+                    // key may have different identity tie-breaks in tree bins.
+                    outputIds.computeIfAbsent(physicalKeys.next(), ignored -> List.of());
                 }
                 return;
             }
@@ -382,8 +388,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 return;
             }
             int from = batch.start + mergeNode, to = edges[mergeEdge++];
-            out.get(from).add(to);
-            in.get(to).add(from);
+            addEdge(from, to, true);
             return;
         }
         if (cursor >= nodes.size()) {
@@ -400,9 +405,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         if (edgeProducers != null) {
             if (edgeProducers.hasNext()) {
                 int to = edgeProducers.next();
-                reserve(24);
-                out.get(cursor).add(to);
-                in.get(to).add(cursor);
+                addEdge(cursor, to, false);
                 return;
             }
             edgeProducers = null;
@@ -427,9 +430,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         if (packedEdges != null) {
             if (packedEdge < packedEdges.length) {
                 int to = packedEdges[packedEdge++];
-                reserve(24);
-                out.get(cursor).add(to);
-                in.get(to).add(cursor);
+                addEdge(cursor, to, false);
                 return;
             }
             packedEdges = null;
@@ -500,6 +501,19 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         return producers == null ? EMPTY : producers;
     }
 
+    private void addEdge(int from, int to, boolean reserved) {
+        // Before DFS, nextEdge is a per-destination stamp. Rows are assembled
+        // consecutively, including ordered worker batches. Repeated resources
+        // supplied by the same recipe add no new reachability: keep the first
+        // occurrence in both directions, preserving the original DFS order.
+        // Worker reservations cover their temporary (possibly repeated) edges.
+        if (nextEdge[to] == from + 1) return;
+        if (!reserved) reserve(24);
+        nextEdge[to] = from + 1;
+        out.get(from).add(to);
+        in.get(to).add(from);
+    }
+
     private void freezeEdges() {
         if (cursor == nodes.size()) {
             cursor = 0;
@@ -509,6 +523,7 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         }
         forward[cursor] = out.get(cursor).array();
         reverse[cursor] = in.get(cursor).array();
+        nextEdge[cursor] = 0;
         out.set(cursor, null);
         in.set(cursor, null);
         cursor++;
@@ -608,16 +623,17 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
 
     private static final class Ints {
 
-        private int[] data = new int[4];
+        private int[] data = EMPTY;
         private int size;
 
         void add(int value) {
-            if (size == data.length) data = Arrays.copyOf(data, Math.multiplyExact(size, 2));
+            if (size == data.length) data = Arrays.copyOf(data, size == 0 ? 4 : Math.multiplyExact(size, 2));
             data[size++] = value;
         }
 
         int[] array() {
-            return Arrays.copyOf(data, size);
+            // All callers freeze a completed row and stop appending to it.
+            return size == data.length ? data : Arrays.copyOf(data, size);
         }
     }
 }

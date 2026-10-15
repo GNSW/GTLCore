@@ -50,8 +50,20 @@ final class CountScheduleContinuations<K> implements AutoCloseable {
         // one continuation concurrently. Reservations remain with the owner.
         if (paused.size() == 4) paused.remove(0).close();
         paused.add(schedule);
-        budget.note("count_schedule_reuse", "paused; next_duplicate_can_continue");
+        budget.note("count_schedule_reuse", "paused; same_request_continuation");
         return true;
+    }
+
+    synchronized boolean hasPending() {
+        return !paused.isEmpty();
+    }
+
+    /** Exclusive FIFO lease, even when no second strategy repeats these counts. */
+    synchronized CountSchedule<K> takePending() {
+        if (paused.isEmpty()) return null;
+        budget.checkpoint();
+        budget.note("count_schedule_reuse", "resumed_without_duplicate; same_request_model");
+        return paused.remove(0);
     }
 
     synchronized void trim() {

@@ -16,6 +16,7 @@ import org.cgse.core.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +35,7 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
     private KeyCounter[] selectedInputs;
     private double selectedPower;
     private long selectedBatch;
+    private List<OutputObligations.ReturnChoice<AEKey>> selectedReturns = List.of();
     private String reason = "";
     private String bindingFailure = "";
     private String bindingDetail = "";
@@ -154,16 +156,13 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
             if (slot.configuration() != (pattern.supportsPushInputsToExternalInventory() && GtlDispatchPolicy.configuration(slot.key()))) return mismatch("INPUT_CONFIGURATION_CHANGED", "slot=" + slot);
             if (slot.reusable() != (pattern.supportsPushInputsToExternalInventory() && GtlDispatchPolicy.reusable(slot.key()))) return mismatch("INPUT_REUSE_CHANGED", "slot=" + slot);
             if (!input.isValid(slot.key(), host.level())) return mismatch("INPUT_NOT_VALID", "slot=" + slot);
-            long copies = 0;
-            for (var possible : input.getPossibleInputs()) {
-                if (possible.what().getPrimaryKey().equals(slot.key().getPrimaryKey()) && slot.amount() % possible.amount() == 0) {
-                    copies = slot.amount() / possible.amount();
-                    break;
-                }
-            }
+            long copies = copies(input, slot);
             if (copies <= 0) return mismatch("INPUT_AMOUNT_CHANGED", "slot=" + slot);
             selectedMultipliers[inputSlot] = CheckedAmounts.add(selectedMultipliers[inputSlot], copies);
-            AEKey returned = input.getRemainingKey(slot.key());
+            var capturedReturn = GtlStateReturns.capture(pattern, input, slot.key());
+            if (!capturedReturn.contract().complete()) return mismatch("UNSUPPORTED_PATTERN_SEMANTICS",
+                    "slot=" + inputSlot + " semantics=" + capturedReturn.contract().semantics());
+            AEKey returned = capturedReturn.nominal();
             if (returned != null) currentOutputs.merge(returned, copies, CheckedAmounts::add);
         }
         for (int i = 0; i < selectedMultipliers.length; i++) if (selectedMultipliers[i] != pattern.getInputs()[i].getMultiplier())
@@ -183,6 +182,7 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
     @Override
     public long capacity(GraphRecipe<AEKey> recipe, long requested) {
         selectedProvider = null;
+        selectedReturns = List.of();
         selectedPattern = resolve(recipe);
         if (selectedPattern == null) {
             reason = "PLAN_STALE_OR_PROVIDER_OFFLINE";
@@ -234,6 +234,64 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
         return 0;
     }
 
+    private static long copies(IPatternDetails.IInput input, GraphRecipe.Slot<AEKey> slot) {
+        for (var possible : input.getPossibleInputs()) {
+            if (possible.amount() > 0 && possible.what().getPrimaryKey().equals(slot.key().getPrimaryKey()) &&
+                    slot.amount() % possible.amount() == 0)
+                return slot.amount() / possible.amount();
+        }
+        return 0;
+    }
+
+    @Override
+    public List<OutputObligations.ReturnChoice<AEKey>> returnChoices(GraphRecipe<AEKey> recipe, long runs) {
+        if (selectedPattern == null || selectedBatch != runs) throw new IllegalStateException("Unprepared graph return contract");
+        List<OutputObligations.ReturnChoice<AEKey>> choices = new ArrayList<>();
+        var inputs = selectedPattern.getInputs();
+        for (int at = 0; at < recipe.slots().size(); at++) {
+            var slot = recipe.slots().get(at);
+            int inputSlot = slot.inputSlot() < 0 ? at : slot.inputSlot();
+            if (inputSlot < 0 || inputSlot >= inputs.length) throw new IllegalStateException("Return input slot changed");
+            var captured = GtlStateReturns.capture(selectedPattern, inputs[inputSlot], slot.key());
+            if (!captured.contract().complete()) throw unsupportedReturn(captured, "incomplete_outcomes");
+            if (!captured.uncertain()) continue;
+            if (captured.nominal() == null) {
+                // The worst legal final use has no return. A surviving bonus
+                // returns to normal network storage; it is not promised material.
+                if (captured.contract().outcomes().stream().noneMatch(Map::isEmpty))
+                    throw unsupportedReturn(captured, "missing_nominal_outcome");
+                continue;
+            }
+            var allowed = new LinkedHashSet<AEKey>();
+            for (var outcome : captured.contract().outcomes()) {
+                if (outcome.size() != 1) throw unsupportedReturn(captured, "optional_or_multiple_remainder");
+                var value = outcome.entrySet().iterator().next();
+                if (value.getValue() != 1L) throw unsupportedReturn(captured, "non_unit_remainder");
+                allowed.add(value.getKey());
+            }
+            long copies = copies(inputs[inputSlot], slot);
+            if (copies <= 0) throw unsupportedReturn(captured, "input_amount_changed");
+            long amount = CheckedAmounts.multiply(copies, slot.configuration() ? 1 : runs);
+            int merged = -1;
+            for (int index = 0; index < choices.size(); index++) {
+                var previous = choices.get(index);
+                boolean equivalent = previous.predicted().equals(captured.nominal()) && previous.allowed().equals(allowed);
+                if (!equivalent && previous.allowed().stream().anyMatch(allowed::contains))
+                    throw unsupportedReturn(captured, "overlapping_state_return_owners");
+                if (equivalent && previous.inputSlot() == inputSlot) merged = index;
+            }
+            if (merged >= 0) amount = CheckedAmounts.add(amount, choices.remove(merged).amount());
+            choices.add(new OutputObligations.ReturnChoice<>(inputSlot, captured.nominal(), allowed, amount));
+        }
+        selectedReturns = List.copyOf(choices);
+        return selectedReturns;
+    }
+
+    private static PlanningFailure unsupportedReturn(GtlStateReturns.Capture captured, String detail) {
+        return new PlanningFailure(GraphPlan.Result.UNSUPPORTED_PATTERN_SEMANTICS,
+                detail + "; semantics=" + captured.contract().semantics());
+    }
+
     private static KeyCounter[] inputs(GraphRecipe<AEKey> recipe, long batch, int slots) {
         KeyCounter[] inputs = new KeyCounter[slots];
         for (int i = 0; i < slots; i++) inputs[i] = new KeyCounter();
@@ -248,7 +306,9 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
     @Override
     public GraphJobRuntime.Outcome push(GraphRecipe<AEKey> recipe, long runs, Map<AEKey, Long> inputs) {
         if (selectedProvider == null || selectedBatch != runs) throw new IllegalStateException("Unprepared graph dispatch");
-        for (AEKey key : recipe.executionOutputs().keySet()) {
+        var receivable = new LinkedHashSet<>(recipe.executionOutputs().keySet());
+        for (var choice : selectedReturns) receivable.addAll(choice.allowed());
+        for (AEKey key : receivable) {
             host.requesting(key, true);
             ((GraphRequestTracker) service).gtlcore$expectGraphOutput(key);
         }

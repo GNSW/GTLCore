@@ -76,6 +76,7 @@
   "gtlcore.ae.graph.seed_scope_material_tradeoff": "此方案允许补充基础原料以减少启动种子；请核对新增耗材。",
   "gtlcore.ae.graph.failure.infeasible": "已证明当前库存无法完成订单，但尚未生成可验证的补料方案。请补料或调整样板后重试。",
   "gtlcore.ae.graph.failure.unknown": "尚未找到可执行方案，也未证明无解。请查看规划日志中的策略详情。",
+  "gtlcore.ae.graph.failure.incomplete_model": "当前候选或返回状态视图尚未找到可执行方案，仍有未覆盖的可能路径，不能据此判定缺料。",
   "gtlcore.ae.graph.failure.search_limit": "规划达到累计搜索额度，尚未完成判断。可减少请求数量或调整图合成搜索额度后重试。",
   "gtlcore.ae.graph.failure.timeout": "规划达到时间限制，尚未完成判断。请调整图合成超时设置后重试。",
   "gtlcore.ae.graph.failure.memory_limit": "规划达到内存预算，尚未完成判断。请调整图合成内存预算后重试。",

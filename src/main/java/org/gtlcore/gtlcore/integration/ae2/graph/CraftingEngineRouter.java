@@ -174,7 +174,8 @@ public final class CraftingEngineRouter {
                     // Published by completion of the snapshot future; workers never inspect CPUs.
                     work.catalysts = new CatalystPolicy(parallelism, ConfigHolder.INSTANCE.ae.ae2GraphMaxExtraCatalystCopies);
                     task = catalog.begin(grid, service, level, source, target,
-                            checkpoint == null ? Set.of() : checkpoint.recoverySeeds().keySet(), budget, refreshInventory);
+                            checkpoint == null ? Set.of() : checkpoint.recoverySeeds().keySet(), budget, refreshInventory,
+                            checkpoint == null ? Set.of() : checkpoint.forecast().keySet());
                 }
                 long preparationNanos = System.nanoTime() - captureStarted;
                 GraphSnapshots.enqueue(task, budget, snapshot, timing -> {
@@ -262,6 +263,7 @@ public final class CraftingEngineRouter {
                                     "[Graph Crafting] fallback target={} amount={} trigger={} cycle_solving=false result={} work={} elapsed_ms={}",
                                     report.target(), report.amount(), report.trigger(), report.result(), report.nodes(), report.elapsedNanos() / 1_000_000.0);
                         }).reuseCandidate(reuseCandidate);
+                if (prepared.candidates() != null) planning.capturedCatalog(prepared.candidates());
                 budget.note("catalog", "recipes=" + compiler.catalog().size() + "; target_sources=" + compiler.producers(target).size() +
                         "; stock_keys=" + planning.availability().size() + "; target_stock=" + planning.availability().getOrDefault(target, 0L) +
                         "; external=" + snapshot.emitable().size() + "; cache_hit=" + snapshot.cacheHit() +

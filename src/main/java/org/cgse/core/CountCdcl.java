@@ -191,6 +191,14 @@ final class CountCdcl implements AutoCloseable {
         return this;
     }
 
+    /** Preferred Boolean endpoints only; never fix a domain or attach a clause. */
+    void preferPhases(long mask) {
+        if (phase.length > 64 || work != 0 || cursor != 0)
+            throw new IllegalStateException("Phase hints require an unstarted small Boolean search");
+        budget.operations(PlanningBudget.Operation.SCAN, 0, phase.length);
+        for (int i = 0; i < phase.length; i++) phase[i] = (mask & (1L << i)) != 0 ? 1 : 0;
+    }
+
     boolean paused() {
         return paused;
     }
@@ -495,16 +503,22 @@ final class CountCdcl implements AutoCloseable {
 
     private int[] explanation(Row row, int forced, int prefix) {
         List<Integer> reason = new ArrayList<>();
-        BigInteger total = forced < 0 ? BigInteger.ZERO : row.weights[forced];
+        // Compilation has already certified that the sum of all positive
+        // weights fits a signed long. Reuse that certificate for lazy reasons;
+        // literal order and charged work remain identical to the wide path.
+        BigInteger total = row.finiteLong ? null : forced < 0 ? BigInteger.ZERO : row.weights[forced];
+        long totalLong = row.finiteLong && forced >= 0 ? row.weights[forced].longValue() : 0;
         if (forced >= 0) reason.add(row.literals[forced] ^ 1);
         for (int i = 0; i < row.literals.length; i++) {
             charge();
-            if (total.compareTo(row.capacity) > 0) break;
+            if (row.finiteLong ? totalLong > row.capacity.longValue() : total.compareTo(row.capacity) > 0) break;
             if (value(row.literals[i]) != 1 || positions[row.literals[i] / 2] >= prefix) continue;
-            total = total.add(row.weights[i]);
+            if (row.finiteLong) totalLong += row.weights[i].longValue();
+            else total = total.add(row.weights[i]);
             reason.add(row.literals[i] ^ 1);
         }
-        if (total.compareTo(row.capacity) <= 0) throw new IllegalStateException("Incomplete weighted reason");
+        if (row.finiteLong ? totalLong <= row.capacity.longValue() : total.compareTo(row.capacity) <= 0)
+            throw new IllegalStateException("Incomplete weighted reason");
         return reason.stream().mapToInt(Integer::intValue).toArray();
     }
 

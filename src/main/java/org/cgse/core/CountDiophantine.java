@@ -23,6 +23,7 @@ final class CountDiophantine implements CountContinuation {
     private int[] faceChoices;
     private int faceAttempt, faceCenter;
     private CountAffineLattice affine;
+    private CountEquationSlices slices;
     private List<Integer> freeVariables;
 
     CountDiophantine(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower,
@@ -172,6 +173,17 @@ final class CountDiophantine implements CountContinuation {
             complete = true;
             budget.note("count_diophantine", "unresolved; work=" + work + "; original_domain_retained");
             return true;
+        }
+        if (z >= 0) {
+            if (slices == null) slices = new CountEquationSlices(rows, lower, upper, x, y, z,
+                    a, b, c, rhs, next, end, stride, budget);
+            if (!slices.step()) return false;
+            counts = slices.counts();
+            slices.close();
+            slices = null;
+            budget.note("count_diophantine", (counts == null ? "unresolved" : "witness") +
+                    "; variables=" + lower.length + "; compiled_slices; work=" + work);
+            return complete = true;
         }
         charge();
         BigInteger[] point = lower.clone(), direction = new BigInteger[lower.length];
@@ -362,8 +374,10 @@ final class CountDiophantine implements CountContinuation {
     public void close() {
         if (affine != null) affine.close();
         if (face != null) face.close();
+        if (slices != null) slices.close();
         affine = null;
         face = null;
+        slices = null;
         budget.release(memory);
         memory = 0;
         complete = true;

@@ -4,6 +4,7 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import org.cgse.core.CapturedRecipe;
 import org.cgse.core.PlanningBudget;
+import org.cgse.core.StateFamily;
 
 import java.util.Iterator;
 import java.util.List;
@@ -13,14 +14,23 @@ public final class CapturedPattern {
 
     static final int MAX_VARIANTS = CapturedRecipe.MAX_VARIANTS;
 
-    public record Candidate(GenericStack stack, AEKey remaining, boolean configuration, boolean reusable) {
+    public record Candidate(GenericStack stack, AEKey remaining, boolean configuration, boolean reusable,
+                            StateFamily<AEKey> family) {
+
+        public Candidate(GenericStack stack, AEKey remaining, boolean configuration, boolean reusable) {
+            this(stack, remaining, configuration, reusable, null);
+        }
 
         public Candidate(GenericStack stack, AEKey remaining, boolean configuration) {
             this(stack, remaining, configuration, false);
         }
     }
 
-    public record Input(long multiplier, List<Candidate> candidates) {
+    public record Input(long multiplier, List<Candidate> candidates, CapturedRecipe.InputMode mode) {
+
+        public Input(long multiplier, List<Candidate> candidates) {
+            this(multiplier, candidates, CapturedRecipe.InputMode.LEGACY);
+        }
 
         public Input {
             candidates = List.copyOf(candidates);
@@ -32,7 +42,8 @@ public final class CapturedPattern {
     public CapturedPattern(List<Input> inputs, List<GenericStack> outputs, boolean external, boolean bounded) {
         delegate = new CapturedRecipe<>(inputs.stream().map(input -> new CapturedRecipe.Input<>(input.multiplier(),
                 input.candidates().stream().map(candidate -> new CapturedRecipe.Candidate<>(amount(candidate.stack()),
-                        candidate.remaining(), candidate.configuration(), candidate.reusable())).toList()))
+                        candidate.remaining(), candidate.configuration(), candidate.reusable(), candidate.family())).toList(),
+                input.mode()))
                 .toList(),
                 outputs.stream().map(CapturedPattern::amount).toList(), external, bounded);
     }
@@ -50,7 +61,11 @@ public final class CapturedPattern {
     }
 
     public Iterator<AEKey> dependencies() {
-        return delegate.dependencies();
+        return delegate.candidateDependencies();
+    }
+
+    CapturedRecipe<AEKey> core() {
+        return delegate;
     }
 
     public Expansion expand(PlanningBudget budget) {

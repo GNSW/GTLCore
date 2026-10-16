@@ -34,6 +34,10 @@ public final class EnergyMonitorBlockEntity extends BlockEntity {
         return owner == null ? null : TeamUtil.getTeamUUID(owner);
     }
 
+    public UUID ownerId() {
+        return owner;
+    }
+
     public boolean formed() {
         return formed;
     }
@@ -90,6 +94,10 @@ public final class EnergyMonitorBlockEntity extends BlockEntity {
             h.sample(now, current);
             display.putString("total", current.toString());
             display.putLong("now", now);
+            try {
+                var ownerName = TeamUtil.GetName(sl, owner);
+                if (ownerName != null) display.putString("ownerName", net.minecraft.network.chat.Component.Serializer.toJson(ownerName));
+            } catch (RuntimeException ignored) {}
             for (int i = 0; i < 4; i++) {
                 BigDecimal avg = h.average(now, EnergyHistory.WINDOWS[i]);
                 if (avg != null) display.putString("power" + i, avg.toPlainString());

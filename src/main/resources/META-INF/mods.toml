@@ -8,7 +8,7 @@ version = "${version}"
 displayName = "${mod_name}"
 displayURL = "${mod_url}"
 authors="${mod_author}"
-description = "GregTech Leisure Core Mods"
+description = "GregTech Leisure Core Mods. Core itself is LGPL-3.0 (see LICENSE / META-INF/licenses/LGPL-3.0.txt); includes GPL-3.0 derived portions from More AE2 Additions (mae2a) by EasterFG (see META-INF/licenses/LICENSE-GPL-3.0.txt)."
 
 [[dependencies.${mod_id}]]
 modId = "forge"

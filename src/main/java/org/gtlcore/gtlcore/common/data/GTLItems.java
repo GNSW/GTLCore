@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.common.data;
 
 import org.gtlcore.gtlcore.client.renderer.item.VirtualIngredientRenderer;
 import org.gtlcore.gtlcore.common.item.*;
+import org.gtlcore.gtlcore.integration.ae2.CircuitInfinityCell;
 import org.gtlcore.gtlcore.integration.ae2.FastInfinityCell;
 import org.gtlcore.gtlcore.integration.ae2.InfinityCell;
 import org.gtlcore.gtlcore.utils.TextUtil;
@@ -112,6 +113,7 @@ public class GTLItems {
     public static final ItemEntry<InfinityCell> ITEM_INFINITY_CELL = REGISTRATE.item("item_infinity_cell", p -> new InfinityCell(AEKeyType.items())).register();
     public static final ItemEntry<InfinityCell> FLUID_INFINITY_CELL = REGISTRATE.item("fluid_infinity_cell", p -> new InfinityCell(AEKeyType.fluids())).register();
     public static final ItemEntry<FastInfinityCell> FAST_INFINITY_CELL = REGISTRATE.item("fast_infinity_cell", p -> new FastInfinityCell()).register();
+    public static final ItemEntry<CircuitInfinityCell> CIRCUIT_INFINITY_CELL = REGISTRATE.item("circuit_infinity_cell", p -> new CircuitInfinityCell()).register();
 
     public static void InitUpgrades() {
         String storageCellGroup = GuiText.StorageCells.getTranslationKey();

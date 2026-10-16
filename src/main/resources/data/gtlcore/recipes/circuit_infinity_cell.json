@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": {
+      "item": "ae2:quartz_glass"
+    },
+    "B": {
+      "item": "ae2:cell_component_16k"
+    },
+    "C": {
+      "tag": "gtceu:circuits/lv"
+    },
+    "D": {
+      "item": "minecraft:diamond"
+    }
+  },
+  "pattern": [
+    "ABA",
+    "BCB",
+    "DDD"
+  ],
+  "result": {
+    "item": "gtlcore:circuit_infinity_cell"
+  },
+  "show_notification": true
+}

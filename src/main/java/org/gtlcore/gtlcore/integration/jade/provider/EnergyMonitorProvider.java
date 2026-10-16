@@ -23,7 +23,9 @@ public final class EnergyMonitorProvider implements IBlockComponentProvider, ISe
         var account = monitor.account();
         if (account != null) {
             binding.putUUID("account", account);
-            binding.putString("team", Component.Serializer.toJson(TeamUtil.GetName(accessor.getLevel(), account)));
+            try {
+                binding.putString("team", Component.Serializer.toJson(TeamUtil.GetName(accessor.getLevel(), monitor.ownerId())));
+            } catch (RuntimeException ignored) {}
         }
         data.put(TAG, binding);
     }
@@ -34,9 +36,13 @@ public final class EnergyMonitorProvider implements IBlockComponentProvider, ISe
         if (accessor.getServerData().contains(TAG)) {
             CompoundTag binding = accessor.getServerData().getCompound(TAG);
             if (binding.hasUUID("account")) {
-                Component team = Component.Serializer.fromJson(binding.getString("team"));
-                tooltip.add(Component.translatable("monitor.gtlcore.bound_team", team == null ? Component.literal("?") : team));
-                tooltip.add(Component.translatable("monitor.gtlcore.bound_uuid", binding.getUUID("account").toString()));
+                Component team = null;
+                if (binding.contains("team")) {
+                    try {
+                        team = Component.Serializer.fromJson(binding.getString("team"));
+                    } catch (RuntimeException ignored) {}
+                }
+                tooltip.add(Component.translatable("monitor.gtlcore.owner", team == null ? Component.literal("?") : team));
             } else tooltip.add(Component.translatable("monitor.gtlcore.unbound"));
         }
         var facing = accessor.getBlockState().getValue(EnergyMonitorBlock.FACING);

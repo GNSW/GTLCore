@@ -82,7 +82,19 @@ public final class EnergyMonitorRenderer implements BlockEntityRenderer<EnergyMo
         pose.mulPose(Axis.YP.rotationDegrees(-be.getBlockState().getValue(EnergyMonitorBlock.FACING).toYRot()));
         pose.translate(-2.42, 2.42, .506);
         pose.scale(.01f, -.01f, .01f);
-        text(pose, buffers, Component.translatable("monitor.gtlcore.formed_title").getString(), 12, 12, 0xFFFFFF);
+        String title = Component.translatable("monitor.gtlcore.formed_title").getString();
+        text(pose, buffers, title, 12, 12, 0xFFFFFF);
+        if (data.contains("ownerName")) {
+            Component owner = null;
+            try {
+                owner = Component.Serializer.fromJson(data.getString("ownerName"));
+            } catch (RuntimeException ignored) {}
+            if (owner != null) {
+                float scale = Math.min(1.7f, (484f - 12f) / Math.max(1, Minecraft.getInstance().font.width(title)));
+                text(pose, buffers, Component.translatable("monitor.gtlcore.owner", owner).getString(),
+                        12f + Minecraft.getInstance().font.width(title) * scale + 8f, 12, 0x55CCFF);
+            }
+        }
         for (int i = 0; i < 4; i++) {
             int y = 68 + i * 32;
             largeText(pose, buffers, PERIODS[i], 12, y, COLORS[i]);

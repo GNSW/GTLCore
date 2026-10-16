@@ -2,6 +2,8 @@ package org.gtlcore.gtlcore.client.monitor;
 
 import org.gtlcore.gtlcore.integration.gtmt.monitor.*;
 
+import com.gregtechceu.gtceu.utils.FormattingUtil;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.*;
@@ -87,8 +89,8 @@ public final class EnergyMonitorRenderer implements BlockEntityRenderer<EnergyMo
             String v = data.contains("power" + i) ? data.getString("power" + i) : "";
             largeText(pose, buffers, v.isEmpty() ? Component.translatable("monitor.gtlcore.collecting").getString() : gtPower(v), 110, y, color(v));
         }
-        chart(pose, buffers, data.getList("changes5m", Tag.TAG_COMPOUND), 12, 228, true, data.getLong("now"));
-        chart(pose, buffers, data.getList("points", Tag.TAG_COMPOUND), 250, 228, false, data.getLong("now"));
+        chart(pose, buffers, data.getList("changes5m", Tag.TAG_COMPOUND), 12, 228, true, data.getLong("now"), Component.translatable("monitor.gtlcore.chart_changes").getString());
+        chart(pose, buffers, data.getList("points", Tag.TAG_COMPOUND), 250, 228, false, data.getLong("now"), Component.translatable("monitor.gtlcore.chart_history").getString());
         String estimate;
         if (!data.contains("power0")) {
             estimate = Component.translatable("monitor.gtlcore.estimate_collecting").getString();
@@ -96,7 +98,7 @@ public final class EnergyMonitorRenderer implements BlockEntityRenderer<EnergyMo
             int sign = new BigDecimal(data.getString("power0")).signum();
             if (sign > 0) estimate = Component.translatable("monitor.gtlcore.fill_forever").getString();
             else if (sign < 0) {
-                String drain = data.contains("drainSeconds") ? compact(data.getString("drainSeconds")) + " s" : Component.translatable("monitor.gtlcore.collecting").getString();
+                String drain = data.contains("drainSeconds") ? drainEta(data.getString("drainSeconds")) : Component.translatable("monitor.gtlcore.collecting").getString();
                 estimate = Component.translatable("monitor.gtlcore.drain_eta", drain).getString();
             } else estimate = Component.translatable("monitor.gtlcore.estimate_stable").getString();
         }
@@ -104,7 +106,27 @@ public final class EnergyMonitorRenderer implements BlockEntityRenderer<EnergyMo
         pose.popPose();
     }
 
-    private static void chart(PoseStack pose, MultiBufferSource buffers, ListTag points, int left, int width, boolean change, long now) {
+    private static String drainEta(String secondsText) {
+        long total;
+        try {
+            total = new BigInteger(secondsText).min(BigInteger.valueOf(Long.MAX_VALUE)).longValue();
+        } catch (NumberFormatException e) {
+            return Component.translatable("monitor.gtlcore.collecting").getString();
+        }
+        if (total <= 0L) return Component.translatable("monitor.gtlcore.collecting").getString();
+        long days = total / 86400L;
+        long hours = total % 86400L / 3600L;
+        long minutes = total % 3600L / 60L;
+        long seconds = total % 60L;
+        StringBuilder text = new StringBuilder();
+        if (days > 0L) text.append(Component.translatable("monitor.gtlcore.time_days", FormattingUtil.formatNumbers(days)).getString());
+        if (days > 0L || hours > 0L) text.append(Component.translatable("monitor.gtlcore.time_hours", FormattingUtil.formatNumbers(hours)).getString());
+        if (days > 0L || hours > 0L || minutes > 0L) text.append(Component.translatable("monitor.gtlcore.time_minutes", FormattingUtil.formatNumbers(minutes)).getString());
+        text.append(Component.translatable("monitor.gtlcore.time_seconds", FormattingUtil.formatNumbers(seconds)).getString());
+        return text.toString();
+    }
+
+    private static void chart(PoseStack pose, MultiBufferSource buffers, ListTag points, int left, int width, boolean change, long now, String title) {
         int curveColor = COLORS[change ? 0 : 3];
         if (points.isEmpty()) {
             chartText(pose, buffers, Component.translatable("monitor.gtlcore.collecting").getString(), left, 280, width, 0xAAAAAA);
@@ -123,6 +145,7 @@ public final class EnergyMonitorRenderer implements BlockEntityRenderer<EnergyMo
         BigInteger span = max.subtract(min);
         chartText(pose, buffers, compact(max.toString()) + " EU", left, 237, width, 0xAAAAAA);
         chartText(pose, buffers, compact(min.toString()) + " EU", left, 412, width, 0xAAAAAA);
+        chartText(pose, buffers, title, left, 218, width, 0xAAAAAA);
         int x0 = left + 6, x1 = left + width - 6;
         line(pose, buffers, x0, 260, x0, 405, 0x777777);
         line(pose, buffers, x0, 405, x1, 405, 0x777777);
@@ -182,7 +205,7 @@ public final class EnergyMonitorRenderer implements BlockEntityRenderer<EnergyMo
     private static void line(PoseStack p, MultiBufferSource b, float x, float y, float xx, float yy, int color) {
         float dx = xx - x, dy = yy - y, length = (float) Math.sqrt(dx * dx + dy * dy);
         if (length == 0) return;
-        float nx = -dy / length * .55f, ny = dx / length * .55f;
+        float nx = -dy / length * .75f, ny = dx / length * .75f;
         VertexConsumer v = b.getBuffer(RenderType.textBackground());
         int r = (color >> 16) & 255, g = (color >> 8) & 255, bl = color & 255;
         v.vertex(p.last().pose(), x + nx, y + ny, 0).color(r, g, bl, 255).uv2(LightTexture.FULL_BRIGHT).endVertex();

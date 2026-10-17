@@ -50,11 +50,8 @@ final class CountSchedule<K> implements AutoCloseable {
     private boolean reverseExact, reverseTried;
     private long memory, labelMemory, programMemory;
     private CountScheduleOrder<K> guidedOrder;
-    private CountScheduleWord<K> word;
-    private boolean wordApplied, wordDisabled;
     private final BitSet visited = new BitSet();
     private boolean guidedTried, guiding;
-    private boolean preferredOnly;
 
     private enum WitnessSource {
         RECURRENCE,
@@ -111,25 +108,6 @@ final class CountSchedule<K> implements AutoCloseable {
         }
     }
 
-    /** One bounded, positive-only scan requested by downstream state feedback.
-     * Its owner retains the ordinary schedule continuation separately. */
-    static <K> CountSchedule<K> preferred(RecipeCountModel<K> model, BigInteger[] counts,
-                                        int[] order, PlanningBudget budget) {
-        if (order.length != counts.length) throw new IllegalArgumentException("Incomplete recipe order");
-        var seen = new BitSet(order.length);
-        for (int index : order) {
-            budget.check();
-            if (index < 0 || index >= order.length || seen.get(index)) throw new IllegalArgumentException("Invalid recipe order");
-            seen.set(index);
-        }
-        var work = new CountSchedule<>(model, counts, budget);
-        work.preferredOnly = true;
-        work.startupChecked = true;
-        work.repairingOrder = true;
-        work.repairOrder = order.clone();
-        return work;
-    }
-
     boolean step() {
         try (var costs = budget.trace(PlanningCostTrace.Stage.SCHEDULE)) {
             return stepMeasured();
@@ -180,37 +158,13 @@ final class CountSchedule<K> implements AutoCloseable {
                 BigInteger bound = remaining[i].divide(used[i]);
                 extra = extra == null ? bound : extra.min(bound);
             }
-            BigInteger countExtra = extra == null ? BigInteger.ZERO : extra;
-            extra = limit(summary, countExtra);
+            extra = limit(summary, extra == null ? BigInteger.ZERO : extra);
             if (extra.signum() > 0) {
                 apply(summary, extra);
                 for (int i = 0; i < used.length; i++) remaining[i] = remaining[i].subtract(used[i].multiply(extra));
             }
             if (!reserveProgram(extra)) return finish(Result.UNKNOWN);
             program.add(PlanStep.repeat(passBody, extra.add(BigInteger.ONE)));
-            // One fixed scan order can split a resource-return cycle over
-            // several passes. Join only witnessed passes, then check the full
-            // prefix and remaining multiset before skipping any future work.
-            if (extra.signum() == 0 && countExtra.signum() > 0 && !rejectedWitness && !wordDisabled) {
-                if (word == null) word = new CountScheduleWord<>(summaries, original, budget);
-                var jump = word.observe(passBody, summary, used, remaining, held, model.external);
-                if (jump != null) {
-                    long bytes = 128L + 8L * jump.passes() + 16L * ((jump.copies().bitLength() + 62L) / 63);
-                    if (!budget.tryReserve(bytes)) { word.close(); }
-                    else {
-                        memory += bytes; programMemory += bytes;
-                        apply(jump.summary(), jump.copies());
-                        for (int i = 0; i < remaining.length; i++) {
-                            budget.check();
-                            remaining[i] = remaining[i].subtract(jump.counts()[i].multiply(jump.copies()));
-                        }
-                        program.add(PlanStep.repeat(jump.body(), jump.copies()));
-                        wordApplied = true;
-                        budget.note("count_schedule_word", "witnessed_passes=" + jump.passes() + "; extra_copies=" + jump.copies());
-                        word.reset();
-                    }
-                }
-            } else if (word != null) word.reset();
             pass.clear();
             Arrays.fill(used, BigInteger.ZERO);
             cursor = 0;
@@ -231,22 +185,6 @@ final class CountSchedule<K> implements AutoCloseable {
             int recipe = (cursor++ + rotation) % count;
             if (variant >= orders) recipe = count - 1 - recipe;
             if (repairingOrder) recipe = repairOrder[cursor - 1];
-            if (preferredOnly) {
-                // An activation/producer late in the order can enable an
-                // earlier preferred rule. Reconsider ready rules immediately;
-                // do not let later rules destroy its physical eligibility.
-                int unavailable = -1;
-                for (int index : repairOrder) {
-                    budget.check();
-                    if (visited.get(index)) continue;
-                    if (unavailable < 0) unavailable = index;
-                    if (remaining[index].signum() > 0 && limit(summaries.get(index), remaining[index]).signum() > 0) {
-                        unavailable = index; break;
-                    }
-                }
-                recipe = unavailable;
-                visited.set(recipe);
-            }
             if (guiding) {
                 recipe = guidedOrder.choose(held, remaining, visited);
                 visited.set(recipe);
@@ -274,7 +212,6 @@ final class CountSchedule<K> implements AutoCloseable {
                 witnessSource = WitnessSource.GREEDY;
                 return finish(Result.WITNESS);
             }
-            if (wordApplied) return nextAttempt();
             if (!guiding && !repairTried && prepareRepairOrder()) {
                 repairingOrder = true;
                 reset();
@@ -333,8 +270,6 @@ final class CountSchedule<K> implements AutoCloseable {
     }
 
     private void reset() {
-        if (word != null) word.reset();
-        wordApplied = false;
         remaining = original.clone();
         used = new BigInteger[original.length];
         Arrays.fill(used, BigInteger.ZERO);
@@ -381,14 +316,6 @@ final class CountSchedule<K> implements AutoCloseable {
     }
 
     private boolean nextAttempt() {
-        if (wordApplied) {
-            // An exact repeated word may change later greedy choices. Failure
-            // or downstream rejection still owes the original, unskipped scan.
-            wordDisabled = true;
-            reset();
-            return false;
-        }
-        if (preferredOnly) return finish(Result.UNKNOWN);
         if (!guidedTried && !smallMultiset()) {
             guidedTried = true;
             guidedOrder = new CountScheduleOrder<>(model, summaries, budget);
@@ -768,7 +695,7 @@ final class CountSchedule<K> implements AutoCloseable {
             if (restartExact()) return false;
         }
         if (value == Result.UNKNOWN && exact && !reverseTried && prepareReverse()) return false;
-        if (value == Result.UNKNOWN && !boundedTried && !preferredOnly) {
+        if (value == Result.UNKNOWN && !boundedTried) {
             boundedTried = true;
             bounded = new CountBoundedSchedule<>(model, original, budget);
             if (bounded.result() == null) {
@@ -781,9 +708,6 @@ final class CountSchedule<K> implements AutoCloseable {
         if (exact) budget.note("count_schedule_por", "components=" + independentComponents +
                 "; states=" + seen.size() + "; sleep_labels=" + labels + "; independent_interleavings_skipped=" + orderedAway +
                 "; reverse=" + reverseExact + "; result=" + value);
-        // Assembly retains the schedule, but no completed candidate needs this
-        // optional word workspace. A rejected acceleration retries without it.
-        if (word != null) { word.close(); word = null; }
         result = value;
         // The caller may reject this prefix after exact seed/production
         // assembly. Keep its reservation until accepted, retried, or closed.
@@ -835,7 +759,6 @@ final class CountSchedule<K> implements AutoCloseable {
 
     @Override
     public void close() {
-        if (word != null) { word.close(); word = null; }
         if (chains != null) { chains.close(); chains = null; }
         if (guidedOrder != null) {
             guidedOrder.close();

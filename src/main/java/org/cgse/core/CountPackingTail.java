@@ -11,25 +11,18 @@ final class CountPackingTail implements AutoCloseable {
     private final int offset, size, dimensions, points;
     private final long[][] coefficients;
     private final CountPackingValues vectors;
-    private final boolean compact;
-    private final long[] minimum, maximum, spread, common, possible, query, stricter;
-    private final long[] suffixMinimum, positive, negative;
+    private final long[] minimum, maximum, spread, common, possible, query;
     private final int[] order, from, to, left, right, stack;
     private long memory, fixed, selected, assignment;
     private int cursor, phase, nodes = 1, pending;
     private boolean ready, complete, feasible;
-    private CountPackingProjection projection;
-    private boolean projectionAttempted, projected;
-    private long queryWork;
-    private int queries;
 
     static CountPackingTail create(long[][] coefficients, int offset, PlanningBudget budget) {
-        if (coefficients.length < 1 || coefficients.length > 35) throw new IllegalArgumentException("Packing row count");
         int size = coefficients[0].length - offset;
         if (offset < 0 || size < 1 || size > 12) throw new IllegalArgumentException("Packing tail width");
         int points = 1 << size, nodes = 2 * ((points + 7) / 8);
         boolean compact = CountPackingValues.canPack(coefficients, offset, coefficients[0].length, budget);
-        long bytes = 8192L + 24L * coefficients.length + points * (8L + (compact ? 4L : 8L) * coefficients.length) + nodes * (44L + 8L * coefficients.length);
+        long bytes = 8192L + points * (8L + (compact ? 4L : 8L) * coefficients.length) + nodes * (36L + 8L * coefficients.length);
         if (!budget.tryReserve(bytes)) return null;
         try { return new CountPackingTail(coefficients, offset, budget, bytes, compact); }
         catch (RuntimeException failure) { budget.release(bytes); throw failure; }
@@ -37,14 +30,11 @@ final class CountPackingTail implements AutoCloseable {
 
     private CountPackingTail(long[][] coefficients, int offset, PlanningBudget budget, long memory, boolean compact) {
         this.coefficients = coefficients; this.offset = offset; this.budget = budget; this.memory = memory;
-        this.compact = compact;
         size = coefficients[0].length - offset; dimensions = coefficients.length; points = 1 << size;
         int capacity = 2 * ((points + 7) / 8);
         vectors = new CountPackingValues(points * dimensions, compact); minimum = new long[capacity * dimensions];
         maximum = new long[dimensions]; spread = new long[dimensions]; query = new long[dimensions];
-        suffixMinimum = new long[dimensions]; positive = new long[dimensions]; negative = new long[dimensions];
         common = new long[capacity]; possible = new long[capacity];
-        stricter = new long[capacity]; stricter[0] = (1L << dimensions) - 1;
         order = new int[points]; from = new int[capacity]; to = new int[capacity];
         rejectedPoint = new int[points];
         rejected = new int[capacity];
@@ -52,14 +42,8 @@ final class CountPackingTail implements AutoCloseable {
         // This complete Boolean box has an exact row spread without enumerating
         // its points. Relative spreads guide partitioning, never exclusions.
         for (int r = 0; r < dimensions; r++) {
-            budget.operations(PlanningBudget.Operation.INTEGER, 64, 3 * size);
-            for (int i = offset; i < offset + size; i++) {
-                long value = coefficients[r][i], bit = 1L << (i - offset);
-                spread[r] += Math.abs(value);
-                suffixMinimum[r] += Math.min(0, value);
-                if (value > 0) positive[r] |= bit;
-                else if (value < 0) negative[r] |= bit;
-            }
+            budget.operations(PlanningBudget.Operation.INTEGER, 64, size);
+            for (int i = offset; i < offset + size; i++) spread[r] += Math.abs(coefficients[r][i]);
         }
     }
 
@@ -94,65 +78,23 @@ final class CountPackingTail implements AutoCloseable {
         this.selected = (selected >>> offset) & fixed;
         // slacks = b - fixed activity - minimum remaining activity. Restore
         // the full suffix RHS, including forced coordinates checked by masks.
-        // Construction is complete, so its temporary maxima can hold this
-        // query's correction masks. Batch the bounded accounting instead of
-        // updating the shared work counter once or twice for every row.
-        budget.operations(PlanningBudget.Operation.INTEGER, 64, 3 * dimensions);
-        int correctionCount = 0;
         for (int r = 0; r < dimensions; r++) {
-            maximum[r] = (this.selected & positive[r]) | (fixed & ~this.selected & negative[r]);
-            correctionCount += Long.bitCount(maximum[r]);
-        }
-        if (correctionCount != 0)
-            budget.operations(PlanningBudget.Operation.INTEGER, 64, 2 * correctionCount);
-        for (int r = 0; r < dimensions; r++) {
-            long bound = slacks[r] + suffixMinimum[r];
-            // The full free suffix minimum is immutable. A fixed coordinate
-            // needs a correction only when it takes its adverse endpoint:
-            // positive coefficient at one, or negative coefficient at zero.
-            for (long bits = maximum[r]; bits != 0; bits &= bits - 1)
-                bound += Math.abs(coefficients[r][offset + Long.numberOfTrailingZeros(bits)]);
+            long bound = slacks[r];
+            budget.operations(PlanningBudget.Operation.INTEGER, 64, size);
+            for (int i = 0; i < size; i++) {
+                long a = coefficients[r][offset + i], bit = 1L << i;
+                if ((fixed & bit) == 0) bound += Math.min(0, a);
+                else if ((this.selected & bit) != 0) bound += a;
+            }
             query[r] = bound;
         }
         pending = 1; stack[0] = 0; complete = feasible = false;
-        projected = false;
-        queries++;
-        // Current-query acceleration, not cross-request cache preparation.
-        // Require repeated traversal worth two estimated builds: a short-lived
-        // tail can otherwise finish before its new index repays construction,
-        // and even a small delay can miss the parent's completion opportunity.
-        // Memory refusal preserves the ordinary index.
-        long estimate = (long) points * (dimensions + size);
-        if (!projectionAttempted && queries >= Math.max(32, points / 32) && queryWork >= 2 * estimate &&
-                budget.remainingWork() >= 2 * estimate) {
-            projectionAttempted = true;
-            for (int r = 0; r < dimensions; r++) {
-                budget.operation(PlanningBudget.Operation.SCAN, 0);
-                if (positive[r] == 0 && negative[r] != 0) {
-                    projection = CountPackingProjection.create(vectors, points, dimensions, r, compact, budget);
-                    break;
-                }
-            }
-        }
     }
 
     /** Exact orthant query; a failed query only closes its caller's prefix. */
     boolean step() {
         if (complete) return true;
         budget.checkpoint();
-        if (!projected) {
-            if (projection != null) {
-                if (!projection.prepare()) return false;
-                if (projection.rejects(query)) return complete = true;
-            }
-            projected = true;
-        }
-        long before = budget.threadWork();
-        try { return advance(); }
-        finally { queryWork += budget.threadWork() - before; }
-    }
-
-    private boolean advance() {
         if (pending == 0) return complete = true;
         int node = stack[--pending];
         budget.operation(PlanningBudget.Operation.SCAN, 0);
@@ -160,8 +102,13 @@ final class CountPackingTail implements AutoCloseable {
         // Recheck the last separating row against this query. The remembered
         // coordinate is an ordering hint, never a cached failure or bound.
         int first = rejected[node] == 0 ? dimensions - 1 : rejected[node] - 1;
-        int rejection = CountPackingQuery.reject(minimum, node * dimensions, query, first, stricter[node], budget);
-        if (rejection >= 0) { rejected[node] = rejection + 1; return false; }
+        budget.operation(PlanningBudget.Operation.SCAN, 0);
+        if (minimum[node * dimensions + first] > query[first]) return false;
+        for (int r = dimensions - 1; r >= 0; r--) {
+            if (r == first) continue;
+            budget.operation(PlanningBudget.Operation.SCAN, 0);
+            if (minimum[node * dimensions + r] > query[r]) { rejected[node] = r + 1; return false; }
+        }
         if (left[node] != 0) {
             stack[pending++] = right[node]; stack[pending++] = left[node];
             return false;
@@ -171,9 +118,14 @@ final class CountPackingTail implements AutoCloseable {
             budget.operation(PlanningBudget.Operation.SCAN, 0);
             if ((((long) id ^ selected) & fixed) != 0) continue;
             int pointFirst = rejectedPoint[id] == 0 ? dimensions - 1 : rejectedPoint[id] - 1;
-            int pointRejection = CountPackingQuery.reject(vectors, id * dimensions, query, pointFirst, budget);
-            if (pointRejection >= 0) rejectedPoint[id] = pointRejection + 1;
-            else { assignment = (long) id << offset; feasible = complete = true; return true; }
+            budget.operation(PlanningBudget.Operation.SCAN, 0);
+            boolean valid = vectors.get(id * dimensions + pointFirst) <= query[pointFirst];
+            if (valid) for (int r = dimensions - 1; r >= 0; r--) {
+                if (r == pointFirst) continue;
+                budget.operation(PlanningBudget.Operation.SCAN, 0);
+                if (vectors.get(id * dimensions + r) > query[r]) { rejectedPoint[id] = r + 1; valid = false; break; }
+            }
+            if (valid) { assignment = (long) id << offset; feasible = complete = true; return true; }
         }
         return false;
     }
@@ -226,8 +178,10 @@ final class CountPackingTail implements AutoCloseable {
 
     private void join(int node) {
         int a = left[node], b = right[node];
-        CountPackingQuery.join(minimum, stricter, dimensions, node, a, b, budget);
-        budget.operations(PlanningBudget.Operation.INTEGER, 64, 2);
+        budget.operations(PlanningBudget.Operation.INTEGER, 64, dimensions + 2);
+        for (int r = 0; r < dimensions; r++) {
+            minimum[node * dimensions + r] = Math.min(minimum[a * dimensions + r], minimum[b * dimensions + r]);
+        }
         common[node] = common[a] & common[b]; possible[node] = possible[a] | possible[b];
     }
 
@@ -255,9 +209,5 @@ final class CountPackingTail implements AutoCloseable {
         if (!feasible) throw new IllegalStateException("No suffix witness");
         return assignment;
     }
-    @Override public void close() {
-        if (projection != null) projection.close();
-        projection = null;
-        budget.release(memory); memory = 0;
-    }
+    @Override public void close() { budget.release(memory); memory = 0; }
 }

@@ -219,15 +219,14 @@ public final class GraphCpuController {
             progressNanos = waitingLogNanos = now;
             return;
         }
-        if (runtime.finished() || runtime.suspended() ||
+        if (runtime.finished() || runtime.suspended() || runtime.expected().isEmpty() ||
                 now - progressNanos < 30_000_000_000L || now - waitingLogNanos < 30_000_000_000L)
             return;
         waitingLogNanos = now;
         try {
             GTLCore.LOGGER.info("[Graph Crafting] job={} target={} waiting={} no_progress_s={} expected={} registered_providers={}",
                     link.getCraftingID(), runtime.plan().target(), runtime.reason(), (now - progressNanos) / 1_000_000_000L,
-                    runtime.expected().entrySet().stream().limit(4).toList(), runtime.expected().isEmpty() ?
-                            adapter.blockedDetails() : adapter.waitingDetails(runtime.plan(), runtime.expected()));
+                    runtime.expected().entrySet().stream().limit(4).toList(), adapter.waitingDetails(runtime.plan(), runtime.expected()));
         } catch (RuntimeException diagnosticFailure) {
             GTLCore.LOGGER.debug("Graph waiting diagnostic unavailable", diagnosticFailure);
         }

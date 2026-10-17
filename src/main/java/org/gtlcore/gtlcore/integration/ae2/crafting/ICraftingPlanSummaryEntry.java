@@ -1,9 +1,5 @@
 package org.gtlcore.gtlcore.integration.ae2.crafting;
 
-import appeng.api.stacks.AEKey;
-
-import java.util.List;
-
 public interface ICraftingPlanSummaryEntry {
 
     long gtlcore$getCraftTimes();
@@ -17,12 +13,4 @@ public interface ICraftingPlanSummaryEntry {
     boolean gtlcore$isMissingGraphSeed();
 
     void gtlcore$setMissingGraphSeed(boolean missing);
-
-    int gtlcore$getGroupedToolStates();
-
-    void gtlcore$setGroupedToolStates(int states);
-
-    List<AEKey> gtlcore$getMissingKeys();
-
-    void gtlcore$setMissingKeys(List<AEKey> keys);
 }

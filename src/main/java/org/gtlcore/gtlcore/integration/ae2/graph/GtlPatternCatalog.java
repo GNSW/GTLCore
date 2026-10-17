@@ -31,30 +31,6 @@ import java.util.*;
 public final class GtlPatternCatalog {
 
     private static final int MAX_CAPTURE_STATES = 100_000;
-    private static final Set<GtlPatternCatalog> CATALOGS = Collections.newSetFromMap(new WeakHashMap<>());
-
-    public GtlPatternCatalog() {
-        CATALOGS.add(this);
-    }
-
-    /** Server-thread retention boundary. Active requests keep their immutable snapshots. */
-    static void trimRetainedCaches() {
-        record Cached(GtlPatternCatalog owner, Roots roots, Structure structure) {}
-        List<Cached> entries = new ArrayList<>();
-        long bytes = 0;
-        for (var owner : CATALOGS) for (var entry : owner.cache.entrySet()) {
-            entries.add(new Cached(owner, entry.getKey(), entry.getValue()));
-            bytes += entry.getValue().catalog().retainedBytes() + 128L * entry.getValue().resources().size();
-        }
-        long limit = ConfigHolder.INSTANCE.ae.ae2GraphCacheMemoryMiB * (1L << 20);
-        if (bytes <= limit) return;
-        entries.sort(Comparator.comparingLong(entry -> entry.structure().catalog().lastAccess()));
-        for (var entry : entries) {
-            entry.owner().cache.remove(entry.roots(), entry.structure());
-            bytes -= entry.structure().catalog().retainedBytes() + 128L * entry.structure().resources().size();
-            if (bytes <= limit) break;
-        }
-    }
 
     private record Roots(AEKey target, Set<AEKey> recovery, boolean discoverByproducts) {}
 
@@ -191,7 +167,6 @@ public final class GtlPatternCatalog {
             simulate = source != null && (refreshInventory || AEConfig.instance().isCraftingSimulatedExtraction() ||
                     ManualCraftingInventoryLock.hasReservations(storage.getInventory()));
             structure = cache.get(roots);
-            if (structure != null) structure.catalog().touch();
             if (structure != null) {
                 hit = true;
                 for (AEKey template : structure.inputTemplates()) flexible.add(template.getPrimaryKey());
@@ -381,7 +356,6 @@ public final class GtlPatternCatalog {
                         if (structure.providerRevision() != revision) structure = new Structure(structure.catalog(), structure.resources(),
                                 structure.inputTemplates(), structure.fuzzyKeys(), structure.boundedAlternatives(), structure.dependencies(), revision);
                         cache.put(roots, structure);
-                        trimRetainedCaches();
                         long weight = cache.values().stream().mapToLong(value -> value.resources().size() + value.catalog().size()).sum();
                         // One catalog is already bounded by the request's graph/memory
                         // limits. Keep the newest alone if it exceeds the shared weight

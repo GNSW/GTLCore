@@ -68,7 +68,7 @@ public final class PlanningScheduler implements AutoCloseable {
     public <T> CompletableFuture<T> submit(Work<T> work, PlanningBudget budget) {
         if (admitted.incrementAndGet() > maxRequests) {
             admitted.decrementAndGet();
-            try { work.close(); } finally { budget.closeMemory(); }
+            work.close();
             return CompletableFuture.failedFuture(new PlanningBudget.Exhausted(PlanningBudget.Limit.QUEUE_LIMIT));
         }
         Job<T> job = new Job<>(work, budget);
@@ -357,9 +357,7 @@ public final class PlanningScheduler implements AutoCloseable {
         }
 
         private void dispose() {
-            if (disposed.compareAndSet(false, true)) {
-                try { work.close(); } finally { budget.closeMemory(); }
-            }
+            if (disposed.compareAndSet(false, true)) work.close();
         }
 
         private void releaseAdmission() {

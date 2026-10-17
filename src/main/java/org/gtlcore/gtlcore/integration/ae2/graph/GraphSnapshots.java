@@ -1,7 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import org.gtlcore.gtlcore.GTLCore;
-import org.gtlcore.gtlcore.config.ConfigHolder;
 
 import net.minecraft.Util;
 import net.minecraftforge.event.OnDatapackSyncEvent;
@@ -25,7 +24,6 @@ public final class GraphSnapshots {
     private static final Deque<Request> pending = new ArrayDeque<>();
     private static long spentNanos;
     private static boolean draining;
-    private static int cacheTicks;
 
     private GraphSnapshots() {}
 
@@ -39,10 +37,6 @@ public final class GraphSnapshots {
     public static void tick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         drain();
-        if (++cacheTicks >= 20) {
-            cacheTicks = 0;
-            GtlPatternCatalog.trimRetainedCaches();
-        }
     }
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -53,9 +47,8 @@ public final class GraphSnapshots {
     /** Share the tick allowance with immediate captures; do not impose a second tick wait on tiny orders. */
     private static void drain() {
         if (draining || pending.isEmpty()) return;
-        long allowance = ConfigHolder.INSTANCE.ae.ae2GraphSnapshotMicros * 1000L;
-        if (spentNanos >= allowance) return;
-        long began = System.nanoTime(), deadline = began + allowance - spentNanos;
+        if (spentNanos >= 2_000_000L) return;
+        long began = System.nanoTime(), deadline = began + 2_000_000L - spentNanos;
         try {
             drainUntil(deadline, false);
         } finally {
@@ -67,14 +60,13 @@ public final class GraphSnapshots {
      * MinecraftServer calls this only after polling its regular/chunk tasks in
      * waitUntilNextTick. This is still the server thread, not async world access.
      * Leave a millisecond before the real next-tick deadline; never use vanilla's
-     * extendable delayed-task deadline. An overloaded server keeps the configured tick cap.
+     * extendable delayed-task deadline. An overloaded server keeps the 2 ms cap.
      */
     public static boolean idle(long nextTickMillis) {
         if (draining || pending.isEmpty()) return false;
         long remainingMillis = nextTickMillis - Util.getMillis();
         if (remainingMillis <= 1) return false;
-        long allowance = Math.min(1_000_000L, ConfigHolder.INSTANCE.ae.ae2GraphSnapshotMicros * 1000L);
-        return drainUntil(System.nanoTime() + Math.min(allowance, (remainingMillis - 1) * 1_000_000L), true);
+        return drainUntil(System.nanoTime() + Math.min(1_000_000L, (remainingMillis - 1) * 1_000_000L), true);
     }
 
     private static boolean drainUntil(long deadline, boolean idle) {

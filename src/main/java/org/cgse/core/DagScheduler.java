@@ -15,8 +15,7 @@ final class DagScheduler<K> {
     private final ReadyQueue ready;
     private final ReadyQueue awakened;
     private final PriorityQueue<Retry> retries = new PriorityQueue<>(Comparator.comparingLong(Retry::tick));
-    private final DagWakeIndex<K> consumers;
-    private long wakeupVisits;
+    private final Map<K, List<Integer>> consumers = new HashMap<>();
     private int unfinished;
     private int active = -1;
     private boolean preferAwakened = true;
@@ -31,13 +30,11 @@ final class DagScheduler<K> {
             String recipe = this.recipes.get(i);
             remaining[i] = counts.get(recipe).subtract(accepted.getOrDefault(recipe, BigInteger.ZERO));
             if (remaining[i].signum() < 0) throw new IllegalArgumentException("DAG accepted count exceeds plan");
-        }
-        consumers = new DagWakeIndex<>(this.recipes.stream().map(recipes::get).toList(), remaining);
-        for (int i = 0; i < this.recipes.size(); i++) {
             if (remaining[i].signum() > 0) {
                 unfinished++;
                 enqueue(i);
             }
+            for (K key : recipes.get(recipe).inputs().keySet()) consumers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(i);
         }
     }
 
@@ -96,9 +93,6 @@ final class DagScheduler<K> {
         // busy return stream cannot starve unrelated nodes or due retries.
         boolean wake = !awakened.isEmpty() && (preferAwakened || ready.isEmpty());
         active = (wake ? awakened : ready).removeFirst();
-        // Polling removes the ready notification. Subscribe again before the
-        // provider call, which may synchronously return an input of this node.
-        consumers.enable(active);
         preferAwakened = !wake;
         return new PlanStep.Batch(recipes.get(active), ExactAmounts.capped(remaining[active]));
     }
@@ -112,7 +106,6 @@ final class DagScheduler<K> {
             // provider returned. It must not leave a zero-run ready entry.
             ready.remove(active);
             awakened.remove(active);
-            consumers.disable(active);
             generation[active]++;
         }
         else enqueue(active);
@@ -122,17 +115,13 @@ final class DagScheduler<K> {
         if (active >= 0 && remaining[active].signum() > 0) {
             ready.remove(active);
             awakened.remove(active);
-            consumers.enable(active);
             retries.add(new Retry(active, tick, ++generation[active]));
         }
     }
 
     void resourceChanged(K key) {
-        for (int index; (index = consumers.first(key)) >= 0; ) {
-            wakeupVisits++;
-            // One ready notification already covers every input event for
-            // this node. Remove all its subscriptions until it is polled.
-            consumers.disable(index);
+        for (int index : consumers.getOrDefault(key, List.of())) {
+            if (remaining[index].signum() <= 0 || awakened.contains(index)) continue;
             ready.remove(index);
             generation[index]++;
             awakened.addLast(index);
@@ -142,12 +131,8 @@ final class DagScheduler<K> {
     private void enqueue(int index) {
         if (remaining[index].signum() <= 0 || ready.contains(index) || awakened.contains(index)) return;
         generation[index]++;
-        consumers.enable(index);
         ready.addLast(index);
     }
-
-    long wakeupVisits() { return wakeupVisits; }
-    long wakeupIndexWordVisits() { return consumers.wordVisits(); }
 
     boolean finished() {
         return unfinished == 0;

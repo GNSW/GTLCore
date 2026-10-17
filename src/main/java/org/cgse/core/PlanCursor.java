@@ -23,7 +23,6 @@ public final class PlanCursor {
     private final Set<PlanStep> work = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<PlanStep, Map<String, BigInteger>> loopCounts = new IdentityHashMap<>();
     private final List<Frame> stack = new ArrayList<>();
-    private boolean mixedLoops;
 
     public PlanCursor(PlanStep root) {
         index(root);
@@ -88,7 +87,6 @@ public final class PlanCursor {
         } else if (step instanceof PlanStep.Repeat repeat) {
             if (repeat.times() > 0 && work.contains(repeat.body())) work.add(step);
             Homogeneous body = homogeneous.get(repeat.body());
-            if (repeat.times() > 1 && body == null && work.contains(repeat.body())) mixedLoops = true;
             if (repeat.times() == 0) homogeneous.put(step, new Homogeneous(null, BigInteger.ZERO));
             else if (body != null) homogeneous.put(step, new Homogeneous(body.recipe, body.runs.multiply(BigInteger.valueOf(repeat.times()))));
         } else {
@@ -154,51 +152,6 @@ public final class PlanCursor {
             }
         }
         return null;
-    }
-
-    boolean hasMixedLoops() { return mixedLoops; }
-
-    /** A boundary of one live Repeat occurrence, not merely a shared body ID.
-     * Peeking only descends sequences/empty suffixes; it accepts no operation. */
-    LoopBoundary loopBoundary(PlanningBudget budget) {
-        while (!stack.isEmpty()) {
-            budget.check();
-            Frame frame = stack.get(stack.size() - 1);
-            if (frame.remaining == 0) stack.remove(stack.size() - 1);
-            else if (frame.step instanceof PlanStep.Repeat repeat) {
-                return homogeneous.containsKey(repeat.body()) ? null :
-                        new LoopBoundary(this, frame, stack.size() - 1, frame.remaining);
-            } else if (frame.step instanceof PlanStep.Sequence sequence && !homogeneous.containsKey(frame.step)) {
-                PlanStep child = sequence.children().get(sequence.children().size() - Math.toIntExact(frame.remaining));
-                frame.remaining--; push(child);
-            } else return null;
-        }
-        return null;
-    }
-
-    boolean insideLoop(LoopBoundary boundary) {
-        return boundary != null && boundary.owner == this && boundary.depth < stack.size()
-                && stack.get(boundary.depth) == boundary.frame;
-    }
-
-    /** Caller must prove an executable lift of the complete skipped iterations. */
-    void skipLoop(LoopBoundary boundary, long iterations) {
-        if (!insideLoop(boundary) || stack.size() != boundary.depth + 1 ||
-                boundary.frame.remaining != boundary.remaining || iterations <= 0 || iterations > boundary.remaining)
-            throw new IllegalArgumentException("Stale or partial loop boundary");
-        boundary.frame.remaining -= iterations;
-    }
-
-    static final class LoopBoundary {
-        private final PlanCursor owner;
-        private final Frame frame;
-        private final int depth;
-        private final long remaining;
-        private LoopBoundary(PlanCursor owner, Frame frame, int depth, long remaining) {
-            this.owner = owner; this.frame = frame; this.depth = depth; this.remaining = remaining;
-        }
-        long remaining() { return remaining; }
-        boolean sameLoop(LoopBoundary other) { return other != null && owner == other.owner && frame == other.frame; }
     }
 
     /** Null keeps the original witness; an empty list asks the pipeline to make room. */

@@ -80,7 +80,6 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private long pausedSearchWork;
     private long previewStarted, previewAllowance;
     private boolean previewCompleting;
-    private boolean missingPreview = true;
     private int quantityResumePhase = -1;
     private Boolean quantityBlocked;
     private Boolean stockBlocked;
@@ -119,13 +118,6 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     public GraphPlanningWork<K> catalysts(CatalystPolicy policy) {
         if (phase != 0) throw new IllegalStateException("Planning already started");
         catalystPolicy = policy;
-        return this;
-    }
-
-    /** A restricted view owner may discard refill previews but still needs local proofs. */
-    GraphPlanningWork<K> missingPreview(boolean enabled) {
-        if (startedWork) throw new IllegalStateException("Planning already started");
-        missingPreview = enabled;
         return this;
     }
 
@@ -277,11 +269,9 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 countSearch = parkedCounts;
                 parkedCounts = null;
                 if (phase == 19) {
-                    // Extra visits earn at most half of the active view's work:
-                    // the stock view retains two thirds of the shared turns,
-                    // while full-model proof continuations receive enough work
-                    // to finish instead of being stranded behind restricted
-                    // repairs. Repeated unrestricted grants still starve views.
+                    // Extra visits during an active view earn at most a quarter
+                    // of that view's charged work. Repeated full grants here
+                    // starved stock/allocation witnesses when counts plateaued.
                     stockCountTurn = true;
                     stockCountStarted = budget.searchWork();
                     countSearch.resumeBounded(stockCountCredit());
@@ -921,14 +911,6 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         discardQuantityAnalysis();
         countBeforeQuantity = false;
         if (allocating != null) allocating.discard();
-        allocating = null;
-        if (!missingPreview) {
-            budget.note("missing_preview", "omitted_by_view_owner; local_proof_retained");
-            // The owner interprets this local result. Do not publish a global
-            // failure detail from a restricted coordinate/coverage view.
-            result = failure(GraphPlan.Result.INFEASIBLE);
-            return;
-        }
         previewStarted = frontierWork();
         previewAllowance = Math.min(262_144, budget.remainingWork() / 8);
         previewCompleting = false;
@@ -1241,7 +1223,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private long frontierWork() { return budget.searchWork() - pausedSearchWork; }
 
     private long stockCountCredit() {
-        return stockView == null ? 0 : Math.max(0, stockView.searchWork() / 2 - stockCountWork);
+        return stockView == null ? 0 : Math.max(0, stockView.searchWork() / 4 - stockCountWork);
     }
 
     private boolean optionalQuantityTurn() {
@@ -1314,8 +1296,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         if (verified != null) return new GraphPlan<>(verified.target(), verified.amount(), verified.preserveSeeds(), verified.steps(),
                 verified.recipes(), verified.initialExact(), verified.seeds(), Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL,
                 budget.nodes(), System.nanoTime() - started);
-        if (Boolean.TRUE.equals(quantityBlocked)) return missingPreview ? withoutMissingPreview("preview stopped by " + limit.limit())
-                : failure(GraphPlan.Result.INFEASIBLE);
+        if (Boolean.TRUE.equals(quantityBlocked)) return withoutMissingPreview("preview stopped by " + limit.limit());
         return failure(GraphPlan.Result.valueOf(limit.limit().name()));
     }
 
@@ -1530,7 +1511,6 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             owner.recipes().forEach(recipe -> banned.add(recipe.id()));
             if (compiler.producers(deficit.getKey()).stream().noneMatch(recipe -> !banned.contains(recipe.id()))) return false;
             seedWork = new GraphPlanningWork<>(compiler, deficit.getKey(), deficit.getValue(), available, external, Map.of(), false, true, budget, banned, nesting + 1);
-            seedWork.missingPreview(missingPreview);
             return false;
         }
 

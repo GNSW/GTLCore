@@ -57,9 +57,6 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
     private GraphCompiler.Compiled<K> result;
     private GraphTopology<K> topology;
     private List<GraphCompiler.Region<K>> sharedRegions;
-    private boolean reboundTopology;
-    private GraphTopology.Rebinding<K> rebinding;
-    private long rebindingMemory;
     private GraphCatalogIndex<K> catalogIndex;
     private GraphCatalogIndex.Builder<K> indexing;
     private int catalogCursor, packedInput, packedEdge;
@@ -158,13 +155,12 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                 var partition = sharedRegions == null ? List.copyOf(regions) : sharedRegions;
                 result = new GraphCompiler.Compiled<>(Collections.unmodifiableMap(recipes),
                         Collections.unmodifiableMap(selected), partition);
-                if (sharedRegions == null || reboundTopology) compiler.rememberTopology(topology, partition);
+                if (sharedRegions == null) compiler.rememberTopology(topology, partition);
                 phase = 7;
                 close();
             }
             case 8 -> registerHubs();
             case 9 -> indexCatalog();
-            case 10 -> rebindTopology();
             default -> {
                 return true;
             }
@@ -213,10 +209,12 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
                         phase = 6;
                         return;
                     }
-                    if (beginRebinding()) return;
                 }
             }
-            prepareStructure();
+            if (catalogIndex == null && compiler.reuseCatalogIndex() && 4L * recipes.size() >= compiler.catalog().size()) {
+                indexing = new GraphCatalogIndex.Builder<>(compiler.catalog(), budget);
+                phase = 9;
+            } else prepareRegistration();
             return;
         }
         currentKey = pending.removeFirst();
@@ -236,43 +234,6 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         if (seen.add(key)) {
             pending.addLast(key);
         }
-    }
-
-    private boolean beginRebinding() {
-        var donor = compiler.topologyDonor(topology);
-        if (donor == null) return false;
-        long bytes = 256L + 128L * recipes.size();
-        if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
-        memory += bytes;
-        rebindingMemory = bytes;
-        rebinding = topology.rebind(donor.topology(), donor.regions(), budget);
-        phase = 10;
-        return true;
-    }
-
-    private void rebindTopology() {
-        if (!rebinding.step()) return;
-        sharedRegions = rebinding.result();
-        rebinding = null;
-        reboundTopology = sharedRegions != null;
-        compiler.topologyRebound(reboundTopology);
-        if (reboundTopology) {
-            budget.phase(PlanningBudget.Phase.ANALYSE);
-            budget.note("graph_topology", "rebound_ports; recipes=" + recipes.size() + "; regions=" + sharedRegions.size());
-            phase = 6;
-        } else {
-            budget.release(rebindingMemory);
-            memory -= rebindingMemory;
-            prepareStructure();
-        }
-        rebindingMemory = 0;
-    }
-
-    private void prepareStructure() {
-        if (catalogIndex == null && compiler.reuseCatalogIndex() && 4L * recipes.size() >= compiler.catalog().size()) {
-            indexing = new GraphCatalogIndex.Builder<>(compiler.catalog(), budget);
-            phase = 9;
-        } else prepareRegistration();
     }
 
     private void indexCatalog() {
@@ -647,7 +608,6 @@ public final class GraphCompilation<K> implements PlanningScheduler.Work<GraphCo
         closed = true;
         if (indexing != null) indexing.close();
         indexing = null;
-        rebinding = null;
         budget.release(indexedMemory + memory);
         indexedMemory = 0;
         memory = 0;

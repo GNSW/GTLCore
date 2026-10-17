@@ -33,7 +33,6 @@ final class DemandExpansion<K> {
     private boolean completingPreview;
     private K completionTarget;
     private BigInteger completionTargetLoans = BigInteger.ZERO;
-    private int completionRefinements;
 
     DemandExpansion(Map<String, GraphRecipe<K>> recipes, Map<K, BigInteger> held, Map<K, BigInteger> goals, PlanningBudget budget) {
         this(recipes, held, goals, budget, false);
@@ -346,41 +345,11 @@ final class DemandExpansion<K> {
             return false;
         }
         BigInteger runs = CheckedAmounts.ceilDiv(wanted.subtract(amount(frame.key)), gain(recipe, frame.key));
-        // Preserve useful funded alternatives before borrowing an intermediate.
-        // The detailed search may have stopped with a partially funded prefix;
-        // completing that prefix should not discard the remaining stock of all
-        // other sources. This is bounded diagnostic construction, not a claim
-        // that the resulting refill is globally minimal.
-        if (completionRefinements < 128 && frame.alternatives.size() <= 128) {
-            GraphRecipe<K> funded = null;
-            BigInteger fundedRuns = BigInteger.ZERO, fundedOutput = BigInteger.ZERO;
-            for (var alternative : frame.alternatives) {
-                budget.check();
-                BigInteger delta = gain(alternative, frame.key);
-                if (delta.signum() <= 0) continue;
-                BigInteger possible = fundedRuns(alternative, CheckedAmounts.ceilDiv(wanted.subtract(amount(frame.key)), delta));
-                BigInteger output = possible.multiply(delta);
-                if (output.compareTo(fundedOutput) > 0) {
-                    funded = alternative; fundedRuns = possible; fundedOutput = output;
-                }
-            }
-            if (funded != null) {
-                recipe = funded; runs = fundedRuns; completionRefinements++;
-            }
-        }
         for (var input : recipe.inputs().entrySet()) {
             budget.check();
             BigInteger need = BigInteger.valueOf(input.getValue()).add(gain(recipe, input.getKey()).negate()
                     .max(BigInteger.ZERO).multiply(runs.subtract(BigInteger.ONE)));
             if (amount(input.getKey()).compareTo(need) < 0) {
-                // Expand an acyclic producer boundary when it is still cheap.
-                // A route back into an active demand instead receives an exact
-                // loan here; following it would turn lossy conversions or seed
-                // cycles into unbounded recursive refill requests.
-                if (completionRefinements < 128 && frames.size() < 64 && canCompleteInput(input.getKey())) {
-                    frame.recipe = recipe; completionRefinements++;
-                    push(input.getKey(), need); return false;
-                }
                 // A returned target can be borrowed to start a recipe, but the
                 // borrowed units must never satisfy the production obligation.
                 if (input.getKey().equals(completionTarget))
@@ -398,37 +367,7 @@ final class DemandExpansion<K> {
                 set(output.getKey(), amount(output.getKey()).add(BigInteger.valueOf(output.getValue()).multiply(runs)));
         }
         append(PlanStep.batch(recipe.id(), runs));
-        if (amount(frame.key).compareTo(wanted) >= 0) pop(true);
-        else frame.recipe = null;
-        return false;
-    }
-
-    private BigInteger fundedRuns(GraphRecipe<K> recipe, BigInteger limit) {
-        for (var input : recipe.inputs().entrySet()) {
-            budget.check();
-            BigInteger prefix = BigInteger.valueOf(input.getValue());
-            BigInteger available = amount(input.getKey());
-            if (available.compareTo(prefix) < 0) return BigInteger.ZERO;
-            BigInteger loss = gain(recipe, input.getKey()).negate();
-            if (loss.signum() > 0) limit = limit.min(available.subtract(prefix).divide(loss).add(BigInteger.ONE));
-        }
-        return limit;
-    }
-
-    private boolean canCompleteInput(K key) {
-        if (active.containsKey(key)) return false;
-        var alternatives = producers.getOrDefault(key, List.of());
-        if (alternatives.size() > 128) return false;
-        for (var recipe : alternatives) {
-            budget.check();
-            if (gain(recipe, key).signum() <= 0) continue;
-            boolean cycle = false;
-            for (K input : recipe.inputs().keySet()) {
-                budget.check();
-                if (active.containsKey(input)) { cycle = true; break; }
-            }
-            if (!cycle) return true;
-        }
+        pop(true);
         return false;
     }
 

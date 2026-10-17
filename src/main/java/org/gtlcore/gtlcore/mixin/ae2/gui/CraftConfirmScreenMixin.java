@@ -49,8 +49,6 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
     private Button gtlcore$favoriteMissing;
     @Unique
     private Button gtlcore$craftingRing;
-    @Unique
-    private boolean gtlcore$equipmentTooltip;
 
     protected CraftConfirmScreenMixin(CraftConfirmMenu menu, Inventory playerInventory,
                                       Component title, ScreenStyle style) {
@@ -97,19 +95,11 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
             setTextContent("cpu_status", Component.translatable("gtlcore.ae.graph.refreshing_submission"));
         }
 
-        String warning = ((GraphPlanMenu) menu).gtlcore$providerWarning();
-        if (!warning.isEmpty()) {
-            this.start.active = false;
-            this.start.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.Serializer.fromJson(warning)));
-            gtlcore$equipmentTooltip = true;
-            setTextContent("cpu_status", Component.translatable("gtlcore.ae.graph.provider_warning"));
-        } else if (gtlcore$equipmentTooltip) {
-            this.start.setTooltip(null);
-            gtlcore$equipmentTooltip = false;
+        if (this.gtlcore$favoriteMissing == null) {
+            return;
         }
-        if (this.gtlcore$favoriteMissing != null)
-            this.gtlcore$favoriteMissing.active = JeiMissingIngredientBookmarks.isAvailable() &&
-                    !gtlcore$collectMissingKeys().isEmpty();
+        this.gtlcore$favoriteMissing.active = JeiMissingIngredientBookmarks.isAvailable() &&
+                !gtlcore$collectMissingKeys().isEmpty();
     }
 
     @Inject(method = "updateBeforeRender", at = @At("HEAD"), cancellable = true, remap = false)

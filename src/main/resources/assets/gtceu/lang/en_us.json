@@ -555,8 +555,8 @@
   "gtceu.gui.adv_me_config.ticks_per_cycle": "Ticks Per Cycle",
   "gtceu.gui.adv_me_config.title": "Configure Advanced ME Input",
   "gui.gtlcore.stock_input_config": "Stock Input Settings",
-  "gtceu.gui.content.chance_1_in": "Consume Chance：%s%%",
-  "gtceu.gui.content.chance_1_logic_in": "Consume Chance：%s%% （%s）",
+  "gtceu.gui.content.chance_1_in": "Consume Chance: %s%%",
+  "gtceu.gui.content.chance_1_logic_in": "Consume Chance: %s%% (%s)",
   "gtceu.gui.content.chance_calculation": "= initial %s%% %s %s overclocks x %s%% per tier",
   "gtceu.gui.content.chance_final_in": "Consume Chance: final %s%%",
   "gtceu.gui.content.chance_final_out": "Output Chance: final %s%%",
@@ -650,7 +650,7 @@
   "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.12": "Energy consumption = 2097152 + LiquidOutput EU/t",
   "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.13": "LiquidOutput(mB) = (chunk base reserve * 10) * Drill base rate * Overclock factor * Temperature factor * Voltage factor mB",
   "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.14": "Overclock factor = (1 + (1000 * (coil tier - 9) - 4000) / 8000)",
-  "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.15": "Temperature factor = 0.3 * √(Temperature parameter / 0.4),if Temperature parameter < 0.4 ；0.3 + 0.7 * ((Temperature parameter -0.4) / 0.6) ^ 2.5,if Temperature parameter ≥ 0.4",
+  "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.15": "Temperature factor = 0.3 * √(Temperature parameter / 0.4), if Temperature parameter < 0.4; 0.3 + 0.7 * ((Temperature parameter -0.4) / 0.6) ^ 2.5,if Temperature parameter ≥ 0.4",
   "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.16": "Voltage factor = (max((machine voltage - 9) / 5) , 0) ^ (0.6 - 0.12 * Temperature parameter) * (0.95 + 0.05 * Temperature parameter)",
   "gtceu.machine.advanced_infinite_driller.drilled_fluid.tooltip.17": "Temperature parameter = (machine current temperature - 2000) / (1000 * (coil tier - 9) - 6000)",
   "gtceu.machine.advanced_infinite_driller.fast": "High Speed Mode: %s",
@@ -1898,5 +1898,8 @@
   "tagprefix.nanoswarm": "%s Nanoswarm",
   "tagprefix.plutostone": "Pluto Stone %s Ore",
   "tagprefix.titanstone": "Titan Stone %s Ore",
-  "tagprefix.venus_stone": "Venus Stone %s Ore"
+  "tagprefix.venus_stone": "Venus Stone %s Ore",
+  "gtceu.universal.tooltip.item_transfer_rate_stacks": "§bTransfer Rate: §f%s stacks/s",
+  "gtceu.universal.tooltip.item_transfer_rate": "§bTransfer Rate: §f%s items/s",
+  "gtceu.universal.tooltip.fluid_transfer_rate": "§bTransfer Rate: §f%s mB/t"
 }

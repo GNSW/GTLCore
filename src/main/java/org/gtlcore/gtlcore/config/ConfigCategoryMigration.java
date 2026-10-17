@@ -15,12 +15,13 @@ import java.util.regex.Pattern;
 /** Moves legacy YAML keys before registration, preserving existing category values. */
 final class ConfigCategoryMigration {
 
+    private static final String GRAPH_PLANNER_OPTIONS = "ae2GraphPlannerTimeoutMs ae2GraphPlannerThreads ae2GraphPlannerMaxRequests ae2GraphPlannerMaxSteps ae2GraphCompilerMaxSteps ae2GraphCachePreparationMaxSteps ae2GraphPlannerParallelWorkBudget ae2GraphFallback ae2GraphFallbackTimeoutMs ae2GraphFallbackMaxSteps ae2GraphFallbackMemoryMiB ae2GraphPlannerMemoryMiB ae2GraphGlobalMemoryMiB ae2GraphCacheMemoryMiB ae2GraphSnapshotMicros ae2GraphSliceSteps ae2GraphSliceMicros";
     private static final Map<String, String> CATEGORIES = Map.ofEntries(
             Map.entry("gameplay", "disableDrift travelStaffCD ftbUltimineRange minimumBlockMiningTicks sendUpdateMessages"),
             Map.entry("content", "enableSkyBlokeMode enablePrimitiveVoidOre oreMultiplier durationMultiplier"),
             Map.entry("machines", "cellType spacetimePip exPatternProvider patternBoxPages MEPatternOutputMin MEPatternOutputMax enableUltimateMEStocking filterHatch batchProcessingTimeLimitTicks batchProcessingEnabledByDefault mobList1 mobList2"),
-            Map.entry("ae", "enableAe2ManualCraftingInventoryLock ae2GraphInventoryLockBehavior enableAe2MissingCrafting ae2CalculationMode ae2CraftingEngine ae2GraphSeedPolicy ae2GraphByteCostMode ae2GraphDiscoverByproducts ae2GraphMaxExtraCatalystCopies ae2PatternProviderAutoExpandDefault"),
-            Map.entry("performance", "ae2CraftingServiceUpdateInterval ae2StorageServiceUpdateInterval ae2GraphPlannerTimeoutMs ae2GraphPlannerThreads ae2GraphPlannerMaxRequests ae2GraphPlannerMaxSteps ae2GraphPlannerParallelWorkBudget ae2GraphFallback ae2GraphPlannerMemoryMiB enableMachineStartupTickBudget machineStartupTickBudgetPerLevel machineStartupAeTickBudgetPerLevel machineStartupTickTimeBudgetMillis optimizeGtceuJeiRegistration"),
+            Map.entry("ae", "enableAe2ManualCraftingInventoryLock ae2GraphInventoryLockBehavior enableAe2MissingCrafting ae2CalculationMode ae2CraftingEngine ae2GraphSeedPolicy ae2GraphByteCostMode ae2GraphDiscoverByproducts ae2GraphMaxExtraCatalystCopies ae2PatternProviderAutoExpandDefault " + GRAPH_PLANNER_OPTIONS),
+            Map.entry("performance", "ae2CraftingServiceUpdateInterval ae2StorageServiceUpdateInterval enableMachineStartupTickBudget machineStartupTickBudgetPerLevel machineStartupAeTickBudgetPerLevel machineStartupTickTimeBudgetMillis optimizeGtceuJeiRegistration"),
             Map.entry("graphics", "enableSmoothAnimations multiblockPreview bloom"),
             Map.entry("diagnostics", "debugLogging ae2GraphDiagnosticLogging"),
             Map.entry("interaction", "ae2GraphPlannerNoticeAfterMs blackBlockList"));
@@ -57,6 +58,15 @@ final class ConfigCategoryMigration {
         Map<String, Map<String, String>> categories = new LinkedHashMap<>();
         CATEGORIES.keySet().forEach(category -> categories.put(category, children(root.get(category))));
         boolean changed = false;
+        // New AE settings take precedence, then the former performance category,
+        // then the oldest flat keys. Never silently replace a user's budget.
+        for (String field : GRAPH_PLANNER_OPTIONS.split(" ")) {
+            String legacy = categories.get("performance").remove(field);
+            if (legacy != null) {
+                categories.get("ae").putIfAbsent(field, legacy);
+                changed = true;
+            }
+        }
         for (var entry : CATEGORIES.entrySet()) {
             Map<String, String> target = categories.get(entry.getKey());
             for (String field : entry.getValue().split(" ")) {
@@ -78,7 +88,7 @@ final class ConfigCategoryMigration {
         for (var entry : categories.entrySet()) {
             if (!entry.getValue().isEmpty()) {
                 root.put(entry.getKey(), entry.getKey() + ":\n" + indent(String.join("", entry.getValue().values())));
-            }
+            } else root.remove(entry.getKey());
         }
         root.values().forEach(result::append);
         return result.toString();

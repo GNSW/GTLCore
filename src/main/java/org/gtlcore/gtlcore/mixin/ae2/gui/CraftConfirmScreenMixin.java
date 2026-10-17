@@ -49,6 +49,8 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
     private Button gtlcore$favoriteMissing;
     @Unique
     private Button gtlcore$craftingRing;
+    @Unique
+    private boolean gtlcore$equipmentTooltip;
 
     protected CraftConfirmScreenMixin(CraftConfirmMenu menu, Inventory playerInventory,
                                       Component title, ScreenStyle style) {
@@ -76,6 +78,8 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
         if (plan instanceof GraphPlanSummaryView view && view.gtlcore$fallback())
             setTextContent("cpu_status", Component.translatable(plan.isSimulation() ?
                     "gtlcore.ae.graph.fallback_preview" : "gtlcore.ae.graph.fallback_plan"));
+        else if (plan instanceof GraphPlanSummaryView view && view.gtlcore$conditionalPreview())
+            setTextContent("cpu_status", Component.translatable("gtlcore.ae.graph.conditional_preview"));
         boolean missingCraft = plan != null && plan.isSimulation() &&
                 ((IConfirmStartMenu) this.menu).gtlcore$isMissingCraftAvailable();
         if (plan != null && plan.isSimulation() && !this.menu.hasNoCPU()) {
@@ -95,11 +99,19 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
             setTextContent("cpu_status", Component.translatable("gtlcore.ae.graph.refreshing_submission"));
         }
 
-        if (this.gtlcore$favoriteMissing == null) {
-            return;
+        String warning = ((GraphPlanMenu) menu).gtlcore$providerWarning();
+        if (!warning.isEmpty()) {
+            this.start.active = false;
+            this.start.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.Serializer.fromJson(warning)));
+            gtlcore$equipmentTooltip = true;
+            setTextContent("cpu_status", Component.translatable("gtlcore.ae.graph.provider_warning"));
+        } else if (gtlcore$equipmentTooltip) {
+            this.start.setTooltip(null);
+            gtlcore$equipmentTooltip = false;
         }
-        this.gtlcore$favoriteMissing.active = JeiMissingIngredientBookmarks.isAvailable() &&
-                !gtlcore$collectMissingKeys().isEmpty();
+        if (this.gtlcore$favoriteMissing != null)
+            this.gtlcore$favoriteMissing.active = JeiMissingIngredientBookmarks.isAvailable() &&
+                    !gtlcore$collectMissingKeys().isEmpty();
     }
 
     @Inject(method = "updateBeforeRender", at = @At("HEAD"), cancellable = true, remap = false)

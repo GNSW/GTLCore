@@ -43,6 +43,19 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
     @Unique
     private boolean gtlcore$fallback;
 
+    @Unique
+    private boolean gtlcore$conditionalPreview;
+
+    @Override
+    public boolean gtlcore$conditionalPreview() {
+        return gtlcore$conditionalPreview;
+    }
+
+    @Override
+    public void gtlcore$conditionalPreview(boolean conditional) {
+        gtlcore$conditionalPreview = conditional;
+    }
+
     @Override
     public boolean gtlcore$fallback() {
         return gtlcore$fallback;
@@ -81,6 +94,7 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
             buffer.writeUUID(gtlcore$graphId);
             GraphSeedStatus.write(buffer, gtlcore$seedProof);
             buffer.writeBoolean(gtlcore$fallback);
+            buffer.writeBoolean(gtlcore$conditionalPreview);
         }
     }
 
@@ -92,6 +106,7 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
             view.gtlcore$graphPlanId(buffer.readUUID());
             view.gtlcore$seedOptimality(GraphSeedStatus.read(buffer));
             view.gtlcore$fallback(buffer.readBoolean());
+            view.gtlcore$conditionalPreview(buffer.readBoolean());
         }
         return summary;
     }
@@ -113,15 +128,7 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
         ((GraphPlanSummaryView) summary).gtlcore$graphPlanId(graph.id());
         ((GraphPlanSummaryView) summary).gtlcore$seedOptimality(graph.graph().seedOptimality());
         ((GraphPlanSummaryView) summary).gtlcore$fallback(graph.fallback());
-        for (var entry : summary.getEntries()) {
-            long seed = graph.graph().seeds().getOrDefault(entry.getWhat(), 0L);
-            ((ICraftingPlanSummaryEntry) entry).gtlcore$setGraphSeed(seed);
-            // A missing-seed result describes the order, not every missing
-            // intermediate. Only mark this plan's explicit recovery material;
-            // a recipe producing a missing consumable does not make it a seed.
-            ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingGraphSeed(
-                    seed > 0 && graph.graph().missingExact().containsKey(entry.getWhat()));
-        }
+        ((GraphPlanSummaryView) summary).gtlcore$conditionalPreview(graph.graph().conditionalPreview());
         return summary;
     }
 

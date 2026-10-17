@@ -321,7 +321,32 @@ public final class PatternRelayPart extends AEBasePart implements ICraftingProvi
     @Override
     public boolean gtlcore$canProduceGraphPattern(IPatternDetails pattern) {
         Set<ICraftingProvider> providers = routeSnapshot.routes().get(pattern);
-        return mode == Mode.ACCESS && getMainNode().isActive() && providers != null && !providers.isEmpty();
+        if (mode != Mode.ACCESS || !getMainNode().isActive() || providers == null) return false;
+        // Route construction excludes relays, so this cannot recurse through a route cycle.
+        for (var provider : providers)
+            if (!(provider instanceof GraphDispatchPreflight check) || check.gtlcore$canProduceGraphPattern(pattern)) return true;
+        return false;
+    }
+
+    @Override
+    public String gtlcore$graphBlockReason(IPatternDetails pattern) {
+        if (mode != Mode.ACCESS || !getMainNode().isActive()) return "PROVIDER_OFFLINE";
+        var providers = routeSnapshot.routes().get(pattern);
+        return providers != null && org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderRequirements.missing(pattern, providers) != null ?
+                "MISSING_TOOL" : "PROVIDER_OFFLINE";
+    }
+
+    @Override
+    public Component gtlcore$graphBlockMessage(IPatternDetails pattern) {
+        if (mode != Mode.ACCESS || !getMainNode().isActive()) return Component.literal("PROVIDER_OFFLINE");
+        var providers = routeSnapshot.routes().get(pattern);
+        Component missing = providers == null ? null : org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderRequirements.missing(pattern, providers);
+        return missing == null ? Component.literal("PROVIDER_OFFLINE") : missing;
+    }
+
+    @Override
+    public String gtlcore$graphBlockDetail(IPatternDetails pattern) {
+        return gtlcore$graphBlockMessage(pattern).getString();
     }
 
     @Override

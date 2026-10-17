@@ -1,0 +1,13 @@
+plugins {
+    id 'java-library'
+}
+
+// The copied engine sources remain inside this checkout. Never resolve CGSE
+// from a sibling checkout or download a binary as a prerequisite to building GTL.
+// Use this subproject's own src/main/java so IDE imports have one source owner.
+ext.cgseConfigFile = file('cgse.properties')
+ext.cgseIdentityPaths = ['cgse-engine/src/main/java', 'cgse-engine/build.gradle',
+                         'cgse-engine/engine.gradle', 'cgse-engine/cgse.properties',
+                         'cgse-engine/NOTICE']
+ext.cgseLicenseFiles = files('NOTICE')
+apply from: 'engine.gradle'

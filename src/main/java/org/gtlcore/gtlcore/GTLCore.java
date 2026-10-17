@@ -12,6 +12,7 @@ import net.minecraftforge.fml.common.Mod;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.cgse.core.EngineInfo;
 
 import java.util.Objects;
 
@@ -28,6 +29,9 @@ public class GTLCore {
     }
 
     public GTLCore() {
+        EngineInfo.requireCompatibility("0.1");
+        LOGGER.info("CGSE engine {} (API {}, revision {})", EngineInfo.version(),
+                EngineInfo.compatibility(), EngineInfo.revision());
         DistExecutor.unsafeRunForDist(() -> ClientProxy::new, () -> CommonProxy::new);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.addListener(GTLCore::worldTick);

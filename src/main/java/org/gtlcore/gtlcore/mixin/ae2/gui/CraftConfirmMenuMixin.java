@@ -80,6 +80,46 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     @GuiSync(101)
     private String gtlcore$planningFailure = "";
 
+    @Unique
+    @GuiSync(103)
+    private String gtlcore$providerWarning = "";
+    @Unique
+    private AeGraphPlan gtlcore$checkedProvidersPlan;
+    @Unique
+    private org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderRequirements gtlcore$providerCheck;
+    @Unique
+    private int gtlcore$providerCheckCooldown;
+
+    @Override
+    public String gtlcore$providerWarning() {
+        return gtlcore$providerWarning;
+    }
+
+    @Unique
+    private void gtlcore$checkProviders() {
+        if (!(result instanceof AeGraphPlan graph) || getGrid() == null) {
+            gtlcore$providerWarning = "";
+            gtlcore$checkedProvidersPlan = null;
+            gtlcore$providerCheck = null;
+            return;
+        }
+        if (graph != gtlcore$checkedProvidersPlan) {
+            gtlcore$checkedProvidersPlan = graph;
+            gtlcore$providerCheck = null;
+            gtlcore$providerCheckCooldown = 0;
+            gtlcore$providerWarning = Component.Serializer.toJson(Component.translatable("gtlcore.ae.graph.checking_providers"));
+        }
+        if (gtlcore$providerCheck == null) {
+            if (gtlcore$providerCheckCooldown-- > 0) return;
+            gtlcore$providerCheck = new org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderRequirements(graph);
+        }
+        if (gtlcore$providerCheck.advance((appeng.me.service.CraftingService) getGrid().getCraftingService())) {
+            gtlcore$providerWarning = gtlcore$providerCheck.message();
+            gtlcore$providerCheck = null;
+            gtlcore$providerCheckCooldown = 20;
+        }
+    }
+
     @Override
     public String gtlcore$planningFailure() {
         return gtlcore$planningFailure;
@@ -118,6 +158,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
 
     @Inject(method = "broadcastChanges", at = @At("HEAD"))
     private void gtlcore$planningProgress(CallbackInfo ci) {
+        if (!isClientSide()) gtlcore$checkProviders();
         if (!isClientSide()) gtlcore$validateInventoryReservation();
         if (!isClientSide() && job instanceof GraphPlanningRequest request && request.isCompletedExceptionally() && !request.isCancelled()) {
             try {
@@ -339,7 +380,9 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
             for (var entry : currentPlan.getEntries()) {
                 if (entry.getMissingAmount() > 0 ||
                         (live != null && entry.getStoredAmount() > live.get(entry.getWhat()))) {
-                    missing.add(entry.getWhat());
+                    var exactKeys = ((org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingPlanSummaryEntry) entry).gtlcore$getMissingKeys();
+                    if (exactKeys.isEmpty()) missing.add(entry.getWhat());
+                    else missing.addAll(exactKeys);
                 }
             }
             gtlcore$missingCache = missing;
@@ -494,6 +537,13 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
 
     @Inject(method = "startJob", at = @At("HEAD"), cancellable = true, remap = false)
     private void gtlcore$guardPendingSubmission(CallbackInfo ci) {
+        if (!isClientSide()) {
+            gtlcore$checkProviders();
+        }
+        if (!gtlcore$providerWarning.isEmpty() || gtlcore$providerCheck != null) {
+            ci.cancel();
+            return;
+        }
         // An extra click while refreshing belongs to the same confirmation. It
         // must neither reset its retry allowance nor submit the old preview.
         if (gtlcore$closed || gtlcore$submitting) {

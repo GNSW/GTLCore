@@ -82,7 +82,9 @@ public final class GraphCpuController {
             return CraftingSubmitResult.CPU_TOO_SMALL;
         GraphPlan<AEKey> plan = view.graph();
         if (!plan.feasible()) {
-            if (!allowMissing || (plan.result() != GraphPlan.Result.MISSING_INPUT && plan.result() != GraphPlan.Result.MISSING_SEED)) return CraftingSubmitResult.INCOMPLETE_PLAN;
+            if (!allowMissing || (plan.result() != GraphPlan.Result.MISSING_INPUT && plan.result() != GraphPlan.Result.MISSING_SEED &&
+                    !plan.conditionalPreview()))
+                return CraftingSubmitResult.INCOMPLETE_PLAN;
             plan = new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), plan.steps(), plan.recipes(),
                     plan.initialExact(), plan.seeds(), Map.of(), GraphPlan.Result.FEASIBLE, plan.searchNodes(), plan.planningNanos());
         }
@@ -219,14 +221,15 @@ public final class GraphCpuController {
             progressNanos = waitingLogNanos = now;
             return;
         }
-        if (runtime.finished() || runtime.suspended() || runtime.expected().isEmpty() ||
+        if (runtime.finished() || runtime.suspended() ||
                 now - progressNanos < 30_000_000_000L || now - waitingLogNanos < 30_000_000_000L)
             return;
         waitingLogNanos = now;
         try {
             GTLCore.LOGGER.info("[Graph Crafting] job={} target={} waiting={} no_progress_s={} expected={} registered_providers={}",
                     link.getCraftingID(), runtime.plan().target(), runtime.reason(), (now - progressNanos) / 1_000_000_000L,
-                    runtime.expected().entrySet().stream().limit(4).toList(), adapter.waitingDetails(runtime.plan(), runtime.expected()));
+                    runtime.expected().entrySet().stream().limit(4).toList(), runtime.expected().isEmpty() ?
+                            adapter.blockedDetails() : adapter.waitingDetails(runtime.plan(), runtime.expected()));
         } catch (RuntimeException diagnosticFailure) {
             GTLCore.LOGGER.debug("Graph waiting diagnostic unavailable", diagnosticFailure);
         }

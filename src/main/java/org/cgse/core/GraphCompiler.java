@@ -94,6 +94,8 @@ public final class GraphCompiler<K> {
         }
         values.put("compiled", entry("compiled", cache.size(), graphWeight, graphBytes));
         values.put("topology", entry("topology", topologies.size(), topologyWeight, 64L * topologyWeight));
+        // Port-equivalent reuse borrows the existing bounded topology cache.
+        values.put("topology_ports", entry("topology_ports", 0, 0, 0));
         values.put("count_catalog", entry("count_catalog", countCatalogs.size(), countCatalogWeight, 128L * countCatalogWeight));
         // Overlap reuse borrows existing count catalogs; it owns no extra cache.
         values.put("count_overlap", entry("count_overlap", 0, 0, 0));
@@ -241,6 +243,21 @@ public final class GraphCompiler<K> {
 
     synchronized List<Region<K>> topology(GraphTopology<K> key) {
         return lookup("topology", topologies.get(key));
+    }
+
+    record TopologyDonor<K>(GraphTopology<K> topology, List<Region<K>> regions) {}
+
+    /** One recent same-size donor, not a scan of every graph's ports under the
+     * compiler monitor. Matching and rebinding happen in the compilation. */
+    synchronized TopologyDonor<K> topologyDonor(GraphTopology<K> key) {
+        TopologyDonor<K> donor = null;
+        for (var entry : topologies.entrySet()) if (entry.getKey().recipes.size() == key.recipes.size())
+            donor = new TopologyDonor<>(entry.getKey(), entry.getValue());
+        return donor;
+    }
+
+    synchronized void topologyRebound(boolean reused) {
+        lookup("topology_ports", reused ? Boolean.TRUE : null);
     }
 
     synchronized void rememberTopology(GraphTopology<K> key, List<Region<K>> regions) {

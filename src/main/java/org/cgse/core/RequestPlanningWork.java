@@ -34,6 +34,16 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     public record FallbackReport<K>(K target, long amount, GraphPlan.Result trigger,
                                     GraphPlan.Result result, long nodes, long elapsedNanos) {}
 
+    /** Ordinary fallback has its own budget, with no worker multiplier or refund of primary work. */
+    public record FallbackLimits(long milliseconds, long maxWork, long maxBytes) {
+        public static final FallbackLimits DEFAULT = new FallbackLimits(250, 131_072, 16L << 20);
+
+        public FallbackLimits {
+            if (milliseconds < 0 || milliseconds > Long.MAX_VALUE / 1_000_000L || maxWork <= 0 || maxBytes <= 0)
+                throw new IllegalArgumentException("Invalid fallback limits");
+        }
+    }
+
     /** Both accounts remain explicit: fallback spends a separate allowance after primary search stops. */
     public record CostReport(PlanningBudget.Metrics primary, PlanningCostTrace.Snapshot primaryPipeline,
                              PlanningBudget.Metrics fallback, PlanningCostTrace.Snapshot fallbackPipeline) {}
@@ -67,6 +77,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private boolean completed;
     private boolean partialSearch, tryEstimate, tryNeighbor;
     private boolean fallbackAttempted, fallbackMode;
+    private FallbackLimits fallbackLimits = FallbackLimits.DEFAULT;
     private PlanningBudget.Metrics fallbackMetrics;
     private PlanningCostTrace.Snapshot fallbackPipeline;
     private long low, high, middle, estimatedAmount;
@@ -104,6 +115,14 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         requestScope = new ReuseScope<>(target, amount, preserve, craftLess, strategy, catalysts,
                 checkpoint == null && !directEmission, checkpoint != null, fallbackEnabled, boundedAlternatives,
                 this.emitable, recoverySeeds);
+    }
+
+    /** Configure before submitting the request; active work keeps its captured limits. */
+    public RequestPlanningWork<K> fallbackLimits(FallbackLimits limits) {
+        if (current != null || selected != null || reuseAttempted || fallbackAttempted)
+            throw new IllegalStateException("Planning already started");
+        fallbackLimits = java.util.Objects.requireNonNull(limits);
+        return this;
     }
 
     /**
@@ -330,7 +349,8 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
             current.close();
             current = null;
         }
-        PlanningBudget quick = new PlanningBudget(250, 131_072, 16L << 20, cancelled, System::nanoTime);
+        PlanningBudget quick = new PlanningBudget(fallbackLimits.milliseconds(), fallbackLimits.maxWork(),
+                fallbackLimits.maxBytes(), cancelled, System::nanoTime).shareMemory(budget);
         if (budget.metricsEnabled()) quick.enableMetrics();
         try {
             try (var costs = quick.trace(PlanningCostTrace.Origin.FALLBACK, PlanningCostTrace.Stage.SEARCH)) {

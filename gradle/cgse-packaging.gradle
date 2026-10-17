@@ -1,0 +1,33 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.nio.file.FileSystems
+import java.nio.file.Files
+
+def engine = project(':cgse-engine')
+tasks.withType(Jar).matching { it.name == 'sourcesJar' }.configureEach {
+    from engine.sourceSets.main.allSource
+}
+tasks.named('remapJar') {
+    inputs.property('cgseVersionRange', engine.cgseVersionRange)
+    doLast {
+        // Loom 1.6 emits [version,) for every included library and replaces any
+        // pre-existing metadata. Set our upper ABI boundary after its worker ends.
+        workerExecutor.await()
+        def archive = archiveFile.get().asFile.toPath()
+        FileSystems.newFileSystem(archive, (ClassLoader) null).withCloseable { zip ->
+            def path = zip.getPath('/META-INF/jarjar/metadata.json')
+            def metadata = new JsonSlurper().parseText(Files.readString(path))
+            def entries = metadata.jars.findAll {
+                it.identifier.group == 'org.cgse' && it.identifier.artifact == 'cgse-engine'
+            }
+            if (entries.size() != 1 || entries[0].version.artifactVersion != engine.version.toString()) {
+                throw new GradleException('Expected exactly one versioned CGSE engine in the remapped GTL jar')
+            }
+            entries[0].version.range = engine.cgseVersionRange
+            Files.writeString(path, JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n')
+            if (Files.exists(zip.getPath('/org/cgse/core/GraphJobRuntime.class'))) {
+                throw new GradleException('CGSE classes must only occur inside the nested engine jar')
+            }
+        }
+    }
+}

@@ -113,15 +113,6 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
         ((GraphPlanSummaryView) summary).gtlcore$graphPlanId(graph.id());
         ((GraphPlanSummaryView) summary).gtlcore$seedOptimality(graph.graph().seedOptimality());
         ((GraphPlanSummaryView) summary).gtlcore$fallback(graph.fallback());
-        for (var entry : summary.getEntries()) {
-            long seed = graph.graph().seeds().getOrDefault(entry.getWhat(), 0L);
-            ((ICraftingPlanSummaryEntry) entry).gtlcore$setGraphSeed(seed);
-            // A missing-seed result describes the order, not every missing
-            // intermediate. Only mark this plan's explicit recovery material;
-            // a recipe producing a missing consumable does not make it a seed.
-            ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingGraphSeed(
-                    seed > 0 && graph.graph().missingExact().containsKey(entry.getWhat()));
-        }
         return summary;
     }
 

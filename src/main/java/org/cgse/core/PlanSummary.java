@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /** Exact confirmation totals for the same immutable plan shown by the graph browser. */
 public final class PlanSummary {
@@ -27,9 +28,21 @@ public final class PlanSummary {
 
     /** Amounts are never clipped here; a host's bounded UI performs its own final conversion. */
     public static <K> List<Entry<K>> entries(GraphPlan<K> plan, Map<K, BigInteger> emitted) {
+        return entries(plan, emitted, GraphRecipe::outputs);
+    }
+
+    /**
+     * Hosts may distinguish displayed products from intermediate state returns.
+     * This projection changes crafted totals only: extraction, shortages and
+     * the verified execution program continue to use their exact original keys.
+     */
+    public static <K> List<Entry<K>> entries(GraphPlan<K> plan, Map<K, BigInteger> emitted,
+                                            Function<GraphRecipe<K>, Map<K, Long>> products) {
         Map<K, BigInteger> crafted = new LinkedHashMap<>(emitted);
         Map<K, BigInteger> runs = new LinkedHashMap<>();
-        plan.patternTimesExact().forEach((id, count) -> plan.recipes().get(id).outputs().forEach((key, amount) -> {
+        plan.patternTimesExact().forEach((id, count) -> products.apply(plan.recipes().get(id)).forEach((key, amount) -> {
+            CheckedAmounts.nonNegative(amount);
+            if (amount == 0) return;
             crafted.merge(key, count.multiply(BigInteger.valueOf(amount)), BigInteger::add);
             runs.merge(key, count, BigInteger::add);
         }));

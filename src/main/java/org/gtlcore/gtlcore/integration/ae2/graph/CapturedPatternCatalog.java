@@ -39,10 +39,13 @@ public final class CapturedPatternCatalog {
     private volatile List<Entry> entries;
     private final int size;
     private volatile Prepared prepared;
+    private volatile long retainedBytes;
+    private long lastAccess = System.nanoTime();
 
     public CapturedPatternCatalog(List<Entry> entries, int size) {
         this.entries = List.copyOf(entries);
         this.size = size;
+        retainedBytes = 256L * (size + (long) entries.size());
     }
 
     public int size() {
@@ -56,6 +59,29 @@ public final class CapturedPatternCatalog {
 
     public Build build(PlanningBudget budget) {
         return new Build(budget);
+    }
+
+    long retainedBytes() {
+        return retainedBytes;
+    }
+
+    long lastAccess() {
+        return lastAccess;
+    }
+
+    void touch() {
+        lastAccess = System.nanoTime();
+    }
+
+    /** Worker-side accounting; server eviction only reads the published estimate. */
+    void refreshRetainedBytes() {
+        Prepared current = prepared;
+        if (current == null) return;
+        long bytes = 256L * (size + (long) current.bindings().size()) + current.compiler().cacheMetrics().estimatedBytes();
+        if (current.candidates() != null) {
+            bytes += current.candidates().retainedCacheBytes();
+        }
+        retainedBytes = bytes;
     }
 
     public final class Build implements PlanningScheduler.Work<Prepared> {

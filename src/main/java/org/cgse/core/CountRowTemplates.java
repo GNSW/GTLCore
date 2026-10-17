@@ -34,10 +34,10 @@ final class CountRowTemplates {
             this.budget = budget;
             this.retaining = retaining;
             started = retaining ? 0 : budget.threadWork();
-            allowance = retaining ? PlanningBudget.CACHE_PREPARATION_WORK : Math.min(65536, budget.remainingWork() / 32);
+            allowance = retaining ? 0 : Math.min(65536, budget.remainingWork() / 32);
         }
         long remaining() {
-            return Math.max(0, allowance - (retaining ? budget.cachePreparationWork() : budget.threadWork() - started));
+            return retaining ? budget.remainingCachePreparationWork() : Math.max(0, allowance - (budget.threadWork() - started));
         }
         void check() {
             if (retaining) charge(1);

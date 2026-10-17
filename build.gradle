@@ -17,6 +17,11 @@ java {
     sourceCompatibility = targetCompatibility = JavaVersion.VERSION_17
 }
 
+// Compile CGSE exactly once, as a separately selectable Forge Jar-in-Jar library.
+sourceSets.main.java.exclude 'org/cgse/core/**'
+evaluationDependsOn(':cgse-engine')
+apply from: 'gradle/cgse-packaging.gradle'
+
 def mixinConfigNames = [
         "gtlcore.mixin.json"
 ]
@@ -98,6 +103,8 @@ repositories {
 }
 
 dependencies {
+    implementation project(':cgse-engine')
+    include project(':cgse-engine')
     minecraft "com.mojang:minecraft:$project.minecraft_version"
     forge "net.minecraftforge:forge:$project.minecraft_version-$project.forge_version"
     // layered mappings - Mojmap names, parchment and QM docs and parameters

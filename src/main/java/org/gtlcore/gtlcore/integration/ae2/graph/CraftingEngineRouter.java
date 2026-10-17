@@ -38,6 +38,7 @@ public final class CraftingEngineRouter {
     }
 
     private static PlanningScheduler scheduler;
+    private static final PlanningMemory GLOBAL_MEMORY = new PlanningMemory(512L << 20);
 
     private record PlanLogKey(AEKey target, long amount, CalculationStrategy strategy, GraphPlan.Result result, long epoch, int missing) {}
 
@@ -85,13 +86,32 @@ public final class CraftingEngineRouter {
 
     private static synchronized PlanningScheduler scheduler() {
         if (scheduler == null) scheduler = new PlanningScheduler(ConfigHolder.INSTANCE.ae.ae2GraphPlannerThreads,
-                ConfigHolder.INSTANCE.ae.ae2GraphPlannerMaxRequests, 4096, 2_000_000L);
+                ConfigHolder.INSTANCE.ae.ae2GraphPlannerMaxRequests, ConfigHolder.INSTANCE.ae.ae2GraphSliceSteps,
+                ConfigHolder.INSTANCE.ae.ae2GraphSliceMicros * 1000L);
         return scheduler;
+    }
+
+    static PlanningBudget planningBudget(int parallelism) {
+        var options = ConfigHolder.INSTANCE.ae;
+        GLOBAL_MEMORY.limit(options.ae2GraphGlobalMemoryMiB * (1L << 20));
+        long search = PlanningBudget.parallelWorkLimit(options.ae2GraphPlannerMaxSteps,
+                parallelism, options.ae2GraphPlannerParallelWorkBudget);
+        long compilation = options.ae2GraphCompilerMaxSteps == 0 ? search : PlanningBudget.parallelWorkLimit(
+                options.ae2GraphCompilerMaxSteps, parallelism, options.ae2GraphPlannerParallelWorkBudget);
+        return new PlanningBudget(options.ae2GraphPlannerTimeoutMs, search, compilation,
+                options.ae2GraphCachePreparationMaxSteps, options.ae2GraphPlannerMemoryMiB * (1L << 20),
+                () -> false, System::nanoTime).memory(GLOBAL_MEMORY);
+    }
+
+    static RequestPlanningWork.FallbackLimits fallbackLimits() {
+        var options = ConfigHolder.INSTANCE.ae;
+        return new RequestPlanningWork.FallbackLimits(options.ae2GraphFallbackTimeoutMs,
+                options.ae2GraphFallbackMaxSteps, options.ae2GraphFallbackMemoryMiB * (1L << 20));
     }
 
     static CompletableFuture<GraphRingView> describe(GraphRingView.Builder work) {
         return scheduler().submit(work, new PlanningBudget(0, 1_000_000,
-                ConfigHolder.INSTANCE.ae.ae2GraphPlannerMemoryMiB * (1L << 20), () -> false, System::nanoTime));
+                ConfigHolder.INSTANCE.ae.ae2GraphPlannerMemoryMiB * (1L << 20), () -> false, System::nanoTime).memory(GLOBAL_MEMORY));
     }
 
     @SubscribeEvent
@@ -142,11 +162,7 @@ public final class CraftingEngineRouter {
                                               RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
         if (amount <= 0) throw new IllegalArgumentException("Non-positive crafting request");
         PlanningScheduler planner = scheduler();
-        long workLimit = PlanningBudget.parallelWorkLimit(ConfigHolder.INSTANCE.ae.ae2GraphPlannerMaxSteps,
-                planner.parallelism(), ConfigHolder.INSTANCE.ae.ae2GraphPlannerParallelWorkBudget);
-        PlanningBudget budget = new PlanningBudget(ConfigHolder.INSTANCE.ae.ae2GraphPlannerTimeoutMs,
-                workLimit, ConfigHolder.INSTANCE.ae.ae2GraphPlannerMemoryMiB * (1L << 20),
-                () -> false, System::nanoTime);
+        PlanningBudget budget = planningBudget(planner.parallelism());
         GraphPlanningRequest result = new GraphPlanningRequest(budget);
         if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) budget.enableMetrics();
         CompletableFuture<GtlPatternCatalog.Snapshot> snapshot = new CompletableFuture<>();
@@ -206,6 +222,7 @@ public final class CraftingEngineRouter {
         private final boolean preserve;
         private final GraphPlanningRequest request;
         private final boolean fallbackEnabled;
+        private final RequestPlanningWork.FallbackLimits fallbackLimits;
         private final RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate;
         private GtlPatternCatalog.Snapshot snapshot;
         private CapturedPatternCatalog.Build preparing;
@@ -233,6 +250,7 @@ public final class CraftingEngineRouter {
             this.preserve = preserve;
             this.request = request;
             this.fallbackEnabled = ConfigHolder.INSTANCE.ae.ae2GraphFallback;
+            this.fallbackLimits = CraftingEngineRouter.fallbackLimits();
             this.reuseCandidate = reuseCandidate;
         }
 
@@ -262,7 +280,7 @@ public final class CraftingEngineRouter {
                             if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
                                     "[Graph Crafting] fallback target={} amount={} trigger={} cycle_solving=false result={} work={} elapsed_ms={}",
                                     report.target(), report.amount(), report.trigger(), report.result(), report.nodes(), report.elapsedNanos() / 1_000_000.0);
-                        }).reuseCandidate(reuseCandidate);
+                        }).fallbackLimits(fallbackLimits).reuseCandidate(reuseCandidate);
                 if (prepared.candidates() != null) planning.capturedCatalog(prepared.candidates());
                 budget.note("catalog", "recipes=" + compiler.catalog().size() + "; target_sources=" + compiler.producers(target).size() +
                         "; stock_keys=" + planning.availability().size() + "; target_stock=" + planning.availability().getOrDefault(target, 0L) +
@@ -271,11 +289,6 @@ public final class CraftingEngineRouter {
             }
             if (!planning.advance(slice)) return false;
             return finish();
-        }
-
-        @Override
-        public void close() {
-            if (planning != null) planning.close();
         }
 
         private void logFailure(Throwable error) {
@@ -321,6 +334,17 @@ public final class CraftingEngineRouter {
         @Override
         public ICraftingPlan result() {
             return result;
+        }
+
+        @Override
+        public void close() {
+            try {
+                if (planning != null) planning.close();
+                if (preparing != null) preparing.close();
+                if (!capture.isDone()) capture.cancel(false);
+            } finally {
+                if (snapshot != null) snapshot.structure().catalog().refreshRetainedBytes();
+            }
         }
 
         @Override

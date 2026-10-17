@@ -72,13 +72,17 @@ public abstract class CraftConfirmTableRendererMixin extends AbstractTableRender
         // AE cells are only 22px high: four half-scale lines already take 21px.
         // Recovery details belong in the unconstrained tooltip, not in another cell row.
         var graphEntry = (ICraftingPlanSummaryEntry) entry;
-        if (graphEntry.gtlcore$getGraphSeed() <= 0 && !graphEntry.gtlcore$isMissingGraphSeed()) return;
+        boolean grouped = graphEntry.gtlcore$getGroupedToolStates() > 1;
+        if (graphEntry.gtlcore$getGraphSeed() <= 0 && !graphEntry.gtlcore$isMissingGraphSeed() && !grouped) return;
         var lines = new ArrayList<>(cir.getReturnValue());
+        if (grouped) lines.add(Component.translatable("gtlcore.ae.graph.grouped_tool_states", graphEntry.gtlcore$getGroupedToolStates())
+                .withStyle(ChatFormatting.GRAY));
         if (graphEntry.gtlcore$getGraphSeed() > 0)
             lines.add(Component.translatable("gtlcore.ae.graph.preserved_seed", graphEntry.gtlcore$getGraphSeed()).withStyle(ChatFormatting.AQUA));
         if (graphEntry.gtlcore$isMissingGraphSeed())
             lines.add(Component.translatable("gtlcore.ae.graph.missing_seed").withStyle(ChatFormatting.RED));
-        if (screen.getMenu() instanceof CraftConfirmMenu menu && menu.getPlan() instanceof GraphPlanSummaryView view)
+        if ((graphEntry.gtlcore$getGraphSeed() > 0 || graphEntry.gtlcore$isMissingGraphSeed()) &&
+                screen.getMenu() instanceof CraftConfirmMenu menu && menu.getPlan() instanceof GraphPlanSummaryView view)
             lines.addAll(GraphSeedStatus.tooltip(view.gtlcore$seedOptimality()));
         cir.setReturnValue(lines);
     }

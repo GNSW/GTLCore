@@ -67,6 +67,8 @@ public final class PlanningBudget {
 
     private final long timeoutNanos;
     private final long maxNodes;
+    private final long maxCompilationNodes;
+    private final long maxCachePreparationTicks;
     private final long maxBytes;
     private final BooleanSupplier cancelled;
     private final LongSupplier clock;
@@ -104,6 +106,8 @@ public final class PlanningBudget {
         return counter;
     }
     private final AtomicLong reservedBytes = new AtomicLong();
+    private PlanningMemory.Account memoryAccount;
+    private boolean ownsMemoryAccount;
     private final AtomicLong peakBytes = new AtomicLong();
     private final AtomicBoolean cancelRequested = new AtomicBoolean();
     private final AtomicBoolean lpProximityClaimed = new AtomicBoolean();
@@ -143,16 +147,25 @@ public final class PlanningBudget {
     }
 
     public PlanningBudget(long milliseconds, long maxNodes, long maxBytes, BooleanSupplier cancelled, LongSupplier clock) {
-        if (milliseconds < 0 || maxNodes <= 0 || maxBytes <= 0) throw new IllegalArgumentException("Invalid planning limits");
+        this(milliseconds, maxNodes, maxNodes, CACHE_PREPARATION_WORK, maxBytes, cancelled, clock);
+    }
+
+    /** Independent cumulative search, compilation and optional retention allowances. Zero disables retention. */
+    public PlanningBudget(long milliseconds, long maxNodes, long maxCompilationNodes, long maxCachePreparationWork,
+                          long maxBytes, BooleanSupplier cancelled, LongSupplier clock) {
+        if (milliseconds < 0 || maxNodes <= 0 || maxCompilationNodes <= 0 || maxCachePreparationWork < 0 || maxBytes <= 0)
+            throw new IllegalArgumentException("Invalid planning limits");
         this.timeoutNanos = Math.multiplyExact(milliseconds, 1_000_000L);
         this.maxNodes = maxNodes;
+        this.maxCompilationNodes = maxCompilationNodes;
+        this.maxCachePreparationTicks = Math.min(maxCachePreparationWork, Long.MAX_VALUE / WORK_SCALE) * WORK_SCALE;
         this.maxBytes = maxBytes;
         this.cancelled = cancelled;
         this.clock = clock;
         this.submitted = clock.getAsLong();
     }
 
-    /** Expanded cap for EACH of search and compilation; workers share both accounts. */
+    /** Expand one configured allowance; workers share the resulting cap. */
     public static long parallelWorkLimit(long base, int workers, boolean expanded) {
         if (base <= 0 || workers <= 0) throw new IllegalArgumentException("Invalid planning limits");
         if (!expanded || workers == 1) return base;
@@ -211,13 +224,13 @@ public final class PlanningBudget {
     /** Checking a saved copy for future use is retention, not a current-order deduction. */
     boolean tryCacheCharge(long units) {
         if (units < 0) throw new IllegalArgumentException("Negative work");
-        return tryCacheTicks(units > CACHE_PREPARATION_WORK ? CACHE_PREPARATION_WORK * WORK_SCALE + 1 : units * WORK_SCALE);
+        return tryCacheTicks(units > Long.MAX_VALUE / WORK_SCALE ? Long.MAX_VALUE : units * WORK_SCALE);
     }
 
     private boolean tryCacheTicks(long ticks) {
         checkpoint();
         synchronized (this) {
-            if (ticks > CACHE_PREPARATION_WORK * WORK_SCALE - cachePreparationTicks) return false;
+            if (ticks > maxCachePreparationTicks - cachePreparationTicks) return false;
             cachePreparationTicks += ticks;
             return true;
         }
@@ -225,6 +238,11 @@ public final class PlanningBudget {
 
     /** Independent retention work; excluded from search, compilation and continuation quotas. */
     public synchronized long cachePreparationWork() { return units(cachePreparationTicks); }
+
+    /** Whole work units still admissible; fractional retention and all workers share this balance. */
+    synchronized long remainingCachePreparationWork() {
+        return (maxCachePreparationTicks - cachePreparationTicks) / WORK_SCALE;
+    }
 
     void compilationCharge(long units) {
         if (units < 0) throw new IllegalArgumentException("Negative work");
@@ -299,8 +317,9 @@ public final class PlanningBudget {
             }
         }
         traceCharge(ticks, compilation);
-        if (units(total) > maxNodes) throw exhausted(Limit.SEARCH_LIMIT,
-                (compilation ? "compilation_work=" : "search_work=") + units(total) + "/" + maxNodes);
+        long limit = compilation ? maxCompilationNodes : maxNodes;
+        if (units(total) > limit) throw exhausted(Limit.SEARCH_LIMIT,
+                (compilation ? "compilation_work=" : "search_work=") + units(total) + "/" + limit);
     }
 
     static long units(long ticks) {
@@ -370,6 +389,10 @@ public final class PlanningBudget {
             if (bytes > maxBytes - previous)
                 throw exhausted(Limit.MEMORY_LIMIT, "reserved_bytes=" + previous + "; requested_bytes=" + bytes + "; limit_bytes=" + maxBytes);
         } while (!reservedBytes.compareAndSet(previous, previous + bytes));
+        if (memoryAccount != null && !memoryAccount.reserve(bytes)) {
+            reservedBytes.addAndGet(-bytes);
+            throw exhausted(Limit.MEMORY_LIMIT, "global_planning_memory; requested_bytes=" + bytes);
+        }
         peakBytes.accumulateAndGet(previous + bytes, Math::max);
     }
 
@@ -382,6 +405,10 @@ public final class PlanningBudget {
             previous = reservedBytes.get();
             if (bytes > maxBytes - previous) return false;
         } while (!reservedBytes.compareAndSet(previous, previous + bytes));
+        if (memoryAccount != null && !memoryAccount.reserve(bytes)) {
+            reservedBytes.addAndGet(-bytes);
+            return false;
+        }
         peakBytes.accumulateAndGet(previous + bytes, Math::max);
         return true;
     }
@@ -393,6 +420,26 @@ public final class PlanningBudget {
             previous = reservedBytes.get();
             if (bytes > previous) throw new IllegalStateException("Unbalanced planning memory reservation");
         } while (!reservedBytes.compareAndSet(previous, previous - bytes));
+        if (memoryAccount != null) memoryAccount.release(bytes);
+    }
+
+    /** Attach before publishing this budget to snapshot or worker threads. */
+    public PlanningBudget memory(PlanningMemory memory) {
+        if (memoryAccount != null || reservedBytes.get() != 0) throw new IllegalStateException("Planning memory already in use");
+        memoryAccount = memory.account();
+        ownsMemoryAccount = true;
+        return this;
+    }
+
+    PlanningBudget shareMemory(PlanningBudget parent) {
+        if (memoryAccount != null || reservedBytes.get() != 0) throw new IllegalStateException("Planning memory already in use");
+        memoryAccount = parent.memoryAccount;
+        return this;
+    }
+
+    /** Called after all request workers and temporary workspaces have been disposed. */
+    public void closeMemory() {
+        if (ownsMemoryAccount) memoryAccount.close();
     }
 
     public void cancel() {
@@ -418,7 +465,8 @@ public final class PlanningBudget {
     }
 
     long availableBytes() {
-        return Math.max(0, maxBytes - reservedBytes.get());
+        long local = Math.max(0, maxBytes - reservedBytes.get());
+        return memoryAccount == null ? local : Math.min(local, memoryAccount.available());
     }
 
     public long reservedBytes() {

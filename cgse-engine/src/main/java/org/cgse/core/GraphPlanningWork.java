@@ -1293,6 +1293,10 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public GraphPlan<K> limited(PlanningBudget.Exhausted limit) {
+        // A completed, verified refill is just as stable at the publication
+        // boundary as a completed feasible plan. Do not replace it with an
+        // empty failure when the owner reaches its limit before harvesting it.
+        if (result != null) return result;
         if (seedOptimization != null) {
             GraphPlan<K> retained = seedOptimization.result();
             seedOptimization.close();

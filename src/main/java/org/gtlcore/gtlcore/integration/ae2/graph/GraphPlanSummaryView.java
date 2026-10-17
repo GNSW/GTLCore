@@ -18,4 +18,8 @@ public interface GraphPlanSummaryView {
     boolean gtlcore$fallback();
 
     void gtlcore$fallback(boolean fallback);
+
+    boolean gtlcore$conditionalPreview();
+
+    void gtlcore$conditionalPreview(boolean conditional);
 }

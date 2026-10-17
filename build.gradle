@@ -18,7 +18,6 @@ java {
 }
 
 // Compile CGSE exactly once, as a separately selectable Forge Jar-in-Jar library.
-sourceSets.main.java.exclude 'org/cgse/core/**'
 evaluationDependsOn(':cgse-engine')
 apply from: 'gradle/cgse-packaging.gradle'
 

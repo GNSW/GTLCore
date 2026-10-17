@@ -174,6 +174,15 @@ public final class GraphPlan<K> {
         return result == Result.FEASIBLE || result == Result.FEASIBLE_NOT_PROVEN_OPTIMAL;
     }
 
+    /**
+     * Verified execution after supplying this plan's deficits, without a proof
+     * that omitted alternatives cannot fulfill the original order. Never a
+     * currently executable plan or a necessary/minimal-material certificate.
+     */
+    public boolean conditionalPreview() {
+        return result == Result.INCOMPLETE_MODEL && !missing.isEmpty();
+    }
+
     public Map<String, Long> patternTimes() {
         return ExactAmounts.longView(patternTimesExact());
     }

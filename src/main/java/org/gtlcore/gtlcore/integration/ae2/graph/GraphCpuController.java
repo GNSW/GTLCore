@@ -82,7 +82,9 @@ public final class GraphCpuController {
             return CraftingSubmitResult.CPU_TOO_SMALL;
         GraphPlan<AEKey> plan = view.graph();
         if (!plan.feasible()) {
-            if (!allowMissing || (plan.result() != GraphPlan.Result.MISSING_INPUT && plan.result() != GraphPlan.Result.MISSING_SEED)) return CraftingSubmitResult.INCOMPLETE_PLAN;
+            if (!allowMissing || (plan.result() != GraphPlan.Result.MISSING_INPUT && plan.result() != GraphPlan.Result.MISSING_SEED &&
+                    !plan.conditionalPreview()))
+                return CraftingSubmitResult.INCOMPLETE_PLAN;
             plan = new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), plan.steps(), plan.recipes(),
                     plan.initialExact(), plan.seeds(), Map.of(), GraphPlan.Result.FEASIBLE, plan.searchNodes(), plan.planningNanos());
         }

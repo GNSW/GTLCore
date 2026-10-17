@@ -78,6 +78,8 @@ public abstract class CraftConfirmScreenMixin extends AEBaseScreen<CraftConfirmM
         if (plan instanceof GraphPlanSummaryView view && view.gtlcore$fallback())
             setTextContent("cpu_status", Component.translatable(plan.isSimulation() ?
                     "gtlcore.ae.graph.fallback_preview" : "gtlcore.ae.graph.fallback_plan"));
+        else if (plan instanceof GraphPlanSummaryView view && view.gtlcore$conditionalPreview())
+            setTextContent("cpu_status", Component.translatable("gtlcore.ae.graph.conditional_preview"));
         boolean missingCraft = plan != null && plan.isSimulation() &&
                 ((IConfirmStartMenu) this.menu).gtlcore$isMissingCraftAvailable();
         if (plan != null && plan.isSimulation() && !this.menu.hasNoCPU()) {

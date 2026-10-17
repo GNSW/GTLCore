@@ -208,7 +208,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
                 selected = candidate;
                 selectedIncomplete = currentIncomplete;
                 low = middle + 1;
-            } else if (candidate.missing().isEmpty()) {
+            } else if (candidate.missing().isEmpty() || candidate.conditionalPreview()) {
                 budget.note("craft_less", "undecided_probe=" + middle + "; retained_amount=" + selected.amount());
                 return finishReduced();
             } else high = middle - 1;
@@ -242,7 +242,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
             reuseAttempted = true;
             reuseCandidate = null;
             var captured = capturedCatalog.begin(target, count, available, emitable, recoverySeeds,
-                    preserve, checkpoint == null && !directEmission, budget).catalysts(policy);
+                    preserve, checkpoint == null && !directEmission, budget).catalysts(policy).conditionalPreviews(true);
             return new PlanningScheduler.Work<>() {
                 @Override public boolean advance(PlanningScheduler.Slice slice) { return captured.advance(slice); }
                 @Override public GraphPlan<K> result() { return consume(captured.result()); }
@@ -315,7 +315,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     }
 
     private boolean finish() {
-        if (!selected.feasible() && (selected.missingExact().isEmpty() || selectedIncomplete && !fallbackMode)) {
+        if (!selected.feasible() && !selected.conditionalPreview() && (selected.missingExact().isEmpty() || selectedIncomplete && !fallbackMode)) {
             // Coverage applies before every negative exit, including a completed
             // child proof without a refill preview. Exhausted search and omitted
             // alternatives are separate reasons, not interchangeable budgets.
@@ -392,6 +392,10 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
             if (retained.feasible()) {
                 selected = retained;
                 selectedIncomplete = currentIncomplete;
+            } else if (verifiedRefill(retained, currentIncomplete) &&
+                    (selected == null || !selected.feasible() && selected.missingExact().isEmpty())) {
+                selected = retained;
+                selectedIncomplete = currentIncomplete;
             } else if (capturedCatalog != null && retained.result() == GraphPlan.Result.INFEASIBLE && !currentIncomplete &&
                     (selected == null || !selected.feasible() && selected.missingExact().isEmpty())) {
                 // Catalog work has already certified that this is a complete
@@ -402,7 +406,8 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
                 return selected;
             }
         }
-        if (selected == null || !selected.feasible() && (!partialSearch || selected.missingExact().isEmpty())) {
+        if (selected == null || !selected.feasible() && !verifiedRefill(selected, selectedIncomplete) &&
+                (!partialSearch || selected.missingExact().isEmpty())) {
             if (!fallback(GraphPlan.Result.valueOf(limit.limit().name()))) throw limit;
             finish();
             return selected;
@@ -410,5 +415,10 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         budget.note("craft_less", "limit=" + limit.limit() + "; retained_amount=" + selected.amount() + "; result=" + selected.result());
         finishReduced();
         return selected;
+    }
+
+    private boolean verifiedRefill(GraphPlan<K> plan, boolean incomplete) {
+        return plan.conditionalPreview() || !incomplete && !plan.missingExact().isEmpty() &&
+                (plan.result() == GraphPlan.Result.MISSING_INPUT || plan.result() == GraphPlan.Result.MISSING_SEED);
     }
 }

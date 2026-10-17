@@ -43,6 +43,19 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
     @Unique
     private boolean gtlcore$fallback;
 
+    @Unique
+    private boolean gtlcore$conditionalPreview;
+
+    @Override
+    public boolean gtlcore$conditionalPreview() {
+        return gtlcore$conditionalPreview;
+    }
+
+    @Override
+    public void gtlcore$conditionalPreview(boolean conditional) {
+        gtlcore$conditionalPreview = conditional;
+    }
+
     @Override
     public boolean gtlcore$fallback() {
         return gtlcore$fallback;
@@ -81,6 +94,7 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
             buffer.writeUUID(gtlcore$graphId);
             GraphSeedStatus.write(buffer, gtlcore$seedProof);
             buffer.writeBoolean(gtlcore$fallback);
+            buffer.writeBoolean(gtlcore$conditionalPreview);
         }
     }
 
@@ -92,6 +106,7 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
             view.gtlcore$graphPlanId(buffer.readUUID());
             view.gtlcore$seedOptimality(GraphSeedStatus.read(buffer));
             view.gtlcore$fallback(buffer.readBoolean());
+            view.gtlcore$conditionalPreview(buffer.readBoolean());
         }
         return summary;
     }
@@ -113,6 +128,7 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
         ((GraphPlanSummaryView) summary).gtlcore$graphPlanId(graph.id());
         ((GraphPlanSummaryView) summary).gtlcore$seedOptimality(graph.graph().seedOptimality());
         ((GraphPlanSummaryView) summary).gtlcore$fallback(graph.fallback());
+        ((GraphPlanSummaryView) summary).gtlcore$conditionalPreview(graph.graph().conditionalPreview());
         return summary;
     }
 

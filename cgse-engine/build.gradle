@@ -4,12 +4,9 @@ plugins {
 
 // The copied engine sources remain inside this checkout. Never resolve CGSE
 // from a sibling checkout or download a binary as a prerequisite to building GTL.
-sourceSets.main.java {
-    setSrcDirs([rootProject.file('src/main/java')])
-    include 'org/cgse/core/**'
-}
+// Use this subproject's own src/main/java so IDE imports have one source owner.
 ext.cgseConfigFile = file('cgse.properties')
-ext.cgseIdentityPaths = ['src/main/java/org/cgse', 'cgse-engine/build.gradle',
+ext.cgseIdentityPaths = ['cgse-engine/src/main/java', 'cgse-engine/build.gradle',
                          'cgse-engine/engine.gradle', 'cgse-engine/cgse.properties',
                          'cgse-engine/NOTICE']
 ext.cgseLicenseFiles = files('NOTICE')

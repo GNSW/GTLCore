@@ -203,6 +203,8 @@ public final class CapturedCatalog<K> {
         private CapturedFlowWitness<K> flowWitness;
         private CapturedReachableWitness<K> reachable;
         private CapturedStatePlanning<K> statePlanning;
+        private CapturedRefillRecovery<K> refillRecovery;
+        private GraphPlan<K> refillCandidate;
         private CapturedStateSupport<K> stateSupport;
         private CapturedStockProjection<K> stateStock;
         private List<Entry<K>> stateSources;
@@ -253,6 +255,15 @@ public final class CapturedCatalog<K> {
         }
 
         public Coverage coverage() { return coverage; }
+
+        private boolean conditionalPreviews;
+
+        /** Request owners may retain a verified refill witness after domain search. */
+        Work conditionalPreviews(boolean enabled) {
+            if (producerLookup || entry != 0 || phase != 0) throw new IllegalStateException("Planning already started");
+            conditionalPreviews = enabled;
+            return this;
+        }
 
         /**
          * Export this request's final candidate scope and optional concrete witness.
@@ -352,6 +363,12 @@ public final class CapturedCatalog<K> {
                                 "; trial_allowance=" + stockTrialAllowance + "; negative_proofs=false");
                         startStatePlanning(projected);
                     }
+                }
+            } else if (phase == 11) {
+                if (refillRecovery.step()) {
+                    var recovered = refillRecovery.result(); refillRecovery.close(); refillRecovery = null;
+                    finish(recovered == null ? refillCandidate : recovered, recovered != null && recovered.feasible() ?
+                            GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : GraphPlan.Result.INCOMPLETE_MODEL);
                 }
             } else {
                 boolean done = slice == null ? solving.step() : solving.advance(slice);
@@ -594,7 +611,7 @@ public final class CapturedCatalog<K> {
                 // restricted negative clauses, closures or sessions into the next one.
                 solving = new GraphPlanningWork<>(indexing.result(), target, amount, stock, external, requiredSeeds,
                         preserve, forceCraft, budget).catalysts(catalystPolicy)
-                        .missingPreview(coverage.complete() && !allocationView);
+                        .missingPreview(!allocationView && (coverage.complete() || conditionalPreviews && !remaining));
                 indexing = null;
                 solveStarted = budget.searchWork();
                 solveAllowance = Math.max(256, Math.min(32768, budget.remainingWork() / 4));
@@ -621,8 +638,14 @@ public final class CapturedCatalog<K> {
                 } else beginInputAllocation();
             } else {
                 var reason = plan.result();
-                if (!coverage.complete() && negative(reason)) reason = GraphPlan.Result.UNKNOWN;
-                finish(plan, reason);
+                if (!coverage.complete() && negative(reason)) reason = conditionalPreviews && !plan.missingExact().isEmpty() ?
+                        GraphPlan.Result.INCOMPLETE_MODEL : GraphPlan.Result.UNKNOWN;
+                if (reason == GraphPlan.Result.INCOMPLETE_MODEL && stateFamilies && budget.remainingWork() >= 4096) {
+                    refillCandidate = plan;
+                    refillRecovery = new CapturedRefillRecovery<>(CapturedCatalog.this, entries, plan, stock, external,
+                            requiredSeeds, forceCraft, catalystPolicy, budget);
+                    phase = 11;
+                } else finish(plan, reason);
             }
         }
 
@@ -768,21 +791,28 @@ public final class CapturedCatalog<K> {
         }
 
         private void finish(GraphPlan<K> plan, GraphPlan.Result reason) {
-            // Restricted previews/seed certificates aren't exported as conclusions
-            // about omitted candidates. A positive witness remains independently valid.
-            boolean preview = coverage.complete() || plan.feasible();
+            // A funded refill witness is useful even when omitted candidates
+            // prevent an infeasibility proof. Keep that scope explicit and never
+            // transfer seed optimality or negative conclusions from the view.
+            boolean conditional = conditionalPreviews && reason == GraphPlan.Result.INCOMPLETE_MODEL && !plan.missingExact().isEmpty();
+            boolean preview = coverage.complete() || plan.feasible() || conditional;
             var answer = new GraphPlan<>(target, amount, preserve,
                     preview ? plan.steps() : new PlanStep.Sequence(List.of()), preview ? plan.recipes() : Map.of(),
                     preview ? plan.initialExact() : Map.of(), preview ? plan.seeds() : Map.of(),
                     preview ? plan.missingExact() : Map.of(), reason, budget.nodes(), System.nanoTime() - started);
             if (coverage.complete() && !allocationView) answer = answer.withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives());
+            if (conditional) {
+                budget.failureDetail("CONDITIONAL_REFILL: verified when supplied; omitted alternatives may need less or no refill");
+                budget.note("candidate_refill", "verified; missing_keys=" + answer.missingExact().size() + "; infeasibility_proven=false");
+            }
             result = new Result<>(answer, coverage);
             budget.phase(PlanningBudget.Phase.COMPLETE);
         }
 
         @Override
         public CompletableFuture<?> waitingFor() {
-            return statePlanning != null ? statePlanning.waitingFor() : solving == null ? null : solving.waitingFor();
+            return refillRecovery != null ? refillRecovery.waitingFor() :
+                    statePlanning != null ? statePlanning.waitingFor() : solving == null ? null : solving.waitingFor();
         }
 
         @Override
@@ -795,9 +825,19 @@ public final class CapturedCatalog<K> {
         public Result<K> limited(PlanningBudget.Exhausted limit) {
             if (result != null) return result;
             checkHandoffCancellation();
+            if (refillCandidate != null) {
+                // This prefix was verified before the optional tool-refill
+                // improvement began. An interrupted retry cannot erase it.
+                finish(refillCandidate, GraphPlan.Result.INCOMPLETE_MODEL);
+                return result;
+            }
             GraphPlan<K> retained = solving == null ? null : solving.limited(limit);
             checkHandoffCancellation();
             if (retained != null && retained.feasible()) finish(retained, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
+            else if (retained != null && !retained.missingExact().isEmpty() && !allocationView &&
+                    (coverage.complete() || conditionalPreviews && !remaining) &&
+                    (retained.result() == GraphPlan.Result.MISSING_INPUT || retained.result() == GraphPlan.Result.MISSING_SEED))
+                finish(retained, coverage.complete() ? retained.result() : GraphPlan.Result.INCOMPLETE_MODEL);
             // Only the canonical model with complete relevant capture coverage
             // can close the order. A completed root proof must survive the same
             // budget handoff as a verified witness; restricted support/prefix
@@ -856,6 +896,8 @@ public final class CapturedCatalog<K> {
             reachable = null;
             if (statePlanning != null) statePlanning.close();
             statePlanning = null;
+            if (refillRecovery != null) refillRecovery.close();
+            refillRecovery = null; refillCandidate = null;
             if (stateSupport != null) stateSupport.close();
             stateSupport = null;
             closeStateStock(); stateSources = null;

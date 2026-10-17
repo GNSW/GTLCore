@@ -4,4 +4,7 @@ package org.gtlcore.gtlcore.integration.ae2;
 public interface InventorySnapshotVersion {
 
     long gtlcore$inventorySnapshotVersion();
+
+    /** Capture on the server thread after refreshing AE's inventory cache. */
+    InventorySnapshot gtlcore$inventorySnapshot();
 }

@@ -124,6 +124,7 @@
     "ae2.TooltipsMixin",
     "ae2.ViewCellItemMixin",
     "ae2.crafting.AECraftingPatternAccessor",
+    "ae2.crafting.AECraftingPatternMixin",
     "ae2.crafting.ChildCraftingSimulationStateAccessor",
     "ae2.crafting.CraftingCalculationMixin",
     "ae2.crafting.CraftingCpuHelperMixin",

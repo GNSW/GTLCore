@@ -77,6 +77,33 @@ public final class ManualCraftingInventoryLock {
         }
     }
 
+    /** Carry only the owning reservation across a deferred server-side query. */
+    public static AvailabilityContext captureAvailabilityContext() {
+        return new AvailabilityContext(ACTIVE_SUBMISSION.get());
+    }
+
+    public static final class AvailabilityContext {
+
+        private final Reservation owner;
+
+        private AvailabilityContext(Reservation owner) {
+            this.owner = owner;
+        }
+
+        public long call(java.util.function.LongSupplier query) {
+            var previous = ACTIVE_SUBMISSION.get();
+            // limitExtraction also checks that the captured owner is still active.
+            if (owner == null) ACTIVE_SUBMISSION.remove();
+            else ACTIVE_SUBMISSION.set(owner);
+            try {
+                return query.getAsLong();
+            } finally {
+                if (previous == null) ACTIVE_SUBMISSION.remove();
+                else ACTIVE_SUBMISSION.set(previous);
+            }
+        }
+    }
+
     public static long limitExtraction(MEStorage storage, AEKey what, long requested, IActionSource source) {
         if (requested <= 0) {
             return requested;

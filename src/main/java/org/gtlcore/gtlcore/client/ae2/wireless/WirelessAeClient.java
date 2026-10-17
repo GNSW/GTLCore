@@ -40,6 +40,8 @@ public final class WirelessAeClient {
                     GTLWirelessAeContent.PATTERN_RELAY.get(),
                     PatternRelayItem.ACCESS_MODEL_PROPERTY,
                     (stack, level, entity, seed) -> PatternRelayItem.getAccessModelProperty(stack));
+            // The front overlay has a transparent border that must reveal the casing underneath.
+            ItemBlockRenderTypes.setRenderLayer(GTLWirelessAeContent.WIRELESS_NETWORK_CORE.get(), RenderType.cutout());
             ItemBlockRenderTypes.setRenderLayer(GTLWirelessAeContent.WIRELESS_NETWORK_BOOKMARK.get(), RenderType.cutout());
             MenuScreens.register(GTLWirelessAeContent.WIRELESS_NETWORK_CORE_MENU.get(), WirelessNetworkCoreScreen::new);
             MenuScreens.register(GTLWirelessAeContent.WIRELESS_NETWORK_BOOKMARK_MENU.get(), WirelessNetworkBookmarkScreen::new);

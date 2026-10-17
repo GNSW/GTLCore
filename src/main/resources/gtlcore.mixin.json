@@ -343,6 +343,7 @@
     "gtmt.WirelessEnergyManagerMixin",
     "gtmt.WirelessEnergyMonitorMixin",
     "gtmt.WirelessEnergyReceiveCoverMixin",
+    "gtmt.WirelessMachinesMixin",
     "gtmt.trait.CatalystFluidStackHandlerMixin",
     "gtmt.trait.CatalystItemStackHandlerMixin",
     "ldlib.AsyncThreadDataMixin",

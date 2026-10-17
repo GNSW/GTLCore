@@ -199,15 +199,20 @@ public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implement
             }
         }
 
-        final GenericStack requireStack = processingPattern.getInputs()[0].getPossibleInputs()[0];
+        final var firstInput = processingPattern.getInputs()[0];
         long multiplier = 0;
         for (var inputList : keyCounters) {
             for (var input : inputList) {
-                if (requireStack.what().equals(input.getKey())) {
-                    multiplier = input.getLongValue() / (requireStack.amount() * processingPattern.getInputs()[0].getMultiplier());
+                for (var possible : firstInput.getPossibleInputs()) {
+                    if (!possible.what().equals(input.getKey())) continue;
+                    long cost = possible.amount() * firstInput.getMultiplier();
+                    if (cost <= 0) continue;
+                    multiplier = input.getLongValue() / cost;
                     break;
                 }
+                if (multiplier != 0) break;
             }
+            if (multiplier != 0) break;
         }
         if (multiplier == 0) return false;
 

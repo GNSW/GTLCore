@@ -8,7 +8,6 @@ import com.gregtechceu.gtceu.api.recipe.chance.logic.ChanceLogic;
 import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.data.recipe.builder.GTRecipeBuilder;
 
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 
 import appeng.api.stacks.AEItemKey;
@@ -51,12 +50,11 @@ public class MECraftHandler extends NotifiableMAHandlerTrait {
                 it.remove();
                 continue;
             }
-            Item item = aeItemKey.getItem();
             long multiply = entry.getLongValue();
 
             long extract = Math.min(multiply, remain);
 
-            var cont = new Content(LongIngredient.create(Ingredient.of(item), extract * key.amount()), ChanceLogic.getMaxChancedValue(), ChanceLogic.getMaxChancedValue(), 0, null, null);
+            var cont = new Content(LongIngredient.create(Ingredient.of(aeItemKey.toStack()), extract * key.amount()), ChanceLogic.getMaxChancedValue(), ChanceLogic.getMaxChancedValue(), 0, null, null);
             outputList.add(cont);
 
             remain -= extract;

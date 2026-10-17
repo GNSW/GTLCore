@@ -1898,5 +1898,8 @@
   "tagprefix.nanoswarm": "%s纳米蜂群",
   "tagprefix.plutostone": "冥王星%s矿石",
   "tagprefix.titanstone": "土卫六%s矿石",
-  "tagprefix.venus_stone": "金星石%s矿石"
+  "tagprefix.venus_stone": "金星石%s矿石",
+  "gtceu.universal.tooltip.item_transfer_rate_stacks": "§b传输速率：§f%s组/s",
+  "gtceu.universal.tooltip.item_transfer_rate": "§b传输速率：§f%s物品/s",
+  "gtceu.universal.tooltip.fluid_transfer_rate": "§b传输速率：§f%s mB/t"
 }

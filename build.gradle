@@ -217,13 +217,6 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(["-Xlint:-deprecation", "-Xlint:-removal"])
 }
 
-java {
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
-    withSourcesJar()
-}
-
 jar {
     // add some additional metadata to the jar manifest
     manifest {

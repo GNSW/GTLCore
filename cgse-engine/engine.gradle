@@ -1,0 +1,88 @@
+import java.security.MessageDigest
+
+// Shared with the vendored engine project in GTLCore; no sibling checkout needed.
+def config = new Properties()
+cgseConfigFile.withInputStream { config.load(it) }
+version = providers.gradleProperty('cgseVersion').getOrElse(config.getProperty('version'))
+ext.cgseCompatibility = config.getProperty('compatibility')
+if (!(version ==~ /(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)/) ||
+        !version.startsWith(cgseCompatibility + '.')) {
+    throw new GradleException("CGSE version must be a stable ${cgseCompatibility}.x release: ${version}")
+}
+def compatibilityParts = cgseCompatibility.tokenize('.')
+ext.cgseUpperVersion = compatibilityParts[0] + '.' + (compatibilityParts[1].toInteger() + 1) + '.0'
+ext.cgseVersionRange = "[${version},${cgseUpperVersion})"
+group = 'org.cgse'
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+def readGit = { List<String> arguments ->
+    try {
+        def output = providers.exec {
+            workingDir rootDir
+            commandLine(['git'] + arguments)
+            ignoreExitValue = true
+        }
+        return output.result.get().exitValue == 0 ? output.standardOutput.asText.get().trim() : null
+    } catch (Exception ignored) {
+        return null
+    }
+}
+def identityPaths = cgseIdentityPaths
+def identity = providers.provider {
+    def top = readGit(['rev-parse', '--show-toplevel'])
+    def ownCheckout = top != null && file(top).canonicalFile == rootDir.canonicalFile
+    def revision = ownCheckout ? readGit(['rev-parse', 'HEAD']) : null
+    def changes = ownCheckout ? readGit(['status', '--porcelain', '--untracked-files=all', '--'] + identityPaths) : null
+    def digest = MessageDigest.getInstance('SHA-256')
+    digest.update(version.toString().getBytes('UTF-8'))
+    def sources = files(identityPaths.collect { path ->
+        def source = rootProject.file(path)
+        source.isDirectory() ? fileTree(source) : source
+    })
+    sources.files.findAll { it.isFile() }.sort { rootProject.relativePath(it) }.each { source ->
+        digest.update(rootProject.relativePath(source).replace('\\', '/').getBytes('UTF-8'))
+        digest.update((byte) 0)
+        digest.update(source.getText('UTF-8').replace('\r\n', '\n').getBytes('UTF-8'))
+        digest.update((byte) 0)
+    }
+    ['Implementation-Revision': revision ?: 'unknown',
+     'Implementation-Source-Dirty': changes == null ? 'unknown' : Boolean.toString(!changes.isEmpty()),
+     'Implementation-Source-SHA256': digest.digest().encodeHex().toString()]
+}
+
+def engineMetadata = tasks.register('generateEngineMetadata') {
+    inputs.property('version', version)
+    inputs.property('compatibility', cgseCompatibility)
+    inputs.property('identity', identity)
+    def output = layout.buildDirectory.dir('generated/engine-resources')
+    outputs.dir(output)
+    doLast {
+        def target = output.get().file('META-INF/cgse/engine.properties').asFile
+        target.parentFile.mkdirs()
+        target.setText("version=${version}\ncompatibility=${cgseCompatibility}\nrevision=${identity.get()['Implementation-Revision']}\n", 'UTF-8')
+    }
+}
+sourceSets.main.resources.srcDir(engineMetadata)
+
+tasks.withType(Jar).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(cgseLicenseFiles) { into 'META-INF' }
+    manifest.attributes('Bundle-License': 'https://mozilla.org/MPL/2.0/',
+            'Implementation-URL': 'https://github.com/autumn-2-net/CGSE_CORE',
+            'Implementation-Title': 'Compiled Graph Solving Engine',
+            'Implementation-Version': project.version)
+    inputs.property('cgseBuildIdentity', identity)
+    doFirst { manifest.attributes(identity.get()) }
+}
+tasks.named('jar', Jar) {
+    manifest.attributes('Automatic-Module-Name': 'org.cgse.engine', 'FMLModType': 'GAMELIBRARY')
+}

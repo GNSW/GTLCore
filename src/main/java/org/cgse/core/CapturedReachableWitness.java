@@ -255,6 +255,26 @@ final class CapturedReachableWitness<K> implements AutoCloseable {
     GraphPlan<K> result() { return result; }
     List<Variant<K>> variants() { return List.copyOf(variants.values()); }
 
+    /** Bounded scheduling estimate, never evidence of feasibility or reachability. */
+    boolean promising(long remainingWork) {
+        if (remainingWork <= 0) return false;
+        budget.operation(PlanningBudget.Operation.SCAN, 0);
+        if (assembly != null || verification != null) return true;
+        if (!indexed) return false;
+        BigInteger available = have(target);
+        budget.operations(PlanningBudget.Operation.INTEGER, Math.max(available.bitLength(), targetGoal.bitLength()) + 64, 8);
+        BigInteger progress = available.subtract(BigInteger.valueOf(stock.getOrDefault(target, 0L)));
+        if (progress.signum() <= 0) return false;
+        long spent = budget.nodes() - workStarted;
+        BigInteger left = targetGoal.subtract(available).max(BigInteger.ZERO);
+        // Use the observed cost per net target gain and keep one spent prefix
+        // for assembly/verification. Long requests with negligible progress do
+        // not qualify merely because a few legal firings were found.
+        BigInteger predicted = left.multiply(BigInteger.valueOf(spent)).add(progress.subtract(BigInteger.ONE)).divide(progress)
+                .add(BigInteger.valueOf(spent));
+        return predicted.compareTo(BigInteger.valueOf(remainingWork)) <= 0;
+    }
+
     private void finishObservation(PlanningBudget.CandidateOutcome outcome) {
         if (observation != null) observation.finish(outcome);
         observation = null;

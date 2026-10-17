@@ -1,0 +1,20 @@
+CGSE - Compiled Graph Solving Engine
+Copyright (c) 2026 autumn
+
+Original CGSE source code, tools, tests, fixtures and documentation are
+licensed under the Mozilla Public License, version 2.0 (MPL-2.0), unless
+otherwise stated in the file or its accompanying notices.
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+Source code: https://github.com/autumn-2-net/CGSE_CORE
+The full license is provided in LICENSE.
+
+Third-party material retains its original license and copyright notices.
+This includes the Gradle wrappers, third-party reference sources and
+benchmark inputs in tests/oracles, and third-party portions of captured
+game/recipe data in tests/datasets/captures. These materials are not
+relicensed by the CGSE license declaration. Their origins are recorded
+in tests/oracles/provenance.json and tests/datasets/index.json.

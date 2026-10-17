@@ -219,14 +219,40 @@ public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implement
     @Override
     public boolean gtlcore$canProduceGraphPattern(IPatternDetails pattern) {
         if (!getMainNode().isActive() || !(pattern instanceof AEProcessingPattern) || !patternSlotMap.containsKey(pattern)) return false;
+        return gtlcore$missingGraphTools(pattern).isEmpty();
+    }
+
+    private Set<Item> gtlcore$missingGraphTools(IPatternDetails pattern) {
+        if (!patternSlotMap.containsKey(pattern)) return Set.of();
         var required = toolsSlotMap.get(patternSlotMap.get(pattern));
-        if (required == null || required.isEmpty()) return true;
+        if (required == null || required.isEmpty()) return Set.of();
         var missing = new ObjectOpenHashSet<>(required);
         for (int i = 0; i < sharedToolsInventory.getSlots(); i++) {
             var stack = sharedToolsInventory.getStackInSlot(i);
             if (!stack.isDamageableItem()) missing.remove(stack.getItem());
         }
-        return missing.isEmpty();
+        return missing;
+    }
+
+    @Override
+    public String gtlcore$graphBlockReason(IPatternDetails pattern) {
+        return !getMainNode().isActive() || !patternSlotMap.containsKey(pattern) ? "PROVIDER_OFFLINE" :
+                gtlcore$missingGraphTools(pattern).isEmpty() ? "PROVIDER_REJECTED" : "MISSING_TOOL";
+    }
+
+    @Override
+    public String gtlcore$graphBlockDetail(IPatternDetails pattern) {
+        return "pos=" + getPos() + "; missing_shared_tools=" + gtlcore$missingGraphTools(pattern);
+    }
+
+    @Override
+    public Component gtlcore$graphBlockMessage(IPatternDetails pattern) {
+        var names = Component.empty();
+        for (var item : gtlcore$missingGraphTools(pattern)) {
+            if (!names.getSiblings().isEmpty()) names.append(", ");
+            names.append(item.getDescription());
+        }
+        return Component.translatable("gtlcore.ae.graph.shared_tool_location", names, getPos().toShortString());
     }
 
     @Override
@@ -276,6 +302,7 @@ public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implement
     }
 
     private @Nullable IPatternDetails getPatternDetailsAsProcessing(ItemStack stack, int slotIndex) {
+        toolsSlotMap.remove(slotIndex);
         if (!stack.isEmpty()) {
             if (stack.getItem() instanceof EncodedPatternItem encodedPatternItem) {
                 final var decodePattern = encodedPatternItem.decode(stack, getLevel(), false);

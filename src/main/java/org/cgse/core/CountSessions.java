@@ -203,7 +203,7 @@ final class CountSessions {
                 var proof = new CountProof.Certificate("persistent_count_assumptions", model.recipes.size(), axioms, trial, List.of(), false);
                 // Certifying a future cache entry is independently bounded. It
                 // must never consume the current order's remaining search work.
-                long allowance = Math.min(4096, PlanningBudget.CACHE_PREPARATION_WORK - budget.cachePreparationWork());
+                long allowance = Math.min(4096, budget.remainingCachePreparationWork());
                 if (allowance <= 0) break;
                 if (CountProof.verify(proof, allowance, units -> retainCharge(budget, units)) != CountProof.Verdict.VERIFIED) continue;
                 accepted.add(conflict);
@@ -284,7 +284,7 @@ final class CountSessions {
         // A few deletion checks remove demand/unrelated-stock premises from
         // small cores. This is optional preparation, never current inference.
         for (int at = support.size() - 1, trials = 0; at >= 0 && trials < 16; at--, trials++) {
-            if (PlanningBudget.CACHE_PREPARATION_WORK - budget.cachePreparationWork() < 1024) break;
+            if (budget.remainingCachePreparationWork() < 1024) break;
             var trial = new ArrayList<>(support); trial.remove(at);
             if (certifies(model.recipes.size(), trial, conflicts, budget)) support = trial;
         }
@@ -295,7 +295,7 @@ final class CountSessions {
                                      List<CountConflict> conflicts, PlanningBudget budget) {
         long copy = rows.size() + conflicts.size();
         for (var row : rows) copy += row.terms().size();
-        long available = PlanningBudget.CACHE_PREPARATION_WORK - budget.cachePreparationWork();
+        long available = budget.remainingCachePreparationWork();
         if (available < copy + 1024) return false;
         retainCharge(budget, copy);
         var proof = certificate("retained_support_check", variables, rows, conflicts);

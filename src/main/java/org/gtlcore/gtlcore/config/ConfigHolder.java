@@ -210,6 +210,16 @@ public class ConfigHolder {
         public int ae2GraphPlannerMaxSteps = 67108864;
 
         @Configurable
+        @Configurable.Range(min = 0, max = Integer.MAX_VALUE)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphCompilerMaxSteps.comment")
+        public int ae2GraphCompilerMaxSteps = 0;
+
+        @Configurable
+        @Configurable.Range(min = 0, max = Integer.MAX_VALUE)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphCachePreparationMaxSteps.comment")
+        public int ae2GraphCachePreparationMaxSteps = 8192;
+
+        @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerParallelWorkBudget.comment")
         public boolean ae2GraphPlannerParallelWorkBudget = false;
 
@@ -218,9 +228,49 @@ public class ConfigHolder {
         public boolean ae2GraphFallback = true;
 
         @Configurable
+        @Configurable.Range(min = 0, max = 86400000)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphFallbackTimeoutMs.comment")
+        public int ae2GraphFallbackTimeoutMs = 250;
+
+        @Configurable
+        @Configurable.Range(min = 1, max = Integer.MAX_VALUE)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphFallbackMaxSteps.comment")
+        public int ae2GraphFallbackMaxSteps = 131072;
+
+        @Configurable
+        @Configurable.Range(min = 1, max = 1024)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphFallbackMemoryMiB.comment")
+        public int ae2GraphFallbackMemoryMiB = 16;
+
+        @Configurable
         @Configurable.Range(min = 16, max = 1024)
         @Configurable.Comment("config.gtlcore.option.ae2GraphPlannerMemoryMiB.comment")
         public int ae2GraphPlannerMemoryMiB = 128;
+
+        @Configurable
+        @Configurable.Range(min = 16, max = 16384)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphGlobalMemoryMiB.comment")
+        public int ae2GraphGlobalMemoryMiB = 512;
+
+        @Configurable
+        @Configurable.Range(min = 0, max = 4096)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphCacheMemoryMiB.comment")
+        public int ae2GraphCacheMemoryMiB = 256;
+
+        @Configurable
+        @Configurable.Range(min = 100, max = 20000)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphSnapshotMicros.comment")
+        public int ae2GraphSnapshotMicros = 2000;
+
+        @Configurable
+        @Configurable.Range(min = 64, max = 65536)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphSliceSteps.comment")
+        public int ae2GraphSliceSteps = 4096;
+
+        @Configurable
+        @Configurable.Range(min = 100, max = 20000)
+        @Configurable.Comment("config.gtlcore.option.ae2GraphSliceMicros.comment")
+        public int ae2GraphSliceMicros = 2000;
 
         @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2PatternProviderAutoExpandDefault.comment")

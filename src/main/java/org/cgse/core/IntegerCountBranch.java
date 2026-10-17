@@ -2100,6 +2100,12 @@ final class IntegerCountBranch<K> implements AutoCloseable {
     /** Early service advances an existing companion's opportunity. Offset its
      * later LP service once; never subtract from actual/global work counters. */
     private long packingQuantum(long completedLpWork) {
+        // An optional rounding domain that spent work without a candidate must
+        // not immediately claim the same amount of extra service again. Give
+        // the retained LP its opportunity, using measured effort rather than
+        // a fixed number of turns. No actual work or local cap is refunded.
+        long cooldown = viewSearch == null ? 0 : viewSearch.takePackingCooldown();
+        packingServiceCredit += Math.min(cooldown, Long.MAX_VALUE - packingServiceCredit);
         long quantum = viewSearch == null ? 0 : viewSearch.packingContinuationQuantum(completedLpWork);
         long credited = Math.min(quantum, packingServiceCredit);
         packingServiceCredit -= credited;

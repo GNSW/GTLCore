@@ -4,6 +4,7 @@ import org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingPlanSummaryEntry;
 
 import net.minecraft.network.FriendlyByteBuf;
 
+import appeng.api.stacks.AEKey;
 import appeng.menu.me.crafting.CraftingPlanSummaryEntry;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -11,6 +12,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.List;
 
 @Mixin(CraftingPlanSummaryEntry.class)
 public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry {
@@ -21,6 +24,30 @@ public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry 
     private long gtlcore$graphSeed;
     @Unique
     private boolean gtlcore$missingGraphSeed;
+    @Unique
+    private int gtlcore$groupedToolStates;
+    @Unique
+    private List<AEKey> gtlcore$missingKeys = List.of();
+
+    @Override
+    public int gtlcore$getGroupedToolStates() {
+        return gtlcore$groupedToolStates;
+    }
+
+    @Override
+    public void gtlcore$setGroupedToolStates(int states) {
+        this.gtlcore$groupedToolStates = states;
+    }
+
+    @Override
+    public List<AEKey> gtlcore$getMissingKeys() {
+        return gtlcore$missingKeys;
+    }
+
+    @Override
+    public void gtlcore$setMissingKeys(List<AEKey> keys) {
+        this.gtlcore$missingKeys = List.copyOf(keys);
+    }
 
     @Override
     public long gtlcore$getGraphSeed() {
@@ -55,6 +82,8 @@ public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry 
         buffer.writeVarLong(gtlcore$craftTimes);
         buffer.writeVarLong(gtlcore$graphSeed);
         buffer.writeBoolean(gtlcore$missingGraphSeed);
+        buffer.writeVarInt(gtlcore$groupedToolStates);
+        buffer.writeCollection(gtlcore$missingKeys, AEKey::writeKey);
     }
 
     @Inject(at = @At("TAIL"), method = "read", cancellable = true, remap = false)
@@ -63,6 +92,8 @@ public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry 
         ((ICraftingPlanSummaryEntry) entry).gtlcore$setCraftTimes(buffer.readVarLong());
         ((ICraftingPlanSummaryEntry) entry).gtlcore$setGraphSeed(buffer.readVarLong());
         ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingGraphSeed(buffer.readBoolean());
+        ((ICraftingPlanSummaryEntry) entry).gtlcore$setGroupedToolStates(buffer.readVarInt());
+        ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingKeys(buffer.readList(AEKey::readKey));
         cir.setReturnValue(entry);
     }
 }

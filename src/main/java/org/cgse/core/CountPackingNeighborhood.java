@@ -23,9 +23,12 @@ final class CountPackingNeighborhood implements AutoCloseable {
         this(coefficients, bounds, seed, budget, learned ? Mode.LEARNING : Mode.PROPAGATION);
     }
     CountPackingNeighborhood(long[][] coefficients, long[] bounds, long seed, PlanningBudget budget, Mode mode) {
+        this(coefficients, bounds, seed, budget, mode, 0);
+    }
+    CountPackingNeighborhood(long[][] coefficients, long[] bounds, long seed, PlanningBudget budget, Mode mode, long flexible) {
         this.budget = budget;
         if (mode == Mode.EXCHANGE || mode == Mode.EXCHANGE_FOUR) {
-            exchange = new CountPackingExchange(coefficients, bounds, seed, budget, mode == Mode.EXCHANGE_FOUR ? 4 : 3);
+            exchange = new CountPackingExchange(coefficients, bounds, seed, budget, mode == Mode.EXCHANGE_FOUR ? 4 : 3, flexible);
             return;
         }
         if (mode == Mode.PROPAGATION) {

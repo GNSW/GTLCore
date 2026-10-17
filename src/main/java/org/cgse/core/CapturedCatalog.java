@@ -6,14 +6,17 @@ package org.cgse.core;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -47,6 +50,70 @@ public final class CapturedCatalog<K> {
     private final List<Entry<K>> entries;
     private final boolean captureComplete;
     private final boolean stateFamilies;
+    private static final long MAX_PRODUCER_CACHE_BYTES = 8L << 20;
+    /** Storage is transferred only after its final insertion; published lists are read-only. */
+    private record Producers<K>(Map<K, List<Integer>> storage, Map<K, List<Integer>> view,
+                                long references, long bytes) {}
+    private volatile Producers<K> retainedProducers;
+    private long producerHits, producerMisses;
+    private final CapturedSupportCache<K> stateSupports;
+    private final CapturedStateProducers<K> stateProducers;
+    private final CapturedStateSources<K> stateSourceHints;
+
+    CapturedStateSources.Metrics stateSourceMetrics() {
+        return stateSourceHints == null ? new CapturedStateSources.Metrics(0, 0, 0) : stateSourceHints.metrics();
+    }
+
+    CapturedStateProducers.Metrics stateProducerMetrics() {
+        return stateProducers == null ? new CapturedStateProducers.Metrics(0, 0, 0, 0) : stateProducers.metrics();
+    }
+
+    /** Source/key hints only, scoped to this capture and exact target/seed-key set. */
+    public record StateSupportCacheMetrics(long hits, long misses, int entries, long estimatedBytes, long maximumBytes) {}
+
+    public StateSupportCacheMetrics stateSupportMetrics() {
+        if (stateSupports == null) return new StateSupportCacheMetrics(0, 0, 0, 0, CapturedSupportCache.MAX_BYTES);
+        var values = stateSupports.metrics();
+        return new StateSupportCacheMetrics(values.hits(), values.misses(), values.entries(), values.bytes(), values.maximumBytes());
+    }
+
+    /** Logical retained auxiliary caches, independent of a request's workspace reservation. */
+    public long retainedCacheBytes() {
+        return stateSupportMetrics().estimatedBytes() + producerIndexMetrics().estimatedBytes() +
+                stateProducerMetrics().bytes() + stateSourceMetrics().bytes();
+    }
+
+    /** Structural containers only; stock, coverage and solver results are never retained here. */
+    public record ProducerCacheMetrics(long hits, long misses, int keys, long references,
+                                       long estimatedBytes, long maximumBytes) {}
+
+    public synchronized ProducerCacheMetrics producerIndexMetrics() {
+        var saved = retainedProducers;
+        return new ProducerCacheMetrics(producerHits, producerMisses, saved == null ? 0 : saved.view.size(),
+                saved == null ? 0 : saved.references, saved == null ? 0 : saved.bytes, MAX_PRODUCER_CACHE_BYTES);
+    }
+
+    private synchronized Producers<K> cachedProducers() {
+        if (retainedProducers == null) { if (producerMisses < Long.MAX_VALUE) producerMisses++; }
+        else if (producerHits < Long.MAX_VALUE) producerHits++;
+        return retainedProducers;
+    }
+
+    private Producers<K> retainProducers(Map<K, List<Integer>> completed, long bytes, long references, PlanningBudget budget) {
+        synchronized (this) {
+            if (retainedProducers != null) return retainedProducers;
+            // One-off auxiliary catalogs keep their original request-owned lifetime.
+            if (producerMisses < 2 || bytes == 0 || bytes > MAX_PRODUCER_CACHE_BYTES - 128) return null;
+        }
+        // Transfer completed storage without cloning it. No host callback or
+        // budget checkpoint runs while holding the catalog publication monitor.
+        if (!budget.tryCacheCharge(1)) return null;
+        synchronized (this) {
+            if (retainedProducers == null)
+                retainedProducers = new Producers<>(completed, Collections.unmodifiableMap(completed), references, bytes + 128);
+            return retainedProducers;
+        }
+    }
 
     public CapturedCatalog(List<Entry<K>> entries) { this(entries, true); }
 
@@ -63,10 +130,15 @@ public final class CapturedCatalog<K> {
         }
         captureComplete = complete;
         stateFamilies = families;
+        stateSupports = families && entries.size() > 128 ? new CapturedSupportCache<>() : null;
+        stateProducers = stateSupports == null ? null : new CapturedStateProducers<>();
+        stateSourceHints = stateSupports == null ? null : new CapturedStateSources<>();
     }
 
     /** Same potential-output scope as Work's index, including unexpanded returns. */
     boolean hasPotentialProducer(K target) {
+        var saved = retainedProducers;
+        if (saved != null) return saved.view.containsKey(target);
         for (var entry : entries) {
             var recipe = entry.recipe();
             if (recipe.size() == 0) continue;
@@ -108,8 +180,11 @@ public final class CapturedCatalog<K> {
         private final Set<K> external;
         private final boolean preserve, forceCraft;
         private final PlanningBudget budget;
-        private final Map<K, List<Integer>> producers = new HashMap<>();
+        private Map<K, List<Integer>> producers = new HashMap<>();
+        private boolean producerLookup, sharedProducers;
+        private long producerMemory, producerReferences;
         private final Map<Integer, DomainState> active = new LinkedHashMap<>();
+        private final Set<Integer> sourceOrder = new TreeSet<>();
         private final Deque<K> pendingKeys = new ArrayDeque<>();
         private final Set<K> discovered = new HashSet<>();
         private final Deque<DomainState> pendingDomains = new ArrayDeque<>();
@@ -128,6 +203,13 @@ public final class CapturedCatalog<K> {
         private CapturedFlowWitness<K> flowWitness;
         private CapturedReachableWitness<K> reachable;
         private CapturedStatePlanning<K> statePlanning;
+        private CapturedStateSupport<K> stateSupport;
+        private CapturedStockProjection<K> stateStock;
+        private List<Entry<K>> stateSources;
+        private List<Integer> stateSourceIndices;
+        private boolean fullStateTried, stateRecoveryTried, stateHintsTried, stateHintTrial;
+        private long stateStarted, stateAllowance, stockTrialStarted, stockTrialAllowance;
+        private long hintTrialStarted, hintTrialAllowance;
         private boolean reachableTried;
         private GraphPlan<K> reachablePlan;
         private List<CapturedReachableWitness.Variant<K>> reachableVariants = List.of();
@@ -136,8 +218,10 @@ public final class CapturedCatalog<K> {
         private List<Integer> providers = List.of();
         private int provider;
         private int entry, output, input, candidate;
-        private int phase; // 0 index, 1 discover, 2 freeze, 3 solve, 4 stock, 5 flow, 6 recovered counts, 7 reachable, 8 state capacity
-        private int flattenEntry, flattenVariant;
+        private int phase; // 0 index, 1 discover, 2 freeze, 3 solve, 4 stock, 5 flow, 6 recovered counts, 7 reachable, 8 state capacity, 9 state support, 10 stock projection
+        private Iterator<Integer> flattenSources;
+        private DomainState flattenState;
+        private int flattenVariant;
         private List<GraphRecipe<K>> concrete = new ArrayList<>();
         private List<GraphRecipe<K>> allocationRecipes = new ArrayList<>();
         private boolean allocationView;
@@ -198,6 +282,18 @@ public final class CapturedCatalog<K> {
             if (closed) throw new IllegalStateException("Closed captured planning work");
             budget.checkpoint();
             if (phase != 3) budget.phase(PlanningBudget.Phase.BUILD);
+            if (stateHintTrial && (phase == 8 || phase == 9) && budget.nodes() - hintTrialStarted >= hintTrialAllowance) {
+                if (stateSupport != null) stateSupport.close();
+                stateSupport = null;
+                if (statePlanning != null) statePlanning.close();
+                statePlanning = null; closeStateStock();
+                budget.note("candidate_state_source_hints", "limited; remaining=" + stateRemaining() + "; negative_transfer=false");
+                if (!beginStateRecovery()) {
+                    if (!fullStateTried) beginStatePlanning(entries);
+                    else phase = 1;
+                }
+                return false;
+            }
             if (phase == 0) {
                 indexPotentialProducer();
             } else if (phase == 1) {
@@ -217,12 +313,45 @@ public final class CapturedCatalog<K> {
             } else if (phase == 7) {
                 recoverReachable();
             } else if (phase == 8) {
+                if (stateStock != null && budget.nodes() - stockTrialStarted >= stockTrialAllowance) {
+                    retryFullStock(); return false;
+                }
                 if (statePlanning.step()) {
                     var plan = statePlanning.result(); statePlanning.close(); statePlanning = null;
                     if (plan != null) {
+                        if (stateSourceHints != null && sharedProducers)
+                            stateSourceHints.retain(entries, stateSourceIndices, budget);
+                        if ((stateRecoveryTried || stateHintsTried) && stateSources != entries && stateSupports != null && sharedProducers)
+                            stateSupports.retainExpanded(target, requiredSeeds.keySet(), stateSources, budget);
+                        if (stateStock == null && stateSupports != null && sharedProducers)
+                            stateSupports.retainStockKeys(target, requiredSeeds.keySet(), stateSources,
+                                    plan.initialExact().keySet(), stock.size(), budget);
+                        closeStateStock();
                         allocationView = true;
                         finish(plan, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
-                    } else phase = 1;
+                    } else if (stateStock != null) retryFullStock();
+                    else if (beginStateRecovery()) { /* Continue the same arm with additional source support. */ }
+                    else if (!fullStateTried) beginStatePlanning(entries);
+                    else phase = 1;
+                }
+            } else if (phase == 9) {
+                if (stateSupport.step()) {
+                    stateSourceIndices = sharedProducers ? stateSupport.retainedIndices() : null;
+                    var selected = stateSupport.result(); stateSupport.close(); stateSupport = null;
+                    if (selected != null && sharedProducers) stateSupports.retain(target, requiredSeeds.keySet(), selected, budget);
+                    if (selected == null && beginStateRecovery()) return false;
+                    beginStatePlanning(selected == null ? entries : selected);
+                }
+            } else if (phase == 10) {
+                if (budget.nodes() - stockTrialStarted >= stockTrialAllowance) retryFullStock();
+                else if (stateStock.step()) {
+                    var projected = stateStock.result();
+                    if (projected == null) retryFullStock();
+                    else {
+                        budget.note("candidate_state_stock", "projected=" + projected.size() + "; inventory=" + stock.size() +
+                                "; trial_allowance=" + stockTrialAllowance + "; negative_proofs=false");
+                        startStatePlanning(projected);
+                    }
                 }
             } else {
                 boolean done = slice == null ? solving.step() : solving.advance(slice);
@@ -238,13 +367,39 @@ public final class CapturedCatalog<K> {
 
         private void indexPotentialProducer() {
             budget.compilationCheck();
+            if (!producerLookup) {
+                producerLookup = true;
+                var cached = cachedProducers();
+                if (cached != null) {
+                    producers = cached.view; sharedProducers = true; entry = entries.size();
+                    budget.note("candidate_index", "hit; keys=" + producers.size() + "; references=" + cached.references);
+                }
+            }
             if (entry == entries.size()) {
+                if (!sharedProducers) {
+                    var saved = retainProducers(producers, producerMemory, producerReferences, budget);
+                    if (saved != null) {
+                        // Another request may have published first. Release only
+                        // this request's duplicate storage, never the shared map.
+                        if (saved.storage != producers) producers.clear();
+                        producers = saved.view; sharedProducers = true;
+                        budget.release(producerMemory); memory -= producerMemory; producerMemory = 0;
+                        budget.note("candidate_index", "retained; keys=" + producers.size() + "; bytes=" + saved.bytes);
+                    }
+                }
                 discover(target);
                 for (K key : requiredSeeds.keySet()) discover(key);
                 if (stateFamilies) {
-                    statePlanning = new CapturedStatePlanning<>(entries, target, amount, stock, external, requiredSeeds,
-                            preserve, forceCraft, budget);
-                    phase = 8;
+                    stateStarted = budget.nodes(); stateAllowance = budget.remainingWork() / 2;
+                    var hint = stateSupports == null ? null : stateSupports.select(target, requiredSeeds.keySet(), budget);
+                    if (hint != null) {
+                        budget.note("candidate_state_support", "reused; selected=" + hint.sources().size() + "; catalog=" + entries.size() + "; negative_proofs=false");
+                        beginStatePlanning(hint.sources(), hint.stockKeys()); return;
+                    }
+                    if (entries.size() > 128) stateSupport = CapturedStateSupport.create(entries, producers, target, requiredSeeds.keySet(), budget,
+                            sharedProducers ? stateProducers : null);
+                    if (stateSupport != null) phase = 9;
+                    else beginStatePlanning(entries);
                 } else phase = 1;
                 return;
             }
@@ -273,15 +428,87 @@ public final class CapturedCatalog<K> {
             output = input = candidate = 0;
         }
 
+        private void beginStatePlanning(List<Entry<K>> sources) {
+            beginStatePlanning(sources, null);
+        }
+
+        private boolean beginStateRecovery() {
+            stateHintTrial = false;
+            if (entries.size() <= 128) return false;
+            if (!stateHintsTried) {
+                stateHintsTried = true;
+                var hints = sharedProducers && stateSourceHints != null ? stateSourceHints.get(entries, budget) : null;
+                stateSupport = CapturedStateSupport.recoverHints(entries, producers, target, requiredSeeds.keySet(), budget,
+                        sharedProducers ? stateProducers : null, stateRemaining(), hints);
+                if (stateSupport != null) {
+                    stateHintTrial = true; hintTrialStarted = budget.nodes();
+                    hintTrialAllowance = Math.min(65_536, stateRemaining() / 4);
+                    budget.note("candidate_state_source_hints", "start; sources=" + hints.size() + "; remaining=" + stateRemaining() +
+                            "; allowance=" + hintTrialAllowance + "; negative_proofs=false");
+                    phase = 9; return true;
+                }
+            }
+            if (stateRecoveryTried) return false;
+            stateRecoveryTried = true;
+            stateSupport = CapturedStateSupport.recover(entries, producers, target, requiredSeeds.keySet(), budget,
+                    sharedProducers ? stateProducers : null, stateRemaining());
+            if (stateSupport == null) return false;
+            budget.note("candidate_state_support_recovery", "start; remaining=" + stateRemaining() + "; negative_proofs=false");
+            phase = 9; return true;
+        }
+
+        private void beginStatePlanning(List<Entry<K>> sources, List<K> stockKeys) {
+            stateSources = sources;
+            fullStateTried = sources == entries;
+            if (fullStateTried) stateSourceIndices = null;
+            long remaining = stateRemaining();
+            if (fullStateTried && phase == 8) budget.note("candidate_state_support", "retry_full_state; remaining=" + remaining +
+                    "; shared_allowance=" + stateAllowance + "; negative_transfer=false");
+            if (remaining >= 2048) stateStock = CapturedStockProjection.create(stockKeys, stock, budget);
+            if (stateStock != null) {
+                stockTrialStarted = budget.nodes(); stockTrialAllowance = remaining / 2;
+                phase = 10;
+            } else startStatePlanning(stock);
+        }
+
+        private long stateRemaining() { return Math.max(0, stateAllowance - (budget.nodes() - stateStarted)); }
+
+        private void startStatePlanning(Map<K, Long> view) {
+            // Selection, the small positive attempt and original state attempt
+            // share one lifetime allowance. A private miss cannot exclude sources.
+            // The outer stock trial owns its deadline; do not halve the nested
+            // recovery admission again before it has performed any actual work.
+            long remaining = stateRemaining();
+            if (stateHintTrial) remaining = Math.min(remaining, Math.max(0, hintTrialAllowance - (budget.nodes() - hintTrialStarted)));
+            statePlanning = new CapturedStatePlanning<>(stateSources, target, amount, view, external, requiredSeeds,
+                    preserve, forceCraft, budget, remaining);
+            phase = 8;
+        }
+
+        private void retryFullStock() {
+            if (statePlanning != null) statePlanning.close();
+            statePlanning = null; closeStateStock();
+            budget.note("candidate_state_stock", "retry_full_stock; remaining=" + stateRemaining() +
+                    "; shared_allowance=" + stateAllowance + "; negative_transfer=false");
+            startStatePlanning(stock);
+        }
+
+        private void closeStateStock() {
+            if (stateStock != null) stateStock.close();
+            stateStock = null;
+        }
+
         private void producer(K key) {
             var values = producers.get(key);
             if (values == null) {
                 reserve(144);
+                producerMemory += 144;
                 values = new ArrayList<>();
                 producers.put(key, values);
             }
             if (values.isEmpty() || values.get(values.size() - 1) != entry) {
                 reserve(16);
+                producerMemory += 16; producerReferences++;
                 values.add(entry);
             }
         }
@@ -311,9 +538,7 @@ public final class CapturedCatalog<K> {
             } else if (provider < providers.size()) {
                 int index = providers.get(provider++);
                 if (!active.containsKey(index)) {
-                    reserve(160);
-                    var state = new DomainState(index);
-                    active.put(index, state);
+                    var state = activate(index);
                     pendingDomains.addLast(state);
                 }
             } else if (!pendingKeys.isEmpty()) {
@@ -334,7 +559,7 @@ public final class CapturedCatalog<K> {
                 // archive being presented as a complete full-catalog proof.
                 if (!coverage.complete() && budget.proofJournal() != null) budget.proofJournal().markIncomplete();
                 budget.note("candidate_coverage", "revision=" + revision + "; domains=" + scopes.size() + "; complete=" + coverage.complete());
-                flattenEntry = flattenVariant = 0;
+                flattenSources = null; flattenState = null; flattenVariant = 0;
                 phase = 2;
             }
         }
@@ -353,22 +578,23 @@ public final class CapturedCatalog<K> {
                     indexing = new CatalogIndex<>(allocationRecipes);
                     allocationRecipes = new ArrayList<>();
                     allocationView = true;
-                } else if (flattenEntry < entries.size()) {
-                    var state = active.get(flattenEntry);
-                    if (state != null && flattenVariant < state.recipes.size()) concrete.add(state.recipes.get(flattenVariant++));
-                    else {
-                        flattenEntry++;
-                        flattenVariant = 0;
-                    }
                 } else {
-                    indexing = new CatalogIndex<>(concrete);
-                    concrete = new ArrayList<>();
+                    if (flattenSources == null) flattenSources = sourceOrder.iterator();
+                    if (flattenState == null && flattenSources.hasNext()) flattenState = active.get(flattenSources.next());
+                    if (flattenState != null) {
+                        if (flattenVariant < flattenState.recipes.size()) concrete.add(flattenState.recipes.get(flattenVariant++));
+                        else { flattenState = null; flattenVariant = 0; }
+                    } else {
+                        indexing = new CatalogIndex<>(concrete);
+                        concrete = new ArrayList<>();
+                    }
                 }
             } else if (indexing.step(budget)) {
                 // A new immutable compiler owns this exact coverage. Never import
                 // restricted negative clauses, closures or sessions into the next one.
                 solving = new GraphPlanningWork<>(indexing.result(), target, amount, stock, external, requiredSeeds,
-                        preserve, forceCraft, budget).catalysts(catalystPolicy);
+                        preserve, forceCraft, budget).catalysts(catalystPolicy)
+                        .missingPreview(coverage.complete() && !allocationView);
                 indexing = null;
                 solveStarted = budget.searchWork();
                 solveAllowance = Math.max(256, Math.min(32768, budget.remainingWork() / 4));
@@ -427,7 +653,7 @@ public final class CapturedCatalog<K> {
                 var variant = reachableVariants.get(reachableVariant++);
                 var state = active.get(variant.entry());
                 if (state == null) {
-                    reserve(160); state = new DomainState(variant.entry()); active.put(variant.entry(), state);
+                    state = activate(variant.entry());
                 }
                 if (variant.ordinal().compareTo(state.domain.coveredPrefix()) >= 0 && state.additional.add(variant.ordinal())) {
                     reserve(128); state.recipes.add(variant.recipe());
@@ -502,8 +728,7 @@ public final class CapturedCatalog<K> {
                 var selected = flowVariants.get(flowVariant++);
                 var state = active.get(selected.entry());
                 if (state == null) {
-                    reserve(160);
-                    state = new DomainState(selected.entry()); active.put(selected.entry(), state);
+                    state = activate(selected.entry());
                     // A sparse support trial need not instantiate an unrelated
                     // prefix of a newly reached upstream domain first.
                 }
@@ -602,6 +827,17 @@ public final class CapturedCatalog<K> {
             memory += bytes;
         }
 
+        private DomainState activate(int index) {
+            reserve(224);
+            // Discovery order still controls allocation and coverage. The small
+            // ordered set only skips inactive sources while freezing canonical
+            // variants, preserving their exact original catalog priority.
+            budget.compilationCharge(32 - Integer.numberOfLeadingZeros(active.size() + 1));
+            var state = new DomainState(index);
+            active.put(index, state); sourceOrder.add(index);
+            return state;
+        }
+
         @Override
         public void close() {
             if (closed) return;
@@ -620,6 +856,9 @@ public final class CapturedCatalog<K> {
             reachable = null;
             if (statePlanning != null) statePlanning.close();
             statePlanning = null;
+            if (stateSupport != null) stateSupport.close();
+            stateSupport = null;
+            closeStateStock(); stateSources = null;
             reachablePlan = null;
             reachableVariants = List.of();
             flowCounts.clear();
@@ -628,11 +867,13 @@ public final class CapturedCatalog<K> {
             expanding = null;
             for (var state : active.values()) state.domain.close();
             active.clear();
+            sourceOrder.clear(); flattenSources = null; flattenState = null;
             pendingDomains.clear();
             pendingAllocations.clear();
             pendingKeys.clear();
             discovered.clear();
-            producers.clear();
+            if (!sharedProducers) producers.clear();
+            producers = Map.of();
             providers = List.of();
             concrete.clear();
             allocationRecipes.clear();

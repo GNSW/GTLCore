@@ -66,8 +66,64 @@ final class LoopBatching {
                     if (best == remaining) break;
                 }
             }
+            // With two recipes the rotations already cover every permutation.
+            if (best < remaining && counts.size() > 2) {
+                Map<String, BigInteger> funded = fundedOrder(counts, remaining, recipes, stock);
+                if (funded != null) {
+                    // The heuristic only proposes an order. Recheck its complete
+                    // affine interval against the unchanged physical forecast.
+                    long possible = iterations(funded, remaining, recipes, stock);
+                    if (possible > best) {
+                        best = possible;
+                        selected = funded;
+                    }
+                }
+            }
         }
         return best > 1 ? new Group(selected, best) : null;
+    }
+
+    /**
+     * A cyclic rotation cannot repair every witness order. For example, B->C,
+     * A+raw->B, C->9A needs A+raw->B, B->C, C->9A once A has accumulated.
+     * Propose a resource-funded permutation without expanding the loop. The
+     * fixed visit allowance bounds optional work on the server thread.
+     */
+    private static <K> Map<String, BigInteger> fundedOrder(Map<String, BigInteger> counts, long remaining,
+                                                         Map<String, GraphRecipe<K>> recipes, Function<K, BigInteger> stock) {
+        int allowance = 4096;
+        long trial = 0;
+        Map<K, BigInteger> initial = new HashMap<>();
+        for (String id : counts.keySet()) {
+            GraphRecipe<K> recipe = recipes.get(id);
+            int cost = recipe.inputs().size() + recipe.outputs().size() + 1;
+            if ((allowance -= cost) < 0) return null;
+            for (K key : recipe.inputs().keySet()) initial.computeIfAbsent(key, stock);
+            for (K key : recipe.outputs().keySet()) initial.computeIfAbsent(key, stock);
+            trial = Math.max(trial, iterations(Collections.singletonMap(id, counts.get(id)), remaining, recipes, stock));
+        }
+        for (int attempt = 0; attempt < 8 && trial > 1; attempt++, trial /= 2) {
+            Map<K, BigInteger> available = new HashMap<>(initial);
+            Map<String, BigInteger> ordered = new LinkedHashMap<>();
+            while (ordered.size() < counts.size()) {
+                boolean progress = false;
+                for (var entry : counts.entrySet()) {
+                    if (ordered.containsKey(entry.getKey())) continue;
+                    GraphRecipe<K> recipe = recipes.get(entry.getKey());
+                    int cost = recipe.inputs().size() + recipe.outputs().size() + 1;
+                    if ((allowance -= cost) < 0) return null;
+                    if (iterations(Collections.singletonMap(entry.getKey(), entry.getValue()), trial, recipes, available::get) < trial) continue;
+                    BigInteger runs = entry.getValue().multiply(BigInteger.valueOf(trial));
+                    recipe.inputs().forEach((key, amount) -> available.merge(key, runs.multiply(BigInteger.valueOf(amount)).negate(), BigInteger::add));
+                    recipe.outputs().forEach((key, amount) -> available.merge(key, runs.multiply(BigInteger.valueOf(amount)), BigInteger::add));
+                    ordered.put(entry.getKey(), entry.getValue());
+                    progress = true;
+                }
+                if (!progress) break;
+            }
+            if (ordered.size() == counts.size()) return ordered;
+        }
+        return null;
     }
 
     /** All constraints are affine in the number of regrouped iterations; no trial dispatches. */

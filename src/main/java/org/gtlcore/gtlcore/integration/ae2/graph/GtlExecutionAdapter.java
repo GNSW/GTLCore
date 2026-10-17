@@ -68,6 +68,17 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
         return bindingDetail;
     }
 
+    public String blockedDetails() {
+        if (selectedPattern == null || service == null) return reason;
+        List<String> details = new ArrayList<>();
+        for (var provider : service.getProviders(selectedPattern)) {
+            if (details.size() >= 4) break;
+            if (provider instanceof GraphDispatchPreflight check)
+                details.add(provider.getClass().getSimpleName() + ": " + check.gtlcore$graphBlockDetail(selectedPattern));
+        }
+        return reason + "; " + details;
+    }
+
     public String waitingDetails(GraphPlan<AEKey> plan, Map<AEKey, Long> expected) {
         List<String> details = new ArrayList<>();
         int checked = 0;
@@ -203,8 +214,8 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
                 reason = "PROVIDERS_BUSY";
                 continue;
             }
-            if (!GraphDispatchContext.call(() -> GraphDispatchContext.allowed(provider, selectedPattern))) {
-                reason = "MISSING_TOOL";
+            if (!GraphDispatchContext.call(recipe.inputs(), requested, () -> GraphDispatchContext.allowed(provider, selectedPattern))) {
+                reason = provider instanceof GraphDispatchPreflight check ? check.gtlcore$graphBlockReason(selectedPattern) : "PROVIDER_REJECTED";
                 continue;
             }
             boolean expanded = GtlDispatchPolicy.expanded(selectedPattern, provider);

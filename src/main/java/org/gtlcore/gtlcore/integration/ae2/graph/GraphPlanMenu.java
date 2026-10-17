@@ -6,6 +6,10 @@ public interface GraphPlanMenu {
 
     AeGraphPlan gtlcore$graphPlan();
 
+    default String gtlcore$providerWarning() {
+        return "";
+    }
+
     default String gtlcore$planningFailure() {
         return "";
     }

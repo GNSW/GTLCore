@@ -15,6 +15,11 @@ import java.util.*;
  */
 final class CountJump implements AutoCloseable {
 
+    // Earn the optional probe after sixteen times its grant in ordinary work.
+    // A short successful walk should finish before this additional search.
+    private static final long TRANSFER_SCOUT_WORK = 16384;
+    private static final long TRANSFER_AFTER = 16 * TRANSFER_SCOUT_WORK;
+
     private record Breakpoint(BigInteger numerator, BigInteger denominator, double slope) {}
 
     private static final class Term {
@@ -61,6 +66,17 @@ final class CountJump implements AutoCloseable {
     private double violation, bestViolation = Double.POSITIVE_INFINITY;
     private int initialized, moves, bumps, restarts, stale, pairs, last = -1;
     private boolean complete, pairMode, retained, paused, compoundEligible;
+    private CountJumpTransfers transfers;
+    private boolean transfersAttempted, transferring;
+    private int transferCursor, transferBest = -1, transferDirection, transferMoves;
+    private double transferScore;
+    private final int[] transferSeeds = new int[4];
+    private final double[] transferSeedScores = new double[4];
+    private int transferSeedCount, compoundSeed, compoundCursor, compoundTransfers;
+    private boolean compoundingTransfers;
+    private final boolean transferScout;
+    private boolean scoutAttempted;
+    private CountJump scout;
 
     CountJump(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
               PlanningBudget budget, long allowance) {
@@ -69,9 +85,15 @@ final class CountJump implements AutoCloseable {
 
     CountJump(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
               PlanningBudget budget, long allowance, BigInteger[] initial) {
+        this(rows, lower, upper, budget, allowance, initial, false);
+    }
+
+    private CountJump(List<ExactLinearProgram.Constraint> rows, BigInteger[] lower, BigInteger[] upper,
+                      PlanningBudget budget, long allowance, BigInteger[] initial, boolean transferScout) {
         if (initial != null && initial.length != lower.length) throw new IllegalArgumentException("Initial point dimensions");
         this.rows = rows;
         this.budget = budget;
+        this.transferScout = transferScout;
         this.allowance = Math.min(allowance, budget.remainingWork() / 8);
         pairAfter = this.allowance * 3 / 4;
         long entries = rows.stream().mapToLong(row -> row.terms().size()).sum();
@@ -222,6 +244,8 @@ final class CountJump implements AutoCloseable {
             if (initialized == rows.size()) dirty.or(movable);
             return false;
         }
+        if (scout != null) return scoutStep();
+        if (transferring) { transferStep(); return false; }
         if (violation < bestViolation - 1e-12 * Math.max(1, Math.abs(violation))) {
             bestViolation = violation;
             improvements++;
@@ -272,12 +296,10 @@ final class CountJump implements AutoCloseable {
             stale = 0;
         } else if (best >= 0 && pairMode && pair()) {
             stale = 0;
+        } else if (transferScout ? beginTransfers() : beginTransferScout()) {
+            return false;
         } else {
-            bump();
-            if (++stale >= 4 || bumps % 32 == 0) {
-                perturb();
-                stale = 0;
-            }
+            stagnate();
         }
         return false;
     }
@@ -453,6 +475,170 @@ final class CountJump implements AutoCloseable {
         return binaryDomains[id];
     }
 
+    private void stagnate() {
+        bump();
+        if (++stale >= 4 || bumps % 32 == 0) { perturb(); stale = 0; }
+    }
+
+    /** Preserve the ordinary walk when an exchange follows a different basin.
+     * The scout owns its point, weights and caches; a failed probe resumes the
+     * untouched parent. One fixed grant bounds interference with old searches. */
+    private boolean beginTransferScout() {
+        if (scoutAttempted || !retained || !wideDomains || work < TRANSFER_AFTER || budget.remainingWork() < 65536) return false;
+        scoutAttempted = true;
+        long before = budget.threadWork();
+        CountJumpTransfers directions = null;
+        try {
+            directions = CountJumpTransfers.create(rows, lower, upper, budget);
+            if (directions == null) return false;
+            scout = new CountJump(rows, lower, upper, budget, TRANSFER_SCOUT_WORK, values, true).retained();
+            scout.transfers = directions;
+            scout.transfersAttempted = true;
+            directions = null;
+            if (scout.complete) {
+                scout.close(); scout = null;
+                return false;
+            }
+            for (int r = 0; r < weights.length; r++) {
+                budget.check(); scout.weights[r] = weights[r];
+            }
+            budget.note("count_jump_transfer", "admitted; pairs=" + scout.transfers.size() + "; scout_work=" + TRANSFER_SCOUT_WORK);
+            return true;
+        } finally {
+            if (directions != null) directions.close();
+            work += budget.threadWork() - before;
+        }
+    }
+
+    private boolean scoutStep() {
+        long before = budget.threadWork();
+        boolean done;
+        try { done = scout.step(); }
+        finally { work += budget.threadWork() - before; }
+        if (!done) return false;
+        counts = scout.counts();
+        transferMoves += scout.transferMoves;
+        compoundTransfers += scout.compoundTransfers;
+        scout.close(); scout = null;
+        if (counts != null) return finish("verified_transfer_witness");
+        budget.note("count_jump_transfer", "scout_finished; original_frontier_retained");
+        stagnate();
+        return false;
+    }
+
+    /** A whole exchange can improve while either individual prefix cannot.
+     * Keep the point and weights fixed while scoring pairs across handoffs. */
+    private boolean beginTransfers() {
+        if (!transferScout || !retained || !wideDomains) return false;
+        if (!transfersAttempted) {
+            transfersAttempted = true;
+            long before = budget.threadWork();
+            try { transfers = CountJumpTransfers.create(rows, lower, upper, budget); }
+            finally { work += budget.threadWork() - before; }
+        }
+        if (transfers == null) return false;
+        transferCursor = 0; transferBest = -1; transferScore = -1e-12;
+        transferSeedCount = 0; compoundingTransfers = false;
+        return transferring = true;
+    }
+
+    private void transferStep() {
+        if (compoundingTransfers) { compoundTransferStep(); return; }
+        if (transferCursor < transfers.size()) {
+            int first = transfers.first(transferCursor), second = transfers.second(transferCursor);
+            for (int sign = 1; sign >= -1; sign -= 2) {
+                charge();
+                if (sign > 0 ? values[first].compareTo(upper[first]) >= 0 || values[second].compareTo(lower[second]) <= 0 :
+                        values[first].compareTo(lower[first]) <= 0 || values[second].compareTo(upper[second]) >= 0) continue;
+                double score = transferScore(first, second, sign);
+                if (score < transferScore) { transferScore = score; transferBest = transferCursor; transferDirection = sign; }
+                if (Double.isFinite(score)) {
+                    int at = 0;
+                    while (at < transferSeedCount && transferSeedScores[at] <= score) at++;
+                    if (at < transferSeeds.length) {
+                        for (int k = Math.min(transferSeedCount, transferSeeds.length - 1); k > at; k--) {
+                            transferSeedScores[k] = transferSeedScores[k - 1]; transferSeeds[k] = transferSeeds[k - 1];
+                        }
+                        transferSeeds[at] = 2 * transferCursor + (sign < 0 ? 1 : 0); transferSeedScores[at] = score;
+                        transferSeedCount = Math.min(transferSeedCount + 1, transferSeeds.length);
+                    }
+                }
+            }
+            transferCursor++;
+            return;
+        }
+        if (transferBest < 0 && transferSeedCount > 0) {
+            compoundingTransfers = true; compoundSeed = 0; compoundCursor = 0; return;
+        }
+        transferring = false;
+        if (transferBest < 0) { stagnate(); return; }
+        int first = transfers.first(transferBest), second = transfers.second(transferBest);
+        BigInteger delta = BigInteger.valueOf(transferDirection);
+        move(first, values[first].add(delta)); move(second, values[second].subtract(delta));
+        transferMoves++; stale = 0;
+    }
+
+    private void compoundTransferStep() {
+        if (compoundSeed >= transferSeedCount) { transferring = false; stagnate(); return; }
+        int seed = transferSeeds[compoundSeed], candidate = compoundCursor++;
+        if (compoundCursor == 2 * transfers.size()) { compoundCursor = 0; compoundSeed++; }
+        int a = transfers.first(seed / 2), b = transfers.second(seed / 2);
+        int c = transfers.first(candidate / 2), d = transfers.second(candidate / 2);
+        charge();
+        if (a == c || a == d || b == c || b == d) return;
+        int sign = (candidate & 1) == 0 ? 1 : -1;
+        if (sign > 0 ? values[c].compareTo(upper[c]) >= 0 || values[d].compareTo(lower[d]) <= 0 :
+                values[c].compareTo(lower[c]) <= 0 || values[d].compareTo(upper[d]) >= 0) return;
+        int firstSign = (seed & 1) == 0 ? 1 : -1;
+        if (!(compoundTransferScore(a, b, firstSign, c, d, sign) < -1e-12)) return;
+        BigInteger firstDelta = BigInteger.valueOf(firstSign), secondDelta = BigInteger.valueOf(sign);
+        move(a, values[a].add(firstDelta)); move(b, values[b].subtract(firstDelta));
+        move(c, values[c].add(secondDelta)); move(d, values[d].subtract(secondDelta));
+        compoundTransfers++; stale = 0; transferring = false;
+    }
+
+    private double compoundTransferScore(int a, int b, int sign, int c, int d, int otherSign) {
+        var first = affected.get(a); var second = affected.get(b);
+        var third = affected.get(c); var fourth = affected.get(d);
+        int i = 0, j = 0, k = 0, l = 0; double score = 0;
+        while (i < first.size() || j < second.size() || k < third.size() || l < fourth.size()) {
+            charge();
+            int row = Math.min(Math.min(i < first.size() ? first.get(i).row : Integer.MAX_VALUE,
+                    j < second.size() ? second.get(j).row : Integer.MAX_VALUE),
+                    Math.min(k < third.size() ? third.get(k).row : Integer.MAX_VALUE,
+                    l < fourth.size() ? fourth.get(l).row : Integer.MAX_VALUE));
+            BigInteger delta = BigInteger.ZERO, other = BigInteger.ZERO;
+            if (i < first.size() && first.get(i).row == row) delta = first.get(i++).coefficient;
+            if (j < second.size() && second.get(j).row == row) delta = delta.subtract(second.get(j++).coefficient);
+            if (k < third.size() && third.get(k).row == row) other = third.get(k++).coefficient;
+            if (l < fourth.size() && fourth.get(l).row == row) other = other.subtract(fourth.get(l++).coefficient);
+            delta = (sign < 0 ? delta.negate() : delta).add(otherSign < 0 ? other.negate() : other);
+            BigInteger difference = residual[row].add(delta).max(BigInteger.ZERO).subtract(residual[row].max(BigInteger.ZERO));
+            score += weights[row] * ratio(difference, scales[row]);
+        }
+        return score;
+    }
+
+    private double transferScore(int first, int second, int sign) {
+        var a = affected.get(first); var b = affected.get(second);
+        int i = 0, j = 0; double score = 0;
+        // Incident lists were built in original row order. Merge them so a
+        // shared resource is evaluated once with the combined exact delta.
+        while (i < a.size() || j < b.size()) {
+            charge();
+            int row = Math.min(i < a.size() ? a.get(i).row : Integer.MAX_VALUE,
+                    j < b.size() ? b.get(j).row : Integer.MAX_VALUE);
+            BigInteger coefficient = BigInteger.ZERO;
+            if (i < a.size() && a.get(i).row == row) coefficient = a.get(i++).coefficient;
+            if (j < b.size() && b.get(j).row == row) coefficient = coefficient.subtract(b.get(j++).coefficient);
+            if (coefficient.signum() == 0) continue;
+            if (sign < 0) coefficient = coefficient.negate();
+            BigInteger difference = residual[row].add(coefficient).max(BigInteger.ZERO).subtract(residual[row].max(BigInteger.ZERO));
+            score += weights[row] * ratio(difference, scales[row]);
+        }
+        return score;
+    }
+
     /** Cross a one-coordinate barrier without committing an expensive prefix. */
     private boolean pair() {
         if (values.length > 128 || retained && !compoundEligible) return false;
@@ -533,7 +719,7 @@ final class CountJump implements AutoCloseable {
     private boolean finish(String detail) {
         complete = true;
         budget.note("count_jump", detail + "; variables=" + values.length + "; rows=" + rows.size() +
-                "; moves=" + moves + "; pairs=" + pairs + "; bumps=" + bumps + "; perturbations=" + restarts + "; work=" + work);
+                "; moves=" + moves + "; pairs=" + pairs + "; transfers=" + transferMoves + "; compound_transfers=" + compoundTransfers + "; bumps=" + bumps + "; perturbations=" + restarts + "; work=" + work);
         return true;
     }
 
@@ -543,6 +729,10 @@ final class CountJump implements AutoCloseable {
 
     @Override
     public void close() {
+        if (scout != null) scout.close();
+        scout = null;
+        if (transfers != null) transfers.close();
+        transfers = null;
         budget.release(memory);
         memory = 0;
     }

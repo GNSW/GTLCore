@@ -26,9 +26,15 @@ public final class GraphFallback {
     public static <K> GraphPlan<K> plan(GraphCompiler<K> compiler, K target, long amount,
                                         Map<K, Long> stock, Set<K> external, Map<K, Long> seeds,
                                         boolean preserve, boolean forceCraft, PlanningBudget budget) {
+        GraphPlan<K> candidate;
         try (var work = new Expansion<>(compiler, target, amount, stock, external, seeds, preserve, forceCraft, budget)) {
             while (!work.step()) { /* All traversal, arithmetic and verification share the fallback budget. */ }
-            return work.result;
+            candidate = work.result;
+        }
+        if (!MissingMaterialExpansion.needed(compiler, candidate)) return candidate;
+        try (var expansion = new MissingMaterialExpansion<>(compiler, candidate, stock, external, Set.of(), forceCraft, forceCraft, budget)) {
+            while (!expansion.step()) { /* A cutoff is a budget exit, never a terminal material. */ }
+            return expansion.result();
         }
     }
 

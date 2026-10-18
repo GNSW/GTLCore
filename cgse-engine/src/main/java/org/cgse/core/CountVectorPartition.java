@@ -13,6 +13,7 @@ import java.util.*;
  * nothing about another decomposition.
  */
 final class CountVectorPartition implements CountContinuation {
+    private static final int FIRST_BIN_ENUMERATION_GROUPS = 32;
     private record Group(int[] variables, BigInteger capacity) {}
     private static final class Interval {
         BigInteger low = BigInteger.ZERO, high;
@@ -36,11 +37,14 @@ final class CountVectorPartition implements CountContinuation {
     private BigInteger[] remaining, candidate, counts;
     private int[] order;
     private CountAffineLattice affine;
+    private CountAffineLattice alternatives;
+    private long alternativeRemaining = 32768;
+    private boolean repairing, alternativesPriced;
     private CountMeetInMiddle matching;
     private List<ExactLinearProgram.Constraint> projected;
     private BigInteger[] binLower, binUpper;
     private long matchingAt;
-    private boolean matchingTried;
+    private boolean matchingTried, matchingEntered;
     private long memory, work, until, maximumWork, completedProgress, prepareStarted;
     private int bin, attempt, verified;
     private boolean complete, paused, verifying;
@@ -201,8 +205,18 @@ final class CountVectorPartition implements CountContinuation {
         if (work >= maximumWork) return finish("local_limit");
         if (work >= until) { paused = true; return true; }
         long before = budget.threadWork();
+        boolean repairVisit = repairing;
         try {
             budget.check();
+            if (repairing && alternativeRemaining <= 0) {
+                // This extra branch has no live ordinary frontier to replace:
+                // the previous residual already failed. Resume its pending
+                // allocation-order retry, without renewing the scout's quota.
+                clearChildren();
+                repairing = false;
+                retry();
+                return complete;
+            }
             if (verifying) {
                 if (verified == rows.size()) { counts = candidate.clone(); return finish("verified_candidate"); }
                 var row = rows.get(verified++); var total = BigInteger.ZERO;
@@ -220,6 +234,17 @@ final class CountVectorPartition implements CountContinuation {
             }
             if (affine == null) { beginBin(); return false; }
             if (matching == null && !matchingTried && work >= matchingAt) beginMatching();
+            if (matching == null && !matchingEntered && projected != null && affine.boxSearchMissed()) {
+                // The unpruned Cartesian estimate can reject a small reachable
+                // table. After a failed box scout, let exact matching prune the
+                // actual targets once. Its nonretained cap cannot be renewed;
+                // failure leaves the ordinary affine/kernel frontier intact.
+                matchingEntered = true;
+                long grant = Math.min(262144, maximumWork - work);
+                budget.note("count_vector_matching", "after_box_miss; bin=" + bin + "; allowance=" + grant);
+                matching = new CountMeetInMiddle(projected, binLower, binUpper, budget,
+                        grant);
+            }
             if (!(matching == null ? affine.step() : matching.step())) return false;
             if (childPaused()) {
                 long available = Math.min(maximumWork, until) - work - (budget.threadWork() - before);
@@ -241,7 +266,14 @@ final class CountVectorPartition implements CountContinuation {
                     if (matching != null) return false;
                 }
             }
-            completedProgress += affine.progress(); affine.close(); affine = null;
+            if (found != null && bin == 0 && alternativeRemaining > 0) {
+                // Keep the completed basis while validating the residual. A
+                // local failure can reuse it instead of eliminating again.
+                alternatives = affine;
+            } else {
+                completedProgress += affine.progress(); affine.close();
+            }
+            affine = null;
             projected = null; binLower = binUpper = null;
             if (found == null) { retry(); return complete; }
             var target = currentBin();
@@ -251,7 +283,11 @@ final class CountVectorPartition implements CountContinuation {
                 candidate[target.variables[g]] = lower[target.variables[g]].add(found[i]); remaining[g] = remaining[g].subtract(found[i]);
             }
             bin++; completedProgress++; return false;
-        } finally { work += budget.threadWork() - before; }
+        } finally {
+            long spent = budget.threadWork() - before;
+            work += spent;
+            if (repairVisit || repairing) alternativeRemaining -= spent;
+        }
     }
 
     private Bin currentBin() { return bins.get((bin + attempt) % bins.size()); }
@@ -269,8 +305,13 @@ final class CountVectorPartition implements CountContinuation {
         }
         binLower = lo; binUpper = hi;
         affine = new CountAffineLattice(projected, lo, hi, budget, 32768).retained();
+        // Broad first allocations make the sphere tree too expensive. Smaller
+        // first bins and stalled residuals may reuse their reduced basis;
+        // inexpensive matching and the ordinary kernel keep their frontiers.
+        if (bin > 0 || order.length <= FIRST_BIN_ENUMERATION_GROUPS) affine.enumerateBox();
         long estimate = bin == 0 ? 0 : CountMeetInMiddle.scoutWork(projected, lo, hi, budget);
         matchingTried = estimate <= 0 || estimate > maximumWork - work;
+        matchingEntered = false;
         // Preserve cheap rounding/kernel successes before paying for a table.
         // Price that scout against the residual matcher, with bounded headroom:
         // an expensive table gives the lattice longer to avoid building it.
@@ -283,14 +324,33 @@ final class CountVectorPartition implements CountContinuation {
         // Re-estimate the residual instead of blindly running another lattice
         // walk. The existing matcher owns its table across all handoffs.
         long estimate = CountMeetInMiddle.scoutWork(projected, binLower, binUpper, budget);
-        if (estimate > 0 && estimate <= maximumWork - work)
+        if (estimate > 0 && estimate <= maximumWork - work) {
+            matchingEntered = true;
             matching = new CountMeetInMiddle(projected, binLower, binUpper, budget, 32768).retained();
+        }
     }
     private boolean childPaused() { return matching == null ? affine.paused() : matching.paused(); }
     private void resumeChild(long quantum) {
         if (matching == null) affine.resume(quantum); else matching.resume(quantum);
     }
     private void retry() {
+        if (alternatives != null) {
+            if (!alternativesPriced) {
+                // A cheap failed decomposition must not buy a large extra
+                // search. Charge the whole branch, including residual checks,
+                // against one small request-owned opportunity.
+                alternativeRemaining = Math.min(alternativeRemaining, work / 2);
+                alternativesPriced = true;
+            }
+            if (alternativeRemaining > 0 && alternatives.nextCandidate()) {
+                restart();
+                repairing = true;
+                affine = alternatives; alternatives = null; matchingTried = true;
+                return;
+            }
+            completedProgress += alternatives.progress(); alternatives.close(); alternatives = null;
+        }
+        repairing = false;
         if (++attempt >= 2 * bins.size()) { finish("decompositions_unresolved"); return; }
         restart();
     }
@@ -325,15 +385,22 @@ final class CountVectorPartition implements CountContinuation {
     @Override public BigInteger[] counts() { return counts == null ? null : counts.clone(); }
     @Override public long work() { return work; }
     @Override public long progress() {
-        return completedProgress + (matching == null ? 0 : matching.progress()) + (affine == null ? 0 : affine.progress());
+        return completedProgress + (matching == null ? 0 : matching.progress()) + (affine == null ? 0 : affine.progress()) +
+                (alternatives == null ? 0 : alternatives.progress());
     }
     @Override public boolean matches(List<ExactLinearProgram.Constraint> other, BigInteger[] low, BigInteger[] high) {
         return rows.equals(other) && Arrays.equals(lower, low) && Arrays.equals(upper, high);
     }
     @Override public void close() {
+        clearChildren();
+        budget.release(memory); memory = 0;
+    }
+    private void clearChildren() {
+        completedProgress += (matching == null ? 0 : matching.progress()) + (affine == null ? 0 : affine.progress()) +
+                (alternatives == null ? 0 : alternatives.progress());
         if (matching != null) matching.close(); matching = null;
         if (affine != null) affine.close(); affine = null;
+        if (alternatives != null) alternatives.close(); alternatives = null;
         projected = null; binLower = binUpper = null;
-        budget.release(memory); memory = 0;
     }
 }

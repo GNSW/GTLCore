@@ -28,7 +28,12 @@ final class CountModelViews implements AutoCloseable {
         }
     }
 
-    record Shape(int variables, long terms, int coefficientBits, int unfixed) {
+    record Shape(int variables, long terms, int coefficientBits, int unfixed, boolean vectorAllocation) {
+
+        Shape(int variables, long terms, int coefficientBits, int unfixed) {
+            // A manually supplied cost estimate has not ruled out this shape.
+            this(variables, terms, coefficientBits, unfixed, true);
+        }
 
         long cost() {
             return Math.max(1, terms + 4L * unfixed) * Math.max(1, (coefficientBits + 63L) / 64);
@@ -489,14 +494,32 @@ final class CountModelViews implements AutoCloseable {
 
     private static Shape shape(List<ExactLinearProgram.Constraint> rows, BigInteger[] low, BigInteger[] high, PlanningBudget budget) {
         long terms = 0;
-        int bits = 1, unfixed = 0;
-        for (var row : rows) for (BigInteger coefficient : row.terms().values()) {
-            budget.check();
-            terms++;
-            bits = Math.max(bits, coefficient.bitLength());
+        int bits = 1, unfixed = 0, possibleGroups = 0;
+        boolean uniformRows = true;
+        for (var row : rows) {
+            int signs = 0, freeTerms = 0;
+            BigInteger first = null;
+            boolean equal = true;
+            for (var term : row.terms().entrySet()) {
+                budget.check();
+                terms++;
+                var coefficient = term.getValue();
+                bits = Math.max(bits, coefficient.bitLength());
+                if (coefficient.signum() != 0 && !low[term.getKey()].equals(high[term.getKey()])) {
+                    signs |= coefficient.signum() > 0 ? 1 : 2;
+                    freeTerms++;
+                    if (first == null) first = coefficient;
+                    else equal &= first.equals(coefficient);
+                }
+            }
+            uniformRows &= signs != 3;
+            if (signs == 1 && equal && freeTerms >= 2 && freeTerms <= 8) possibleGroups++;
         }
         for (int i = 0; i < low.length; i++) if (!low[i].equals(high[i])) unfixed++;
-        return new Shape(low.length, terms, bits, unfixed);
+        // Four disjoint capacity groups of at least two coordinates are needed.
+        // Counting possible rows only rejects impossible shapes; overlap and
+        // exact capacities remain the specialist's admission responsibility.
+        return new Shape(low.length, terms, bits, unfixed, uniformRows && possibleGroups >= 4 && unfixed >= 8);
     }
 
     @Override

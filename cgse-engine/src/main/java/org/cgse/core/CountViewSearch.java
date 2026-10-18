@@ -309,7 +309,13 @@ final class CountViewSearch implements AutoCloseable {
                 CountContinuation partition = wideAllocationViews.contains(view) ?
                         CountGroupedPartition.createWide(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MIN_QUANTUM) :
                         CountGroupedPartition.createMultiway(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MIN_QUANTUM);
-                if (partition == null) partition = CountVectorPartition.create(
+                // Vector allocation requires single-sign rows and at least four
+                // capacity groups after fixed terms are removed. The compiler
+                // already visits those terms: do not copy/reduce an inapplicable model to
+                // rediscover that fact before the ordinary engines' first turn.
+                // New shared bounds may fix the offending coordinates, so a
+                // hint from the declared domains cannot reject that new scope.
+                if (partition == null && (view.shape().vectorAllocation() || domains.version() != 0)) partition = CountVectorPartition.create(
                         view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MIN_QUANTUM);
                 if (partition == null) continue;
                 Search search = new Search(view, policy.add(view.shape().cost(), Engine.GROUPED_PARTITION), Engine.GROUPED_PARTITION);

@@ -73,6 +73,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private SeedPortfolio<K> seedOptimization;
     private boolean seedAttempted;
     private MissingStockAnalysis<K> missingAnalysis;
+    private MissingMaterialExpansion<K> missingExpansion;
     private QuantityAnalysis<K> quantities;
     private boolean quantityDeferred;
     private boolean countBeforeQuantity;
@@ -277,11 +278,11 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 countSearch = parkedCounts;
                 parkedCounts = null;
                 if (phase == 19) {
-                    // Extra visits earn at most half of the active view's work:
-                    // the stock view retains two thirds of the shared turns,
-                    // while full-model proof continuations receive enough work
-                    // to finish instead of being stranded behind restricted
-                    // repairs. Repeated unrestricted grants still starve views.
+                    // Extra visits earn at most a quarter of the active view's
+                    // work. A broad count frontier can keep excluding dead
+                    // multisets without an executable candidate; more service
+                    // here displaces source/view progress and changes subsequent
+                    // branch handoffs. Full-model proofs keep their bounded turn.
                     stockCountTurn = true;
                     stockCountStarted = budget.searchWork();
                     countSearch.resumeBounded(stockCountCredit());
@@ -596,6 +597,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 case 10 -> {
                     if (!verifying.step()) return false;
                     if (optimizeSeeds(best)) return false;
+                    if (expandMissing(best)) return false;
                     result = best;
                     discardQuantityAnalysis();
                     phase = 8;
@@ -718,6 +720,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     result = seedOptimization.result();
                     seedOptimization.close();
                     seedOptimization = null;
+                    if (expandMissing(result)) { result = null; return false; }
                     if (result.feasible()) verified = result;
                     discardQuantityAnalysis();
                     budget.phase(PlanningBudget.Phase.COMPLETE);
@@ -770,6 +773,14 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         beginVerification(PlanningBudget.CandidateOrigin.SOURCE_GRAPH);
                         phase = 4;
                     } else afterSolve();
+                }
+                case 21 -> {
+                    if (!missingExpansion.step()) return false;
+                    result = missingExpansion.result();
+                    missingExpansion.close();
+                    missingExpansion = null;
+                    discardQuantityAnalysis();
+                    phase = 8;
                 }
                 default -> {
                     return true;
@@ -1241,7 +1252,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private long frontierWork() { return budget.searchWork() - pausedSearchWork; }
 
     private long stockCountCredit() {
-        return stockView == null ? 0 : Math.max(0, stockView.searchWork() / 2 - stockCountWork);
+        return stockView == null ? 0 : Math.max(0, stockView.searchWork() / 4 - stockCountWork);
     }
 
     private boolean optionalQuantityTurn() {
@@ -1277,6 +1288,15 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         phase = 10;
     }
 
+    private boolean expandMissing(GraphPlan<K> plan) {
+        if (!missingPreview || !MissingMaterialExpansion.needed(compiler, plan)) return false;
+        if (verifying != null) { verifying.close(); verifying = null; }
+        missingExpansion = new MissingMaterialExpansion<>(compiler, plan, stock, external, excluded, forceCraft, false, budget);
+        budget.note("missing_expansion", "start; verified_program_retained; initial_keys=" + plan.missingExact().size());
+        phase = 21;
+        return true;
+    }
+
     @Override
     public CompletableFuture<?> waitingFor() {
         if (countSearch != null && countSearch.waitingFor() != null) return countSearch.waitingFor();
@@ -1297,11 +1317,22 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         // boundary as a completed feasible plan. Do not replace it with an
         // empty failure when the owner reaches its limit before harvesting it.
         if (result != null) return result;
+        if (missingExpansion != null) {
+            // The witness is funded, but its displayed supply boundary has not
+            // completed expansion. Do not publish a truncated intermediate bill.
+            missingExpansion.close(); missingExpansion = null;
+            budget.failureDetail("MISSING_EXPANSION_INCOMPLETE: " + limit.limit());
+            return failure(GraphPlan.Result.valueOf(limit.limit().name()));
+        }
         if (seedOptimization != null) {
             GraphPlan<K> retained = seedOptimization.result();
             seedOptimization.close();
             seedOptimization = null;
             discardQuantityAnalysis();
+            if (missingPreview && MissingMaterialExpansion.needed(compiler, retained)) {
+                budget.failureDetail("MISSING_EXPANSION_INCOMPLETE: " + limit.limit());
+                return failure(GraphPlan.Result.valueOf(limit.limit().name()));
+            }
             return retained;
         }
         if (countSearch != null) {
@@ -1370,6 +1401,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         validatingStockProposal = false;
         if (missingAnalysis != null) missingAnalysis.close();
         missingAnalysis = null;
+        if (missingExpansion != null) missingExpansion.close();
+        missingExpansion = null;
         if (productionProof != null) productionProof.close();
         productionProof = null;
         clearAlternativeOrder();

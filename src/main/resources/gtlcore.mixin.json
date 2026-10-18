@@ -94,6 +94,7 @@
     "configuration.EnumWidgetLocalizationMixin"
   ],
   "mixins": [
+    "gtm.cover.GTUtilSolarMixin",
     "gtm.StableBlockCandidatesMixin",
     "gtmt.TerminalPatternAccessor",
     "gtmt.TerminalPatternPerformanceMixin",

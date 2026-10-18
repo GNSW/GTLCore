@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.client.ae2.graph.CraftingRingScreen;
 import org.gtlcore.gtlcore.client.ae2.graph.GraphViewSettingsScreen;
 import org.gtlcore.gtlcore.client.ae2.wireless.MEChamberManagerTerminalScreen;
 import org.gtlcore.gtlcore.common.data.machines.MultiBlockMachineA;
+import org.gtlcore.gtlcore.integration.jei.grouping.TagGroupOverlay;
 
 import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.data.tag.TagPrefix;
@@ -139,6 +140,7 @@ public class GTLJEIPlugin implements IModPlugin {
 
     @Override
     public void onRuntimeUnavailable() {
+        TagGroupOverlay.closeActive();
         JeiMeInventoryTooltip.onRuntimeUnavailable();
         JeiMissingIngredientBookmarks.onRuntimeUnavailable();
     }

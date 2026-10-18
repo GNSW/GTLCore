@@ -1,8 +1,10 @@
 package org.gtlcore.gtlcore.integration.jei;
 
 import org.gtlcore.gtlcore.client.ae2.MeInventoryAmountClient;
+import org.gtlcore.gtlcore.integration.jei.grouping.TagGroupOverlay;
 import org.gtlcore.gtlcore.utils.TextUtil;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -119,6 +121,16 @@ public final class JeiMeInventoryTooltip {
         if (hovered.isPresent()) {
             return toKey(hovered.get());
         }
+        var overlay = TagGroupOverlay.active();
+        if (overlay != null) {
+            var minecraft = Minecraft.getInstance();
+            var window = minecraft.getWindow();
+            double x = screen == null ? minecraft.mouseHandler.xpos() * window.getGuiScaledWidth() / window.getScreenWidth() : mouseX;
+            double y = screen == null ? minecraft.mouseHandler.ypos() * window.getGuiScaledHeight() / window.getScreenHeight() : mouseY;
+            // Blank popup cells and its header must not extract an ingredient
+            // from the recipe or container underneath the panel.
+            if (overlay.contains(x, y)) return null;
+        }
 
         if (runtime.getRecipesGui().getParentScreen().isEmpty()) {
             return null;
@@ -140,6 +152,21 @@ public final class JeiMeInventoryTooltip {
 
     private static Optional<ITypedIngredient<?>> getHoveredIngredient(IJeiRuntime runtime, @Nullable Screen screen,
                                                                       double mouseX, double mouseY) {
+        var overlay = TagGroupOverlay.active();
+        if (overlay != null) {
+            if (screen == null) {
+                var minecraft = Minecraft.getInstance();
+                var window = minecraft.getWindow();
+                mouseX = minecraft.mouseHandler.xpos() * window.getGuiScaledWidth() / window.getScreenWidth();
+                mouseY = minecraft.mouseHandler.ypos() * window.getGuiScaledHeight() / window.getScreenHeight();
+            }
+            if (overlay.contains(mouseX, mouseY)) {
+                // Resolve the exact expanded element before the normal JEI list
+                // or the underlying screen. Shared by extraction, ordering and search.
+                return overlay.hoveredSlot(mouseX, mouseY).flatMap(slot -> slot.getOptionalElement())
+                        .map(element -> element.getTypedIngredient());
+            }
+        }
         Optional<ITypedIngredient<?>> hovered = runtime.getIngredientListOverlay().getIngredientUnderMouse();
         if (hovered.isEmpty()) {
             hovered = runtime.getBookmarkOverlay().getIngredientUnderMouse();

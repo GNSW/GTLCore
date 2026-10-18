@@ -51,6 +51,77 @@ public class ConfigHolder {
     @Configurable
     public InteractionOptions interaction = new InteractionOptions();
 
+    @Configurable
+    public JeiOptions jei = new JeiOptions();
+
+    public static class JeiOptions {
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiTagGrouping.comment")
+        public boolean jeiTagGrouping = true;
+
+        @Configurable
+        @Configurable.Range(min = 0, max = 2000)
+        @Configurable.Comment("config.gtlcore.option.jeiGroupHoverDelay.comment")
+        public int jeiGroupHoverDelay = 200;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupMetalBlacklist.comment")
+        public boolean jeiGroupMetalBlacklist = true;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupTagBlacklist.comment")
+        public String[] jeiGroupTagBlacklist = {
+                "forge:ores", "forge:ores/*", "forge:raw_materials", "forge:raw_materials/*",
+                "forge:crushed_ores", "forge:crushed_ores/*", "forge:purified_ores", "forge:purified_ores/*",
+                "forge:refined_ores", "forge:refined_ores/*"
+        };
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupItemBlacklist.comment")
+        public String[] jeiGroupItemBlacklist = {};
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupPreferredTags.comment")
+        public String[] jeiGroupPreferredTags = {
+                "minecraft:logs", "minecraft:planks", "minecraft:leaves", "minecraft:saplings", "minecraft:wool"
+        };
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupCategoryTags.comment")
+        public String[] jeiGroupCategoryTags = {
+                "forge:glass", "forge:glass_panes", "forge:chests", "forge:barrels", "forge:circuits", "minecraft:shulker_boxes"
+        };
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupEquipmentTags.comment")
+        public String[] jeiGroupEquipmentTags = {
+                "forge:tools/drill", "forge:tools/chainsaw", "forge:tools/buzzsaw",
+                "minecraft:swords", "minecraft:pickaxes", "minecraft:axes", "minecraft:shovels", "minecraft:hoes",
+                "forge:tools/*"
+        };
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupSupplementaryTags.comment")
+        public String[] jeiGroupSupplementaryTags = {
+                "gtlcore:glazed_terracotta", "forge:armors/*"
+        };
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupBuildingTags.comment")
+        public String[] jeiGroupBuildingTags = {
+                "gtlcore:industrial_lamps", "gtlcore:small_industrial_lamps", "minecraft:stairs", "minecraft:slabs", "minecraft:walls"
+        };
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.jeiGroupIgnoredTags.comment")
+        public String[] jeiGroupIgnoredTags = {
+                "minecraft:beacon_payment_items", "minecraft:non_flammable_wood", "minecraft:logs_that_burn",
+                "minecraft:enchantable/*", "forge:tools", "forge:ingots", "forge:nuggets", "forge:dusts",
+                "forge:gems", "forge:plates", "forge:rods", "forge:storage_blocks"
+        };
+    }
+
     public static class GameplayOptions {
 
         @Configurable

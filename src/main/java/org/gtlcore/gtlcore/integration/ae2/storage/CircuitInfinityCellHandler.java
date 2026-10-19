@@ -25,6 +25,7 @@ public class CircuitInfinityCellHandler implements ICellHandler {
 
     @Override
     public StorageCell getCellInventory(ItemStack is, ISaveProvider container) {
+        if (!isCell(is)) return null;
         return new CircuitInfinityCellInventory();
     }
 }

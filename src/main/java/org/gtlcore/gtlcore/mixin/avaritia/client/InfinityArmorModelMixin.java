@@ -29,5 +29,6 @@ public abstract class InfinityArmorModelMixin {
                        remap = false),
               require = 0,
               remap = false)
+    @SuppressWarnings("target") // This grouped fallback targets the production SRG name only.
     private void gtlcore$suppressObfuscatedWingMaterialLog(Logger logger, Object message) {}
 }

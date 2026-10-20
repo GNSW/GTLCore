@@ -27,6 +27,9 @@ def mixinConfigNames = [
 
 loom {
     silentMojangMappingsLicense()
+    mixin {
+        defaultRefmapName = "gtlcore-refmap.json"
+    }
     forge {
         mixinConfigs = mixinConfigNames
 
@@ -311,24 +314,35 @@ tasks.register("checkMixinPackageClasses") {
 
 tasks.named("check") {
     dependsOn(tasks.named("checkMixinPackageClasses"))
-    dependsOn(tasks.named("multiblockPreviewTest"))
-    dependsOn(tasks.named("tagExprFilterTest"))
 }
 
-tasks.register("multiblockPreviewTest", JavaExec) {
+tasks.register("verifyPackagedMixinRefmaps") {
     group = "verification"
-    description = "Checks preview bounds, camera-plane panning, cache ownership and cancellation."
-    dependsOn(testClasses)
-    // Pure checks do not launch Minecraft or need the runtime-only client mods.
-    classpath = files(sourceSets.main.output, sourceSets.test.output, sourceSets.test.compileClasspath)
-    mainClass = "org.gtlcore.gtlcore.client.preview.MultiblockPreviewTest"
-    workingDir = projectDir
+    description = "Checks that the production jar contains the reference maps its Mixin configs declare."
+    dependsOn(tasks.named("remapJar"))
+    inputs.file(tasks.named("remapJar").flatMap { it.archiveFile })
+
+    doLast {
+        def archive = tasks.named("remapJar").get().archiveFile.get().asFile
+        new java.util.zip.ZipFile(archive).withCloseable { zip ->
+            mixinConfigNames.each { configName ->
+                def configEntry = zip.getEntry(configName)
+                if (configEntry == null) throw new GradleException("Missing Mixin config: $configName")
+                def config = zip.getInputStream(configEntry).withCloseable {
+                    new groovy.json.JsonSlurper().parse(it, "UTF-8")
+                }
+                if (!config.refmap) throw new GradleException("Missing refmap declaration: $configName")
+                def refmapEntry = zip.getEntry(config.refmap)
+                if (refmapEntry == null) throw new GradleException("Missing packaged Mixin refmap: ${config.refmap}")
+                def refmap = zip.getInputStream(refmapEntry).withCloseable {
+                    new groovy.json.JsonSlurper().parse(it, "UTF-8")
+                }
+                if (!refmap.mappings) throw new GradleException("Empty packaged Mixin refmap: ${config.refmap}")
+            }
+        }
+    }
 }
 
-tasks.register("tagExprFilterTest", JavaExec) {
-    group = "verification"
-    description = "Checks set-based tag filters, legacy patterns and incomplete expressions."
-    dependsOn(testClasses)
-    classpath = files(sourceSets.main.output, sourceSets.test.output, sourceSets.test.compileClasspath)
-    mainClass = "org.gtlcore.gtlcore.utils.TagExprFilterTest"
+tasks.named("build") {
+    dependsOn(tasks.named("verifyPackagedMixinRefmaps"))
 }

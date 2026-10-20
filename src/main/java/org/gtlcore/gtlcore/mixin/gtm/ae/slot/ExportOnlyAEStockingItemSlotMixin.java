@@ -23,6 +23,7 @@ import static com.lowdragmc.lowdraglib.LDLib.isRemote;
 @Mixin(targets = "com.gregtechceu.gtceu.integration.ae2.machine.MEStockingBusPartMachine$ExportOnlyAEStockingItemSlot", remap = false)
 public abstract class ExportOnlyAEStockingItemSlotMixin extends ExportOnlyAEItemSlot implements IMESlot {
 
+    @SuppressWarnings("target") // Synthetic outer-instance field exists in the dependency bytecode.
     @Shadow(remap = false)
     @Final
     private MEStockingBusPartMachine this$0;

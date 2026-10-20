@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.integration.ae2.storage;
 
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.integration.ae2.InfinityCell;
+import org.gtlcore.gtlcore.integration.ae2.InfinityWaterCellData;
 import org.gtlcore.gtlcore.utils.NumberUtils;
 import org.gtlcore.gtlcore.utils.StorageManager;
 
@@ -212,8 +213,12 @@ public class InfinityCellInventory implements StorageCell, PreciseStorageAmount 
             if (amount.isEmpty() || key == null) corruptedTag = true;
             else {
                 var count = new BigInteger(amount);
-                storedMap.put(key, count);
-                updateDisplayAmount(key, count);
+                var total = count;
+                if (key instanceof AEItemKey itemKey && InfinityWaterCellData.isCell(itemKey.getItem())) {
+                    total = storedMap.getOrDefault(key, BigInteger.ZERO).add(count);
+                }
+                storedMap.put(key, total);
+                updateDisplayAmount(key, total);
                 this.storedItemCount += count.doubleValue();
             }
         }

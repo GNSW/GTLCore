@@ -40,11 +40,13 @@ public abstract class CWURecipeCapabilityMixin {
     }
 
     // These erased bridges are used by Content.copy and RecipeRunner. Retain the old Integer signatures.
+    @SuppressWarnings("target") // javac hides synthetic bridge methods from annotation processors.
     @Inject(method = "copyInner(Ljava/lang/Object;)Ljava/lang/Object;", at = @At("HEAD"), cancellable = true, remap = false)
     private void gtlcore$copyLong(Object content, CallbackInfoReturnable<Object> cir) {
         cir.setReturnValue(ComputationAmounts.box(ComputationAmounts.read(content)));
     }
 
+    @SuppressWarnings("target") // The erased bridge exists in the dependency bytecode.
     @Inject(method = "copyWithModifier(Ljava/lang/Object;Lcom/gregtechceu/gtceu/api/recipe/content/ContentModifier;)Ljava/lang/Object;",
             at = @At("HEAD"),
             cancellable = true,

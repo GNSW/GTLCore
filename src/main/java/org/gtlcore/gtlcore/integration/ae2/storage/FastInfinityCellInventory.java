@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.integration.ae2.storage;
 
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.integration.ae2.FastInfinityCell;
+import org.gtlcore.gtlcore.integration.ae2.InfinityWaterCellData;
 import org.gtlcore.gtlcore.utils.StorageManager;
 import org.gtlcore.gtlcore.utils.datastructure.Int128;
 
@@ -230,8 +231,12 @@ public class FastInfinityCellInventory implements StorageCell, PreciseStorageAmo
             else {
                 var longArray = longArrayTag.getAsLongArray();
                 var count = new Int128(longArray[0], longArray[1]);
-                storedMap.put(key, count);
-                updateDisplayAmount(key, count);
+                var total = count;
+                if (key instanceof AEItemKey itemKey && InfinityWaterCellData.isCell(itemKey.getItem()) && storedMap.containsKey(key)) {
+                    total = storedMap.get(key).copy().add(count);
+                }
+                storedMap.put(key, total);
+                updateDisplayAmount(key, total);
                 this.storedItemCount += count.doubleValue();
             }
         }

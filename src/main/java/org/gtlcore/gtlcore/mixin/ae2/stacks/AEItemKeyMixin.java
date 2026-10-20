@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.ae2.stacks;
 
 import org.gtlcore.gtlcore.integration.ae2.BlankDataMedia;
+import org.gtlcore.gtlcore.integration.ae2.InfinityWaterCellData;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -40,20 +41,26 @@ public abstract class AEItemKeyMixin {
                     ordinal = 0,
                     remap = false)
     private static CompoundTag gtlcore$blankDataTag(CompoundTag value, ItemLike item, CompoundTag tag, CompoundTag caps) {
-        return BlankDataMedia.normalize(item, value);
+        return InfinityWaterCellData.normalize(item, BlankDataMedia.normalize(item, value));
     }
 
     // Packet decoding constructs its interned key directly instead of using of().
     @Inject(method = "fromPacket", at = @At("RETURN"), cancellable = true, remap = false)
     private static void gtlcore$blankPacketTag(FriendlyByteBuf data, CallbackInfoReturnable<AEItemKey> cir) {
         AEItemKey key = cir.getReturnValue();
-        if (key != null && key.getTag() != null && key.getTag().isEmpty() && BlankDataMedia.isMedia(key.getItem()))
+        if (key != null && (InfinityWaterCellData.isCell(key.getItem()) ||
+                key.getTag() != null && key.getTag().isEmpty() && BlankDataMedia.isMedia(key.getItem())))
             cir.setReturnValue(AEItemKey.of(key.toStack()));
     }
 
     @Inject(method = "matches(Lnet/minecraft/world/item/ItemStack;)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void gtlcore$matchBlankData(ItemStack stack, CallbackInfoReturnable<Boolean> cir) {
-        if (stack.isEmpty() || !BlankDataMedia.isMedia(item)) return;
+        if (stack.isEmpty()) return;
+        if (InfinityWaterCellData.isCell(item)) {
+            cir.setReturnValue(((AEItemKey) (Object) this).equals(AEItemKey.of(stack)));
+            return;
+        }
+        if (!BlankDataMedia.isMedia(item)) return;
         CompoundTag tag = stack.getTag();
         if (tag == null || tag.isEmpty()) cir.setReturnValue(((AEItemKey) (Object) this).equals(AEItemKey.of(stack)));
     }

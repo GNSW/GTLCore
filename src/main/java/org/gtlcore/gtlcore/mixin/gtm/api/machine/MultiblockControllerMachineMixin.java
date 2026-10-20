@@ -13,7 +13,9 @@ import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
 /**
@@ -26,6 +28,9 @@ public abstract class MultiblockControllerMachineMixin extends MetaMachine imple
 
     @Shadow(remap = false)
     protected boolean isFormed;
+
+    @Unique
+    private final AtomicBoolean gtlcore$formationCheckQueued = new AtomicBoolean();
 
     @Shadow(remap = false)
     public abstract Lock getPatternLock();
@@ -79,26 +84,52 @@ public abstract class MultiblockControllerMachineMixin extends MetaMachine imple
     }
 
     /**
-     * @author .
-     * @reason .
+     * @author GTLCore
+     * @reason Check and commit formation together using current server-thread world state.
      */
     @Overwrite(remap = false)
     public void asyncCheckPattern(long periodID) {
-        if ((getMultiblockState().hasError() || !isFormed) && (getHolder().getOffset() + periodID) % 4 == 0 && checkPatternWithTryLock()) {
-            if (getLevel() instanceof ServerLevel serverLevel) {
-                serverLevel.getServer().execute(() -> {
-                    getPatternLock().lock();
+        if ((getHolder().getOffset() + periodID) % 4 != 0 ||
+                !(getLevel() instanceof ServerLevel serverLevel) ||
+                !gtlcore$formationCheckQueued.compareAndSet(false, true))
+            return;
+
+        try {
+            serverLevel.getServer().execute(() -> {
+                try {
+                    if (isInValid() || getLevel() != serverLevel) return;
+                    Lock lock = getPatternLock();
+                    if (!lock.tryLock()) return;
                     try {
+                        if (isFormed && !getMultiblockState().hasError()) return;
+                        // Keep failed checks registered; completing the structure must allow a later retry.
+                        try (var timing = WorldPatternTiming.beginCheck(this, "formation")) {
+                            boolean matched = checkPattern();
+                            if (timing != null) timing.result(matched);
+                            if (!matched) return;
+                        }
                         setFlipped(getMultiblockState().isNeededFlip());
                         onStructureFormed();
                         var mwsd = MultiblockWorldSavedData.getOrCreate(serverLevel);
+                        // A machine may reject formation after the pattern matched (e.g. missing energy IO).
+                        // Only committed structures leave the search queue; later part placement must retry.
+                        if (!isFormed()) {
+                            mwsd.removeMapping(getMultiblockState());
+                            mwsd.addAsyncLogic(this);
+                            return;
+                        }
                         mwsd.addMapping(getMultiblockState());
                         mwsd.removeAsyncLogic(this);
                     } finally {
-                        getPatternLock().unlock();
+                        lock.unlock();
                     }
-                });
-            }
+                } finally {
+                    gtlcore$formationCheckQueued.set(false);
+                }
+            });
+        } catch (RuntimeException | Error exception) {
+            gtlcore$formationCheckQueued.set(false);
+            throw exception;
         }
     }
 }

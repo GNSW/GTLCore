@@ -65,6 +65,12 @@ public abstract class MultiblockStateMixin {
                     if (formed && controller.checkPatternWithLock()) {
                         controller.self().setFlipped(tempThis.isNeededFlip());
                         controller.onStructureFormed();
+                        // Matching the shape does not guarantee the machine accepted its parts.
+                        if (!controller.isFormed()) {
+                            MultiblockWorldSavedData mwsd = MultiblockWorldSavedData.getOrCreate(serverLevel);
+                            mwsd.removeMapping(tempThis);
+                            mwsd.addAsyncLogic(controller);
+                        }
                     } else {
                         controller.self().setFlipped(false);
                         controller.onStructureInvalid();

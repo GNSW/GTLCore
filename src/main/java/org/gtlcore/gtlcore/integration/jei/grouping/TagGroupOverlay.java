@@ -202,11 +202,15 @@ public final class TagGroupOverlay {
             var area = slot.getArea();
             graphics.pose().pushPose();
             graphics.pose().translate(area.x() + area.width() - 1, area.y() + 1, 200);
+            graphics.pose().pushPose();
             graphics.pose().scale(0.4f, 0.4f, 1);
             RenderSystem.enableBlend();
             // Vanilla recipe-book forward arrow, with its original transparent pixels.
             graphics.blit(RECIPE_BOOK, -12, 0, 1, 208, 12, 17);
-            graphics.drawString(font, count, -14 - font.width(count), 1, 0xFFFFFFFF, true);
+            graphics.pose().popPose();
+            // Match the craftable label size while keeping the arrow and the number separated.
+            graphics.pose().scale(0.5f, 0.5f, 1);
+            graphics.drawString(font, count, -12 - font.width(count), 1, 0xFFFFFFFF, true);
             RenderSystem.disableBlend();
             graphics.pose().popPose();
         });

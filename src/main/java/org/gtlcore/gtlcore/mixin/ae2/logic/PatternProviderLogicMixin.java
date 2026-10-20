@@ -193,6 +193,14 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
         if (side != null) {
             targetBE = host.getBlockEntity().getLevel().getBlockEntity(host.getBlockEntity().getBlockPos().relative(side));
         }
+        // An interface forwards into network storage, including formation planes that
+        // accept only part of a request per insertion. Keep AE2's original admission
+        // check and send-list retries instead of requiring the whole batch to fit now.
+        // Batch-size estimation still uses the simulated capacity below.
+        if (targetBE instanceof InterfaceLogicHost ||
+                (targetBE != null && side != null && gtlcore$isInterfacePart(targetBE, side.getOpposite()))) {
+            return;
+        }
         cir.setReturnValue(gtlcore$canTargetAccept(new PatternCapacityProbe(target), targetBE,
                 side == null ? null : side.getOpposite(),
                 gtlcore$toInputCounter(inputHolder), 1));

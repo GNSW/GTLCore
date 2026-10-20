@@ -629,6 +629,7 @@ public class GTLMachines {
 
     public static final MachineDefinition ME_INPUT_ASSEMBLY = REGISTRATE
             .machine("me_input_assembly", MEDualInputHatchPartMachine::new)
+            .tooltipBuilder(GTL_ADD)
             .tier(EV)
             .abilities(PartAbility.IMPORT_ITEMS, PartAbility.IMPORT_FLUIDS)
             .rotationState(RotationState.ALL)

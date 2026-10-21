@@ -77,7 +77,7 @@ final class PlanReuseVerification<K> implements AutoCloseable {
                     if (inputs.hasNext()) {
                         var input = inputs.next();
                         if (!external.contains(input.getKey()) && input.getValue().compareTo(
-                                BigInteger.valueOf(stock.getOrDefault(input.getKey(), 0L))) > 0)
+                                PlanningInventory.exactAmount(stock, input.getKey())) > 0)
                             return reject("stock");
                     } else phase = 2;
                 }

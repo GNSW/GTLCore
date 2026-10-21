@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.ToIntFunction;
+import java.util.function.ToLongFunction;
 
 /** Retained allocation of one family's owned entities to simultaneous slots.
  * Indivisible slots need one exact key; mixed slots can use the remaining keys.
@@ -29,6 +30,7 @@ final class StateEntityAllocation<K> implements AutoCloseable {
     private final BigInteger[] remaining;
     private final int[] chosen, next, preferred;
     private final int[] priorities;
+    private final long[] costs;
     private final List<Pick<K>> result = new ArrayList<>();
     private final int indivisible;
     private int depth, mixed, bin;
@@ -44,15 +46,22 @@ final class StateEntityAllocation<K> implements AutoCloseable {
 
     static <K> StateEntityAllocation<K> create(List<Demand> demands, List<Supply<K>> supplies,
             ToIntFunction<K> preference, PlanningBudget budget) {
+        return create(demands, supplies, preference, null, budget);
+    }
+
+    static <K> StateEntityAllocation<K> create(List<Demand> demands, List<Supply<K>> supplies,
+            ToIntFunction<K> preference, ToLongFunction<K> cost, PlanningBudget budget) {
         // At most one pick per indivisible slot. Splitting the mixed remainder
         // exhausts either a slot or a supply at each pick, hence O(slots + keys).
-        long bytes = 512L + 160L * demands.size() + (preference == null ? 224L : 320L) * supplies.size();
-        if (!budget.tryReserve(bytes)) return preference == null ? null : create(demands, supplies, budget);
-        try { return new StateEntityAllocation<>(demands, supplies, preference, budget, bytes); }
+        long bytes = 512L + 160L * demands.size() + (preference == null ? 224L : 320L) * supplies.size() +
+                (cost == null ? 0 : 128L + 128L * supplies.size());
+        if (!budget.tryReserve(bytes)) return cost != null ? create(demands, supplies, preference, budget) :
+                preference == null ? null : create(demands, supplies, budget);
+        try { return new StateEntityAllocation<>(demands, supplies, preference, cost, budget, bytes); }
         catch (RuntimeException | Error failure) { budget.release(bytes); throw failure; }
     }
 
-    private StateEntityAllocation(List<Demand> demands, List<Supply<K>> supplies, ToIntFunction<K> preference,
+    private StateEntityAllocation(List<Demand> demands, List<Supply<K>> supplies, ToIntFunction<K> preference, ToLongFunction<K> cost,
             PlanningBudget budget, long bytes) {
         this.budget = budget; memory = bytes;
         this.demands = new ArrayList<>(demands); this.supplies = new ArrayList<>(supplies);
@@ -67,17 +76,24 @@ final class StateEntityAllocation<K> implements AutoCloseable {
         if (scores != null) for (var supply : this.supplies) {
             budget.check(); scores.put(supply.state(), preference.applyAsInt(supply.state()));
         }
+        var losses = cost == null ? null : new HashMap<K, Long>();
+        if (losses != null) for (var supply : this.supplies) {
+            budget.check(); losses.put(supply.state(), cost.applyAsLong(supply.state()));
+        }
         this.supplies.sort((a, b) -> {
             budget.check();
             int order = scores == null ? 0 : Integer.compare(scores.get(a.state()), scores.get(b.state()));
+            if (order == 0 && losses != null) order = Long.compare(losses.get(a.state()), losses.get(b.state()));
             return order != 0 ? order : Long.compare(b.capacity(), a.capacity());
         });
         priorities = scores == null ? null : new int[supplies.size()];
+        costs = losses == null ? null : new long[supplies.size()];
         remaining = new BigInteger[supplies.size()];
         BigInteger available = BigInteger.ZERO, needed = BigInteger.ZERO;
         for (int i = 0; i < this.supplies.size(); i++) {
             budget.check(); remaining[i] = this.supplies.get(i).count(); available = available.add(remaining[i]);
             if (priorities != null) priorities[i] = scores.get(this.supplies.get(i).state());
+            if (costs != null) costs[i] = losses.get(this.supplies.get(i).state());
         }
         int fixed = 0;
         for (var demand : this.demands) { budget.check(); needed = needed.add(BigInteger.valueOf(demand.amount())); if (!demand.mixed()) fixed++; }
@@ -125,6 +141,7 @@ final class StateEntityAllocation<K> implements AutoCloseable {
             for (int i = 0; i < remaining.length; i++) {
                 budget.check();
                 int order = best < 0 || priorities == null ? 0 : Integer.compare(priorities[i], priorities[best]);
+                if (order == 0 && best >= 0 && costs != null) order = Long.compare(costs[i], costs[best]);
                 if (remaining[i].compareTo(amount) >= 0 && (best < 0 || order < 0 ||
                         order == 0 && remaining[i].compareTo(remaining[best]) < 0)) best = i;
             }

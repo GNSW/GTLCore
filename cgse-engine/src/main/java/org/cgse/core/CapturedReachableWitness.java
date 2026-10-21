@@ -61,8 +61,8 @@ final class CapturedReachableWitness<K> implements AutoCloseable {
         this.force = force; this.budget = budget;
         workStarted = budget.nodes();
         allowance = budget.remainingWork() / 8;
-        targetGoal = BigInteger.valueOf(amount).add(BigInteger.valueOf(force ?
-                Math.max(stock.getOrDefault(target, 0L), seeds.getOrDefault(target, 0L)) : seeds.getOrDefault(target, 0L)));
+        BigInteger reserve = BigInteger.valueOf(seeds.getOrDefault(target, 0L));
+        targetGoal = BigInteger.valueOf(amount).add(force ? reserve.max(PlanningInventory.exactAmount(stock, target)) : reserve);
         if (allowance < 1024 || !reserve(1024)) { done = true; return; }
         try {
             discover(target);
@@ -141,7 +141,7 @@ final class CapturedReachableWitness<K> implements AutoCloseable {
     }
 
     private BigInteger have(K key) {
-        return inventory.getOrDefault(key, BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+        return inventory.getOrDefault(key, PlanningInventory.exactAmount(stock, key));
     }
 
     private boolean supplied(K key) { return external.contains(key) && (!force || !key.equals(target)); }
@@ -263,7 +263,7 @@ final class CapturedReachableWitness<K> implements AutoCloseable {
         if (!indexed) return false;
         BigInteger available = have(target);
         budget.operations(PlanningBudget.Operation.INTEGER, Math.max(available.bitLength(), targetGoal.bitLength()) + 64, 8);
-        BigInteger progress = available.subtract(BigInteger.valueOf(stock.getOrDefault(target, 0L)));
+        BigInteger progress = available.subtract(PlanningInventory.exactAmount(stock, target));
         if (progress.signum() <= 0) return false;
         long spent = budget.nodes() - workStarted;
         BigInteger left = targetGoal.subtract(available).max(BigInteger.ZERO);

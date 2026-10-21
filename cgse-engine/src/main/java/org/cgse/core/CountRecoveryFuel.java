@@ -125,7 +125,7 @@ final class CountRecoveryFuel<K> {
             rates.computeIfAbsent(route.fuel, unused -> new LinkedHashMap<>()).merge(route.catalyst, route, (a, b) -> BigInteger.valueOf(a.fuelUnits).multiply(BigInteger.valueOf(b.catalystUnits)).compareTo(
                     BigInteger.valueOf(b.fuelUnits).multiply(BigInteger.valueOf(a.catalystUnits))) >= 0 ? a : b);
         }
-        Map<K, Long> stock = new LinkedHashMap<>(this.stock);
+        Map<K, BigInteger> stock = new LinkedHashMap<>(PlanningInventory.exactAmounts(this.stock));
         rates.forEach((fuel, sources) -> {
             BigInteger credit = BigInteger.ZERO;
             for (var route : sources.values()) {
@@ -135,9 +135,9 @@ final class CountRecoveryFuel<K> {
             }
             // The stock API is long. A capped candidate is still witness-only,
             // and cannot disprove the full model or the unpriced candidate.
-            stock.put(fuel, BigInteger.valueOf(stock.getOrDefault(fuel, 0L)).add(credit).min(ExactAmounts.LONG_MAX).longValueExact());
+            stock.put(fuel, stock.getOrDefault(fuel, BigInteger.ZERO).add(credit));
         });
-        return stock;
+        return PlanningInventory.exactSnapshot(stock);
     }
 
     PlanStep lift(GraphPlan<K> plan, LongConsumer retain) {
@@ -222,7 +222,7 @@ final class CountRecoveryFuel<K> {
                     budget.check();
                     if (input.getKey().equals(route.catalyst) || original.external.contains(input.getKey())) continue;
                     // prepare() established that these inputs have no producer.
-                    var capacity = BigInteger.valueOf(stock.getOrDefault(input.getKey(), 0L)).divide(BigInteger.valueOf(input.getValue()));
+                    var capacity = PlanningInventory.exactAmount(stock, input.getKey()).divide(BigInteger.valueOf(input.getValue()));
                     bound = bound == null ? capacity : bound.min(capacity);
                 }
                 if (bound == null) return null; // No invented finite domain.
@@ -268,7 +268,7 @@ final class CountRecoveryFuel<K> {
     }
 
     private BigInteger available(K key) {
-        return BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(original.goal(key));
+        return PlanningInventory.exactAmount(stock, key).subtract(original.goal(key));
     }
 
     /** Bounded witness construction; failure says nothing about the original choice space. */

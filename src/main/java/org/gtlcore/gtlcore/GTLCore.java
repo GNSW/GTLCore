@@ -29,7 +29,7 @@ public class GTLCore {
     }
 
     public GTLCore() {
-        EngineInfo.requireCompatibility("0.1");
+        EngineInfo.requireCompatibility("0.2");
         LOGGER.info("CGSE engine {} (API {}, revision {})", EngineInfo.version(),
                 EngineInfo.compatibility(), EngineInfo.revision());
         DistExecutor.unsafeRunForDist(() -> ClientProxy::new, () -> CommonProxy::new);

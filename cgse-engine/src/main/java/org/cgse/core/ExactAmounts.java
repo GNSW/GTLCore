@@ -24,7 +24,10 @@ public final class ExactAmounts {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     public static <K> Map<K, BigInteger> copy(Map<K, ? extends Number> amounts) {
+        if (amounts instanceof PlanningInventory.FrozenAmounts<?>)
+            return PlanningInventory.exactAmounts((Map<K, Long>) amounts);
         Map<K, BigInteger> result = new LinkedHashMap<>();
         amounts.forEach((key, value) -> {
             BigInteger count = of(value);

@@ -30,6 +30,8 @@ final class GraphOutputView<K> implements AutoCloseable {
     private long work, memory, graphMemory;
     private int next;
     private GraphCompilation<K> compiling;
+    private GraphCompiler.Compiled<K> checkedGraph;
+    private GraphViewBounds<K> checking;
     private GraphSolve<K> solving;
     private AllocationSearch.Candidate<K> restoring;
     private GraphPlan<K> result;
@@ -171,6 +173,21 @@ final class GraphOutputView<K> implements AutoCloseable {
                     return false;
                 }
             }
+            if (checkedGraph != null) {
+                if (checking == null)
+                    checking = GraphViewBounds.create(checkedGraph, target, amount, stock, seeds, external, force,
+                            budget, Math.min(4096, allowance - work));
+                if (checking != null && !checking.step()) return false;
+                boolean blocked = checking != null && checking.blocked();
+                if (checking != null) checking.close();
+                checking = null;
+                if (!blocked)
+                    solving = new GraphSolve<>(checkedGraph, target, amount, stock, external, seeds, preserve, force,
+                            budget, started, policy, stock).scoutRegions();
+                else budget.note("output_view", "selected_graph_blocked; trial=" + next + "; no_negative_transfer");
+                checkedGraph = null;
+                if (!blocked) return false;
+            }
             if (compiling != null) {
                 if (!compiling.step()) return false;
                 var graph = compiling.result();
@@ -179,8 +196,7 @@ final class GraphOutputView<K> implements AutoCloseable {
                 graphMemory = bytes;
                 compiling.close();
                 compiling = null;
-                solving = new GraphSolve<>(graph, target, amount, stock, external, seeds, preserve, force,
-                        budget, started, policy, stock).scoutRegions();
+                checkedGraph = graph;
                 return false;
             }
             budget.release(graphMemory);
@@ -238,9 +254,12 @@ final class GraphOutputView<K> implements AutoCloseable {
 
     @Override public void close() {
         if (compiling != null) compiling.close();
+        if (checking != null) checking.close();
         if (solving != null) solving.close();
         if (restoring != null) restoring.close();
         compiling = null;
+        checking = null;
+        checkedGraph = null;
         solving = null;
         restoring = null;
         budget.release(memory + graphMemory);

@@ -103,7 +103,7 @@ final class QuantityAnalysis<K> {
                 }
                 return false;
             }
-            for (K key : keys) if (!producers.containsKey(key) && !external.contains(key)) publish(key, BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+            for (K key : keys) if (!producers.containsKey(key) && !external.contains(key)) publish(key, PlanningInventory.exactAmount(stock, key));
             phase = 1;
             return false;
         }
@@ -124,7 +124,7 @@ final class QuantityAnalysis<K> {
                     K key = output.getKey();
                     produced.merge(key, runs.multiply(BigInteger.valueOf(output.getValue())), BigInteger::add);
                     if (producers.merge(key, -1, Integer::sum) == 0 && !external.contains(key))
-                        publish(key, produced.get(key).add(BigInteger.valueOf(stock.getOrDefault(key, 0L))));
+                        publish(key, produced.get(key).add(PlanningInventory.exactAmount(stock, key)));
                 }
                 return false;
             }
@@ -248,7 +248,7 @@ final class QuantityAnalysis<K> {
             K key = entry.getKey();
             BigInteger weight = entry.getValue();
             if (weight.signum() < 0 || external.contains(key) && weight.signum() != 0) return false;
-            available = available.add(weight.multiply(BigInteger.valueOf(stock.getOrDefault(key, 0L))));
+            available = available.add(weight.multiply(PlanningInventory.exactAmount(stock, key)));
             required = required.add(weight.multiply(goal(key)));
         }
         return available.compareTo(required) < 0;

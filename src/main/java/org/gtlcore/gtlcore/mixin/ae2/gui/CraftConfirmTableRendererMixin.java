@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.mixin.ae2.gui;
 
 import org.gtlcore.gtlcore.integration.ae2.common.IConfirmStartMenu;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ICraftingPlanSummaryEntry;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphMissingStatus;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphPlanSummaryView;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphSeedStatus;
 
@@ -73,8 +74,11 @@ public abstract class CraftConfirmTableRendererMixin extends AbstractTableRender
         // Recovery details belong in the unconstrained tooltip, not in another cell row.
         var graphEntry = (ICraftingPlanSummaryEntry) entry;
         boolean grouped = graphEntry.gtlcore$getGroupedToolStates() > 1;
-        if (graphEntry.gtlcore$getGraphSeed() <= 0 && !graphEntry.gtlcore$isMissingGraphSeed() && !grouped) return;
+        if (graphEntry.gtlcore$getGraphSeed() <= 0 && !graphEntry.gtlcore$isMissingGraphSeed() && !grouped &&
+                graphEntry.gtlcore$getMissingSourceMask() == 0)
+            return;
         var lines = new ArrayList<>(cir.getReturnValue());
+        lines.addAll(GraphMissingStatus.tooltip(graphEntry.gtlcore$getMissingSourceMask()));
         if (grouped) lines.add(Component.translatable("gtlcore.ae.graph.grouped_tool_states", graphEntry.gtlcore$getGroupedToolStates())
                 .withStyle(ChatFormatting.GRAY));
         if (graphEntry.gtlcore$getGraphSeed() > 0)

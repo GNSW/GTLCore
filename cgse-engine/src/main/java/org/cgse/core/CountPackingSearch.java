@@ -25,6 +25,14 @@ final class CountPackingSearch implements AutoCloseable {
     private CountPackingTail tail;
     private long tailWork;
     private boolean tailAttempted, tailActive, tailQuery;
+    private CountPackingConflicts conflicts;
+    private long[] conflictForces;
+
+    void reuse(CountCdcl source) {
+        if (complete || conflicts != null) return;
+        conflicts = CountPackingConflicts.create(source, size, depth, seed, undecided, selected, choices, budget);
+        if (conflicts != null) conflictForces = new long[2];
+    }
 
     /** Takes ownership of coefficients. All row activities must fit below 2^60. */
     CountPackingSearch(long[][] coefficients, long[] bounds, long seed, PlanningBudget budget) {
@@ -150,13 +158,14 @@ final class CountPackingSearch implements AutoCloseable {
                 feasible = complete = true;
                 return true;
             }
-            // Amortize a finite exact tail only after this same search has
-            // already spent a measured warmup repeating suffix propagation.
-            // Include the table depth in that estimate: admitting after just a
-            // few repeats costs easy cores their low-budget witness. This is
-            // a scheduling estimate; construction/query work is charged in full.
+            // Require repeated, measured suffix work before buying an index.
+            // Point generation, exact leaf bounds and joins scan the rows;
+            // partitioning also scales with the suffix width. They are added,
+            // not multiplied: charging a full row scan at every tree depth
+            // delays reuse even though internal nodes use sampled axes and joins.
+            // This is admission advice only; all actual work remains charged.
             if (size >= 2 * TAIL_BITS && Long.numberOfTrailingZeros(undecided[depth]) >= size - TAIL_BITS) {
-                long warmup = (1L << TAIL_BITS) * positive.length * (TAIL_BITS + 1) * 2;
+                long warmup = (1L << TAIL_BITS) * (4 * positive.length + 3 * TAIL_BITS);
                 if (!tailAttempted && tailWork >= warmup && budget.remainingWork() >= warmup) {
                     tailAttempted = true;
                     tail = CountPackingTail.create(coefficients, size - TAIL_BITS, budget);
@@ -176,6 +185,7 @@ final class CountPackingSearch implements AutoCloseable {
             slacks[depth + 1][r] = slacks[depth][r] - loss;
             if (loss != 0) pendingRows |= 1L << r;
         }
+        if (conflicts != null) conflicts.branch(depth, variable, value);
         undecided[depth + 1] = undecided[depth] & ~bit;
         selected[depth + 1] = selected[depth] | (value ? bit : 0);
         depth++;
@@ -217,6 +227,11 @@ final class CountPackingSearch implements AutoCloseable {
                 forceOne |= forced & negative[r];
                 if ((forceZero & forceOne) != 0) return false;
             }
+            if (conflicts != null) {
+                conflictForces[0] = forceZero; conflictForces[1] = forceOne;
+                if (!conflicts.propagate(depth, undecided[depth], conflictForces)) return false;
+                forceZero = conflictForces[0]; forceOne = conflictForces[1];
+            }
             long forced = forceZero | forceOne;
             if (forced == 0) return true;
             forcedValues += Long.bitCount(forced);
@@ -231,6 +246,7 @@ final class CountPackingSearch implements AutoCloseable {
                     slacks[depth][r] -= Math.abs(coefficients[r][variable]);
                 }
             }
+            if (conflicts != null) conflicts.assign(depth, forceZero, forceOne);
             selected[depth] |= forceOne;
             undecided[depth] &= ~forced;
         }
@@ -243,6 +259,8 @@ final class CountPackingSearch implements AutoCloseable {
     }
     long forcedValues() { return forcedValues; }
     @Override public void close() {
+        if (conflicts != null) conflicts.close();
+        conflicts = null; conflictForces = null;
         if (tail != null) tail.close();
         tail = null;
         buckets = null; shifts = null;

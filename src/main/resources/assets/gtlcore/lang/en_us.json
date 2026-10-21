@@ -1,4 +1,7 @@
 {
+  "gtlcore.ae.graph.cycle_refill": "Refill at a cycle boundary for this route. Another order or route may need less or no refill; this is not a proven minimum.",
+  "gtlcore.ae.graph.terminal_refill": "No further production route was found in the captured patterns for this material.",
+  "gtlcore.ae.graph.unexpanded_refill": "Expansion of this route is incomplete or restricted. This is not a proven basic-material shortage.",
   "config.gtlcore.option.ae2GraphGlobalMemoryMiB": "Global graph planning memory (MiB)",
   "config.gtlcore.option.ae2GraphGlobalMemoryMiB.comment": "Shared estimated workspace cap across concurrent snapshots, solvers, fallback and display jobs; default 512 MiB. Released on completion or cancellation. Separate from retained caches and work budgets; not a JVM heap cap. Reload affects new reservations, without revoking existing ones.",
   "config.gtlcore.option.ae2GraphCacheMemoryMiB": "Graph retained cache target (MiB)",
@@ -92,6 +95,7 @@
   "gtlcore.ae.graph.failure.infeasible": "The captured inventory is proven insufficient, but no verified refill plan is available. Add materials or adjust patterns and retry.",
   "gtlcore.ae.graph.failure.unknown": "No executable plan was found; infeasibility is not proven. See the planning log for strategy details.",
   "gtlcore.ae.graph.failure.incomplete_model": "No executable plan was found in the captured candidate or return-state view. Some alternatives are not covered, so a material shortage is not proven.",
+  "gtlcore.ae.graph.failure.inventory_precision_limit": "This order needs more material than a single inventory counter can represent. Its shortages cannot be determined accurately. Reduce the order quantity and retry.",
   "gtlcore.ae.graph.failure.search_limit": "Planning reached its cumulative work budget before completing. Reduce the request or adjust the graph search budget and retry.",
   "gtlcore.ae.graph.failure.timeout": "Planning reached its time limit before completing. Adjust the graph timeout and retry.",
   "gtlcore.ae.graph.failure.memory_limit": "Planning reached its memory budget before completing. Adjust the graph memory budget and retry.",

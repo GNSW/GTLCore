@@ -9,12 +9,15 @@ import java.util.*;
 /** Search in one proposed Boolean face. Neither its fixed exterior nor its
  * distance row is an original-model fact; local failures and clauses stay here. */
 final class CountPackingNeighborhood implements AutoCloseable {
-    enum Mode { PROPAGATION, LEARNING, EXCHANGE, EXCHANGE_FOUR }
+    enum Mode { PROPAGATION, LEARNING, EXCHANGE, EXCHANGE_FOUR, EXCHANGE_ASYMMETRIC, RELAXATION }
 
     private final PlanningBudget budget;
+    private final long[][] sourceRows;
+    private final long[] sourceBounds;
     private CountPackingSearch propagation;
     private CountPackingExchange exchange;
     private CountCdcl learning;
+    private CountPackingLpSearch relaxation;
     private long memory, assignment;
     private boolean complete, feasible;
 
@@ -27,6 +30,16 @@ final class CountPackingNeighborhood implements AutoCloseable {
     }
     CountPackingNeighborhood(long[][] coefficients, long[] bounds, long seed, PlanningBudget budget, Mode mode, long flexible) {
         this.budget = budget;
+        sourceRows = coefficients; sourceBounds = bounds;
+        if (mode == Mode.RELAXATION) {
+            relaxation = CountPackingLpSearch.create(coefficients, bounds, budget);
+            complete = relaxation == null;
+            return;
+        }
+        if (mode == Mode.EXCHANGE_ASYMMETRIC) {
+            exchange = new CountPackingExchange(coefficients, bounds, seed, budget, 1, flexible, 4);
+            return;
+        }
         if (mode == Mode.EXCHANGE || mode == Mode.EXCHANGE_FOUR) {
             exchange = new CountPackingExchange(coefficients, bounds, seed, budget, mode == Mode.EXCHANGE_FOUR ? 4 : 3, flexible);
             return;
@@ -65,9 +78,14 @@ final class CountPackingNeighborhood implements AutoCloseable {
         }
     }
 
+    void warm(CountPackingLpSearch.Root source) {
+        if (relaxation != null) relaxation.warm(source);
+    }
+
     boolean step() {
         if (complete) return true;
-        if (propagation != null) return propagation.step();
+        if (relaxation != null) return complete = relaxation.step();
+        if (propagation != null) return complete = propagation.step();
         if (exchange != null) return exchange.step();
         if (!learning.step()) return false;
         if (learning.paused()) {
@@ -84,14 +102,30 @@ final class CountPackingNeighborhood implements AutoCloseable {
         return true;
     }
 
-    boolean feasible() { return exchange != null ? exchange.feasible() : propagation != null ? propagation.feasible() : feasible; }
+    /** Identity includes the column order, fixed exterior and any distance row.
+     * Even equal dimensions or a different projection of the same model do not
+     * authorize sharing the private repair's clauses. */
+    void reuse(CountPackingNeighborhood source) {
+        if (propagation != null && source.learning != null && budget == source.budget &&
+                sourceRows == source.sourceRows && sourceBounds == source.sourceBounds)
+            propagation.reuse(source.learning);
+    }
+
+    boolean feasible() { return relaxation != null ? relaxation.feasible() : exchange != null ? exchange.feasible() : propagation != null ? propagation.feasible() : feasible; }
+    /** Only exhaustion of the full face may retire another search of it.
+     * A restricted exchange or refused workspace provides no such conclusion. */
+    boolean provedInfeasible() { return complete && !feasible() && (propagation != null || learning != null && learning.infeasible()); }
     long assignment() {
         if (!feasible()) throw new IllegalStateException("No neighborhood witness");
-        return exchange != null ? exchange.assignment() : propagation != null ? propagation.assignment() : assignment;
+        return relaxation != null ? relaxation.assignment() : exchange != null ? exchange.assignment() : propagation != null ? propagation.assignment() : assignment;
     }
     long forcedValues() { return propagation == null ? 0 : propagation.forcedValues(); }
 
     @Override public void close() {
+        if (relaxation != null) {
+            budget.note("count_packing_lp", relaxation.statistics());
+            relaxation.close(); relaxation = null;
+        }
         if (propagation != null) propagation.close();
         propagation = null;
         if (exchange != null) exchange.close();

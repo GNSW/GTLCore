@@ -1,4 +1,7 @@
 {
+  "gtlcore.ae.graph.cycle_refill": "当前方案在循环边界需要补料。换顺序或生产路径可能减少或免除补料，尚未证明这是最少补料。",
+  "gtlcore.ae.graph.terminal_refill": "在已读取的样板中，未找到可继续展开此材料的生产路径。",
+  "gtlcore.ae.graph.unexpanded_refill": "此方案的展开尚未完成或受到限制，不能据此认定缺少基础材料。",
   "config.gtlcore.option.ae2GraphGlobalMemoryMiB": "图合成全局规划内存上限（MiB）",
   "config.gtlcore.option.ae2GraphGlobalMemoryMiB.comment": "所有并发请求共用的估算工作内存上限，默认512 MiB；快照、求解、回退与视图构建共同计入。请求结束或取消后释放。与缓存保留额度和搜索工作量分开；不是JVM堆上限。配置重载后对新申请生效，降低上限不会中断已有内存持有者。",
   "config.gtlcore.option.ae2GraphCacheMemoryMiB": "图合成缓存保留目标（MiB）",
@@ -92,6 +95,7 @@
   "gtlcore.ae.graph.failure.infeasible": "已证明当前库存无法完成订单，但尚未生成可验证的补料方案。请补料或调整样板后重试。",
   "gtlcore.ae.graph.failure.unknown": "尚未找到可执行方案，也未证明无解。请查看规划日志中的策略详情。",
   "gtlcore.ae.graph.failure.incomplete_model": "当前候选或返回状态视图尚未找到可执行方案，仍有未覆盖的可能路径，不能据此判定缺料。",
+  "gtlcore.ae.graph.failure.inventory_precision_limit": "订单的材料需求超过单次库存计数范围，暂时无法准确计算缺料。请减少下单数量后重试。",
   "gtlcore.ae.graph.failure.search_limit": "规划达到累计搜索额度，尚未完成判断。可减少请求数量或调整图合成搜索额度后重试。",
   "gtlcore.ae.graph.failure.timeout": "规划达到时间限制，尚未完成判断。请调整图合成超时设置后重试。",
   "gtlcore.ae.graph.failure.memory_limit": "规划达到内存预算，尚未完成判断。请调整图合成内存预算后重试。",

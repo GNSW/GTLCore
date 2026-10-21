@@ -16,6 +16,51 @@ final class CountReachability<K> implements AutoCloseable {
     private BigInteger[] counts;
     private boolean complete;
 
+    /** A scheduling hint for small token populations. Terminal feed may be
+     * consumed, but every original transition must preserve/decrease the number
+     * of produced tokens. This is not a reachability or infeasibility proof. */
+    static boolean smallClosedPopulation(RecipeCountModel<?> model) {
+        if (model.keys.size() > 32 || model.recipes.size() > 64 || model.recipes.isEmpty()) return false;
+        long bytes = 512L + 64L * model.keys.size();
+        if (!model.budget.tryReserve(bytes)) return false;
+        try {
+            var produced = new HashSet<Object>();
+            for (var recipe : model.recipes) {
+                model.budget.check();
+                if (recipe.batchSensitiveInputs()) return false;
+                for (var output : recipe.outputs().entrySet()) {
+                    model.budget.check();
+                    if (model.external.contains(output.getKey())) continue;
+                    if (output.getValue() != 1) return false;
+                    produced.add(output.getKey());
+                }
+            }
+            int population = 0;
+            for (var key : produced) {
+                model.budget.check();
+                long present = model.stock.getOrDefault(key, 0L);
+                if (present < 0 || present > 8 - population) return false;
+                population += (int) present;
+            }
+            if (population == 0) return false;
+            for (var recipe : model.recipes) {
+                int inputs = 0, outputs = 0;
+                for (var input : recipe.inputs().entrySet()) {
+                    model.budget.check();
+                    if (!produced.contains(input.getKey())) continue;
+                    if (input.getValue() != 1) return false;
+                    inputs++;
+                }
+                for (var output : recipe.outputs().keySet()) {
+                    model.budget.check();
+                    if (produced.contains(output)) outputs++;
+                }
+                if (outputs > inputs) return false;
+            }
+            return true;
+        } finally { model.budget.release(bytes); }
+    }
+
     static <K> CountReachability<K> create(RecipeCountModel<K> model, long maximumWork) {
         if (model.recipes.size() > 64 || maximumWork < 1024 ||
                 model.budget.remainingWork() < 32768 || model.recipes.stream().anyMatch(GraphRecipe::batchSensitiveInputs))
@@ -54,7 +99,7 @@ final class CountReachability<K> implements AutoCloseable {
                 if (finite > 32 && model.goal(key).signum() == 0 &&
                         !(produced.contains(key) && consumed.contains(key))) continue;
                 keys.add(key);
-                initial.add(BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+                initial.add(PlanningInventory.exactAmount(model.stock, key));
                 goal.add(model.goal(key));
             }
             if (keys.size() > 32) {

@@ -45,6 +45,11 @@ final class CapturedStockProjection<K> implements AutoCloseable {
 
     Map<K, Long> result() {
         if (!done || closed) throw new IllegalStateException("Stock projection is not available");
+        if (!declined && PlanningInventory.hasWideAmounts(stock)) {
+            var exact = new LinkedHashMap<K, java.math.BigInteger>();
+            values.keySet().forEach(key -> exact.put(key, PlanningInventory.exactAmount(stock, key)));
+            return PlanningInventory.exactSnapshot(exact);
+        }
         return declined ? null : view;
     }
 

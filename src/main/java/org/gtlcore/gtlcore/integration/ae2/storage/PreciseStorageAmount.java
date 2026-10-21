@@ -4,7 +4,7 @@ import appeng.api.stacks.AEKey;
 
 import java.math.BigInteger;
 
-/** Optional display-only access to an immutable, non-negative stored quantity. */
+/** Exact physical quantity. Planning callers must separately enforce extraction permissions and reservations. */
 public interface PreciseStorageAmount {
 
     BigInteger getExactStoredAmount(AEKey key);

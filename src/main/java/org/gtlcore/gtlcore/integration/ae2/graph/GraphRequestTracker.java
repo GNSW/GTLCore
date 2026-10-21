@@ -15,6 +15,10 @@ public interface GraphRequestTracker {
 
     default void gtlcore$invalidateGraphBinding(String binding) {}
 
+    default ByproductPatternIndex gtlcore$patternSources() {
+        return null;
+    }
+
     default Iterable<IPatternDetails> gtlcore$registeredGraphPatterns() {
         return List.of();
     }

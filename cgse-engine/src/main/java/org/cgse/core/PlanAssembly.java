@@ -121,7 +121,7 @@ final class PlanAssembly<K> implements AutoCloseable {
             case 4 -> {
                 if (requiredAmounts.hasNext()) {
                     var entry = requiredAmounts.next();
-                    BigInteger deficit = entry.getValue().subtract(BigInteger.valueOf(stock.getOrDefault(entry.getKey(), 0L)));
+                    BigInteger deficit = entry.getValue().subtract(PlanningInventory.exactAmount(stock, entry.getKey()));
                     if (!external.contains(entry.getKey()) && deficit.signum() > 0) missing.put(entry.getKey(), deficit);
                 } else {
                     regionIndex = recipeIndex = 0;

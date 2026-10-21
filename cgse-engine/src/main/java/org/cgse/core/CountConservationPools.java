@@ -63,7 +63,7 @@ final class CountConservationPools {
                     for (K key : pool) {
                         tick.run();
                         deficit = deficit.add(BigInteger.valueOf(recipe.inputs().getOrDefault(key, 0L)))
-                                .subtract(BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+                                .subtract(PlanningInventory.exactAmount(model.stock, key));
                     }
                     if (deficit.signum() > 0) { explained = true; break; }
                 }
@@ -72,7 +72,7 @@ final class CountConservationPools {
                 for (int i = 0; i < keys.size(); i++) {
                     tick.run();
                     K key = keys.get(i);
-                    var a = BigInteger.valueOf(model.stock.getOrDefault(key, 0L))
+                    var a = PlanningInventory.exactAmount(model.stock, key)
                             .subtract(BigInteger.valueOf(recipe.inputs().getOrDefault(key, 0L)));
                     if (a.signum() != 0) terms.put(i, a);
                 }

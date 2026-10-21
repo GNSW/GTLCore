@@ -11,6 +11,7 @@ import appeng.crafting.CraftingPlan;
 import org.cgse.core.CraftingCostModel;
 import org.cgse.core.ExactAmounts;
 import org.cgse.core.GraphPlan;
+import org.cgse.core.PlanningInventory;
 import org.cgse.core.RequestPlanningWork;
 
 import java.math.BigInteger;
@@ -50,6 +51,23 @@ public final class AeGraphPlan implements ICraftingPlan {
     public AeGraphPlan(GraphPlan<AEKey> graph, Map<String, IPatternDetails> bindings, Set<AEKey> emitable,
                        Map<AEKey, Long> stock, boolean fallback,
                        RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
+        this(graph, bindings, emitable, stock, fallback, reuseCandidate, stock.entrySet().stream()
+                .filter(entry -> entry.getValue() == Long.MAX_VALUE &&
+                        PlanningInventory.exactAmount(stock, entry.getKey()).equals(ExactAmounts.LONG_MAX))
+                .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    public AeGraphPlan(GraphPlan<AEKey> graph, Map<String, IPatternDetails> bindings, Set<AEKey> emitable,
+                       Map<AEKey, Long> stock, boolean fallback,
+                       RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate, Set<AEKey> impreciseStock) {
+        // Unknown saturated storages supply a lower bound only. Exact readers,
+        // including a physical inventory of exactly MAX, can establish a deficit.
+        for (var entry : graph.missingExact().entrySet()) {
+            AEKey key = entry.getKey();
+            if (impreciseStock.contains(key) && !emitable.contains(key)) {
+                throw new GraphPlanningFailure(GraphPlan.Result.INCOMPLETE_MODEL, GraphPlanningFailure.INVENTORY_PRECISION_LIMIT);
+            }
+        }
         this.graph = graph;
         this.fallback = fallback;
         this.reuseCandidate = reuseCandidate;
@@ -66,7 +84,7 @@ public final class AeGraphPlan implements ICraftingPlan {
         selectedPatterns = ExactAmounts.longView(selected);
         Map<AEKey, BigInteger> emissions = new LinkedHashMap<>();
         graph.initialExact().forEach((key, amount) -> {
-            BigInteger deficit = amount.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+            BigInteger deficit = amount.subtract(PlanningInventory.exactAmount(stock, key));
             if (emitable.contains(key) && deficit.signum() > 0) emissions.put(key, deficit);
         });
         this.emitted = Map.copyOf(emissions);

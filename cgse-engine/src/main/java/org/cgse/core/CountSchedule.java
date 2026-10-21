@@ -95,9 +95,9 @@ final class CountSchedule<K> implements AutoCloseable {
                         // retry and exact-search state copy unrelated stock.
                         // Include returned/coproduct keys even if they are not
                         // constrained by the backward count-model closure.
-                        long available = model.stock.getOrDefault(key, 0L);
-                        if (available != 0 && !initialHeld.containsKey(key))
-                            initialHeld.put(key, BigInteger.valueOf(available));
+                        BigInteger available = PlanningInventory.exactAmount(model.stock, key);
+                        if (available.signum() != 0 && !initialHeld.containsKey(key))
+                            initialHeld.put(key, available);
                         if (amount.signum() < 0 && !model.external.contains(key))
                             consumers.computeIfAbsent(key, unused -> new ArrayList<>()).add(index);
                     });

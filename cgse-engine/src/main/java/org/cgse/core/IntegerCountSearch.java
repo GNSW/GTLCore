@@ -53,6 +53,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private IntegerCountBranch<K> shellProbe;
     private long shellWork, shellAllowance;
     private boolean executionBlocked, reachabilityAttempted;
+    private boolean executionScoutRequested, executionScoutAssessed;
     private CountReachability<K> reachability;
     private IntegerCountBranch<K> reachabilityProbe;
     private long reachabilityWork, reachabilityAllowance, reachabilityMaximum;
@@ -83,7 +84,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             this.compiler = compiler;
             this.target = target;
             this.amount = amount;
-            this.stock = Map.copyOf(stock);
+            this.stock = PlanningInventory.snapshot(stock);
             this.seeds = Map.copyOf(seeds);
             this.external = Set.copyOf(external);
             this.preserve = preserve;
@@ -143,7 +144,7 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         if (model == null || complete || stopped.get() || running != null || !dispatched.isEmpty() ||
                 this.proofs != null || proofs == null || !compileRecovery || this.budget != budget || this.started != started ||
                 !this.target.equals(target) || this.amount != amount || this.preserve != preserve || this.force != force ||
-                !this.stock.equals(stock) || !this.seeds.equals(seeds) || !this.external.equals(external)) return Handoff.DECLINED;
+                !PlanningInventory.sameAmounts(this.stock, stock) || !this.seeds.equals(seeds) || !this.external.equals(external)) return Handoff.DECLINED;
         // Equal dimensions or matching ids do not establish complete supply.
         // Check the destination's whole backward closure, including seed goals
         // and exclusions. Object identity also covers bindings and slot semantics.
@@ -265,6 +266,20 @@ final class IntegerCountSearch<K> implements AutoCloseable {
             prepareShell();
         }
         if (shell != null) return stepShell();
+        if (best == null && executionScoutRequested && !executionScoutAssessed && !reachabilityAttempted &&
+                work >= 32768 && allowance - work >= 16384 && budget.remainingWork() >= 32768) {
+            executionScoutAssessed = true;
+            long before = budget.threadWork();
+            boolean smallPopulation;
+            try { smallPopulation = compileRecovery && CountReachability.smallClosedPopulation(model); }
+            finally { work += budget.threadWork() - before; }
+            if (smallPopulation) {
+                prepareReachability();
+                // Optional admission failure must not suppress the older
+                // recovery attempt after an actual execution conflict.
+                if (reachability == null) reachabilityAttempted = false;
+            }
+        }
         if (best == null && !reachabilityAttempted && work >= 32768 &&
                 (executionBlocked || unresolved && pending.isEmpty() && deferred.isEmpty())) prepareReachability();
         if (reachability != null) return stepReachability();
@@ -380,6 +395,9 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     void resume() {
         resume(2_000_000, false);
     }
+
+    /** The coordinator may test execution shape when sharing a stock-view turn. */
+    void considerExecutionScout() { executionScoutRequested = true; }
 
     /** A competing frontier funds this turn; local progress cannot enlarge its grant. */
     void resumeBounded(long maximumWork) {

@@ -90,7 +90,7 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
     private boolean finish(GraphPlan<K> plan) {
         result = attempts == 1 ? plan : new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), plan.steps(),
                 plan.recipes(), plan.initialExact(), plan.seeds(), plan.missingExact(), plan.result(), budget.nodes(), System.nanoTime() - started)
-                .withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives());
+                .withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives()).withMissingSourcesFrom(plan);
         return true;
     }
 

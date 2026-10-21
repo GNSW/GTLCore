@@ -128,7 +128,8 @@ public class CraftingPlanSummaryMixin implements GraphPlanSummaryView {
         ((GraphPlanSummaryView) summary).gtlcore$graphPlanId(graph.id());
         ((GraphPlanSummaryView) summary).gtlcore$seedOptimality(graph.graph().seedOptimality());
         ((GraphPlanSummaryView) summary).gtlcore$fallback(graph.fallback());
-        ((GraphPlanSummaryView) summary).gtlcore$conditionalPreview(graph.graph().conditionalPreview());
+        ((GraphPlanSummaryView) summary).gtlcore$conditionalPreview(graph.graph().conditionalPreview() ||
+                graph.graph().missingExact().keySet().stream().anyMatch(key -> graph.graph().missingBoundary(key).source() != GraphPlan.MissingSource.TERMINAL_UNDER_CURRENT_COVERAGE));
         return summary;
     }
 

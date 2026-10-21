@@ -20,7 +20,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
     private final Map<PlanStep, SequenceSummary<K>> known;
     private Map<PlanStep, SequenceSummary<K>> shared;
     private long sharedBytes;
-    private final Deque<Frame> stack = new ArrayDeque<>();
+    private Deque<Frame> stack = new ArrayDeque<>();
     private SequenceSummary<K> result;
 
     public SummaryComputation(PlanStep step, Map<String, GraphRecipe<K>> recipes, PlanningBudget budget) {
@@ -53,10 +53,24 @@ public final class SummaryComputation<K> implements AutoCloseable {
             complete(frame.cached);
             return result != null;
         }
+        // Identity wrappers preserve the complete prefix/delta/peak fold. Peel
+        // one per charged continuation instead of copying all material vectors
+        // on the way back up. The original node remains the memoization key.
+        // Keep the existing ordinary-batch sequence fold: it is already cheaper
+        // than a standalone batch frame and does not copy a child summary.
+        PlanStep identity = frame.step instanceof PlanStep.Repeat r && r.times() == 1 ? r.body() :
+                frame.step instanceof PlanStep.Sequence s && s.children().size() == 1 ? s.children().get(0) : null;
+        if (identity != null && (frame.step instanceof PlanStep.Repeat || !ordinaryBatch(identity))) {
+            frame.step = identity;
+            SequenceSummary<K> previous = shared == null ? null : shared.get(identity);
+            frame.cached = previous == null ? known.get(identity) : previous;
+            return false;
+        }
         if (frame.ordinary != null) {
-            for (int operation = 0; operation < 32; operation++) {
-                budget.check();
+            int operations = 0;
+            while (operations < 32) {
                 if (frame.ordinaryEntries.hasNext()) {
+                    budget.check(); operations++;
                     var entry = frame.ordinaryEntries.next();
                     K key = entry.getKey();
                     if (foldOrdinaryLong(frame, key, entry.getValue())) continue;
@@ -81,6 +95,14 @@ public final class SummaryComputation<K> implements AutoCloseable {
                     continue;
                 }
                 frame.ordinary = null;
+                // Fold adjacent ordinary batches in one bounded continuation.
+                // Their ports still pay for every arithmetic operation, but
+                // iterator hand-offs need no separate step/frame/fold maps.
+                var sequence = (PlanStep.Sequence) frame.step;
+                if (frame.child < sequence.children().size() && startOrdinary(frame, sequence.children().get(frame.child))) {
+                    frame.child++;
+                    continue;
+                }
                 break;
             }
             if (frame.ordinary != null) return false;
@@ -126,20 +148,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
         } else if (frame.step instanceof PlanStep.Sequence sequence) {
             if (frame.child < sequence.children().size()) {
                 PlanStep child = sequence.children().get(frame.child++);
-                if (child instanceof PlanStep.Batch batch && batch.runs() > 0) {
-                    var recipe = recipes.get(batch.recipe());
-                    if (recipe == null) throw new IllegalArgumentException("Unknown recipe " + batch.recipe());
-                    if (Collections.disjoint(recipe.inputs().keySet(), recipe.outputs().keySet())) {
-                        // For an ordinary batch, exact prefix need and peak have
-                        // a closed form. Fold directly into the parent; allocating
-                        // and copying three tiny maps per recipe is unnecessary.
-                        frame.ordinary = recipe;
-                        frame.ordinaryRuns = BigInteger.valueOf(batch.runs());
-                        frame.ordinaryInputs = true;
-                        frame.ordinaryEntries = recipe.inputs().entrySet().iterator();
-                        return false;
-                    }
-                }
+                if (startOrdinary(frame, child)) return false;
                 stack.push(new Frame(child));
                 return false;
             }
@@ -179,20 +188,40 @@ public final class SummaryComputation<K> implements AutoCloseable {
         return result != null;
     }
 
+    private boolean startOrdinary(Frame frame, PlanStep child) {
+        if (!(child instanceof PlanStep.Batch batch) || batch.runs() == 0) return false;
+        var recipe = recipes.get(batch.recipe());
+        if (recipe == null) throw new IllegalArgumentException("Unknown recipe " + batch.recipe());
+        if (recipe.hasInputReturns()) return false;
+        // For an ordinary batch, exact prefix need and peak have a closed
+        // form. No input may also be returned by this same batch.
+        frame.ordinary = recipe;
+        frame.ordinaryRuns = BigInteger.valueOf(batch.runs());
+        frame.ordinaryInputs = true;
+        frame.ordinaryEntries = recipe.inputs().entrySet().iterator();
+        return true;
+    }
+
+    private boolean ordinaryBatch(PlanStep step) {
+        if (!(step instanceof PlanStep.Batch b) || b.runs() == 0) return false;
+        var recipe = recipes.get(b.recipe());
+        return recipe != null && !recipe.hasInputReturns();
+    }
+
     private void complete(SequenceSummary<K> complete) {
         Frame finished = stack.pop();
         if (stack.isEmpty()) {
             result = complete;
-            if (shared != null) shared.clear();
+            shared = null;
             budget.release(sharedBytes);
             sharedBytes = 0;
         } else {
-            if (!(finished.step instanceof PlanStep.Batch) && (shared == null || !shared.containsKey(finished.step))) {
+            if (!(finished.original instanceof PlanStep.Batch) && (shared == null || !shared.containsKey(finished.original))) {
                 long bytes = 128L + 128L * (complete.required().size() + complete.delta().size() + complete.peak().size());
                 budget.reserve(bytes);
                 sharedBytes += bytes;
                 if (shared == null) shared = new IdentityHashMap<>();
-                shared.put(finished.step, complete);
+                shared.put(finished.original, complete);
             }
             Frame parent = stack.peek();
             parent.pending = complete;
@@ -245,16 +274,17 @@ public final class SummaryComputation<K> implements AutoCloseable {
     /** Release a suspended fold when its owning strategy is abandoned. */
     @Override
     public void close() {
-        if (shared != null) shared.clear();
-        stack.clear();
+        shared = null;
+        if (!stack.isEmpty()) stack = new ArrayDeque<>();
         budget.release(sharedBytes);
         sharedBytes = 0;
     }
 
     private final class Frame {
 
-        private final PlanStep step;
-        private final SequenceSummary<K> cached;
+        private final PlanStep original;
+        private PlanStep step;
+        private SequenceSummary<K> cached;
         private final Map<K, BigInteger> need, change, peak;
         private Iterator<Map.Entry<K, Long>> entries;
         private Iterator<K> keys;
@@ -268,7 +298,7 @@ public final class SummaryComputation<K> implements AutoCloseable {
         private long repeat = 1;
 
         private Frame(PlanStep step) {
-            this.step = step;
+            this.original = this.step = step;
             SequenceSummary<K> previous = shared == null ? null : shared.get(step);
             cached = previous == null ? known.get(step) : previous;
             // A flat sequence never shares a composite child. A cached frame

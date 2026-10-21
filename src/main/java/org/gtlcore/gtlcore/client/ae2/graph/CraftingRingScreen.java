@@ -496,7 +496,10 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
                     lines.addAll(GraphSeedStatus.tooltip(seedProof));
                 }
                 if (model.initialInputs().contains(key)) lines.add(text("initial_input_help"));
-                if (resource.missing().signum() > 0) lines.add(text("missing", resource.missing().toString()));
+                if (resource.missing().signum() > 0) {
+                    lines.add(text("missing", resource.missing().toString()));
+                    lines.addAll(org.gtlcore.gtlcore.integration.ae2.graph.GraphMissingStatus.tooltip(resource.missingSourceMask()));
+                }
             }
             if (model.crafted().containsKey(key)) lines.add(text("crafted", model.crafted().get(key).toString()));
             if (model.used().containsKey(key)) lines.add(text("used", model.used().get(key).toString()));

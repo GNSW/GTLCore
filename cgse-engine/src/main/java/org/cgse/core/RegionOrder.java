@@ -41,7 +41,7 @@ final class RegionOrder<K> {
                 budget.check();
                 consumers.computeIfAbsent(key, ignored -> new ArrayList<>()).add(index);
                 sleeping.merge(key, 1, Integer::sum);
-                available.putIfAbsent(key, BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                available.putIfAbsent(key, PlanningInventory.exactAmount(stock, key));
                 reserve(128);
             }
             if (enabled(recipe)) enqueue(index);
@@ -83,7 +83,7 @@ final class RegionOrder<K> {
         for (var input : recipe.inputs().entrySet()) {
             budget.check();
             if (internal.contains(input.getKey()) && !external.contains(input.getKey()) &&
-                    available.getOrDefault(input.getKey(), BigInteger.valueOf(stock.getOrDefault(input.getKey(), 0L)))
+                    available.getOrDefault(input.getKey(), PlanningInventory.exactAmount(stock, input.getKey()))
                             .compareTo(BigInteger.valueOf(input.getValue())) < 0)
                 return false;
         }

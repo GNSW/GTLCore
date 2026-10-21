@@ -76,7 +76,7 @@ final class CountRecurrence<K> implements AutoCloseable {
     private boolean funded(SequenceSummary<K> candidate) {
         for (var entry : candidate.required().entrySet()) {
             budget.check();
-            if (!model.external.contains(entry.getKey()) && entry.getValue().compareTo(BigInteger.valueOf(model.stock.getOrDefault(entry.getKey(), 0L))) > 0) return false;
+            if (!model.external.contains(entry.getKey()) && entry.getValue().compareTo(PlanningInventory.exactAmount(model.stock, entry.getKey())) > 0) return false;
         }
         return true;
     }
@@ -89,7 +89,7 @@ final class CountRecurrence<K> implements AutoCloseable {
         keys.addAll(middle.keys());
         for (K key : keys) if (!model.external.contains(key)) {
             budget.check();
-            BigInteger stock = BigInteger.valueOf(model.stock.getOrDefault(key, 0L));
+            BigInteger stock = PlanningInventory.exactAmount(model.stock, key);
             BigInteger delta = summary.delta(key), loss = delta.negate().max(BigInteger.ZERO);
             // Prefix, insertion, suffix requirements are affine in a whenever
             // both copies of S are nonempty. Endpoints are tried separately.

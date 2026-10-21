@@ -84,6 +84,11 @@ public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVe
         return ((GraphProviderVersion) this.craftingProviders).gtlcore$registeredPatterns();
     }
 
+    @Override
+    public org.gtlcore.gtlcore.integration.ae2.graph.ByproductPatternIndex gtlcore$patternSources() {
+        return ((GraphProviderVersion) this.craftingProviders).gtlcore$patternSources();
+    }
+
     @Inject(method = "beginCraftingCalculation", at = @At("HEAD"), cancellable = true, remap = false)
     private void gtlcore$beginGraphCalculation(Level level,
                                                ICraftingSimulationRequester requester, AEKey what, long amount,

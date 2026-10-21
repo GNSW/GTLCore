@@ -7,31 +7,43 @@ import org.cgse.core.PlanningBudget;
 import java.util.*;
 
 /** Declared output identities support candidate discovery, never synthetic stock. */
-final class ByproductPatternIndex {
+public final class ByproductPatternIndex {
 
     private final Map<AEKey, List<IPatternDetails>> outputs;
     private final Map<Object, List<IPatternDetails>> fuzzyPrimary, fuzzyAll;
     private final Map<AEKey, Boolean> candidates;
+    private final Runnable validate;
 
     private ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> outputs,
                                   Map<Object, List<IPatternDetails>> fuzzyPrimary,
                                   Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates) {
+        this(outputs, fuzzyPrimary, fuzzyAll, candidates, () -> {});
+    }
+
+    ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> outputs,
+                          Map<Object, List<IPatternDetails>> fuzzyPrimary,
+                          Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates,
+                          Runnable validate) {
         this.outputs = Collections.unmodifiableMap(outputs);
         this.fuzzyPrimary = Collections.unmodifiableMap(fuzzyPrimary);
         this.fuzzyAll = Collections.unmodifiableMap(fuzzyAll);
         this.candidates = Collections.unmodifiableMap(candidates);
+        this.validate = validate;
     }
 
     Iterator<AEKey> candidates(boolean includeSecondary) {
+        validate.run();
         return candidates.entrySet().stream().filter(entry -> includeSecondary || entry.getValue())
                 .map(Map.Entry::getKey).iterator();
     }
 
     List<IPatternDetails> fuzzySources(AEKey key, Collection<IPatternDetails> primary, boolean includeSecondary) {
+        validate.run();
         return merge(primary, (includeSecondary ? fuzzyAll : fuzzyPrimary).getOrDefault(key.getPrimaryKey(), List.of()));
     }
 
     List<IPatternDetails> sources(AEKey key, Collection<IPatternDetails> primary) {
+        validate.run();
         return merge(primary, outputs.getOrDefault(key, List.of()));
     }
 
@@ -39,14 +51,16 @@ final class ByproductPatternIndex {
         if (secondary.isEmpty()) return List.copyOf(primary);
         // Some integrations already register secondary outputs. Count each
         // effective pattern once, retaining AE's order for primary sources.
-        Set<IPatternDetails> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        // AE's registry keys patterns by equality. A provider refresh can
+        // replace the primary instance while retaining the same indexed recipe.
+        Set<IPatternDetails> seen = new HashSet<>();
         List<IPatternDetails> result = new ArrayList<>();
         for (var pattern : primary) if (seen.add(pattern)) result.add(pattern);
         for (var pattern : secondary) if (seen.add(pattern)) result.add(pattern);
         return result;
     }
 
-    static final class Build {
+    static final class Build implements AutoCloseable {
 
         private final Iterator<IPatternDetails> patterns;
         private final Map<AEKey, List<IPatternDetails>> outputs = new LinkedHashMap<>();
@@ -57,6 +71,21 @@ final class ByproductPatternIndex {
         private Iterator<Map.Entry<Object, List<IPatternDetails>>> freezingFamilies;
         private int freezePhase;
         private ByproductPatternIndex result;
+        private PlanningBudget owner;
+        private long reserved;
+
+        private void reserve(PlanningBudget budget, long bytes) {
+            if (owner != null && owner != budget) throw new IllegalStateException("Index budget changed");
+            owner = budget;
+            budget.reserve(bytes);
+            reserved += bytes;
+        }
+
+        @Override
+        public void close() {
+            if (reserved != 0) owner.release(reserved);
+            reserved = 0;
+        }
 
         Build(Iterable<IPatternDetails> patterns) {
             this.patterns = patterns.iterator();
@@ -69,7 +98,7 @@ final class ByproductPatternIndex {
                 var pattern = patterns.next();
                 if (!seen.add(pattern)) return false;
                 if (seen.size() > 100_000) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "byproduct_index_patterns");
-                budget.reserve(64);
+                reserve(budget, 64);
                 var values = pattern.getOutputs();
                 if (values.length > 256) throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "byproduct_index_outputs");
                 Set<AEKey> keys = new HashSet<>();
@@ -78,7 +107,7 @@ final class ByproductPatternIndex {
                 for (var output : values) {
                     budget.compilationCheck();
                     if (output.amount() <= 0 || !keys.add(output.what())) continue;
-                    budget.reserve(96);
+                    reserve(budget, 96);
                     boolean isPrimary = output.what().equals(primary);
                     candidates.merge(output.what(), isPrimary, (left, right) -> left || right);
                     Object family = output.what().getPrimaryKey();

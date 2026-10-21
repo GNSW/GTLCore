@@ -43,7 +43,7 @@ public sealed interface PlanStep permits PlanStep.Batch, PlanStep.Sequence, Plan
     record Sequence(List<PlanStep> children) implements PlanStep {
 
         public Sequence {
-            children = List.copyOf(children);
+            children = FrozenPlanSteps.freeze(children);
         }
     }
 

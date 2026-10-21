@@ -93,7 +93,7 @@ final class PlanEGraph implements AutoCloseable {
         if (program == plan.steps()) return plan;
         return new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), program, plan.recipes(),
                 plan.initialExact(), plan.seeds(), plan.missingExact(), plan.result(), plan.searchNodes(), plan.planningNanos())
-                .withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives());
+                .withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives()).withMissingSourcesFrom(plan);
     }
 
     private int importProgram(PlanStep root) {

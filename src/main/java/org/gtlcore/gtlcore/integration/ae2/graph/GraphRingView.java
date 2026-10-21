@@ -29,7 +29,12 @@ public final class GraphRingView {
     }
 
     public record Row(Kind kind, String id, GenericStack icon, BigInteger count, long seed, BigInteger missing,
-                      List<GenericStack> inputs, List<GenericStack> outputs, int parent) {
+                      List<GenericStack> inputs, List<GenericStack> outputs, int parent, int missingSourceMask) {
+
+        public Row(Kind kind, String id, GenericStack icon, BigInteger count, long seed, BigInteger missing,
+                   List<GenericStack> inputs, List<GenericStack> outputs, int parent) {
+            this(kind, id, icon, count, seed, missing, inputs, outputs, parent, 0);
+        }
 
         public Row {
             if (count.signum() < 0 || missing.signum() < 0 || seed < 0) throw new IllegalArgumentException("Negative display amount");
@@ -100,7 +105,9 @@ public final class GraphRingView {
                 default -> new GenericStack(plan.target(), plan.amount());
             };
             var row = new Row(Kind.valueOf(portable.kind().name()), portable.id(), icon, portable.count(),
-                    portable.seed().longValueExact(), portable.missing(), inputs, outputs, portable.parent());
+                    portable.seed().longValueExact(), portable.missing(), inputs, outputs, portable.parent(),
+                    portable.missing().signum() > 0 && portable.resource() != null ?
+                            1 << plan.missingBoundary(portable.resource()).source().ordinal() : 0);
             all.add(row);
             long weight = 128L + 3L * row.id().length() + stackSize(row.icon()) + row.count().bitLength() / 8 + row.missing().bitLength() / 8;
             for (var stack : row.inputs()) weight += stackSize(stack);
@@ -189,6 +196,7 @@ public final class GraphRingView {
             buffer.writeVarLong(row.seed());
             buffer.writeByteArray(row.missing().toByteArray());
             buffer.writeInt(row.parent());
+            buffer.writeVarInt(row.missingSourceMask());
             writeStacks(buffer, row.inputs(), keys);
             writeStacks(buffer, row.outputs(), keys);
         }
@@ -217,10 +225,11 @@ public final class GraphRingView {
             long seed = CheckedAmounts.nonNegative(buffer.readVarLong());
             BigInteger missing = readAmount(buffer);
             int parent = buffer.readInt();
+            int missingSourceMask = buffer.readVarInt();
             if (parent < -1 || parent >= offset + i) throw new IllegalArgumentException("Invalid graph display parent");
             if (kind == Kind.REFERENCE && (Integer.parseInt(recipe) < graphRows || Integer.parseInt(recipe) >= offset + i))
                 throw new IllegalArgumentException("Invalid graph program reference");
-            rows.add(new Row(kind, recipe, icon, times, seed, missing, readStacks(buffer, keys), readStacks(buffer, keys), parent));
+            rows.add(new Row(kind, recipe, icon, times, seed, missing, readStacks(buffer, keys), readStacks(buffer, keys), parent, missingSourceMask));
         }
         return new Page(id, target, preserve, offset, total, graphRows, rows);
     }

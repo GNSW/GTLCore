@@ -191,7 +191,7 @@ public final class RegionSelection<K> implements AutoCloseable {
                         scaled = true;
                         workingCopies = (int) Math.min(catalystPolicy.parallelism(), amount);
                         for (K key : produced) if (summary.required(key).signum() > 0)
-                            workingCopies = (int) Math.min(workingCopies, BigInteger.valueOf(catalystStock.getOrDefault(key, 0L))
+                            workingCopies = (int) Math.min(workingCopies, PlanningInventory.exactAmount(catalystStock, key)
                                     .divide(summary.required(key)).add(BigInteger.valueOf(catalystPolicy.maxExtraCopies()))
                                     .min(BigInteger.valueOf(Integer.MAX_VALUE)).longValue());
                         workingCopies = Math.max(1, workingCopies);
@@ -211,7 +211,7 @@ public final class RegionSelection<K> implements AutoCloseable {
             case 4 -> {
                 if (keys.hasNext()) {
                     K key = keys.next();
-                    BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(PlanningInventory.exactAmount(stock, key));
                     needsWork |= gap.signum() > 0;
                     BigInteger gain = unitSummary.delta(key);
                     if (gain.signum() > 0) count = count.max(CheckedAmounts.ceilDiv(gap, gain));
@@ -261,7 +261,7 @@ public final class RegionSelection<K> implements AutoCloseable {
                         reserve.put(key, seed);
                         if (summary.delta(key).signum() > 0) {
                             BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(seed))
-                                    .subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                                    .subtract(PlanningInventory.exactAmount(stock, key));
                             count = count.max(CheckedAmounts.ceilDiv(gap, unitSummary.delta(key)));
                         }
                     }
@@ -293,7 +293,7 @@ public final class RegionSelection<K> implements AutoCloseable {
                     K key = keys.next();
                     BigInteger required = runs.signum() == 0 ? BigInteger.ZERO : summary.required(key)
                             .add(summary.delta(key).negate().max(BigInteger.ZERO).multiply(runs.subtract(BigInteger.ONE)));
-                    BigInteger deficit = required.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    BigInteger deficit = required.subtract(PlanningInventory.exactAmount(stock, key));
                     if (!external.contains(key) && deficit.signum() > 0) {
                         missing++;
                     }
@@ -347,7 +347,7 @@ public final class RegionSelection<K> implements AutoCloseable {
                 index++;
                 if (choice != null && choice.runs().signum() > 0 &&
                         (!forceTarget || !produced.contains(target) || choice.summary().delta(target).signum() > 0) &&
-                        produced.stream().allMatch(key -> demand.getOrDefault(key, BigInteger.ZERO).compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) <= 0 ||
+                        produced.stream().allMatch(key -> demand.getOrDefault(key, BigInteger.ZERO).compareTo(PlanningInventory.exactAmount(stock, key)) <= 0 ||
                                 choice.summary().delta(key).signum() > 0 || choice.summary().required(key).signum() > 0)) {
                     // A conversion cycle need not run every recipe. A single
                     // direction can be a valid funded preview even when a full
@@ -438,7 +438,7 @@ public final class RegionSelection<K> implements AutoCloseable {
             BigInteger prefix = runs.signum() == 0 ? BigInteger.ZERO : choice.summary().required(key)
                     .add(delta.negate().max(BigInteger.ZERO).multiply(preceding));
             BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
-            if (prefix.max(goal.subtract(delta.multiply(runs))).compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) > 0) return false;
+            if (prefix.max(goal.subtract(delta.multiply(runs))).compareTo(PlanningInventory.exactAmount(stock, key)) > 0) return false;
         }
         return true;
     }
@@ -470,7 +470,7 @@ public final class RegionSelection<K> implements AutoCloseable {
                     .add(delta.negate().max(BigInteger.ZERO).multiply(preceding));
             BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
             BigInteger deficit = prefix.max(goal.subtract(delta.multiply(runs)))
-                    .subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L))).max(BigInteger.ZERO);
+                    .subtract(PlanningInventory.exactAmount(stock, key)).max(BigInteger.ZERO);
             largerDeficit |= deficit.compareTo(preference.missing(key)) > 0;
             if (deficit.signum() > 0 && stock.getOrDefault(key, 0L) == 0) absent++;
         }
@@ -511,7 +511,7 @@ public final class RegionSelection<K> implements AutoCloseable {
         boolean deficient = false;
         for (K key : produced) {
             budget.operation(PlanningBudget.Operation.SCAN, 1);
-            if (demand.getOrDefault(key, BigInteger.ZERO).compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) <= 0) continue;
+            if (demand.getOrDefault(key, BigInteger.ZERO).compareTo(PlanningInventory.exactAmount(stock, key)) <= 0) continue;
             deficient = true;
             if (ratioGain(key).signum() > 0) return true;
         }

@@ -83,6 +83,7 @@ public final class PlanningBudget {
     // consume search/compilation slices or abort an order when this cap is full.
     static final long CACHE_PREPARATION_WORK = 8192;
     private long cachePreparationTicks;
+    private final AtomicLong refillDiagnosticWork = new AtomicLong();
     // Keep one ThreadLocal key, but never carry a previous order's fractional
     // ticks into this one's slice boundaries. The request owns the worker clocks;
     // the last-clock fast path must not retain a completed request on idle pools.
@@ -238,6 +239,23 @@ public final class PlanningBudget {
 
     /** Independent retention work; excluded from search, compilation and continuation quotas. */
     public synchronized long cachePreparationWork() { return units(cachePreparationTicks); }
+
+    /** Optional refill explanations have their own request-wide allowance. */
+    boolean tryRefillDiagnostic() {
+        checkpoint();
+        long previous;
+        do {
+            previous = refillDiagnosticWork.get();
+            if (previous >= 2048) return false;
+        } while (!refillDiagnosticWork.compareAndSet(previous, previous + 1));
+        // Yield to queued requests without spending solver, compiler or cache
+        // preparation quotas. Metadata cannot displace a later solving view.
+        if (countThreadWork) workerWork().total++;
+        return true;
+    }
+
+    /** Completed diagnostic visits, separate from search, compilation and cache preparation. */
+    public long refillDiagnosticWork() { return refillDiagnosticWork.get(); }
 
     /** Whole work units still admissible; fractional retention and all workers share this balance. */
     synchronized long remainingCachePreparationWork() {

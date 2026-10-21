@@ -177,6 +177,7 @@
     "ae2.pattern.EncodedPatternItemMixin",
     "ae2.service.CraftingServiceMixin",
     "ae2.service.NetworkCraftingProvidersMixin",
+    "ae2.service.NetworkCraftingProviderStateMixin",
     "ae2.service.GraphStorageServiceMixin",
     "ae2.service.StorageServiceMixin",
     "ae2.stacks.AEItemKeyMixin",

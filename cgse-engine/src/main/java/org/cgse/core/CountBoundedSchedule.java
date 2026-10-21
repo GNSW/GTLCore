@@ -68,8 +68,8 @@ final class CountBoundedSchedule<K> implements AutoCloseable {
             if (assignment == null) return finish(search.infeasible() ? CountSchedule.Result.DEAD : CountSchedule.Result.UNKNOWN);
             Map<K, BigInteger> held = new LinkedHashMap<>();
             for (K key : resources) {
-                long amount = model.stock.getOrDefault(key, 0L);
-                if (amount != 0) held.put(key, BigInteger.valueOf(amount));
+                BigInteger amount = PlanningInventory.exactAmount(model.stock, key);
+                if (amount.signum() != 0) held.put(key, amount);
             }
             var used = new BigInteger[counts.length];
             Arrays.fill(used, BigInteger.ZERO);
@@ -128,7 +128,7 @@ final class CountBoundedSchedule<K> implements AutoCloseable {
                 BigInteger coefficient = t == time ? input : input.subtract(BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L)));
                 if (coefficient.signum() != 0) prefix.put(t * active.size() + r, coefficient);
             }
-            add(prefix, BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+            add(prefix, PlanningInventory.exactAmount(model.stock, key));
             return result != null;
         }
         BigInteger[] low = new BigInteger[horizon * active.size()], high = new BigInteger[low.length];

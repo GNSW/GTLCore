@@ -495,7 +495,17 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 learnedChoices.add(new CountConflict(current));
                 proofContradiction = current.isEmpty();
                 state = State.DEAD;
-            } else afterViewSearch(continuation);
+            } else {
+                long completion = continuation == 2 ? viewSearch.allocationCompletionQuantum() : 0;
+                if (completion > 0) {
+                    // Compilation exposed an owned grouped allocation search.
+                    // Honor its existing completion ceiling before unrelated
+                    // whole-model scouts spend this optional graph view's budget.
+                    // Neither this handoff nor progress renews that ceiling.
+                    viewSearch.resume(completion);
+                    viewStage = 2;
+                } else afterViewSearch(continuation);
+            }
             return;
         }
         if (congruence != null) {

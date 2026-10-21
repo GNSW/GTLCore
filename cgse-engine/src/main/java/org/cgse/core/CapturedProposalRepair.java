@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Add executions to an old auxiliary assignment under the current rows.
+/** Fund auxiliary count lower bounds under the current captured rows.
  * Restricted failure is inconclusive; only a newly verified program escapes. */
 final class CapturedProposalRepair<K> implements AutoCloseable {
     private final List<CapturedCatalog.Entry<K>> entries;
@@ -35,9 +35,18 @@ final class CapturedProposalRepair<K> implements AutoCloseable {
     static <K> CapturedProposalRepair<K> create(List<CapturedCatalog.Entry<K>> entries, Map<String, BigInteger> previous,
             K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> seeds,
             boolean preserve, boolean force, PlanningBudget budget) {
+        return create(entries, previous, target, amount, stock, external, seeds, preserve, force, budget, Long.MAX_VALUE);
+    }
+
+    /** Additional activation lower bounds are also positive-only hints.
+     * The caller's end-to-end trial allowance includes this count search. */
+    static <K> CapturedProposalRepair<K> create(List<CapturedCatalog.Entry<K>> entries, Map<String, BigInteger> previous,
+            K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> seeds,
+            boolean preserve, boolean force, PlanningBudget budget, long maximumWork) {
         if (previous == null || previous.isEmpty() || previous.size() > 128 || entries.size() > 128 || budget.remainingWork() < 16_384)
             return null;
-        var repair = new CapturedProposalRepair<>(entries, previous, target, amount, stock, external, seeds, preserve, force, budget);
+        if (maximumWork < 1024) return null;
+        var repair = new CapturedProposalRepair<>(entries, previous, target, amount, stock, external, seeds, preserve, force, budget, maximumWork);
         boolean retained = false;
         try {
             long bytes = 1024L + 192L * previous.size();
@@ -55,10 +64,10 @@ final class CapturedProposalRepair<K> implements AutoCloseable {
 
     private CapturedProposalRepair(List<CapturedCatalog.Entry<K>> entries, Map<String, BigInteger> previous,
             K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> seeds,
-            boolean preserve, boolean force, PlanningBudget budget) {
+            boolean preserve, boolean force, PlanningBudget budget, long maximumWork) {
         this.entries = entries; this.previous = previous; this.target = target; this.amount = amount;
         this.stock = stock; this.external = external; this.seeds = seeds; this.preserve = preserve; this.force = force; this.budget = budget;
-        started = budget.nodes(); allowance = Math.min(65_536, budget.remainingWork() / 16);
+        started = budget.nodes(); allowance = Math.min(maximumWork, Math.min(65_536, budget.remainingWork() / 16));
     }
 
     boolean step() {

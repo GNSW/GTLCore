@@ -84,7 +84,7 @@ final class CapturedInputAllocation<K> implements AutoCloseable {
             else {
                 for (var e : resources.entrySet()) {
                     budget.compilationCheck();
-                    rows.add(new ExactLinearProgram.Constraint(e.getValue(), BigInteger.valueOf(stock.getOrDefault(e.getKey(), 0L))));
+                    rows.add(new ExactLinearProgram.Constraint(e.getValue(), PlanningInventory.exactAmount(stock, e.getKey())));
                 }
                 built = true;
             }
@@ -110,12 +110,12 @@ final class CapturedInputAllocation<K> implements AutoCloseable {
             long copies = mix ? 1 : input.multiplier();
             BigInteger amount = BigInteger.valueOf(value.stack().amount()).multiply(BigInteger.valueOf(copies));
             if (amount.signum() <= 0 || amount.bitLength() > 63) return;
-            if (!external.contains(value.stack().what()) && amount.compareTo(BigInteger.valueOf(stock.getOrDefault(value.stack().what(), 0L))) > 0) return;
+            if (!external.contains(value.stack().what()) && amount.compareTo(PlanningInventory.exactAmount(stock, value.stack().what())) > 0) return;
             if (variables.size() >= 1024 || !reserve(768)) { done = true; return; }
             int id = variables.size();
             variables.add(new Variable(slot, at));
             BigInteger maximum = BigInteger.valueOf(mix ? input.multiplier() : 1).multiply(BigInteger.valueOf(firings));
-            if (!external.contains(value.stack().what())) maximum = maximum.min(BigInteger.valueOf(stock.getOrDefault(value.stack().what(), 0L)).divide(amount));
+            if (!external.contains(value.stack().what())) maximum = maximum.min(PlanningInventory.exactAmount(stock, value.stack().what()).divide(amount));
             upper.add(maximum);
             slotTerms.put(id, BigInteger.ONE);
             if (!external.contains(value.stack().what())) resources.computeIfAbsent(value.stack().what(), ignored -> new LinkedHashMap<>()).put(id, amount);

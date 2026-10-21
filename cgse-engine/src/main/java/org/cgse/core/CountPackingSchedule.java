@@ -6,6 +6,28 @@ package org.cgse.core;
 /** Request-local neighborhood coverage and capacity coupling. These observations
  * choose service order only; they neither remove values nor certify a conflict. */
 final class CountPackingSchedule {
+    record Expansion(boolean rotate, int leftPoints, int rightPoints) {}
+
+    /** One extra ordinary change, concentrated on the streamed half. The
+     * smaller combinatorial orientation is advice, never a restriction on
+     * another frontier or an original-model proof. */
+    static Expansion expansion(int size, long flexible, PlanningBudget budget) {
+        if (size < 2 || size > 40 || flexible == 0 || (flexible >>> size) != 0 || Long.bitCount(flexible) > 10) return null;
+        int split = size / 2;
+        long mask = (1L << size) - 1, left = (1L << split) - 1;
+        long rotated = ((flexible >>> split) | (flexible << (size - split))) & mask;
+        int lf = Long.bitCount(flexible & left), rf = Long.bitCount(flexible >>> split);
+        int rlf = Long.bitCount(rotated & left), rrf = Long.bitCount(rotated >>> split);
+        int a = CountPackingExchange.combinations(split, 1, lf, budget);
+        int b = CountPackingExchange.combinations(size - split, 4, rf, budget);
+        int c = CountPackingExchange.combinations(split, 1, rlf, budget);
+        int d = CountPackingExchange.combinations(size - split, 4, rrf, budget);
+        boolean first = a <= 65536 && b <= 65536, second = c <= 65536 && d <= 65536;
+        if (!first && !second) return null;
+        boolean rotate = second && (!first || (long) c + d < (long) a + b);
+        return rotate ? new Expansion(true, c, d) : new Expansion(false, a, b);
+    }
+
     record Analysis(boolean admitted, int fractional, int coupled, long covered, long roundings,
                     int leftPoints, int rightPoints, long resumeWork) {}
 

@@ -41,7 +41,7 @@ final class CountChainSchedule<K> implements AutoCloseable {
         BigInteger total = BigInteger.ZERO;
         for (K key : model.keys) {
             budget.check();
-            total = total.add(BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+            total = total.add(PlanningInventory.exactAmount(model.stock, key));
         }
         BigInteger[] counts = new BigInteger[model.recipes.size()];
         Arrays.fill(counts, total);
@@ -73,13 +73,13 @@ final class CountChainSchedule<K> implements AutoCloseable {
                 for (K key : r.inputs().keySet()) {
                     tick();
                     consumers.computeIfAbsent(key, unused -> new ArrayList<>()).add(i);
-                    held.put(key, BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+                    held.put(key, PlanningInventory.exactAmount(model.stock, key));
                 }
                 // Stock of a coproduct can fund a later chain even if it is
                 // absent from the backward model's constrained resource list.
                 for (K key : r.outputs().keySet()) {
                     tick();
-                    held.put(key, BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+                    held.put(key, PlanningInventory.exactAmount(model.stock, key));
                     produced.add(key);
                     if (r.outputs().size() == 1 && model.goal(key).signum() == 0 && !model.external.contains(key) &&
                             model.stock.getOrDefault(key, 0L) > 0) this.entries.add(key);
@@ -230,13 +230,13 @@ final class CountChainSchedule<K> implements AutoCloseable {
     Map<K, Long> entryStock() {
         if (!entriesOnly || witness == null) return null;
         if (!reserve(256L + 96L * (model.stock.size() + held.size()))) return null;
-        Map<K, Long> result = new LinkedHashMap<>(model.stock);
+        Map<K, BigInteger> result = new LinkedHashMap<>(PlanningInventory.exactAmounts(model.stock));
         for (var e : held.entrySet()) {
             budget.check();
-            if (e.getValue().signum() < 0 || e.getValue().compareTo(ExactAmounts.LONG_MAX) > 0) return null;
-            result.put(e.getKey(), e.getValue().longValueExact());
+            if (e.getValue().signum() < 0) return null;
+            result.put(e.getKey(), e.getValue());
         }
-        return Collections.unmodifiableMap(result);
+        return PlanningInventory.exactSnapshot(result);
     }
 
     private void tick() {

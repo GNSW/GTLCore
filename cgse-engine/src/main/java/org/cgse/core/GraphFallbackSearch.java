@@ -149,7 +149,7 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
     }
 
     private BigInteger available(K key) {
-        return inventory.getOrDefault(key, BigInteger.valueOf(force && target.equals(key) ? 0 : stock.getOrDefault(key, 0L)));
+        return inventory.getOrDefault(key, force && target.equals(key) ? BigInteger.ZERO : PlanningInventory.exactAmount(stock, key));
     }
 
     private void put(K key, BigInteger value) {

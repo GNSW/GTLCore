@@ -223,7 +223,7 @@ final class CountStartup<K> {
         for (int k = 0; k < model.keys.size(); k++) {
             tick();
             K key = model.keys.get(k);
-            initial.add(BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+            initial.add(PlanningInventory.exactAmount(model.stock, key));
             goal.add(BigInteger.valueOf(model.recipes.get(proof.recipe).inputs().getOrDefault(key, 0L)));
             if (proof.unbounded.contains(key) || model.external.contains(key)) unlimited.add(k);
         }

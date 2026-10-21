@@ -953,6 +953,60 @@ final class CountCdcl implements AutoCloseable {
         return List.copyOf(learned);
     }
 
+    /**
+     * A bounded snapshot for the owner's identical Boolean face, not a global
+     * proof export. Prefer live short clauses, including useful later clauses
+     * absent from the first 128 externally reported conflicts.
+     */
+    int copyBooleanConflicts(int variables, long[] masks, long[] ones) {
+        if (values.length != variables || variables > 64 || masks.length != ones.length || masks.length > 64) return 0;
+        for (int i = 0; i < values.length; i++) {
+            budget.check();
+            if (lower[i].signum() != 0 || !upper[i].equals(BigInteger.ONE)) return 0;
+        }
+        Comparator<Clause> order = (a, b) -> {
+            budget.check();
+            int compared = Integer.compare(a.literals.length, b.literals.length);
+            if (compared == 0) compared = Integer.compare(a.lbd, b.lbd);
+            return compared != 0 ? compared : Long.compare(b.used, a.used);
+        };
+        var best = new PriorityQueue<Clause>(Math.max(1, masks.length), order.reversed());
+        long started = budget.threadWork();
+        for (int at = clauses.size() - 1; at >= 0 && budget.threadWork() - started < 8192; at--) {
+            budget.check();
+            var clause = clauses.get(at);
+            if (!clause.learned || clause.deleted || masks.length == 0) continue;
+            if (best.size() < masks.length) best.add(clause);
+            else if (order.compare(clause, best.peek()) < 0) { best.remove(); best.add(clause); }
+        }
+        // Binary implications live directly in the watch lists, not in the
+        // clause database. Visit each pair once despite watch-order swaps.
+        for (int literal = 0; literal < watches.size() && budget.threadWork() - started < 8192; literal++) {
+            for (var entry : watches.get(literal)) {
+                if (budget.threadWork() - started >= 8192) break;
+                budget.check();
+                if (!(entry instanceof int[] pair) || literal != Math.min(pair[0], pair[1]) || masks.length == 0)
+                    continue;
+                var clause = new Clause(pair, true, 2);
+                if (best.size() < masks.length) best.add(clause);
+                else if (order.compare(clause, best.peek()) < 0) { best.remove(); best.add(clause); }
+            }
+        }
+        int count = 0;
+        while (!best.isEmpty()) {
+            var clause = best.remove();
+            long mask = 0, selected = 0;
+            for (int literal : clause.literals) {
+                budget.check();
+                long bit = 1L << (literal / 2);
+                mask |= bit;
+                if ((literal & 1) == 0) selected |= bit;
+            }
+            masks[count] = mask; ones[count++] = selected;
+        }
+        return count;
+    }
+
     /** Accept only the owner's proved, guarded clauses in this immutable domain. */
     boolean learn(CountConflict value) {
         if (!retaining || complete || imported.size() >= 64 || imported.contains(value) || value.assumptions().size() > 16)

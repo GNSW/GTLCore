@@ -65,7 +65,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private final CatalystPolicy catalysts;
     private boolean directEmission;
     private boolean unavailableTarget;
-    private final long capturedTargetStock;
+    private final java.math.BigInteger capturedTargetStock;
     private final Map<K, Long> recoverySeeds;
     private ReuseScope<K> requestScope;
     private CapturedCatalog<K> capturedCatalog;
@@ -104,7 +104,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         this.fallbackReporter = fallbackReporter;
         directEmission = this.emitable.contains(target) && compiler.producers(target).isEmpty();
         unavailableTarget = checkpoint == null && !this.emitable.contains(target) && compiler.producers(target).isEmpty();
-        capturedTargetStock = stock.getOrDefault(target, 0L);
+        capturedTargetStock = PlanningInventory.exactAmount(stock, target);
         available = PlanningInventory.availability(stock, checkpoint == null ? Map.of() : checkpoint.forecast(),
                 directEmission && checkpoint == null ? target : null);
         recoverySeeds = PlanningInventory.snapshot(checkpoint == null ? Map.of() : checkpoint.recoverySeeds());
@@ -138,10 +138,10 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         directEmission = emitable.contains(target) && !produced;
         unavailableTarget = checkpoint == null && !emitable.contains(target) && !produced;
         if (checkpoint == null && emittedBefore != directEmission) {
-            var updated = new java.util.LinkedHashMap<>(available);
-            if (directEmission || capturedTargetStock <= 0) updated.remove(target);
+            var updated = new java.util.LinkedHashMap<>(PlanningInventory.exactAmounts(available));
+            if (directEmission || capturedTargetStock.signum() <= 0) updated.remove(target);
             else updated.put(target, capturedTargetStock);
-            available = Map.copyOf(updated);
+            available = PlanningInventory.exactSnapshot(updated);
         }
         updateReuseScope();
         return this;
@@ -278,7 +278,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         for (var entry : full.initialExact().entrySet()) {
             if (emitable.contains(entry.getKey()) || entry.getValue().signum() == 0) continue;
             java.math.BigInteger scaled = java.math.BigInteger.valueOf(amount)
-                    .multiply(java.math.BigInteger.valueOf(available.getOrDefault(entry.getKey(), 0L)))
+                    .multiply(PlanningInventory.exactAmount(available, entry.getKey()))
                     .divide(entry.getValue());
             guess = guess.min(scaled);
         }
@@ -396,14 +396,17 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
                     (selected == null || !selected.feasible() && selected.missingExact().isEmpty())) {
                 selected = retained;
                 selectedIncomplete = currentIncomplete;
-            } else if (capturedCatalog != null && retained.result() == GraphPlan.Result.INFEASIBLE && !currentIncomplete &&
+            } else if (retained.result() == GraphPlan.Result.INFEASIBLE && !currentIncomplete &&
                     (selected == null || !selected.feasible() && selected.missingExact().isEmpty())) {
-                // Catalog work has already certified that this is a complete
-                // original-domain proof, not a restricted allocation/prefix.
+                // Both complete ordinary catalogs and complete capture owners
+                // retain original-domain proofs; bounded alternatives do not.
                 selected = retained;
                 selectedIncomplete = false;
                 finish();
                 return selected;
+            } else if (retained.result() == GraphPlan.Result.INFEASIBLE && currentIncomplete &&
+                    budget.failureDetail().startsWith("PROVEN_INFEASIBLE:")) {
+                budget.failureDetail("RESTRICTED_PROOF_NOT_TRANSFERRED: preview stopped by " + limit.limit());
             }
         }
         if (selected == null || !selected.feasible() && !verifiedRefill(selected, selectedIncomplete) &&

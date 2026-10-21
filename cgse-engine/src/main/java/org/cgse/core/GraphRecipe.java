@@ -20,6 +20,7 @@ public final class GraphRecipe<K> {
     private final Map<K, Long> configurationInputs;
     private final Map<K, Long> reusableInputs;
     private final Map<K, Long> executionOutputs;
+    private final boolean inputReturns;
 
     public GraphRecipe(String id, String binding, List<Slot<K>> slots, Map<K, Long> outputs) {
         this.id = Objects.requireNonNull(id);
@@ -30,9 +31,19 @@ public final class GraphRecipe<K> {
         Map<K, Long> aggregated = new LinkedHashMap<>();
         Map<K, Long> configuration = new LinkedHashMap<>();
         Map<K, Long> reusable = new LinkedHashMap<>();
-        for (Slot<K> slot : this.slots) aggregated.merge(slot.key(), slot.amount(), CheckedAmounts::add);
-        for (Slot<K> slot : this.slots) if (slot.configuration()) configuration.merge(slot.key(), slot.amount(), CheckedAmounts::add);
-        for (Slot<K> slot : this.slots) if (slot.reusable()) reusable.merge(slot.key(), slot.amount(), CheckedAmounts::add);
+        boolean returns = false;
+        boolean inspectSlots = this.slots.size() <= this.outputs.size();
+        for (Slot<K> slot : this.slots) {
+            aggregated.merge(slot.key(), slot.amount(), CheckedAmounts::add);
+            if (slot.configuration()) configuration.merge(slot.key(), slot.amount(), CheckedAmounts::add);
+            if (slot.reusable()) reusable.merge(slot.key(), slot.amount(), CheckedAmounts::add);
+            if (inspectSlots && !returns && this.outputs.containsKey(slot.key())) returns = true;
+        }
+        // Classify once on the smaller side; reuse the aggregation pass when
+        // inputs are smaller. A one-output recipe must not probe every input.
+        // Verification then needs no scan at each immutable batch boundary.
+        if (!inspectSlots) for (K key : this.outputs.keySet()) if (aggregated.containsKey(key)) { returns = true; break; }
+        this.inputReturns = returns;
         this.inputs = Collections.unmodifiableMap(aggregated);
         this.configurationInputs = Collections.unmodifiableMap(configuration);
         this.reusableInputs = reusable.isEmpty() ? Map.of() : Collections.unmodifiableMap(reusable);
@@ -91,6 +102,9 @@ public final class GraphRecipe<K> {
     public Map<K, Long> inputs() {
         return inputs;
     }
+
+    /** Logical returns include reusable tokens, even without a physical output. */
+    boolean hasInputReturns() { return inputReturns; }
 
     public Map<K, Long> configurationInputs() {
         return configurationInputs;

@@ -13,7 +13,8 @@ import java.util.*;
 final class CapturedProofCodec {
 
     private static final int LEGACY_MAGIC = 0x43474431; // CGD1 has implicit LEGACY input modes
-    private static final int MAGIC = 0x43474432; // CGD2, separate from scoped CGP arithmetic proofs
+    private static final int MODE_MAGIC = 0x43474432; // CGD2 adds explicit input modes
+    private static final int MAGIC = 0x43474433; // CGD3 retains exact physical stock
     private static final long MAX_FILE = 64L << 20;
     private final CapturedProof.Guard guard = new CapturedProof.Guard(20_000_000, 128L << 20);
 
@@ -66,7 +67,11 @@ final class CapturedProofCodec {
         }
         var request = proof.request();
         out.writeInt(request.target()); out.writeLong(request.amount());
-        amounts(out, request.stock()); amounts(out, request.requiredSeeds());
+        count(out, request.stock().size(), 96);
+        for (var key : new TreeSet<>(request.stock().keySet())) {
+            out.writeInt(key); integer(out, PlanningInventory.exactAmount(request.stock(), key));
+        }
+        amounts(out, request.requiredSeeds());
         count(out, request.external().size(), 64);
         for (int key : new TreeSet<>(request.external())) out.writeInt(key);
         out.writeBoolean(request.preserve()); out.writeBoolean(request.forceCraft());
@@ -104,7 +109,7 @@ final class CapturedProofCodec {
 
     private CapturedProof.Certificate decode(DataInputStream in) throws IOException {
         int format = in.readInt();
-        if (format != MAGIC && format != LEGACY_MAGIC) throw new IOException("Unknown captured proof format");
+        if (format != MAGIC && format != MODE_MAGIC && format != LEGACY_MAGIC) throw new IOException("Unknown captured proof format");
         int resources = in.readInt(); boolean complete = in.readBoolean();
         var patterns = new ArrayList<CapturedProof.Pattern>();
         for (int n = count(in, 256); n > 0; n--) {
@@ -128,7 +133,14 @@ final class CapturedProofCodec {
             patterns.add(new CapturedProof.Pattern(id, binding, inputs, outputs, external, captured));
         }
         int target = in.readInt(); long amount = in.readLong();
-        var stock = amounts(in); var seeds = amounts(in); Set<Integer> external = new LinkedHashSet<>();
+        Map<Integer, Long> stock;
+        if (format == MAGIC) {
+            Map<Integer, BigInteger> exact = new LinkedHashMap<>();
+            for (int n = count(in, 96); n > 0; n--)
+                if (exact.put(in.readInt(), integer(in)) != null) throw new IOException("Duplicate stock resource");
+            stock = PlanningInventory.exactSnapshot(exact);
+        } else stock = amounts(in);
+        var seeds = amounts(in); Set<Integer> external = new LinkedHashSet<>();
         for (int n = count(in, 64); n > 0; n--) if (!external.add(in.readInt())) throw new IOException("Duplicate external resource");
         var request = new CapturedProof.Request(target, amount, stock, external, seeds, in.readBoolean(), in.readBoolean());
         long revision = in.readLong(); boolean covered = in.readBoolean(); var domains = new ArrayList<CapturedCatalog.DomainCoverage>();

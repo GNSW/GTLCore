@@ -60,6 +60,9 @@ public final class GraphCpuController {
     private long providerGeneration = Long.MIN_VALUE;
     private Iterator<String> bindingsToCheck;
     private String replanOrigin = "";
+    private GraphPlan<AEKey> supplyPlan;
+    private List<AEKey> wideSupply = List.of();
+    private int supplyCursor;
 
     public GraphCpuController(GraphCpuHost host) {
         this.host = host;
@@ -194,6 +197,7 @@ public final class GraphCpuController {
         int budget = (int) Math.min(4096, remaining);
         if (runtime.state() == GraphJobRuntime.State.SETTLING || runtime.state() == GraphJobRuntime.State.CANCELLING) budget = 64;
         int dispatched = runtime.tick(adapter, TickHandler.instance().getCurrentTick(), budget);
+        pullDeferredStock();
         // Match the existing GTL named-book completion convention without
         // inventing the marker as physical output or dropping other returns.
         if (runtime.plan().target() instanceof AEItemKey item && item.getItem() == Items.WRITTEN_BOOK &&
@@ -211,6 +215,41 @@ public final class GraphCpuController {
         logWaiting();
         publish(false);
         if (runtime.finished()) finish();
+    }
+
+    /**
+     * A wide initial requirement is received in physical long-sized windows.
+     * Already stored material does not generate AE's future-insertion event.
+     */
+    private void pullDeferredStock() {
+        if (runtime.state() != GraphJobRuntime.State.RUNNING || runtime.suspended()) return;
+        if (supplyPlan != runtime.plan()) {
+            supplyPlan = runtime.plan();
+            wideSupply = supplyPlan.initialExact().entrySet().stream()
+                    .filter(entry -> entry.getValue().compareTo(ExactAmounts.LONG_MAX) > 0)
+                    .map(Map.Entry::getKey).toList();
+            supplyCursor = 0;
+        }
+        if (wideSupply.isEmpty()) return;
+        var grid = host.grid();
+        if (grid == null) return;
+        var storage = grid.getStorageService().getInventory();
+        long deadline = System.nanoTime() + 1_000_000;
+        for (int i = 0; i < Math.min(8, wideSupply.size()); i++) {
+            if (i > 0 && System.nanoTime() - deadline >= 0) break;
+            AEKey key = wideSupply.get(supplyCursor++ % wideSupply.size());
+            if (supplyCursor == wideSupply.size()) supplyCursor = 0;
+            long wanted = Math.min(runtime.externalWaiting(key), runtime.receivable(key));
+            if (wanted <= 0) continue;
+            long extracted = storage.extract(key, wanted, Actionable.MODULATE, host.source());
+            if (extracted < 0 || extracted > wanted) throw new IllegalStateException("Invalid deferred extraction");
+            if (extracted == 0) continue;
+            long accepted = insert(key, extracted, Actionable.MODULATE);
+            if (accepted < extracted) {
+                host.orphanInventory().insert(key, extracted - accepted, Actionable.MODULATE);
+                host.dirty();
+            }
+        }
     }
 
     private void logWaiting() {
@@ -280,6 +319,9 @@ public final class GraphCpuController {
         }
         indexed = Set.of();
         runtime = null;
+        supplyPlan = null;
+        wideSupply = List.of();
+        supplyCursor = 0;
         adapter = null;
         link = null;
         host.output(null);
@@ -307,6 +349,9 @@ public final class GraphCpuController {
 
     public void read(CompoundTag parent) {
         clearReplan();
+        supplyPlan = null;
+        wideSupply = List.of();
+        supplyCursor = 0;
         providerGeneration = Long.MIN_VALUE;
         CompoundTag tag = parent.getCompound(GraphJobCodec.NBT_KEY);
         try {

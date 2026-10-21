@@ -48,6 +48,7 @@ public final class GraphPlanSummary {
             details.gtlcore$setCraftTimes(ExactAmounts.capped(group.runs));
             details.gtlcore$setGraphSeed(ExactAmounts.capped(group.seed));
             details.gtlcore$setMissingGraphSeed(group.missingSeed);
+            details.gtlcore$setMissingSourceMask(group.missingSourceMask);
             if (group.states > 1) {
                 details.gtlcore$setGroupedToolStates(group.states);
                 details.gtlcore$setMissingKeys(group.missingKeys);
@@ -109,6 +110,7 @@ public final class GraphPlanSummary {
         final List<AEKey> missingKeys = new ArrayList<>();
         int states;
         boolean missingSeed;
+        int missingSourceMask;
 
         Group(AEKey key) {
             this.key = key;
@@ -123,7 +125,10 @@ public final class GraphPlanSummary {
             long retained = plan.graph().seeds().getOrDefault(row.key(), 0L);
             seed = seed.add(BigInteger.valueOf(retained));
             missingSeed |= retained > 0 && row.missing().signum() > 0;
-            if (row.missing().signum() > 0) missingKeys.add(row.key());
+            if (row.missing().signum() > 0) {
+                missingKeys.add(row.key());
+                missingSourceMask |= 1 << plan.graph().missingBoundary(row.key()).source().ordinal();
+            }
         }
     }
 }

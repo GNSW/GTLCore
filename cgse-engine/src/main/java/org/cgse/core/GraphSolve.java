@@ -206,7 +206,7 @@ final class GraphSolve<K> implements AutoCloseable {
 
     private void ordinaryValue(K key, BigInteger quantity) {
         if (ordinaryPhase == 0) {
-            BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+            BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).subtract(PlanningInventory.exactAmount(stock, key));
             ordinaryCount = ordinaryCount.max(CheckedAmounts.ceilDiv(gap, quantity));
             if (forceCraft && !targetProduced && key.equals(target))
                 ordinaryCount = ordinaryCount.max(CheckedAmounts.ceilDiv(BigInteger.valueOf(amount), quantity));

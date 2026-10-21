@@ -95,7 +95,7 @@ final class CountShellCompilation<K> implements AutoCloseable {
                 continue;
             BigInteger produced = BigInteger.valueOf(recipe.outputs().get(output));
             BigInteger needed = demand.getOrDefault(output, BigInteger.ZERO)
-                    .subtract(BigInteger.valueOf(model.stock.getOrDefault(output, 0L))).max(BigInteger.ZERO);
+                    .subtract(PlanningInventory.exactAmount(model.stock, output)).max(BigInteger.ZERO);
             BigInteger runs = CheckedAmounts.ceilDiv(needed, produced).max(CheckedAmounts.ceilDiv(
                     model.productionGoals.getOrDefault(output, BigInteger.ZERO), produced));
             bounded(runs);

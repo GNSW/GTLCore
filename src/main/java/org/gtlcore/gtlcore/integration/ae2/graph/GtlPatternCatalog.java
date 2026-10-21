@@ -24,6 +24,7 @@ import org.cgse.core.GraphPlan;
 import org.cgse.core.GraphRecipe;
 import org.cgse.core.PlanningBudget;
 import org.cgse.core.PlanningFailure;
+import org.cgse.core.PlanningInventory;
 
 import java.util.*;
 
@@ -148,7 +149,10 @@ public final class GtlPatternCatalog {
         private final Set<Object> flexible = new HashSet<>(), expandedFamilies = new HashSet<>();
         private final Map<Object, List<AEKey>> searchedFamilies = new HashMap<>();
         private int recipeCount;
-        private final Map<AEKey, Long> stock = new LinkedHashMap<>();
+        private final Map<AEKey, Number> stock = new LinkedHashMap<>();
+        private final Set<AEKey> impreciseStock = new LinkedHashSet<>();
+        private ExactInventoryRead exactInventory;
+        private AEKey exactInventoryKey;
         private final Set<AEKey> emitted = new LinkedHashSet<>(), fuzzy = new HashSet<>();
         private final Set<Object> fuzzyPrimary = new HashSet<>();
         private Structure structure;
@@ -345,6 +349,20 @@ public final class GtlPatternCatalog {
                     }
                 }
                 case 3 -> {
+                    if (exactInventory != null) {
+                        try {
+                            if (!exactInventory.step()) return false;
+                            stock.put(exactInventoryKey, exactInventory.amount());
+                            if (exactInventory.unlimited()) emitted.add(exactInventoryKey);
+                            else if (!exactInventory.exact()) impreciseStock.add(exactInventoryKey);
+                        } catch (RuntimeException | Error failure) {
+                            exactInventory.close();
+                            exactInventory = null;
+                            throw failure;
+                        }
+                        exactInventory.close();
+                        exactInventory = null;
+                    }
                     // Amortize state-machine/phase bookkeeping over a bounded
                     // stock scan. World calls stay on the server thread; every
                     // key still checks cancellation and the shared tick deadline.
@@ -358,14 +376,20 @@ public final class GtlPatternCatalog {
                         AEKey resource = keys.next();
                         if (source != null) {
                             long count = available.get(resource);
+                            boolean saturated = count == Long.MAX_VALUE;
                             // AE may defer a just-inserted stack's cache update to
                             // its end-tick event. Query an empty cached key before
                             // diagnosing absence; this never transfers material.
                             if (simulate || count == 0) count = storage.getInventory().extract(resource,
                                     refreshInventory || count == 0 ? Long.MAX_VALUE : count, Actionable.SIMULATE, source);
                             if (count > 0) stock.put(resource, count);
+                            if (saturated || count == Long.MAX_VALUE) {
+                                exactInventoryKey = resource;
+                                exactInventory = new ExactInventoryRead(storage.getInventory(), resource, source, budget);
+                            }
                         }
                         if (service.canEmitFor(resource)) emitted.add(resource);
+                        if (exactInventory != null) return false;
                     }
                     if (!keys.hasNext()) {
                         if (dataRevision != dataGeneration) throw new IllegalStateException("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
@@ -392,7 +416,8 @@ public final class GtlPatternCatalog {
                         }
                         // Phase 4 is terminal; no mutable owner escapes alongside
                         // these read-only views. Subsequent requests own new maps.
-                        result = new Snapshot(structure, Collections.unmodifiableMap(stock), Collections.unmodifiableSet(emitted), revision, hit);
+                        result = new Snapshot(structure, PlanningInventory.exactSnapshot(stock), Collections.unmodifiableSet(emitted),
+                                revision, hit, Set.copyOf(impreciseStock));
                         phase = 4;
                     }
                 }
@@ -424,15 +449,22 @@ public final class GtlPatternCatalog {
         private boolean prepareSources() {
             if (dataRevision != dataGeneration) throw new IllegalStateException("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
             if (invalidationRevision != invalidationGeneration) throw new IllegalStateException("GRAPH_BINDING_INVALIDATED_DURING_SNAPSHOT");
+            var registered = ((GraphRequestTracker) service).gtlcore$patternSources();
+            if (registered != null) {
+                sourceIndex = registered;
+                return true;
+            }
             long latest = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
             if (byproducts != null && byproductRevision == latest) {
                 sourceIndex = byproducts;
+                if (indexing != null) indexing.close();
                 indexing = null;
                 return true;
             }
             // Provider updates may occur between tick slices. Discard the
             // partial index before touching its live registry iterator again.
             if (indexing == null || indexingRevision != latest) {
+                if (indexing != null) indexing.close();
                 indexingRevision = latest;
                 indexing = new ByproductPatternIndex.Build(((GraphRequestTracker) service).gtlcore$registeredGraphPatterns());
             }
@@ -743,5 +775,11 @@ public final class GtlPatternCatalog {
                             Set<AEKey> inputTemplates, Set<AEKey> fuzzyKeys, boolean boundedAlternatives,
                             Map<AEKey, List<Signature>> dependencies, long providerRevision) {}
 
-    public record Snapshot(Structure structure, Map<AEKey, Long> stock, Set<AEKey> emitable, long epoch, boolean cacheHit) {}
+    public record Snapshot(Structure structure, Map<AEKey, Long> stock, Set<AEKey> emitable, long epoch, boolean cacheHit,
+                           Set<AEKey> impreciseStock) {
+
+        public Snapshot(Structure structure, Map<AEKey, Long> stock, Set<AEKey> emitable, long epoch, boolean cacheHit) {
+            this(structure, stock, emitable, epoch, cacheHit, Set.of());
+        }
+    }
 }

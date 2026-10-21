@@ -733,7 +733,7 @@ public final class CapturedCatalog<K> {
                 }
                 BigInteger needed = BigInteger.valueOf(amount);
                 if (!forceCraft) needed = needed.add(BigInteger.valueOf(requiredSeeds.getOrDefault(target, 0L)))
-                        .subtract(BigInteger.valueOf(stock.getOrDefault(target, 0L))).max(BigInteger.ONE);
+                        .subtract(PlanningInventory.exactAmount(stock, target)).max(BigInteger.ONE);
                 allocationFirings = output.signum() > 0 ? needed.subtract(BigInteger.ONE).divide(output).add(BigInteger.ONE).min(BigInteger.valueOf(Long.MAX_VALUE)).longValueExact() : 1;
                 allocation = new CapturedInputAllocation<>(recipe, allocating.domain, stock, external, allocationFirings, budget);
             } else if (!flowTried && allocationRecipes.isEmpty()) {
@@ -791,6 +791,8 @@ public final class CapturedCatalog<K> {
         }
 
         private void finish(GraphPlan<K> plan, GraphPlan.Result reason) {
+            if ((!coverage.complete() || allocationView) && budget.failureDetail().startsWith("PROVEN_INFEASIBLE:"))
+                budget.failureDetail("RESTRICTED_PROOF_NOT_TRANSFERRED: result=" + reason);
             // A funded refill witness is useful even when omitted candidates
             // prevent an infeasibility proof. Keep that scope explicit and never
             // transfer seed optimality or negative conclusions from the view.
@@ -800,6 +802,7 @@ public final class CapturedCatalog<K> {
                     preview ? plan.steps() : new PlanStep.Sequence(List.of()), preview ? plan.recipes() : Map.of(),
                     preview ? plan.initialExact() : Map.of(), preview ? plan.seeds() : Map.of(),
                     preview ? plan.missingExact() : Map.of(), reason, budget.nodes(), System.nanoTime() - started);
+            if (preview) answer.withMissingSourcesFrom(plan);
             if (coverage.complete() && !allocationView) answer = answer.withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives());
             if (conditional) {
                 budget.failureDetail("CONDITIONAL_REFILL: verified when supplied; omitted alternatives may need less or no refill");

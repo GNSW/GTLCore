@@ -94,10 +94,21 @@ final class CountBounds implements AutoCloseable {
     }
 
     CountBounds(int variables, List<ExactLinearProgram.Constraint> rows, PlanningBudget budget, int assumptionStart, Seed seed) {
+        this(variables, rows, budget, assumptionStart, seed, true);
+    }
+
+    /** Cheap necessary check; leave consequence generation to the full count search. */
+    static CountBounds propagationOnly(int variables, List<ExactLinearProgram.Constraint> rows, PlanningBudget budget) {
+        return new CountBounds(variables, rows, budget, -1, null, false);
+    }
+
+    private CountBounds(int variables, List<ExactLinearProgram.Constraint> rows, PlanningBudget budget,
+                        int assumptionStart, Seed seed, boolean combine) {
         this.rows = new ArrayList<>(rows);
         originalRows = List.copyOf(rows);
         this.assumptionStart = assumptionStart;
         this.budget = budget;
+        combined = !combine;
         explain = assumptionStart >= 0;
         lower = new BigInteger[variables];
         upper = new BigInteger[variables];
@@ -160,9 +171,11 @@ final class CountBounds implements AutoCloseable {
                 for (int variable : this.rows.get(r).terms().keySet()) affected.get(variable).add(r);
                 enqueue(r);
             }
-            combinePairs(known);
-            combineSharedDemands();
-            combineCapacityGroups();
+            if (combine) {
+                combinePairs(known);
+                combineSharedDemands();
+                combineCapacityGroups();
+            }
             // Seed the worklist with the narrowest equations. A triangular
             // count chain can then propagate from its fixed boundary in one
             // sweep, instead of repeatedly revisiting long prefix equations.

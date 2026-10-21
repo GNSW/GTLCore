@@ -28,6 +28,18 @@ public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry 
     private int gtlcore$groupedToolStates;
     @Unique
     private List<AEKey> gtlcore$missingKeys = List.of();
+    @Unique
+    private int gtlcore$missingSourceMask;
+
+    @Override
+    public int gtlcore$getMissingSourceMask() {
+        return gtlcore$missingSourceMask;
+    }
+
+    @Override
+    public void gtlcore$setMissingSourceMask(int mask) {
+        gtlcore$missingSourceMask = mask;
+    }
 
     @Override
     public int gtlcore$getGroupedToolStates() {
@@ -84,6 +96,7 @@ public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry 
         buffer.writeBoolean(gtlcore$missingGraphSeed);
         buffer.writeVarInt(gtlcore$groupedToolStates);
         buffer.writeCollection(gtlcore$missingKeys, AEKey::writeKey);
+        buffer.writeVarInt(gtlcore$missingSourceMask);
     }
 
     @Inject(at = @At("TAIL"), method = "read", cancellable = true, remap = false)
@@ -94,6 +107,7 @@ public class CraftingPlanSummaryEntryMixin implements ICraftingPlanSummaryEntry 
         ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingGraphSeed(buffer.readBoolean());
         ((ICraftingPlanSummaryEntry) entry).gtlcore$setGroupedToolStates(buffer.readVarInt());
         ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingKeys(buffer.readList(AEKey::readKey));
+        ((ICraftingPlanSummaryEntry) entry).gtlcore$setMissingSourceMask(buffer.readVarInt());
         cir.setReturnValue(entry);
     }
 }

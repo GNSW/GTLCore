@@ -32,7 +32,7 @@ final class QuantityPotential<K> implements AutoCloseable {
 
     static <K> boolean applicable(RecipeCountModel<K> model, K target, PlanningBudget budget) {
         return model.rowKeys.size() == model.constraints.size() && model.ids.containsKey(target) &&
-                !model.external.contains(target) && model.goal(target).compareTo(BigInteger.valueOf(model.stock.getOrDefault(target, 0L))) > 0 &&
+                !model.external.contains(target) && model.goal(target).compareTo(PlanningInventory.exactAmount(model.stock, target)) > 0 &&
                 model.constraints.size() <= 8192 && model.recipes.size() <= 8192 && budget.remainingWork() >= 131_072;
     }
 
@@ -81,7 +81,7 @@ final class QuantityPotential<K> implements AutoCloseable {
             }
             for (int end = Math.min(model.constraints.size(), index + 32); index < end; index++) {
                 check();
-                objective[index] = BigInteger.valueOf(model.stock.getOrDefault(model.rowKeys.get(index), 0L)).negate();
+                objective[index] = PlanningInventory.exactAmount(model.stock, model.rowKeys.get(index)).negate();
                 for (var term : model.constraints.get(index).terms().entrySet()) {
                     check();
                     if (term.getValue().signum() != 0) full.get(term.getKey()).put(index, term.getValue().negate());

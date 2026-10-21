@@ -496,7 +496,10 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
                     lines.addAll(GraphSeedStatus.tooltip(seedProof));
                 }
                 if (model.initialInputs().contains(key)) lines.add(text("initial_input_help"));
-                if (resource.missing().signum() > 0) lines.add(text("missing", resource.missing().toString()));
+                if (resource.missing().signum() > 0) {
+                    lines.add(text("missing", resource.missing().toString()));
+                    lines.addAll(org.gtlcore.gtlcore.integration.ae2.graph.GraphMissingStatus.tooltip(resource.missingSourceMask()));
+                }
             }
             if (model.crafted().containsKey(key)) lines.add(text("crafted", model.crafted().get(key).toString()));
             if (model.used().containsKey(key)) lines.add(text("used", model.used().get(key).toString()));
@@ -852,8 +855,8 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
             return;
         }
         var row = model.recipes().get(page);
-        graphics.drawString(font, text("runs", compact(row.count())), 12, 31, ACCENT, false);
-        hits.add(new Hit(12, 27, 180, 14, List.of(text("runs", row.count().toString()))));
+        graphics.drawString(font, row.count().signum() == 0 ? text("cycle_source") : text("runs", compact(row.count())), 12, 31, ACCENT, false);
+        hits.add(new Hit(12, 27, 180, 14, List.of(recipeRuns(row))));
         int pages = Math.max(1, (Math.max(row.inputs().size(), row.outputs().size()) + ioRows() - 1) / ioRows());
         nodePage = Math.max(0, Math.min(nodePage, pages - 1));
         graphics.drawString(font, text("inputs"), 14, 48, MUTED, false);
@@ -878,7 +881,11 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
     }
 
     private List<Component> recipeTooltip(GraphRingView.Row row) {
-        return List.of(text("recipe_for", row.icon().what().getDisplayName()), text("runs", row.count().toString()), text("open_recipe"));
+        return List.of(text("recipe_for", row.icon().what().getDisplayName()), recipeRuns(row), text("open_recipe"));
+    }
+
+    private static Component recipeRuns(GraphRingView.Row row) {
+        return row.count().signum() == 0 ? text("cycle_source") : text("runs", row.count().toString());
     }
 
     private static String compact(long amount) {

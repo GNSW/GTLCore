@@ -106,7 +106,7 @@ final class CountExecution<K> implements AutoCloseable {
 
     private boolean compile(RecipeCountModel<K> model, List<K> keys) {
         BigInteger stock = BigInteger.ZERO;
-        for (K key : keys) stock = stock.add(BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+        for (K key : keys) stock = stock.add(PlanningInventory.exactAmount(model.stock, key));
         Map<Integer, BigInteger> gains = new LinkedHashMap<>();
         List<Use> uses = new ArrayList<>();
         for (int i = 0; i < model.recipes.size(); i++) {

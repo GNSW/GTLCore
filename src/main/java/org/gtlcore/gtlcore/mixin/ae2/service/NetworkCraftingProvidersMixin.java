@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.mixin.ae2.service;
 
+import org.gtlcore.gtlcore.integration.ae2.graph.ByproductPatternIndex;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderVersion;
+import org.gtlcore.gtlcore.integration.ae2.graph.RegisteredPatternIndex;
 
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEKey;
@@ -30,6 +32,19 @@ public abstract class NetworkCraftingProvidersMixin implements GraphProviderVers
 
     @Unique
     private long gtlcore$generation;
+
+    @Unique
+    private final RegisteredPatternIndex gtlcore$outputIndex = new RegisteredPatternIndex();
+
+    @Override
+    public void gtlcore$patternChanged(IPatternDetails pattern, boolean present) {
+        gtlcore$outputIndex.changed(pattern, present);
+    }
+
+    @Override
+    public ByproductPatternIndex gtlcore$patternSources() {
+        return gtlcore$outputIndex.view();
+    }
 
     @WrapOperation(method = "getFuzzyCraftable",
                    at = @At(value = "INVOKE", target = "Lappeng/api/storage/AEKeyFilter;matches(Lappeng/api/stacks/AEKey;)Z"),

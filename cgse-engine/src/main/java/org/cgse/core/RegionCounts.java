@@ -45,7 +45,7 @@ final class RegionCounts<K> implements AutoCloseable {
         this.demand = new LinkedHashMap<>(demand);
         this.goals = new LinkedHashMap<>(this.demand);
         if (force && recipes.stream().anyMatch(recipe -> recipe.outputs().containsKey(target)))
-            this.goals.merge(target, BigInteger.valueOf(stock.getOrDefault(target, 0L)).add(BigInteger.valueOf(amount)), BigInteger::max);
+            this.goals.merge(target, PlanningInventory.exactAmount(stock, target).add(BigInteger.valueOf(amount)), BigInteger::max);
         // The force-craft stock offset is a production floor, not another
         // delivery obligation. Seed refinement adds to the real demand only;
         // adding it to stock + amount repeatedly manufactures excess stock.
@@ -152,7 +152,7 @@ final class RegionCounts<K> implements AutoCloseable {
         for (var entry : reserve.entrySet()) {
             K key = entry.getKey();
             BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(entry.getValue()));
-            if (BigInteger.valueOf(stock.getOrDefault(key, 0L)).add(summary.delta(key)).compareTo(goal) < 0) {
+            if (PlanningInventory.exactAmount(stock, key).add(summary.delta(key)).compareTo(goal) < 0) {
                 goals.merge(key, goal, BigInteger::max);
                 changed = true;
             }

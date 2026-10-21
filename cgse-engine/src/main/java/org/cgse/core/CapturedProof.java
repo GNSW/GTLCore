@@ -30,7 +30,7 @@ public final class CapturedProof {
 
     public record Request(int target, long amount, Map<Integer, Long> stock, Set<Integer> external,
                           Map<Integer, Long> requiredSeeds, boolean preserve, boolean forceCraft) {
-        public Request { stock = Map.copyOf(stock); external = Set.copyOf(external); requiredSeeds = Map.copyOf(requiredSeeds); }
+        public Request { stock = PlanningInventory.snapshot(stock); external = Set.copyOf(external); requiredSeeds = Map.copyOf(requiredSeeds); }
     }
 
     public enum Kind { BATCH, SEQUENCE, REPEAT }
@@ -122,6 +122,15 @@ public final class CapturedProof {
     }
 
     private static <K> Map<Integer, Long> map(Map<K, Long> values, java.util.function.Function<K, Integer> key, Guard guard) {
+        if (PlanningInventory.hasWideAmounts(values)) {
+            Map<Integer, BigInteger> exact = new LinkedHashMap<>();
+            for (K resource : values.keySet()) {
+                guard.work(); guard.keep(96);
+                BigInteger count = PlanningInventory.exactAmount(values, resource);
+                guard.integer(count); exact.put(key.apply(resource), count);
+            }
+            return PlanningInventory.exactSnapshot(exact);
+        }
         Map<Integer, Long> result = new LinkedHashMap<>();
         for (var e : values.entrySet()) { guard.work(); guard.keep(96); result.put(key.apply(e.getKey()), e.getValue()); }
         return result;
@@ -193,7 +202,10 @@ public final class CapturedProof {
         void key(int key) { require(key >= 0 && key < proof.snapshot().resources()); }
 
         void amounts(Map<Integer, Long> values) {
-            for (var e : values.entrySet()) { guard.work(); key(e.getKey()); require(e.getValue() > 0); }
+            for (var e : values.entrySet()) {
+                guard.work(); key(e.getKey()); require(e.getValue() > 0);
+                guard.integer(PlanningInventory.exactAmount(values, e.getKey()));
+            }
         }
 
         void coverage() {
@@ -365,7 +377,7 @@ public final class CapturedProof {
             amounts(witness.seeds());
             for (var e : witness.initial().entrySet()) {
                 guard.work(); key(e.getKey()); guard.integer(e.getValue()); require(e.getValue().signum() > 0);
-                require(proof.request().external().contains(e.getKey()) || e.getValue().compareTo(BigInteger.valueOf(proof.request().stock().getOrDefault(e.getKey(), 0L))) <= 0);
+                require(proof.request().external().contains(e.getKey()) || e.getValue().compareTo(PlanningInventory.exactAmount(proof.request().stock(), e.getKey())) <= 0);
             }
             Map<String, Summary> recipes = new HashMap<>();
             for (var e : witness.recipes().entrySet()) {

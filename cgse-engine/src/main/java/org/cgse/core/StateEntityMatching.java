@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.ToIntBiFunction;
+import java.util.function.ToLongBiFunction;
 
 /** Owned physical entities shared by slots with different eligibility rules.
  * Whole-key slots branch over keys; mixed and unit slots use integral residual
@@ -30,14 +31,33 @@ final class StateEntityMatching<K> implements AutoCloseable {
     private final BigInteger[] remaining;
     private final int[] chosen, next, parentDemand, parentSupply, queue;
     private final int[] priority;
+    private final boolean[] nonMinimum;
     private final int fixed, width;
     private int depth, unmet, failedSlot;
     private long memory;
     private boolean done, feasible, flowing, totalShortage, hallDeficit;
     private boolean partialEligibility, relaxationTried, relaxing, failedFlow;
     private boolean packingTried, wholeKeyFailure;
+    private boolean preferenceLoss;
     private StateEntityPacking<K> packing;
     private StateEntityCohorts<K> cohorts;
+    private StateEntityMinCost<K> costRepair;
+    private ToIntBiFunction<StateEntityAllocation.Demand, K> repairPreference;
+    private ToLongBiFunction<StateEntityAllocation.Demand, K> repairCost;
+
+    boolean canMinimizePreferences() {
+        // Whole demands are sorted by amount. Equal-size, entirely whole-key
+        // allocations have an exact unit-cohort representation; mixed sizes do not.
+        return demands.size() > 1 && demands.size() <= 32 && width > 1 && width <= 256 && allowed.length <= 1024 &&
+                (fixed == 0 || fixed == demands.size() && demands.get(0).amount() == demands.get(fixed - 1).amount());
+    }
+
+    boolean hasPreferenceLoss() { return feasible() && preferenceLoss; }
+
+    void minimizePreferences(ToIntBiFunction<StateEntityAllocation.Demand, K> preference,
+            ToLongBiFunction<StateEntityAllocation.Demand, K> cost) {
+        if (canMinimizePreferences()) { repairPreference = preference; repairCost = cost; }
+    }
 
     static <K> StateEntityMatching<K> create(List<StateEntityAllocation.Demand> demands,
             List<StateEntityAllocation.Supply<K>> supplies,
@@ -48,20 +68,30 @@ final class StateEntityMatching<K> implements AutoCloseable {
     static <K> StateEntityMatching<K> create(List<StateEntityAllocation.Demand> demands,
             List<StateEntityAllocation.Supply<K>> supplies, BiPredicate<StateEntityAllocation.Demand, K> eligible,
             ToIntBiFunction<StateEntityAllocation.Demand, K> preference, PlanningBudget budget) {
+        return create(demands, supplies, eligible, preference, null, budget);
+    }
+
+    static <K> StateEntityMatching<K> create(List<StateEntityAllocation.Demand> demands,
+            List<StateEntityAllocation.Supply<K>> supplies, BiPredicate<StateEntityAllocation.Demand, K> eligible,
+            ToIntBiFunction<StateEntityAllocation.Demand, K> preference,
+            ToLongBiFunction<StateEntityAllocation.Demand, K> cost, PlanningBudget budget) {
         long edges = (long) demands.size() * supplies.size();
         if (edges > Integer.MAX_VALUE - 8) return null;
-        // Includes the eligibility/flow matrix and worst-case materialized picks.
-        long bytes = 768L + 192L * demands.size() + (preference == null ? 224L : 256L) * supplies.size() +
-                (preference == null ? 96L : 104L) * edges;
-        if (!budget.tryReserve(bytes)) return preference == null ? null : create(demands, supplies, eligible, budget);
-        try { return new StateEntityMatching<>(demands, supplies, eligible, preference, budget, bytes); }
+        // Includes eligibility/flow, picks and ranked priority/lower-bound flags.
+        boolean ranked = preference != null || cost != null;
+        long bytes = 768L + 192L * demands.size() + (ranked ? 256L : 224L) * supplies.size() +
+                (ranked ? 104L : 96L) * edges + (cost == null ? 0 : 32L + 8L * supplies.size());
+        if (!budget.tryReserve(bytes)) return cost != null ? create(demands, supplies, eligible, preference, budget) :
+                preference == null ? null : create(demands, supplies, eligible, budget);
+        try { return new StateEntityMatching<>(demands, supplies, eligible, preference, cost, budget, bytes); }
         catch (RuntimeException | Error failure) { budget.release(bytes); throw failure; }
     }
 
     private StateEntityMatching(List<StateEntityAllocation.Demand> demands,
             List<StateEntityAllocation.Supply<K>> supplies,
             BiPredicate<StateEntityAllocation.Demand, K> eligible,
-            ToIntBiFunction<StateEntityAllocation.Demand, K> preference, PlanningBudget budget, long bytes) {
+            ToIntBiFunction<StateEntityAllocation.Demand, K> preference,
+            ToLongBiFunction<StateEntityAllocation.Demand, K> cost, PlanningBudget budget, long bytes) {
         this.budget = budget; memory = bytes;
         this.demands = new ArrayList<>(demands); this.supplies = new ArrayList<>(supplies);
         this.demands.sort((a, b) -> {
@@ -72,9 +102,11 @@ final class StateEntityMatching<K> implements AutoCloseable {
         this.supplies.sort((a, b) -> { budget.check(); return Long.compare(b.capacity(), a.capacity()); });
         width = supplies.size(); int count = demands.size(), indivisible = 0;
         allowed = new boolean[count * width]; flow = new long[allowed.length];
-        priority = preference == null ? null : new int[allowed.length];
-        int[] scores = preference == null ? null : new int[width];
-        Integer[] order = preference == null ? null : new Integer[width];
+        priority = preference == null && cost == null ? null : new int[allowed.length];
+        nonMinimum = priority != null && count > 1 && count <= 32 && width > 1 && width <= 256 && allowed.length <= 1024 ? new boolean[allowed.length] : null;
+        int[] scores = priority == null ? null : new int[width];
+        long[] costs = cost == null ? null : new long[width];
+        Integer[] order = priority == null ? null : new Integer[width];
         remaining = new BigInteger[width]; left = new long[count];
         BigInteger available = BigInteger.ZERO, needed = BigInteger.ZERO;
         for (int s = 0; s < width; s++) {
@@ -89,15 +121,25 @@ final class StateEntityMatching<K> implements AutoCloseable {
                 budget.check(); allowed[d * width + s] = eligible.test(demand, this.supplies.get(s).state());
                 partialEligibility |= !allowed[d * width + s];
                 if (scores != null) {
-                    scores[s] = allowed[d * width + s] ? preference.applyAsInt(demand, this.supplies.get(s).state()) : Integer.MAX_VALUE;
+                    scores[s] = !allowed[d * width + s] ? Integer.MAX_VALUE : preference == null ? 0 : preference.applyAsInt(demand, this.supplies.get(s).state());
+                    if (costs != null) costs[s] = allowed[d * width + s] ? cost.applyAsLong(demand, this.supplies.get(s).state()) : Long.MAX_VALUE;
                     order[s] = s;
                 }
             }
             if (scores != null) {
                 // Stable per-slot edge order is only a search preference. All
                 // allowed edges remain available to branches and augmentations.
-                Arrays.sort(order, (a, b) -> { budget.check(); return Integer.compare(scores[a], scores[b]); });
-                for (int s = 0; s < width; s++) { budget.check(); priority[d * width + s] = order[s]; }
+                Arrays.sort(order, (a, b) -> {
+                    budget.check(); int comparison = Integer.compare(scores[a], scores[b]);
+                    return comparison != 0 || costs == null ? comparison : Long.compare(costs[a], costs[b]);
+                });
+                int firstAllowed = -1;
+                for (int s = 0; s < width; s++) {
+                    budget.check(); int key = order[s]; priority[d * width + s] = key;
+                    if (!allowed[d * width + key]) continue;
+                    if (firstAllowed < 0) firstAllowed = key;
+                    else if (nonMinimum != null) nonMinimum[d * width + key] = scores[key] != scores[firstAllowed] || costs != null && costs[key] != costs[firstAllowed];
+                }
             }
         }
         fixed = indivisible; unmet = fixed;
@@ -114,6 +156,10 @@ final class StateEntityMatching<K> implements AutoCloseable {
         budget.checkpoint();
         if (done) return true;
         budget.check();
+        if (costRepair != null) {
+            if (!costRepair.step()) return false;
+            costRepair.close(); costRepair = null;
+        }
         if (cohorts != null) {
             if (!cohorts.step()) return false;
             if (!cohorts.possible()) {
@@ -160,13 +206,27 @@ final class StateEntityMatching<K> implements AutoCloseable {
                 startPacking();
                 return false;
             }
+            preferenceLoss = false;
             for (int d = 0; d < demands.size(); d++) {
                 budget.check(); var demand = demands.get(d);
-                if (d < fixed) result.add(new StateEntityAllocation.Pick<>(demand.slot(), supplies.get(chosen[d]).state(), demand.amount()));
+                if (d < fixed) {
+                    preferenceLoss |= nonMinimum != null && nonMinimum[d * width + chosen[d]];
+                    result.add(new StateEntityAllocation.Pick<>(demand.slot(), supplies.get(chosen[d]).state(), demand.amount()));
+                }
                 else for (int s = 0; s < width; s++) {
                     budget.check(); long use = flow[d * width + s];
-                    if (use > 0) result.add(new StateEntityAllocation.Pick<>(demand.slot(), supplies.get(s).state(), use));
+                    if (use > 0) {
+                        preferenceLoss |= nonMinimum != null && nonMinimum[d * width + s];
+                        result.add(new StateEntityAllocation.Pick<>(demand.slot(), supplies.get(s).state(), use));
+                    }
                 }
+            }
+            if (repairPreference != null) {
+                if (preferenceLoss || nonMinimum == null) costRepair = fixed == 0 ?
+                        StateEntityMinCost.create(demands, supplies, allowed, flow, remaining, repairPreference, repairCost, budget) :
+                        StateEntityMinCost.createWhole(demands, supplies, allowed, chosen, remaining, repairPreference, repairCost, budget);
+                repairPreference = null; repairCost = null;
+                if (costRepair != null) { result.clear(); return false; }
             }
             feasible = done = true; return true;
         }
@@ -302,6 +362,8 @@ final class StateEntityMatching<K> implements AutoCloseable {
     List<StateEntityAllocation.Pick<K>> result() { if (!feasible()) throw new IllegalStateException("No matching witness"); return result; }
 
     @Override public void close() {
+        if (costRepair != null) costRepair.close(); costRepair = null;
+        repairPreference = null; repairCost = null;
         if (packing != null) packing.close(); packing = null;
         if (cohorts != null) cohorts.close(); cohorts = null;
         demands.clear(); supplies.clear(); result.clear(); Arrays.fill(remaining, null);

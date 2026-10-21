@@ -31,6 +31,10 @@ final class CountLcg implements AutoCloseable {
 
     private record LinearReason(ExactLinearProgram.Constraint row, int except, BigInteger slack, int prefix, int rowId) {}
 
+    /** Interior deletions carry flattened, pre-update bound explanations.
+     * They belong only to the private support candidate, never a proof export. */
+    private record Hole(int variable, int removed, int level, List<Literal> reason, long bytes) {}
+
     private static final class ExplainedLiteral {
 
         final Literal literal;
@@ -210,6 +214,14 @@ final class CountLcg implements AutoCloseable {
     }
 
     private final PlanningBudget budget;
+    // Borrowed only by CountSupportedSearch; its consequences never leave that
+    // candidate owner as proof rows, root bounds or learned clauses.
+    private CountEqualitySupport equalitySupport;
+    private int[] domainMasks, domainFull;
+    private Hole[][] holeReasons;
+    private List<Hole> holeTrail;
+    private BitSet holePending;
+    private long holesRemoved, holesRestored;
     private List<ExactLinearProgram.Constraint> rows;
     private final BigInteger[] rootLow, rootHigh, low, high;
     private final BigInteger[] levelZeroLow, levelZeroHigh;
@@ -466,6 +478,12 @@ final class CountLcg implements AutoCloseable {
                 analyze();
                 return complete;
             }
+            if (holePending != null && !holePending.isEmpty()) {
+                int variable = holePending.nextSetBit(0);
+                holePending.clear(variable);
+                trimHoles(variable);
+                return false;
+            }
             if (!queue.isEmpty()) {
                 if (cutPropagationCycle()) return false;
                 int id = queue.removeFirst();
@@ -474,6 +492,7 @@ final class CountLcg implements AutoCloseable {
                     long before = work;
                     int beforeTrail = trail.size();
                     propagate(id);
+                    if (conflict == null && equalitySupport != null) propagateSupport(id);
                     if (rowPool != null) rowPool.observed(id, trail.size() - beforeTrail + (conflict == null ? 0 : low.length), work - before, decisions);
                 }
                 return false;
@@ -577,6 +596,15 @@ final class CountLcg implements AutoCloseable {
             if (best < 0) throw new IllegalStateException("Fixed integer assignment was not propagated");
             BigInteger middle = high[best] == null ? low[best].add(low[best].abs().max(BigInteger.ONE)) :
                     low[best].add(high[best].subtract(low[best]).shiftRight(1));
+            if (domainMasks != null && domainMasks[best] != domainFull[best]) {
+                // Split between allowed values, without visiting an excluded
+                // singleton. The complementary bound remains a normal LCG
+                // decision; trimming its endpoint has an explicit explanation.
+                int remaining = currentMask(best);
+                int skip = (Integer.bitCount(remaining) - 1) / 2;
+                while (skip-- > 0) { charge(); remaining &= remaining - 1; }
+                middle = rootLow[best].add(BigInteger.valueOf(Integer.numberOfTrailingZeros(remaining)));
+            }
             level++;
             decisions++;
             boolean up = preferred != null && preferred.up();
@@ -938,6 +966,165 @@ final class CountLcg implements AutoCloseable {
         }
     }
 
+    CountLcg supportEqualities(CountEqualitySupport support) {
+        if (retainProof || differenceChecked || equalitySupport != null) throw new IllegalStateException("Support requires a fresh private candidate search");
+        equalitySupport = Objects.requireNonNull(support);
+        return this;
+    }
+
+    void expandEqualityDomains() {
+        if (domainMasks == null) throw new IllegalStateException("Expansion requires private equality domains");
+        long before = budget.threadWork();
+        try { equalitySupport.expandDomains(this::enqueue); }
+        finally {
+            workTicks += (budget.threadWork() - before) * PlanningBudget.WORK_SCALE;
+            work = PlanningBudget.units(workTicks);
+        }
+    }
+
+    boolean supportDomains() {
+        if (equalitySupport == null || differenceChecked || domainMasks != null)
+            throw new IllegalStateException("Domains require a fresh private support search");
+        // Include retained ArrayList capacity after undo as well as the
+        // per-value reason pointers; popping a trail does not shrink its array.
+        long bytes = 512L + 512L * low.length;
+        if (!budget.tryReserve(bytes)) return false;
+        memory += bytes;
+        domainMasks = new int[low.length];
+        domainFull = new int[low.length];
+        holeReasons = new Hole[low.length][];
+        holeTrail = new ArrayList<>();
+        holePending = new BitSet(low.length);
+        for (int i = 0; i < low.length; i++) {
+            charge();
+            if (high[i] == null) continue;
+            BigInteger width = high[i].subtract(low[i]);
+            if (width.signum() < 0 || width.compareTo(BigInteger.valueOf(15)) > 0) continue;
+            domainFull[i] = domainMasks[i] = (1 << (width.intValue() + 1)) - 1;
+            holeReasons[i] = new Hole[16];
+        }
+        return true;
+    }
+
+    private void propagateSupport(int rowId) {
+        long before = budget.threadWork();
+        CountEqualitySupport.Result result;
+        try { result = equalitySupport.propagate(rowId, low, high, domainMasks); }
+        finally {
+            workTicks += (budget.threadWork() - before) * PlanningBudget.WORK_SCALE;
+            work = PlanningBudget.units(workTicks);
+        }
+        if (result == null) return;
+        List<Literal> why;
+        if (domainMasks != null) why = supportReason(result.variables());
+        else {
+            why = new ArrayList<>();
+            // A hull-only DP uses just this box. A masked DP must additionally
+            // explain every prior deletion it consumed, even with equal bounds.
+            for (int i : result.variables()) {
+                charge();
+                why.add(new Literal(i, true, low[i]));
+                why.add(new Literal(i, false, high[i]));
+            }
+        }
+        if (result.empty()) { conflict = why; return; }
+        for (int k = 0; k < result.variables().length && conflict == null; k++) {
+            int i = result.variables()[k];
+            if (domainMasks != null) {
+                // Endpoints already live on the ordinary bound trail. Store
+                // only the extra interior deletions, avoiding duplicate reasons
+                // and wakeups for values excluded by the supported hull.
+                int first = result.lower()[k].subtract(rootLow[i]).intValueExact();
+                int last = result.upper()[k].subtract(rootLow[i]).intValueExact();
+                int hull = ((1 << (last - first + 1)) - 1) << first;
+                removeHoles(i, result.supports()[k] | ~hull, why);
+            }
+            tighten(new Literal(i, true, result.lower()[k]), why);
+            tighten(new Literal(i, false, result.upper()[k]), why);
+        }
+    }
+
+    private List<Literal> supportReason(int[] variables) {
+        long bytes = 256L + 512L * low.length;
+        reserve(bytes);
+        try {
+            var strongest = new LinkedHashMap<Integer, Literal>();
+            for (int variable : variables) {
+                mergeSupportReason(strongest, new Literal(variable, true, low[variable]));
+                mergeSupportReason(strongest, new Literal(variable, false, high[variable]));
+                int seen = 0;
+                for (Hole hole : holeReasons[variable]) {
+                    charge();
+                    if (hole == null || (seen & hole.removed) != 0) continue;
+                    seen |= hole.removed;
+                    for (Literal literal : hole.reason) mergeSupportReason(strongest, literal);
+                }
+            }
+            var result = new ArrayList<Literal>();
+            for (Literal literal : strongest.values()) {
+                charge();
+                result.add(literal);
+            }
+            return result;
+        } finally {
+            memory -= bytes;
+            budget.release(bytes);
+        }
+    }
+
+    private void mergeSupportReason(Map<Integer, Literal> strongest, Literal literal) {
+        charge();
+        if (rootTrue(literal)) return;
+        int key = boundKey(literal.variable, literal.minimum);
+        Literal old = strongest.get(key);
+        if (old == null || (literal.minimum ? literal.value.compareTo(old.value) > 0 : literal.value.compareTo(old.value) < 0))
+            strongest.put(key, literal);
+    }
+
+    private void removeHoles(int variable, int allowed, List<Literal> reason) {
+        int removed = domainMasks[variable] & ~allowed;
+        if (removed == 0) return;
+        long bytes = 192L + 256L * reason.size();
+        reserve(bytes);
+        var hole = new Hole(variable, removed, level, List.copyOf(reason), bytes);
+        holeTrail.add(hole);
+        for (int bits = removed; bits != 0; bits &= bits - 1) {
+            charge();
+            holeReasons[variable][Integer.numberOfTrailingZeros(bits)] = hole;
+        }
+        domainMasks[variable] &= allowed;
+        holesRemoved += Integer.bitCount(removed);
+        wakeHoles(variable);
+    }
+
+    private void wakeHoles(int variable) {
+        holePending.set(variable);
+        // Interior changes affect BOTH signs of paired equations even when
+        // neither endpoint moves. Cached interval row activities remain valid.
+        for (int key = 2 * variable; key < 2 * variable + 2; key++)
+            for (Incidence edge : incident.get(key)) { charge(); enqueue(edge.row); }
+    }
+
+    private int currentMask(int variable) {
+        charge();
+        int first = low[variable].subtract(rootLow[variable]).intValueExact();
+        int last = high[variable].subtract(rootLow[variable]).intValueExact();
+        return domainMasks[variable] & (((1 << (last - first + 1)) - 1) << first);
+    }
+
+    private void trimHoles(int variable) {
+        if (domainMasks[variable] == domainFull[variable]) return;
+        int remaining = currentMask(variable);
+        int first = Integer.numberOfTrailingZeros(remaining), last = 31 - Integer.numberOfLeadingZeros(remaining);
+        BigInteger minimum = rootLow[variable].add(BigInteger.valueOf(first));
+        BigInteger maximum = rootLow[variable].add(BigInteger.valueOf(last));
+        if (remaining != 0 && minimum.equals(low[variable]) && maximum.equals(high[variable])) return;
+        var why = supportReason(new int[] {variable});
+        if (remaining == 0) { conflict = why; return; }
+        tighten(new Literal(variable, true, minimum), why);
+        tighten(new Literal(variable, false, maximum), why);
+    }
+
     private void propagate(int rowId) {
         var row = rows.get(rowId);
         RowActivity cached = activity(rowId);
@@ -1247,6 +1434,8 @@ final class CountLcg implements AutoCloseable {
         // propagation. Waking both directions used to rescan unrelated rows.
         updateEndpoint(literal.variable, literal.minimum, old, literal.value);
         changed(literal.variable);
+        if (domainMasks != null && domainMasks[literal.variable] != domainFull[literal.variable])
+            holePending.set(literal.variable);
     }
 
     private void analyze() {
@@ -1440,8 +1629,23 @@ final class CountLcg implements AutoCloseable {
             else high[change.literal.variable] = change.old;
             updateEndpoint(change.literal.variable, change.literal.minimum, change.literal.value, change.old);
             changed(change.literal.variable);
+            if (domainMasks != null && domainMasks[change.literal.variable] != domainFull[change.literal.variable])
+                holePending.set(change.literal.variable);
             memory -= change.bytes;
             budget.release(change.bytes);
+        }
+        if (holeTrail != null) while (!holeTrail.isEmpty() && holeTrail.get(holeTrail.size() - 1).level > to) {
+            charge();
+            Hole hole = holeTrail.remove(holeTrail.size() - 1);
+            domainMasks[hole.variable] |= hole.removed;
+            for (int bits = hole.removed; bits != 0; bits &= bits - 1) {
+                charge();
+                holeReasons[hole.variable][Integer.numberOfTrailingZeros(bits)] = null;
+            }
+            holesRestored += Integer.bitCount(hole.removed);
+            wakeHoles(hole.variable);
+            memory -= hole.bytes;
+            budget.release(hole.bytes);
         }
         level = to;
     }
@@ -1737,6 +1941,9 @@ final class CountLcg implements AutoCloseable {
 
     @Override
     public void close() {
+        equalitySupport = null;
+        if (domainMasks != null) budget.note("count_equality_domains", "removed=" + holesRemoved + "; restored=" + holesRestored + "; private_candidate_scope");
+        domainMasks = null; domainFull = null; holeReasons = null; holeTrail = null; holePending = null;
         finiteHint = null;
         if (finiteHintSession != null) finiteHintSession.close();
         if (lockScores != null) lockScores.close();

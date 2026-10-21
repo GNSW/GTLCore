@@ -16,7 +16,7 @@ final class CountPackingExchange implements AutoCloseable {
     private final int[] rejected, rejectedPoint;
     private final long[] slack, seedChange, query, prefix, leftLimit;
     private final long seed;
-    private final int size, dimensions, split, points, leafSize;
+    private final int size, dimensions, split, points, leafSize, rightRadius;
     private final CountPackingValues vectors;
     private final long[] masks, minimum, maximum, spread, stricter;
     private final int[] order, from, to, left, right, building, querying;
@@ -31,7 +31,12 @@ final class CountPackingExchange implements AutoCloseable {
         this(a, b, seed, budget, radius, 0);
     }
     CountPackingExchange(long[][] a, long[] b, long seed, PlanningBudget budget, int radius, long flexible) {
+        this(a, b, seed, budget, radius, flexible, -1);
+    }
+    /** A separate, explicitly bounded domain; the legacy symmetric radius is unchanged. */
+    CountPackingExchange(long[][] a, long[] b, long seed, PlanningBudget budget, int radius, long flexible, int otherRadius) {
         if (radius < 1 || radius > 4) throw new IllegalArgumentException("Exchange radius");
+        if (otherRadius != -1 && (otherRadius < 1 || otherRadius > 4)) throw new IllegalArgumentException("Right exchange radius");
         if (a.length == 0) throw new IllegalArgumentException("Empty exchange face");
         size = a[0].length;
         dimensions = b.length;
@@ -47,15 +52,16 @@ final class CountPackingExchange implements AutoCloseable {
         int combinations = 1, chosen = 1;
         for (int k = 1; k <= Math.min(radius, split); k++) { chosen = chosen * (split - k + 1) / k; combinations += chosen; }
         if (flexible != 0) {
-            int cap = combinations(Math.max(split, size - split), 4, 0, budget);
+            int cap = otherRadius < 0 ? combinations(Math.max(split, size - split), 4, 0, budget) : 65536;
             int leftFree = Long.bitCount(flexible & ((1L << split) - 1));
             int rightFree = Long.bitCount(flexible >>> split);
-            while (radius > 0 && (combinations(split, radius, leftFree, budget) > cap ||
+            while (otherRadius < 0 && radius > 0 && (combinations(split, radius, leftFree, budget) > cap ||
                     combinations(size - split, radius, rightFree, budget) > cap)) radius--;
             combinations = combinations(split, radius, leftFree, budget);
-            if (combinations > cap || combinations(size - split, radius, rightFree, budget) > cap)
+            if (combinations > cap || combinations(size - split, otherRadius < 0 ? radius : otherRadius, rightFree, budget) > cap)
                 throw new IllegalArgumentException("Unbounded flexible exchange");
         }
+        rightRadius = otherRadius < 0 ? radius : otherRadius;
         points = combinations;
         // Retain only lower node bounds for one-sided queries. Upper activities
         // are build scratch; root spreads guide partitioning without tree storage.
@@ -79,7 +85,7 @@ final class CountPackingExchange implements AutoCloseable {
             slack = b.clone();
             leftLimit = flexible == 0 ? null : new long[dimensions];
             query = new long[dimensions];
-            prefix = new long[(flexible == 0 ? radius + 1 : size + 1) * dimensions];
+            prefix = new long[(flexible == 0 ? Math.max(radius, rightRadius) + 1 : size + 1) * dimensions];
             seedChange = new long[dimensions * size];
             for (int r = 0; r < dimensions; r++) {
                 long magnitude = Math.abs(b[r]);
@@ -97,11 +103,11 @@ final class CountPackingExchange implements AutoCloseable {
             }
 
             // Necessary one-sided bounds, calculated over the actual proposed
-            // opposite domain: every improving flexible flip plus at most radius
+            // opposite domain: every improving flexible flip plus at most its radius
             // improving ordinary flips. A rejected left point cannot have a mate.
             // These bounds close only this neighborhood; they are never shared cuts.
             if (leftLimit != null) for (int r = 0; r < dimensions; r++) {
-                var best = new long[radius];
+                var best = new long[rightRadius];
                 for (int i = split; i < size; i++) {
                     long change = seedChange[r * size + i];
                     budget.operation(PlanningBudget.Operation.SCAN, 0);
@@ -110,13 +116,13 @@ final class CountPackingExchange implements AutoCloseable {
                         leftLimit[r] += Math.min(0, change);
                         continue;
                     }
-                    budget.operations(PlanningBudget.Operation.SCAN, 0, radius);
-                    for (int k = 0; k < radius; k++) if (change < best[k]) {
+                    budget.operations(PlanningBudget.Operation.SCAN, 0, rightRadius);
+                    for (int k = 0; k < rightRadius; k++) if (change < best[k]) {
                         long old = best[k]; best[k] = change; change = old;
                     }
                 }
                 leftLimit[r] = slack[r] - leftLimit[r];
-                budget.operations(PlanningBudget.Operation.INTEGER, 64, radius + 1);
+                budget.operations(PlanningBudget.Operation.INTEGER, 64, rightRadius + 1);
                 for (long value : best) leftLimit[r] -= value;
             }
             vectors = new CountPackingValues(points * dimensions, compact);
@@ -135,7 +141,8 @@ final class CountPackingExchange implements AutoCloseable {
             rejected = new int[capacity];
             building = new int[64];
             querying = new int[64];
-            subsets = new Subsets(0, split, radius, flexible, budget);
+            subsets = new Subsets(0, split, Math.max(radius, rightRadius), flexible, budget);
+            subsets.radius = radius;
         }
  catch (RuntimeException failure) {
             close();
@@ -171,6 +178,7 @@ final class CountPackingExchange implements AutoCloseable {
         if (phase == 1) {
             if (builds == 0) {
                 phase = 2;
+                subsets.radius = rightRadius;
                 subsets.reset(split, size);
                 return false;
             }
@@ -352,7 +360,7 @@ final class CountPackingExchange implements AutoCloseable {
         final int[] chosen;
         boolean first = true, done;
         final long flexible;
-        final int radius;
+        int radius;
         final int[] costs;
         final PlanningBudget budget;
         Subsets(int start, int end, int radius, long flexible, PlanningBudget budget) {
@@ -403,7 +411,7 @@ final class CountPackingExchange implements AutoCloseable {
             int i = count - 1;
             while (i >= 0 && chosen[i] == end - count + i) i--;
             if (i < 0) {
-                if (++count > Math.min(chosen.length, end - start)) {
+                if (++count > Math.min(radius, end - start)) {
                     done = true;
                     return -1L;
                 }

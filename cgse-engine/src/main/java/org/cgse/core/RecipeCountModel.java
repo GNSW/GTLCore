@@ -176,8 +176,8 @@ final class RecipeCountModel<K> implements AutoCloseable {
      * would incorrectly prove valid recycling orders impossible. Every count
      * witness still passes the independent scheduling and candidate checks.
      */
-    private void requireProduction(K target, long amount) {
-        boolean positiveGain = BigInteger.valueOf(stock.getOrDefault(target, 0L)).compareTo(goal(target)) >= 0;
+    void requireProduction(K target, long amount) {
+        boolean positiveGain = PlanningInventory.exactAmount(stock, target).compareTo(goal(target)) >= 0;
         // Unit flows decompose into paths and cycles. Omit cycles, paths that
         // export existing target stock into optional products, and matching
         // surplus target paths: the same target gain then needs only that many
@@ -250,7 +250,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
                         }
                     }
                     constraints.add(new ExactLinearProgram.Constraint(terms,
-                            BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
+                            PlanningInventory.exactAmount(stock, key).subtract(goal(key))));
                     rowKeys.add(key);
                 }
                 return;
@@ -284,7 +284,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
         }
         for (var row : rows.entrySet()) {
             K key = row.getKey();
-            constraints.add(row.getValue().build(BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
+            constraints.add(row.getValue().build(PlanningInventory.exactAmount(stock, key).subtract(goal(key))));
             rowKeys.add(key);
         }
     }
@@ -302,7 +302,7 @@ final class RecipeCountModel<K> implements AutoCloseable {
             K key = keys.get(i);
             if (external.contains(key)) continue;
             budget.charge(1L + (structure.terms.get(i).size() + 3L) / 4);
-            constraints.add(new ExactLinearProgram.Constraint(structure.terms.get(i), BigInteger.valueOf(stock.getOrDefault(key, 0L)).subtract(goal(key))));
+            constraints.add(new ExactLinearProgram.Constraint(structure.terms.get(i), PlanningInventory.exactAmount(stock, key).subtract(goal(key))));
             rowKeys.add(key);
         }
     }

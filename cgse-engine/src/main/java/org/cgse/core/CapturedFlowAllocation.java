@@ -100,7 +100,7 @@ final class CapturedFlowAllocation<K> implements AutoCloseable {
             if (!resourceRows.hasNext()) { built = true; return; }
             var row = resourceRows.next(); K key = row.getKey();
             if (external.contains(key) && !key.equals(target)) return;
-            BigInteger available = BigInteger.valueOf(stock.getOrDefault(key, 0L));
+            BigInteger available = PlanningInventory.exactAmount(stock, key);
             BigInteger goal = BigInteger.valueOf(seeds.getOrDefault(key, 0L));
             if (key.equals(target)) goal = goal.add(BigInteger.valueOf(amount));
             BigInteger upper = available.subtract(goal);

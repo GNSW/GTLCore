@@ -9,4 +9,10 @@ public interface GraphProviderVersion {
 
     /** Live registered patterns; iterate on the server thread while the revision is unchanged. */
     Iterable<IPatternDetails> gtlcore$registeredPatterns();
+
+    default void gtlcore$patternChanged(IPatternDetails pattern, boolean present) {}
+
+    default ByproductPatternIndex gtlcore$patternSources() {
+        return null;
+    }
 }

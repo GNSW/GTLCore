@@ -303,10 +303,10 @@ public final class CraftingEngineRouter {
 
         private boolean finish() {
             GraphPlan<AEKey> selected = planning.result();
-            Map<AEKey, Long> extractionStock = new LinkedHashMap<>(planning.availability());
+            Map<AEKey, Long> extractionStock = planning.availability();
             long assemblyStarted = System.nanoTime();
             result = new AeGraphPlan(selected, prepared.bindings(), snapshot.emitable(), extractionStock,
-                    planning.fallbackMode(), planning.reuseCandidate());
+                    planning.fallbackMode(), planning.reuseCandidate(), snapshot.impreciseStock());
             long assemblyNanos = System.nanoTime() - assemblyStarted;
             long skipped = ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging ? logAllowance(grid,
                     new PlanLogKey(target, amount, strategy, selected.result(), snapshot.epoch(), selected.missingExact().hashCode())) : -1;

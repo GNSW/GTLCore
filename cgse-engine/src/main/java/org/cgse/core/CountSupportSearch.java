@@ -83,7 +83,7 @@ final class CountSupportSearch<K> implements AutoCloseable {
             for (int k = 0; k < model.keys.size(); k++) {
                 K key = model.keys.get(k);
                 boolean supplied = model.external.contains(key);
-                stock.add(supplied ? BigInteger.ZERO : BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+                stock.add(supplied ? BigInteger.ZERO : PlanningInventory.exactAmount(model.stock, key));
                 goals[k] = supplied ? BigInteger.ZERO : model.goal(key);
                 for (int i = 0; i < support.size(); i++) {
                     budget.check();

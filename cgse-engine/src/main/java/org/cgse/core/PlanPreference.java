@@ -133,7 +133,7 @@ final class PlanPreference<K> {
             BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
             BigInteger initial = prefix.max(goal.subtract(net)).max(BigInteger.ZERO);
             put(required, key, initial);
-            if (!external.contains(key)) put(missing, key, initial.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L))).max(BigInteger.ZERO));
+            if (!external.contains(key)) put(missing, key, initial.subtract(PlanningInventory.exactAmount(stock, key)).max(BigInteger.ZERO));
         }
         // Most local orderings already differ in startup needs. Only traverse
         // their compressed programs and compute peaks when those costs tie.

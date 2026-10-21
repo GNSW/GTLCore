@@ -25,4 +25,10 @@ public interface ICraftingPlanSummaryEntry {
     List<AEKey> gtlcore$getMissingKeys();
 
     void gtlcore$setMissingKeys(List<AEKey> keys);
+
+    default int gtlcore$getMissingSourceMask() {
+        return 0;
+    }
+
+    default void gtlcore$setMissingSourceMask(int mask) {}
 }

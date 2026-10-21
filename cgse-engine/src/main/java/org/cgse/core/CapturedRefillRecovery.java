@@ -26,7 +26,7 @@ final class CapturedRefillRecovery<K> implements AutoCloseable {
     private final long started, allowance;
     private final List<StateFamily<K>> families = new ArrayList<>();
     private final Set<String> identities = new LinkedHashSet<>();
-    private final Map<K, Long> supplied = new LinkedHashMap<>();
+    private final Map<K, BigInteger> supplied = new LinkedHashMap<>();
     private Iterator<Map.Entry<K, BigInteger>> missing;
     private Iterator<Map.Entry<K, Long>> inventory;
     private Map.Entry<K, BigInteger> current;
@@ -62,7 +62,7 @@ final class CapturedRefillRecovery<K> implements AutoCloseable {
                 } else { input++; candidate = 0; }
             } else { entry++; input = candidate = 0; }
         } else if (inventory.hasNext()) {
-            budget.compilationCheck(); var value = inventory.next(); reserve(96); supplied.put(value.getKey(), value.getValue());
+            budget.compilationCheck(); var value = inventory.next(); reserve(96); supplied.put(value.getKey(), PlanningInventory.exactAmount(stock, value.getKey()));
         } else if (work == null) {
             budget.compilationCheck();
             if (missing == null) missing = preview.missingExact().entrySet().iterator();
@@ -71,12 +71,9 @@ final class CapturedRefillRecovery<K> implements AutoCloseable {
                 if (family < families.size()) {
                     if (families.get(family++).accepts(current.getKey())) { removedToolRefill = true; current = null; }
                 } else {
-                    BigInteger available = BigInteger.valueOf(supplied.getOrDefault(current.getKey(), 0L)).add(current.getValue());
-                    // A large exact preview is still useful, but this optional
-                    // retry must not narrow an unrepresentable physical stock.
-                    if (available.compareTo(BigInteger.valueOf(Long.MAX_VALUE)) > 0) { done = true; return true; }
+                    BigInteger available = supplied.getOrDefault(current.getKey(), BigInteger.ZERO).add(current.getValue());
                     if (!supplied.containsKey(current.getKey())) reserve(96);
-                    supplied.put(current.getKey(), available.longValueExact()); current = null;
+                    supplied.put(current.getKey(), available); current = null;
                 }
             } else if (!missing.hasNext()) {
                 if (families.isEmpty()) { done = true; return true; }
@@ -84,7 +81,7 @@ final class CapturedRefillRecovery<K> implements AutoCloseable {
                         "; allowance=" + allowance + "; negative_proofs=false");
                 // Keep the full captured source domain. The nested work cannot
                 // make another conditional refill or recursively retry itself.
-                work = catalog.begin(preview.target(), preview.amount(), supplied, external, seeds,
+                work = catalog.begin(preview.target(), preview.amount(), PlanningInventory.exactSnapshot(supplied), external, seeds,
                         preview.preserveSeeds(), force, budget).catalysts(catalysts);
             }
         } else if (work.step()) {
@@ -99,9 +96,9 @@ final class CapturedRefillRecovery<K> implements AutoCloseable {
         for (var value : plan.initialExact().entrySet()) {
             budget.compilationCheck();
             if (external.contains(value.getKey())) continue;
-            if (value.getValue().compareTo(BigInteger.valueOf(supplied.getOrDefault(value.getKey(), 0L))) > 0)
+            if (value.getValue().compareTo(supplied.getOrDefault(value.getKey(), BigInteger.ZERO)) > 0)
                 throw new IllegalStateException("Refill retry borrowed unavailable stock");
-            BigInteger deficit = value.getValue().subtract(BigInteger.valueOf(stock.getOrDefault(value.getKey(), 0L)));
+            BigInteger deficit = value.getValue().subtract(PlanningInventory.exactAmount(stock, value.getKey()));
             if (deficit.signum() > 0) deficits.put(value.getKey(), deficit);
         }
         result = new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), plan.steps(), plan.recipes(),

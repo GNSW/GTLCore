@@ -40,7 +40,7 @@ final class ContinuousCoverability<K> implements AutoCloseable {
             return;
         }
         memory = 512L << 10;
-        if (model.keys.stream().allMatch(key -> BigInteger.valueOf(model.stock.getOrDefault(key, 0L)).compareTo(model.goal(key)) >= 0)) {
+        if (model.keys.stream().allMatch(key -> PlanningInventory.exactAmount(model.stock, key).compareTo(model.goal(key)) >= 0)) {
             finish(Result.POSSIBLE);
             return;
         }
@@ -70,7 +70,7 @@ final class ContinuousCoverability<K> implements AutoCloseable {
                 }
             }
             K key = model.keys.get(i);
-            BigInteger difference = model.goal(key).subtract(BigInteger.valueOf(model.stock.getOrDefault(key, 0L)));
+            BigInteger difference = model.goal(key).subtract(PlanningInventory.exactAmount(model.stock, key));
             equations.add(new ExactLinearProgram.Constraint(terms, difference));
             equations.add(new ExactLinearProgram.Constraint(reversed, difference.negate()));
         }

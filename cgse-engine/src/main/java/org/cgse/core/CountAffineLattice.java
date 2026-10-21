@@ -12,7 +12,6 @@ import java.util.*;
  */
 final class CountAffineLattice implements AutoCloseable {
 
-    private static final int MAX_ALTERNATIVES = 32;
     private static final long ENUMERATION_WORK = 262144;
     private static final ExactRational HALF = new ExactRational(BigInteger.ONE, BigInteger.TWO);
     private static final ExactRational LOVASZ = new ExactRational(BigInteger.valueOf(3), BigInteger.valueOf(4));
@@ -45,7 +44,7 @@ final class CountAffineLattice implements AutoCloseable {
     private CountLatticePotential potential;
     private CountLatticePotential.Workspace potentialWorkspace;
     private boolean deep, strengthened;
-    private int alternative;
+    private int alternative, alternativeLimit = 32;
     private boolean enumerating, boxSearchMissed;
     private long enumerationAt, enumerationWork;
     private CountLatticeEnumeration enumeration;
@@ -128,7 +127,7 @@ final class CountAffineLattice implements AutoCloseable {
             } else if (phase == 8) {
                 nearest();
                 alternative++; checkpoints++;
-                if (counts != null || alternative == MAX_ALTERNATIVES) return complete = true;
+                if (counts != null || alternative >= alternativeLimit) return complete = true;
             } else if (phase == 5) {
                 gramStep();
             } else if (phase == 6) {
@@ -685,7 +684,7 @@ final class CountAffineLattice implements AutoCloseable {
      * this same scope, and exhausting their target points proves nothing.
      */
     boolean nextCandidate() {
-        if (!retaining || counts == null || memory == 0 || basis.size() < 2 || mu == null || norms == null || alternative == MAX_ALTERNATIVES)
+        if (!retaining || counts == null || memory == 0 || basis.size() < 2 || mu == null || norms == null || alternative >= alternativeLimit)
             return false;
         budget.checkpoint();
         counts = null;
@@ -693,6 +692,12 @@ final class CountAffineLattice implements AutoCloseable {
         phase = 8;
         budget.note("count_affine_alternative", "basis_reused; next=" + alternative + "; variables=" + lower.length);
         return true;
+    }
+
+    /** Extra target points for a caller's separately bounded, deferred retry. */
+    void widenAlternativeTargets() {
+        if (!retaining) throw new IllegalStateException("Alternative targets need an owned basis");
+        alternativeLimit = 256;
     }
 
     private void interval() {

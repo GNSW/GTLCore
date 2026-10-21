@@ -80,7 +80,7 @@ final class AllocationSearch<K> {
         this.external = external;
         this.preserve = preserve;
         this.force = force;
-        productionGoal = force ? BigInteger.valueOf(stock.getOrDefault(target, 0L)).add(BigInteger.valueOf(amount)) : null;
+        productionGoal = force ? PlanningInventory.exactAmount(stock, target).add(BigInteger.valueOf(amount)) : null;
         this.excluded = excluded;
         this.budget = budget;
         this.started = started;
@@ -154,14 +154,14 @@ final class AllocationSearch<K> {
                 K refill = null;
                 BigInteger refillGap = null;
                 if (preview) for (K key : keyIds.keySet()) if (!producedKeys.contains(key) && !external.contains(key)) {
-                    BigInteger gap = goals.getOrDefault(key, BigInteger.ZERO).subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    BigInteger gap = goals.getOrDefault(key, BigInteger.ZERO).subtract(PlanningInventory.exactAmount(stock, key));
                     if (refillGap == null || gap.compareTo(refillGap) > 0) {
                         refill = key;
                         refillGap = gap;
                     }
                 }
                 for (K key : keyIds.keySet()) {
-                    BigInteger available = BigInteger.valueOf(stock.getOrDefault(key, 0L));
+                    BigInteger available = PlanningInventory.exactAmount(stock, key);
                     // A one-unit diagnostic refill avoids fragmenting a large
                     // compressed loop at its very last missing raw input. This
                     // is hypothetical only: Candidate derives every borrowed
@@ -180,8 +180,8 @@ final class AllocationSearch<K> {
                 stack.push(new Frame(0, 0, new BitSet()));
                 visit(new BitSet());
                 Map<K, BigInteger> required = new LinkedHashMap<>();
-                BigInteger targetGoal = BigInteger.valueOf(amount).add(BigInteger.valueOf(force ?
-                        Math.max(stock.getOrDefault(target, 0L), requiredSeeds.getOrDefault(target, 0L)) : requiredSeeds.getOrDefault(target, 0L)));
+                BigInteger reserve = BigInteger.valueOf(requiredSeeds.getOrDefault(target, 0L));
+                BigInteger targetGoal = BigInteger.valueOf(amount).add(force ? reserve.max(PlanningInventory.exactAmount(stock, target)) : reserve);
                 required.put(target, targetGoal);
                 requiredSeeds.forEach((key, count) -> required.merge(key, BigInteger.valueOf(count), BigInteger::max));
                 expansion = new DemandExpansion<>(relevant, held, required, budget, preview);
@@ -241,7 +241,7 @@ final class AllocationSearch<K> {
             if (backjump()) return false;
             if (provenResourceConflict()) frame.recipe = recipes.size();
             BigInteger goal = BigInteger.valueOf(amount);
-            if (force) goal = goal.add(BigInteger.valueOf(stock.getOrDefault(target, 0L)));
+            if (force) goal = goal.add(PlanningInventory.exactAmount(stock, target));
             if (held.getOrDefault(target, BigInteger.ZERO).compareTo(goal) >= 0) {
                 checking = candidate(new PlanStep.Sequence(path));
                 return false;
@@ -498,7 +498,7 @@ final class AllocationSearch<K> {
                 }
                 BigInteger goal = BigInteger.valueOf(requiredSeeds.getOrDefault(key, 0L));
                 if (key.equals(target)) {
-                    if (force) goal = goal.max(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+                    if (force) goal = goal.max(PlanningInventory.exactAmount(stock, key));
                     goal = goal.add(BigInteger.valueOf(amount));
                 }
                 required = required.add(entry.getValue().multiply(goal));
@@ -706,9 +706,9 @@ final class AllocationSearch<K> {
                     BigInteger goal = BigInteger.valueOf(seeds.getOrDefault(key, 0L));
                     if (key.equals(target)) goal = goal.add(BigInteger.valueOf(amount));
                     BigInteger required = summary.required(key).max(goal.subtract(summary.delta(key)));
-                    if (!external.contains(key) && required.compareTo(BigInteger.valueOf(stock.getOrDefault(key, 0L))) > 0) {
+                    if (!external.contains(key) && required.compareTo(PlanningInventory.exactAmount(stock, key)) > 0) {
                         if (!preview) return true;
-                        missing.put(key, required.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L))));
+                        missing.put(key, required.subtract(PlanningInventory.exactAmount(stock, key)));
                     }
                     if (required.signum() > 0) initial.put(key, required);
                 } else {

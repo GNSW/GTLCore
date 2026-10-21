@@ -33,15 +33,18 @@ final class ForceCraftProof<K> implements AutoCloseable {
             allowance = Math.min(65536, budget.remainingWork() / 8);
             BigInteger amount = BigInteger.valueOf(plan.amount());
             BigInteger net = verified.summary().delta(plan.target());
+            // Net target gain is physical output minus non-reusable target
+            // consumption, so it cannot exceed gross physical production.
+            // This sufficient proof needs no source-count or output-total pass.
+            if (net.compareTo(amount) >= 0) {
+                complete = proved = true;
+                return;
+            }
             // Returned configuration tokens are not physical production. A zero
             // gain loop cannot discharge an ordinary forced crafting request.
             if (verified.physicalProduced(plan.target()).compareTo(amount) < 0 || net.signum() <= 0) {
                 outcome = net.signum() <= 0 ? Outcome.NON_PRODUCTIVE : Outcome.OUTPUT_SHORTFALL;
                 complete = true;
-                return;
-            }
-            if (net.compareTo(amount) >= 0) {
-                complete = proved = true;
                 return;
             }
             var counts = verified.patternCounts();

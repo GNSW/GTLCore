@@ -50,12 +50,26 @@ final class PlanFlowPruning<K> {
         if (original instanceof PlanStep.Batch || budget.remainingWork() < 16_384) return original;
         var pruning = new PlanFlowPruning<>(recipes, budget);
         try {
+            if (pruning.oversizedFlat(original)) return original;
             return pruning.rewrite(original);
         } catch (Stop limit) {
             return original;
         } finally {
             budget.release(pruning.memory);
         }
+    }
+
+    /** The only run in a flat word is already outside prune's 256-atom
+     * bound. A bounded scan avoids building an identity DAG and copying the
+     * same ineligible run; nested words still need their original traversal. */
+    private boolean oversizedFlat(PlanStep original) {
+        if (!(original instanceof PlanStep.Sequence sequence) || sequence.children().size() <= 256 ||
+                sequence.children().size() > 4096) return false;
+        for (var child : sequence.children()) {
+            charge();
+            if (!(child instanceof PlanStep.Batch)) return false;
+        }
+        return true;
     }
 
     private PlanStep rewrite(PlanStep original) {

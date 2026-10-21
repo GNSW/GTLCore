@@ -29,6 +29,7 @@ final class CountViewSearch implements AutoCloseable {
     private boolean groupedPartitionAttempted;
     private boolean relaxationNeighborhoodAttempted;
     private boolean packingCoreAttempted;
+    private boolean equalitySupportAttempted, equalityDomainsAttempted;
     private final Set<CountModelViews.View> partitionViews = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CountModelViews.View> wideAllocationViews = Collections.newSetFromMap(new IdentityHashMap<>());
     private long commonWork, reportedCommonWork, restorationWork;
@@ -76,6 +77,7 @@ final class CountViewSearch implements AutoCloseable {
         long proposalBytes;
         long sliceWork, progress, work, candidates, verified, dead, unknown, downstreamWork;
         int repairCompletionObserved;
+        int allocationCompletionObserved;
         long continuationLimit, continuationProgress, continuationCheckpoint;
         long observedRoundingWork;
         long publishedRoots;
@@ -203,6 +205,8 @@ final class CountViewSearch implements AutoCloseable {
         GROUPED_PARTITION,
         RELAXATION_NEIGHBORHOOD,
         PACKING_CORE,
+        EQUALITY_SUPPORT,
+        EQUALITY_DOMAINS,
         DOMAIN,
         DIAGRAM,
         BOOLEAN,
@@ -294,6 +298,16 @@ final class CountViewSearch implements AutoCloseable {
     boolean hasGroupedPartition() {
         return searches.stream().anyMatch(search -> !search.done && search.scheduling.eligible &&
                 search.engine == Engine.GROUPED_PARTITION);
+    }
+
+    /** Continue a selected allocation opportunity, including newly checked residual depths. */
+    long allocationCompletionQuantum() {
+        // Exact capacity groups admit a self-contained allocation search.
+        // Packing/LP neighborhoods still need their existing interleaved
+        // service: running their repair alone can delay useful competing cuts.
+        for (Search search : searches) if (pendingAllocationCompletion(search))
+            return Math.min(262144, Math.min(search.continuationLimit - search.work, budget.remainingWork()));
+        return 0;
     }
 
     private void addGroupedPartition() {
@@ -609,6 +623,8 @@ final class CountViewSearch implements AutoCloseable {
                     added = addIntegerLp();
                     if (!added) added = addRelaxationNeighborhood();
                     if (!added) added = addPackingCore();
+                    if (!added) added = addEqualitySupport(false);
+                    if (!added) added = addEqualitySupport(true);
                 }
                 finally {
                     integerScoutWork = budget.threadWork() - scoutStarted;
@@ -617,6 +633,12 @@ final class CountViewSearch implements AutoCloseable {
                 if (added) stalled = false;
                 else if (addIntegerJump()) stalled = false;
             }
+            // An owned allocation completion opportunity can cross a quiet
+            // phase (for example, kernel search before box enumeration). The
+            // outer coordinator must not interpret two idle feedback batches
+            // as surrendering that already bounded opportunity. Keep ordinary
+            // owner deadlines: another resume cannot renew its work ceiling.
+            if (stalled && searches.stream().anyMatch(this::pendingAllocationCompletion)) stalled = false;
             return counts != null || infeasible || stalled;
         } finally {
             long spent = budget.threadWork() - before;
@@ -645,6 +667,34 @@ final class CountViewSearch implements AutoCloseable {
                 }
             }
         }
+    }
+
+    private boolean addEqualitySupport(boolean discrete) {
+        if ((discrete ? equalityDomainsAttempted : equalitySupportAttempted) || !models.compiledAlternatives() ||
+                work < (discrete ? 16_777_216 : 4_194_304) ||
+                policy.mode() == CountPortfolioPolicy.Mode.PROOF || budget.proofJournal() != null) return false;
+        if (discrete) equalityDomainsAttempted = true;
+        else equalitySupportAttempted = true;
+        // The smaller affine/finite representations retain their established
+        // path. This companion addresses sparse narrow domains above their
+        // ambient admission, without constructing a dense high-rank lattice.
+        var views = new ArrayList<>(models.available());
+        views.sort(Comparator.comparingLong(view -> view.shape().cost()));
+        for (var view : views) {
+            if (view.shape().variables() <= 128 || view.shape().variables() > 512 ||
+                    view.shape().terms() > 12L * view.shape().variables() || view.shape().vectorAllocation()) continue;
+            var domains = models.domains(view);
+            var search = CountSupportedSearch.create(view.rows(), domains.lower(), domains.upper(), budget, CountPortfolioPolicy.MIN_QUANTUM, discrete);
+            if (search == null) continue;
+            // Interior-domain reasoning has a different cost and trajectory.
+            // Keep the successful hull frontier and add one later, bounded
+            // candidate instead of restarting or replacing that frontier.
+            Engine engine = discrete ? Engine.EQUALITY_DOMAINS : Engine.EQUALITY_SUPPORT;
+            Search arm = new Search(view, policy.add(view.shape().cost(), engine), engine);
+            arm.scope = domains; arm.specialist = search; searches.add(arm);
+            return true;
+        }
+        return false;
     }
 
     private boolean addRelaxationNeighborhood() {
@@ -728,7 +778,8 @@ final class CountViewSearch implements AutoCloseable {
                 // the final repair preference compensates for the completed
                 // scout's measured cost, once. Request and local caps still pay
                 // every operation, including the scout itself.
-                long interrupted = packing.phase() == CountPackingCore.Phase.DISTANCE_REPAIR ? packing.restoredScoutWork() : 0;
+                long interrupted = packing.phase() == CountPackingCore.Phase.DISTANCE_REPAIR ||
+                        packing.phase() == CountPackingCore.Phase.RESUMED_ENUMERATION ? packing.restoredScoutWork() : 0;
                 search.continuationLimit = Math.max(search.continuationLimit, saturatedAdd(search.work,
                         Math.min(packing.remainingAllowance(), saturatedAdd(budget.remainingWork() / 3, interrupted))));
             }
@@ -738,6 +789,7 @@ final class CountViewSearch implements AutoCloseable {
                         Math.min(4_194_304, budget.remainingWork() / 8);
                 search.continuationLimit = saturatedAdd(search.work, opportunity);
             }
+            extendVectorCompletion(search);
             if (search.work < search.continuationLimit) return search;
         }
         if (sampled) for (Search search : searches) {
@@ -761,6 +813,27 @@ final class CountViewSearch implements AutoCloseable {
         }
         var chosen = policy.select();
         return searches.stream().filter(search -> search.scheduling == chosen).findFirst().orElse(null);
+    }
+
+    private boolean pendingAllocationCompletion(Search search) {
+        if (!search.done && search.scheduling.eligible) extendVectorCompletion(search);
+        return !search.done && search.scheduling.eligible && search.progress > 0 &&
+                search.work < search.continuationLimit &&
+                (search.specialist instanceof CountGroupedPartition || search.specialist instanceof CountVectorPartition);
+    }
+
+    private void extendVectorCompletion(Search search) {
+        if (search.continuationLimit == 0 || search.work < search.continuationLimit ||
+                !(search.specialist instanceof CountVectorPartition vector) ||
+                vector.interiorCompletionDepth() <= search.allocationCompletionObserved) return;
+        search.allocationCompletionObserved = vector.interiorCompletionDepth();
+        // Only a verified allocation prefix with an admitted residual repair
+        // earns this finite scheduling preference. It spends the existing
+        // request/local allowances; pauses and repeated decompositions do not
+        // renew it. Packing and generic LP service remain unchanged.
+        long grant = Math.min(vector.remainingAllowance(), Math.min(2_097_152, budget.remainingWork() / 8));
+        search.continuationLimit = saturatedAdd(search.work, grant);
+        budget.note("count_vector_completion", "depth=" + search.allocationCompletionObserved + "; allowance=" + grant);
     }
 
     /** Charged work in completed or retained portfolio steps. */

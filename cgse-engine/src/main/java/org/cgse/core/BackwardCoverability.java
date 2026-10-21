@@ -37,6 +37,7 @@ final class BackwardCoverability<K> implements AutoCloseable {
     private final Map<K, Integer> positions = new HashMap<>();
     private final BitSet unbounded = new BitSet();
     private final long allowance;
+    private final boolean witnessOnly;
     private long work, stepStarted;
     private Node active;
     private int cursor, verifyNode, verifyRecipe;
@@ -55,9 +56,17 @@ final class BackwardCoverability<K> implements AutoCloseable {
 
     BackwardCoverability(List<GraphRecipe<K>> recipes, Map<K, BigInteger> stock, Map<K, BigInteger> goals,
                          Set<K> external, Collection<Action<K>> macros, PlanningBudget budget, long allowance) {
+        this(recipes, stock, goals, external, macros, budget, allowance, false);
+    }
+
+    /** Restricted optional searches need witnesses, never global absence proofs
+     * or an implicitly larger portfolio after their local quota is exhausted. */
+    BackwardCoverability(List<GraphRecipe<K>> recipes, Map<K, BigInteger> stock, Map<K, BigInteger> goals,
+                         Set<K> external, Collection<Action<K>> macros, PlanningBudget budget, long allowance, boolean witnessOnly) {
         this.recipes = List.copyOf(recipes);
         this.budget = budget;
         this.allowance = allowance;
+        this.witnessOnly = witnessOnly;
         stepStarted = budget.threadWork();
         Set<K> all = new LinkedHashSet<>(stock.keySet());
         all.addAll(goals.keySet());
@@ -80,6 +89,10 @@ final class BackwardCoverability<K> implements AutoCloseable {
             remember(new Node(goal, null, null, 0));
         } catch (LocalLimit limit) {
             finish(Result.UNKNOWN);
+        } catch (PlanningBudget.Exhausted | java.util.concurrent.CancellationException failure) {
+            // Admission can fail after the first antichain node was reserved.
+            // A throwing constructor cannot be closed by its caller.
+            close(); throw failure;
         } finally {
             work += budget.threadWork() - stepStarted;
         }
@@ -294,14 +307,15 @@ final class BackwardCoverability<K> implements AutoCloseable {
     }
 
     private boolean finish(Result value) {
-        if (value == Result.UNKNOWN && !forwardTried && keys.size() <= 32 && actions.size() <= 64) {
+        if (witnessOnly && value != Result.WITNESS) value = Result.UNKNOWN;
+        if (!witnessOnly && value == Result.UNKNOWN && !forwardTried && keys.size() <= 32 && actions.size() <= 64) {
             forwardTried = true;
             forward = new ForwardCoverability<>(recipes, keys, initial, goal, actions, budget, Math.min(8192, allowance / 4));
             if (forward.result() == null) return false;
             forward.close();
             forward = null;
         }
-        if (value == Result.UNKNOWN && !pdrTried && keys.size() <= 32 && recipes.size() <= 64) {
+        if (!witnessOnly && value == Result.UNKNOWN && !pdrTried && keys.size() <= 32 && recipes.size() <= 64) {
             pdrTried = true;
             pdr = new PdrCoverability<>(recipes, keys, initial, goal, actions, budget, Math.min(16384, allowance / 2));
             if (pdr.result() == null) return false;
@@ -317,7 +331,7 @@ final class BackwardCoverability<K> implements AutoCloseable {
             budget.proofJournal().add(new ExecutionProof.Certificate("coverability:captured_stock_goals", startupVerifying ? ExecutionProof.Kind.STARTUP_BOX : ExecutionProof.Kind.BACKWARD_CLOSURE,
                     initial, goal, inputs, outputs, basis.stream().map(Node::required).toList(), startupVerifying ? unbounded.stream().boxed().collect(java.util.stream.Collectors.toSet()) : Set.of()));
         }
-        if (value == Result.UNKNOWN && !inductionTried && keys.size() <= 12 && recipes.size() <= 16) {
+        if (!witnessOnly && value == Result.UNKNOWN && !inductionTried && keys.size() <= 12 && recipes.size() <= 16) {
             inductionTried = true;
             induction = new CountInduction<>(recipes, keys, initial, goal, budget, Math.min(65536, allowance));
             if (induction.result() == null) return false;

@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.crafting;
 
+import appeng.api.config.Actionable;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
@@ -113,19 +114,7 @@ public final class ManualCraftingInventoryLock {
             return requested;
         }
 
-        long reservedForOthers;
-        synchronized (RESERVED) {
-            var reserved = RESERVED.get(storage);
-            if (reserved == null) {
-                return requested;
-            }
-
-            long totalReserved = reserved.get(what);
-            var active = ACTIVE_SUBMISSION.get();
-            long owned = active != null && active.isActiveFor(storage) ? active.amounts.get(what) : 0;
-            reservedForOthers = subtractClamped(totalReserved, owned);
-        }
-
+        long reservedForOthers = reservedForOthers(storage, what);
         if (reservedForOthers <= 0) {
             return requested;
         }
@@ -138,6 +127,38 @@ public final class ManualCraftingInventoryLock {
                     storage, what, requested, allowed, available, reservedForOthers, source);
         }
         return allowed;
+    }
+
+    /** Reservation adjustment for an exact planning read; honors the active submit owner. */
+    public static long reservedForOthers(MEStorage storage, AEKey what) {
+        synchronized (RESERVED) {
+            var reserved = RESERVED.get(storage);
+            if (reserved == null) {
+                return 0;
+            }
+
+            long totalReserved = reserved.get(what);
+            var active = ACTIVE_SUBMISSION.get();
+            long owned = active != null && active.isActiveFor(storage) ? active.amounts.get(what) : 0;
+            return subtractClamped(totalReserved, owned);
+        }
+    }
+
+    /** Read through security and extraction filters, without subtracting this root's reservation twice. */
+    public static long simulatePhysical(MEStorage storage, AEKey what, IActionSource source) {
+        var queries = AVAILABILITY_QUERIES.get();
+        if (queries == null) {
+            queries = new IdentityHashMap<>();
+            AVAILABILITY_QUERIES.set(queries);
+        }
+        Boolean previous = queries.put(storage, Boolean.TRUE);
+        try {
+            return storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source);
+        } finally {
+            if (previous == null) queries.remove(storage);
+            else queries.put(storage, previous);
+            if (queries.isEmpty()) AVAILABILITY_QUERIES.remove();
+        }
     }
 
     private static long getPhysicalAvailableAmount(MEStorage storage, AEKey what, IActionSource source) {

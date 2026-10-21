@@ -10,8 +10,8 @@ import java.util.*;
 public final class PlanCountComputation {
 
     private final Deque<Frame> stack = new ArrayDeque<>();
-    private final Map<PlanStep, BigInteger> weights = new IdentityHashMap<>();
-    private final List<PlanStep> order = new ArrayList<>();
+    private Map<PlanStep, BigInteger> weights = new IdentityHashMap<>();
+    private List<PlanStep> order = new ArrayList<>();
     private final Map<String, BigInteger> counts = new LinkedHashMap<>();
     private final PlanStep root;
     private boolean indexed, complete;
@@ -49,9 +49,12 @@ public final class PlanCountComputation {
             }
             if (cursor < 0) {
                 complete = true;
-                order.clear();
-                weights.clear();
-                counts.values().removeIf(value -> value.signum() == 0);
+                // Drop completed scratch without synchronous array scans. Every
+                // indexed edge has positive multiplicity (zero repeats are not
+                // traversed), and only positive batches were inserted in counts.
+                // Consequently no zero count can survive the propagation.
+                order = null;
+                weights = null;
                 continue;
             }
             PlanStep node = order.get(cursor);

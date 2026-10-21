@@ -132,14 +132,14 @@ final class SeedOptimization<K> implements AutoCloseable {
                 for (K key : produced) if (!external.contains(key) && summary.delta(key).signum() >= 0 && !mandatory.containsKey(key))
                     if (!original.feasible() || stock.getOrDefault(key, 0L) > 0) choices.add(key);
                 choices.sort(Comparator.comparing(key -> summary.required(key).signum() == 0));
-                stock.forEach((key, value) -> raw.put(key, BigInteger.valueOf(value)));
+                stock.forEach((key, value) -> raw.put(key, PlanningInventory.exactAmount(stock, key)));
                 original.missingExact().forEach((key, value) -> raw.merge(key, value, BigInteger::add));
                 for (K key : produced) if (summary.delta(key).signum() >= 0) raw.remove(key);
                 mandatory.keySet().forEach(raw::remove);
                 var base = new LinkedHashMap<>(raw);
-                mandatory.forEach((key, value) -> base.put(key, BigInteger.valueOf(Math.max(value, stock.getOrDefault(key, 0L)))));
+                mandatory.forEach((key, value) -> base.put(key, BigInteger.valueOf(value).max(PlanningInventory.exactAmount(stock, key))));
                 Map<K, BigInteger> loans = new LinkedHashMap<>();
-                choices.forEach(key -> loans.put(key, original.feasible() ? BigInteger.valueOf(stock.getOrDefault(key, 0L)) : ExactAmounts.LONG_MAX));
+                choices.forEach(key -> loans.put(key, original.feasible() ? PlanningInventory.exactAmount(stock, key) : ExactAmounts.LONG_MAX));
                 support = new SeedSupport<>(List.copyOf(recipes.values()), choices, base, loans, searchExternal(), mandatory.keySet(),
                         original.target(), original.amount(), force, budget);
                 combination = new int[0];
@@ -229,10 +229,10 @@ final class SeedOptimization<K> implements AutoCloseable {
                     return false;
                 }
                 supplied = new LinkedHashMap<>(raw);
-                mandatory.forEach((key, value) -> supplied.put(key, BigInteger.valueOf(Math.max(value, stock.getOrDefault(key, 0L)))));
+                mandatory.forEach((key, value) -> supplied.put(key, BigInteger.valueOf(value).max(PlanningInventory.exactAmount(stock, key))));
                 for (int i : combination) {
                     K key = choices.get(i);
-                    supplied.put(key, original.feasible() ? BigInteger.valueOf(stock.getOrDefault(key, 0L)) : ExactAmounts.LONG_MAX);
+                    supplied.put(key, original.feasible() ? PlanningInventory.exactAmount(stock, key) : ExactAmounts.LONG_MAX);
                 }
                 if (cardinality == 0 || enumerateSupports) advanceCombination();
                 beginSearch();
@@ -464,7 +464,7 @@ final class SeedOptimization<K> implements AutoCloseable {
             BigInteger need = value.required(key).max(goal.subtract(value.delta(key)));
             if (!external.contains(key) && !purchased.contains(key) && need.compareTo(supplied.getOrDefault(key, BigInteger.ZERO)) > 0) return null;
             if (need.signum() > 0) initial.put(key, need);
-            BigInteger gap = need.subtract(BigInteger.valueOf(stock.getOrDefault(key, 0L)));
+            BigInteger gap = need.subtract(PlanningInventory.exactAmount(stock, key));
             if (!external.contains(key) && gap.signum() > 0) missing.put(key, gap);
         }
         if (seeds.size() > best.seeds().size() || original.feasible() && !missing.isEmpty()) return null;

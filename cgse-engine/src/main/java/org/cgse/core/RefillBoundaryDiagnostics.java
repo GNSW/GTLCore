@@ -6,7 +6,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Optional final annotation. Never searches again or changes a completed refill bill. */
+/** Optional final annotation. Never replans or changes a completed refill bill. */
 final class RefillBoundaryDiagnostics<K> implements AutoCloseable {
     private final GraphCompiler<K> compiler;
     private final RefillProducerOrder<K> order;
@@ -17,6 +17,8 @@ final class RefillBoundaryDiagnostics<K> implements AutoCloseable {
     private GraphPlan<K> result;
     private long memory;
     private boolean done;
+    private boolean cyclic;
+    private RefillCycleView<K> cycleView;
 
     RefillBoundaryDiagnostics(GraphPlan<K> plan, GraphCompiler<K> compiler, RefillProducerOrder<K> completedOrder,
                               PlanningBudget budget) {
@@ -29,7 +31,14 @@ final class RefillBoundaryDiagnostics<K> implements AutoCloseable {
         try {
             budget.checkpoint();
             for (int i = 0; i < 64; i++) {
-                if (!keys.hasNext() || !budget.tryRefillDiagnostic()) return finish();
+                if (!keys.hasNext()) {
+                    if (!cyclic) return finish();
+                    if (!budget.tryRefillCycleView()) return finish();
+                    if (cycleView == null) cycleView = new RefillCycleView<>(result, order, budget, sources);
+                    if (cycleView.advance()) return finish();
+                    continue;
+                }
+                if (!budget.tryRefillDiagnostic()) return finish();
                 K key = keys.next();
                 GraphPlan.MissingSource source;
                 var node = order == null ? null : order.get(key);
@@ -39,6 +48,7 @@ final class RefillBoundaryDiagnostics<K> implements AutoCloseable {
                 else source = GraphPlan.MissingSource.UNEXPANDED_SOURCE;
                 if (!budget.tryReserve(96)) return finish();
                 memory += 96; sources.put(key, source);
+                cyclic |= source == GraphPlan.MissingSource.CYCLE_BOUNDARY;
             }
             return false;
         } catch (PlanningBudget.Exhausted limit) {
@@ -49,10 +59,14 @@ final class RefillBoundaryDiagnostics<K> implements AutoCloseable {
 
     private boolean finish() {
         if (!sources.isEmpty()) result = result.withMissingSources(GraphPlan.MissingSource.UNASSESSED, sources);
+        if (cycleView != null && !cycleView.cycles().isEmpty()) result = result.withRefillCycles(cycleView.cycles());
         sources = null; done = true;
         return true;
     }
 
     GraphPlan<K> result() { return result; }
-    @Override public void close() { sources = null; budget.release(memory); memory = 0; }
+    @Override public void close() {
+        if (cycleView != null) { cycleView.close(); cycleView = null; }
+        sources = null; budget.release(memory); memory = 0;
+    }
 }

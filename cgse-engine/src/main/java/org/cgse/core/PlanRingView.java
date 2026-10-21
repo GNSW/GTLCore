@@ -37,7 +37,10 @@ public final class PlanRingView<K> {
         }
     }
 
-    /** Resource is populated only for resource rows; recipe IDs and reference indices are opaque text. */
+    /**
+     * Resource is populated only for resource rows; recipe IDs and reference indices are opaque text.
+     * A zero-count RECIPE describes a refill cycle source and is not an executed recipe.
+     */
     public record Row<K>(Kind kind, String id, K resource, BigInteger count, BigInteger seed, BigInteger missing,
                          List<Amount<K>> inputs, List<Amount<K>> outputs, int parent) {
 
@@ -100,6 +103,9 @@ public final class PlanRingView<K> {
         private final Deque<Iterator<K>> resources = new ArrayDeque<>();
         private final Set<K> seenResources = new HashSet<>();
         private final Iterator<String> selected;
+        private final Set<String> seenRecipes;
+        private final Iterator<List<GraphRecipe<K>>> cycles;
+        private Iterator<GraphRecipe<K>> cycleRecipes = List.<GraphRecipe<K>>of().iterator();
         private final IdentityHashMap<PlanStep, Integer> programs = new IdentityHashMap<>();
         private final Deque<Pending> pending = new ArrayDeque<>();
         private Row<K> row;
@@ -114,6 +120,8 @@ public final class PlanRingView<K> {
             resources.add(plan.seeds().keySet().iterator());
             resources.add(plan.missingExact().keySet().iterator());
             this.selected = selected.iterator();
+            cycles = plan.refillCycles().iterator();
+            seenRecipes = plan.refillCycles().isEmpty() ? null : new HashSet<>();
             pending.push(new Pending(List.of(plan.steps()).iterator(), -1));
         }
 
@@ -133,11 +141,21 @@ public final class PlanRingView<K> {
                         plan.missingExact().getOrDefault(key, BigInteger.ZERO), List.of(), List.of(), -1);
             } else if (selected.hasNext()) {
                 String id = selected.next();
+                if (seenRecipes != null) seenRecipes.add(id);
                 var recipe = plan.recipes().get(id);
                 if (recipe.inputs().size() > MAX_SLOTS || recipe.outputs().size() > MAX_SLOTS)
                     throw new IllegalArgumentException("Too many graph display slots");
                 row = new Row<>(Kind.RECIPE, id, null, plan.patternTimesExact().get(id), BigInteger.ZERO,
                         BigInteger.ZERO, amounts(recipe.inputs()), amounts(recipe.executionOutputs()), -1);
+            } else if (cycleRecipes.hasNext()) {
+                var recipe = cycleRecipes.next();
+                if (!seenRecipes.add(recipe.id())) return false;
+                // Zero runs denotes a source reference, never an execution batch.
+                row = new Row<>(Kind.RECIPE, recipe.id(), null, BigInteger.ZERO, BigInteger.ZERO,
+                        BigInteger.ZERO, amounts(recipe.inputs()), amounts(recipe.executionOutputs()), -1);
+            } else if (cycles.hasNext()) {
+                cycleRecipes = cycles.next().iterator();
+                return false;
             } else if (!pending.isEmpty()) {
                 if (programs.isEmpty()) graphRows = size;
                 var next = pending.peek();

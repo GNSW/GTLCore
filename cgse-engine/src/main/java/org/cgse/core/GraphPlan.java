@@ -21,6 +21,7 @@ public final class GraphPlan<K> {
     private final SeedOptimality seedOptimality;
     private MissingSource defaultMissingSource = MissingSource.UNASSESSED;
     private Map<K, MissingSource> missingSources = Map.of();
+    private java.util.List<java.util.List<GraphRecipe<K>>> refillCycles = java.util.List.of();
     private java.util.List<GraphPlan<K>> alternatives = java.util.List.of();
     private volatile Map<K, Long> initialView, missingView;
     private volatile Map<String, BigInteger> exactTimes;
@@ -96,10 +97,21 @@ public final class GraphPlan<K> {
         return copy;
     }
 
+    /** Complete source cycles for display only; never part of the executable recipe set. */
+    java.util.List<java.util.List<GraphRecipe<K>>> refillCycles() { return refillCycles; }
+
+    /** Transfer private, completed paths without copying or retaining the support graph. */
+    GraphPlan<K> withRefillCycles(java.util.List<java.util.List<GraphRecipe<K>>> cycles) {
+        GraphPlan<K> copy = new GraphPlan<>(this);
+        copy.refillCycles = Collections.unmodifiableList(cycles);
+        return copy;
+    }
+
     /** Only on unpublished copies retaining the same deficit keys and planning scope. */
     GraphPlan<K> withMissingSourcesFrom(GraphPlan<K> original) {
         defaultMissingSource = original.defaultMissingSource;
         missingSources = original.missingSources;
+        refillCycles = original.refillCycles;
         return this;
     }
 

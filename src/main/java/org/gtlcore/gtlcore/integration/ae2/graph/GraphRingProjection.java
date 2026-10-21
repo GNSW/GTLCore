@@ -33,7 +33,8 @@ public final class GraphRingProjection {
                 resources.put(resource, new GraphRingView.Row(row.kind(), row.id(), new GenericStack(resource, 1),
                         row.count().add(old == null ? BigInteger.ZERO : old.count()),
                         org.cgse.core.ExactAmounts.capped(BigInteger.valueOf(row.seed()).add(BigInteger.valueOf(old == null ? 0 : old.seed()))),
-                        row.missing().add(old == null ? BigInteger.ZERO : old.missing()), List.of(), List.of(), row.parent()));
+                        row.missing().add(old == null ? BigInteger.ZERO : old.missing()), List.of(), List.of(), row.parent(),
+                        row.missingSourceMask() | (old == null ? 0 : old.missingSourceMask())));
             } else if (row.kind() == GraphRingView.Kind.RECIPE) {
                 var inputs = amounts(row.inputs(), target, representatives);
                 var outputs = amounts(row.outputs(), target, representatives);

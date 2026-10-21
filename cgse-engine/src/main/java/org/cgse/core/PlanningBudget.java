@@ -84,6 +84,7 @@ public final class PlanningBudget {
     static final long CACHE_PREPARATION_WORK = 8192;
     private long cachePreparationTicks;
     private final AtomicLong refillDiagnosticWork = new AtomicLong();
+    private final AtomicLong refillCycleViewWork = new AtomicLong();
     // Keep one ThreadLocal key, but never carry a previous order's fractional
     // ticks into this one's slice boundaries. The request owns the worker clocks;
     // the last-clock fast path must not retain a completed request on idle pools.
@@ -242,12 +243,21 @@ public final class PlanningBudget {
 
     /** Optional refill explanations have their own request-wide allowance. */
     boolean tryRefillDiagnostic() {
+        return tryRefillAnnotation(refillDiagnosticWork, 2048);
+    }
+
+    /** Source edges need their own allowance so tracing cannot displace boundary classifications. */
+    boolean tryRefillCycleView() {
+        return tryRefillAnnotation(refillCycleViewWork, 16_384);
+    }
+
+    private boolean tryRefillAnnotation(AtomicLong counter, long limit) {
         checkpoint();
         long previous;
         do {
-            previous = refillDiagnosticWork.get();
-            if (previous >= 2048) return false;
-        } while (!refillDiagnosticWork.compareAndSet(previous, previous + 1));
+            previous = counter.get();
+            if (previous >= limit) return false;
+        } while (!counter.compareAndSet(previous, previous + 1));
         // Yield to queued requests without spending solver, compiler or cache
         // preparation quotas. Metadata cannot displace a later solving view.
         if (countThreadWork) workerWork().total++;
@@ -255,7 +265,7 @@ public final class PlanningBudget {
     }
 
     /** Completed diagnostic visits, separate from search, compilation and cache preparation. */
-    public long refillDiagnosticWork() { return refillDiagnosticWork.get(); }
+    public long refillDiagnosticWork() { return refillDiagnosticWork.get() + refillCycleViewWork.get(); }
 
     /** Whole work units still admissible; fractional retention and all workers share this balance. */
     synchronized long remainingCachePreparationWork() {

@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import org.gtlcore.gtlcore.config.ConfigHolder;
+import org.gtlcore.gtlcore.integration.ae2.InventorySnapshot;
+import org.gtlcore.gtlcore.integration.ae2.InventorySnapshotVersion;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 
 import com.gregtechceu.gtceu.api.item.IGTTool;
@@ -118,6 +120,7 @@ public final class GtlPatternCatalog {
         private final Roots roots;
         private final PlanningBudget budget;
         private KeyCounter available;
+        private final InventorySnapshot discoveryInventory;
         private final KeyCounter additionalDiscovery = new KeyCounter();
         private final Iterator<AEKey> discoveryKeys;
         private long revision;
@@ -138,7 +141,8 @@ public final class GtlPatternCatalog {
         private int potentialCount, freezing;
         private ByproductPatternIndex potentialSource;
         private Iterator<AEKey> producerCandidates;
-        private Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> stockCandidates;
+        private InventorySnapshot.Cursor stockCandidates;
+        private Set<AEKey> stockCandidateKeys;
         private Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> additionalCandidates;
         private final Map<IPatternDetails, CandidateCapture> captures = new IdentityHashMap<>();
         private final Map<IPatternDetails, Signature> capturedSignatures = new IdentityHashMap<>();
@@ -183,6 +187,11 @@ public final class GtlPatternCatalog {
                 throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "job_discovery_keys");
             discoveryKeys = Set.copyOf(discoveryOnly).iterator();
             available = source == null ? new KeyCounter() : storage.getCachedInventory();
+            // AE mutates its cached counter between tick slices. Pin an immutable
+            // version for discovery; physical quantities are still read in phase 3.
+            discoveryInventory = source == null ? InventorySnapshot.EMPTY :
+                    storage instanceof InventorySnapshotVersion version ? version.gtlcore$inventorySnapshot() :
+                            InventorySnapshot.copyOf(available);
             revision = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
             dataRevision = dataGeneration;
             invalidationRevision = invalidationGeneration;
@@ -486,7 +495,8 @@ public final class GtlPatternCatalog {
             if (potentialSource != sourceIndex) {
                 potentialSource = sourceIndex;
                 producerCandidates = sourceIndex.candidates(roots.discoverByproducts());
-                stockCandidates = available.iterator();
+                stockCandidates = discoveryInventory.cursor();
+                stockCandidateKeys = new HashSet<>();
                 additionalCandidates = additionalDiscovery.iterator();
             }
             if (producerCandidates != null && producerCandidates.hasNext()) {
@@ -494,18 +504,27 @@ public final class GtlPatternCatalog {
                 return false;
             }
             producerCandidates = null;
-            if (stockCandidates != null && stockCandidates.hasNext()) {
-                var entry = stockCandidates.next();
-                if (entry.getLongValue() > 0) offerPotential(entry.getKey());
-                return false;
+            if (stockCandidates != null) {
+                if (!stockCandidates.step(this::offerStockCandidate)) return false;
+                budget.release(64L * stockCandidateKeys.size());
+                stockCandidateKeys = null;
+                stockCandidates = null;
             }
-            stockCandidates = null;
             if (additionalCandidates != null && additionalCandidates.hasNext()) {
                 offerPotential(additionalCandidates.next().getKey());
                 return false;
             }
             additionalCandidates = null;
             return true;
+        }
+
+        private void offerStockCandidate(AEKey key, long amount) {
+            if (stockCandidateKeys.contains(key)) return;
+            if (stockCandidateKeys.size() >= MAX_CAPTURE_STATES)
+                throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "inventory_discovery_keys");
+            budget.reserve(64);
+            stockCandidateKeys.add(key);
+            if (amount > 0) offerPotential(key);
         }
 
         private void offerPotential(AEKey key) {

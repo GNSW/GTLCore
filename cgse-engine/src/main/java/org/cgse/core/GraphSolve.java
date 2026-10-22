@@ -159,7 +159,7 @@ final class GraphSolve<K> implements AutoCloseable {
                 ordinaryPhase = 0;
             } else selection = new RegionSelection<>(region, demand, stock, target, amount,
                     preserve, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock)
-                    .allowTargetSeedConsumption(consumeTargetSeed).scoutRegions(regionScout);
+                    .allowTargetSeedConsumption(consumeTargetSeed).seedCredits(requiredSeeds).scoutRegions(regionScout);
         } else if (!targetProduced) {
             budget.note("selected_graph", "target_not_produced; target=" + target + "; recipes=" + graph.recipes().size() + "; force_craft=" + forceCraft);
             result = failure(GraphPlan.Result.UNKNOWN);

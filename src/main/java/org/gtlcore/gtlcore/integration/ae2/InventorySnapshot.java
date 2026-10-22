@@ -7,6 +7,7 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -53,6 +54,67 @@ public final class InventorySnapshot {
     /** Never called by publication or request construction on the server thread. */
     public void prepare() {
         index();
+    }
+
+    /** Compatibility for storage services without incremental snapshot publication. */
+    public static InventorySnapshot copyOf(KeyCounter source) {
+        var copy = new KeyCounter();
+        copy.addAll(source);
+        return new InventorySnapshot(new State(null, null, copy), 0);
+    }
+
+    /**
+     * A bounded cursor over immutable absolute updates, newest first. The first
+     * occurrence of each key wins, including zero quantities (removals). This
+     * does not build an index, acquire a worker's monitor, or traverse inventory
+     * when constructed on the server thread.
+     */
+    public Cursor cursor() {
+        return new Cursor(state);
+    }
+
+    public static final class Cursor {
+
+        private State current;
+        private int remaining;
+        private Iterator<? extends it.unimi.dsi.fastutil.objects.Object2LongMap.Entry<AEKey>> entries;
+
+        private Cursor(State current) {
+            moveTo(current);
+        }
+
+        private void moveTo(State state) {
+            current = state;
+            remaining = state.changes == null ? 0 : state.changes.size;
+            entries = null;
+        }
+
+        /** Visits at most one update or version boundary; true means exhausted. */
+        public boolean step(ObjLongConsumer<AEKey> visitor) {
+            if (current == null) return true;
+            if (current.index != null) {
+                if (entries == null) entries = current.index.iterator();
+                if (entries.hasNext()) {
+                    var entry = entries.next();
+                    visitor.accept(entry.getKey(), entry.getLongValue());
+                    return false;
+                }
+                current = null;
+                entries = null;
+                return true;
+            }
+            if (remaining > 0) {
+                int offset = --remaining;
+                Changes changes = current.changes;
+                visitor.accept(changes.keys.get(offset / Changes.CHUNK_SIZE)[offset % Changes.CHUNK_SIZE],
+                        changes.amounts.get(offset / Changes.CHUNK_SIZE)[offset % Changes.CHUNK_SIZE]);
+            } else {
+                // A concurrent compaction may replace this parent's state, but
+                // both representations describe exactly the same version.
+                moveTo(current.parent.state);
+            }
+            return false;
+        }
     }
 
     private KeyCounter index() {

@@ -22,6 +22,7 @@ public final class RegionSelection<K> implements AutoCloseable {
     private final Map<K, BigInteger> demand;
     private final Map<K, Long> stock;
     private Map<K, Long> catalystStock;
+    private Map<K, Long> seedCredits = Map.of();
     private final K target;
     private final long amount;
     private final boolean preserve, forceTarget;
@@ -67,6 +68,15 @@ public final class RegionSelection<K> implements AutoCloseable {
         regionScout = enabled;
         return this;
     }
+
+    /** Explicit final reserves are already included in the incoming demand. */
+    RegionSelection<K> seedCredits(Map<K, Long> credits) {
+        if (phase != 0 || index != 0) throw new IllegalStateException("Region search already started");
+        seedCredits = credits;
+        return this;
+    }
+
+    private long extraSeed(K key, long seed) { return Math.max(0, seed - seedCredits.getOrDefault(key, 0L)); }
 
     public RegionSelection(GraphCompiler.Region<K> region, Map<K, BigInteger> demand, Map<K, Long> stock,
                            K target, long amount, boolean preserve, boolean forceTarget, Set<K> external, PlanningBudget budget, CatalystPolicy policy, Map<K, Long> catalystStock) {
@@ -142,7 +152,8 @@ public final class RegionSelection<K> implements AutoCloseable {
                 } else {
                     if (region.cyclic() && recipes.size() > 6) {
                         countsStarted = currentWork();
-                        counts = new RegionCounts<>(recipes, demand, stock, external, target, amount, forceTarget, preserve, budget).scoutRegions(regionScout);
+                        counts = new RegionCounts<>(recipes, demand, stock, external, target, amount, forceTarget, preserve, budget)
+                                .seedCredits(seedCredits).scoutRegions(regionScout);
                         phase = 10;
                         return false;
                     }
@@ -256,11 +267,27 @@ public final class RegionSelection<K> implements AutoCloseable {
                 if (count.signum() > 0 && region.cyclic() && preserve && keys.hasNext()) {
                     K key = keys.next();
                     if (summary.delta(key).signum() >= 0 && summary.required(key).signum() > 0) {
-                        long seed = CheckedAmounts.amount(summary.required(key));
-                        if (recipes.size() == 1) seed = CheckedAmounts.multiply(seed, workingCopies);
+                        BigInteger requiredSeed = summary.required(key);
+                        if (recipes.size() == 1 && workingCopies > 1)
+                            requiredSeed = requiredSeed.multiply(BigInteger.valueOf(workingCopies));
+                        if (requiredSeed.compareTo(ExactAmounts.LONG_MAX) > 0) {
+                            // Extra parallel working stock is optional. Retry
+                            // this order with one copy before trying a different
+                            // ratio/order; an oversized proposal is not a limit
+                            // on the entire request's exact material ledger.
+                            if (workingCopies > 1) {
+                                workingCopies = 1;
+                                body = children.size() == 1 ? children.get(0) : new PlanStep.Sequence(children);
+                                computation.close();
+                                computation = new SummaryComputation<>(body, byId, budget);
+                                phase = 3;
+                            } else nextTrial();
+                            return complete();
+                        }
+                        long seed = requiredSeed.longValueExact();
                         reserve.put(key, seed);
                         if (summary.delta(key).signum() > 0) {
-                            BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(seed))
+                            BigInteger gap = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(extraSeed(key, seed)))
                                     .subtract(PlanningInventory.exactAmount(stock, key));
                             count = count.max(CheckedAmounts.ceilDiv(gap, unitSummary.delta(key)));
                         }
@@ -338,7 +365,8 @@ public final class RegionSelection<K> implements AutoCloseable {
                     GraphRecipe<K> recipe = recipes.get(index);
                     single = new RegionSelection<>(new GraphCompiler.Region<>(List.of(recipe),
                             !Collections.disjoint(recipe.inputs().keySet(), recipe.outputs().keySet())), demand, stock,
-                            target, amount, preserve, forceTarget, external, budget, catalystPolicy, catalystStock).scoutRegions(regionScout);
+                            target, amount, preserve, forceTarget, external, budget, catalystPolicy, catalystStock)
+                            .seedCredits(seedCredits).scoutRegions(regionScout);
                 }
                 if (!single.step()) return false;
                 Choice<K> choice = single.result();
@@ -405,7 +433,8 @@ public final class RegionSelection<K> implements AutoCloseable {
                         .allMatch(e -> external.contains(e.getKey()) || e.getValue() <= stock.getOrDefault(e.getKey(), 0L)))) {
             triedPartialCounts = true;
             countsStarted = currentWork();
-            counts = new RegionCounts<>(region.recipes(), demand, stock, external, target, amount, forceTarget, preserve, budget).scoutRegions(regionScout);
+            counts = new RegionCounts<>(region.recipes(), demand, stock, external, target, amount, forceTarget, preserve, budget)
+                    .seedCredits(seedCredits).scoutRegions(regionScout);
             phase = 13;
         }
         // Keep the ordinary material preference and exact ratio repair first.
@@ -437,7 +466,7 @@ public final class RegionSelection<K> implements AutoCloseable {
             BigInteger delta = choice.summary().delta(key);
             BigInteger prefix = runs.signum() == 0 ? BigInteger.ZERO : choice.summary().required(key)
                     .add(delta.negate().max(BigInteger.ZERO).multiply(preceding));
-            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
+            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(extraSeed(key, choice.seeds().getOrDefault(key, 0L))));
             if (prefix.max(goal.subtract(delta.multiply(runs))).compareTo(PlanningInventory.exactAmount(stock, key)) > 0) return false;
         }
         return true;
@@ -445,9 +474,9 @@ public final class RegionSelection<K> implements AutoCloseable {
 
     private void consider(Choice<K> choice) {
         if (fundedStartup == null && regionFunded(choice)) fundedStartup = choice;
-        if (best != null && preference == null) preference = PlanPreference.of(best, produced, demand, stock, external, budget);
+        if (best != null && preference == null) preference = PlanPreference.of(best, produced, demand, stock, external, seedCredits, budget);
         if (preference != null && cannotPreferStartup(choice)) return;
-        PlanPreference<K> next = PlanPreference.of(choice, produced, demand, stock, external, budget);
+        PlanPreference<K> next = PlanPreference.of(choice, produced, demand, stock, external, seedCredits, budget);
         // When resource vectors are incomparable, retain the existing startup
         // policy: prefer topping up a known catalyst to introducing an absent
         // catalyst type. This is a choice heuristic, never a dominance proof.
@@ -468,7 +497,7 @@ public final class RegionSelection<K> implements AutoCloseable {
             BigInteger delta = choice.summary().delta(key);
             BigInteger prefix = runs.signum() == 0 ? BigInteger.ZERO : choice.summary().required(key)
                     .add(delta.negate().max(BigInteger.ZERO).multiply(preceding));
-            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
+            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(extraSeed(key, choice.seeds().getOrDefault(key, 0L))));
             BigInteger deficit = prefix.max(goal.subtract(delta.multiply(runs)))
                     .subtract(PlanningInventory.exactAmount(stock, key)).max(BigInteger.ZERO);
             largerDeficit |= deficit.compareTo(preference.missing(key)) > 0;

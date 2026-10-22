@@ -44,6 +44,8 @@ final class CountSchedule<K> implements AutoCloseable {
     private boolean chainsTried;
     private boolean boundedTried;
     private int[] repairOrder;
+    private int[] componentOrder;
+    private CountScheduleReady<K> readyOrder;
     private boolean repairTried, repairingOrder;
     private boolean preferEnabled;
     private List<SequenceSummary<K>> exactActions;
@@ -128,6 +130,30 @@ final class CountSchedule<K> implements AutoCloseable {
         work.repairingOrder = true;
         work.repairOrder = order.clone();
         return work;
+    }
+
+    /** Finish upstream components before exporting their startup stock. This
+     * is an optional ordering of fixed counts, never an execution restriction. */
+    static <K> CountSchedule<K> componentOrdered(RecipeCountModel<K> model, BigInteger[] counts,
+                                                int[] components, PlanningBudget budget) {
+        long bytes = 64L * counts.length;
+        if (!budget.tryReserve(bytes)) return new CountSchedule<>(model, counts, budget, true);
+        try {
+            Integer[] indices = new Integer[counts.length];
+            for (int i = 0; i < indices.length; i++) { budget.check(); indices[i] = i; }
+            Arrays.sort(indices, (a, b) -> { budget.check(); return Integer.compare(components[a], components[b]); });
+            int[] order = Arrays.stream(indices).mapToInt(Integer::intValue).toArray();
+            var work = preferred(model, counts, order, budget);
+            if (work.result == null) {
+                work.componentOrder = components;
+                work.memory += bytes; bytes = 0;
+                try {
+                    work.readyOrder = new CountScheduleReady<>(work.summaries, components, model.external, counts, budget);
+                    if (!work.readyOrder.available()) { work.readyOrder.close(); work.readyOrder = null; }
+                } catch (RuntimeException | Error failure) { work.close(); throw failure; }
+            }
+            return work;
+        } finally { budget.release(bytes); }
     }
 
     boolean step() {
@@ -215,6 +241,7 @@ final class CountSchedule<K> implements AutoCloseable {
             Arrays.fill(used, BigInteger.ZERO);
             cursor = 0;
             visited.clear();
+            if (readyOrder != null) readyOrder.reset(remaining);
             if (done()) {
                 witness = new PlanStep.Sequence(program);
                 witnessSource = WitnessSource.GREEDY;
@@ -231,19 +258,30 @@ final class CountSchedule<K> implements AutoCloseable {
             int recipe = (cursor++ + rotation) % count;
             if (variant >= orders) recipe = count - 1 - recipe;
             if (repairingOrder) recipe = repairOrder[cursor - 1];
-            if (preferredOnly) {
+            if (readyOrder != null) {
+                recipe = readyOrder.choose(held, remaining, visited);
+                if (recipe < 0) { cursor = count; return false; }
+                visited.set(recipe);
+            } else if (preferredOnly) {
                 // An activation/producer late in the order can enable an
                 // earlier preferred rule. Reconsider ready rules immediately;
                 // do not let later rules destroy its physical eligibility.
                 int unavailable = -1;
+                int component = Integer.MAX_VALUE;
+                if (componentOrder != null) for (int index : repairOrder) {
+                    budget.check();
+                    if (remaining[index].signum() > 0) { component = componentOrder[index]; break; }
+                }
                 for (int index : repairOrder) {
                     budget.check();
                     if (visited.get(index)) continue;
+                    if (componentOrder != null && (remaining[index].signum() == 0 || componentOrder[index] != component)) continue;
                     if (unavailable < 0) unavailable = index;
                     if (remaining[index].signum() > 0 && limit(summaries.get(index), remaining[index]).signum() > 0) {
                         unavailable = index; break;
                     }
                 }
+                if (unavailable < 0) { cursor = count; return false; }
                 recipe = unavailable;
                 visited.set(recipe);
             }
@@ -263,6 +301,7 @@ final class CountSchedule<K> implements AutoCloseable {
                 if (!reserveProgram(runs)) return finish(Result.UNKNOWN);
                 apply(summaries.get(recipe), runs);
                 remaining[recipe] = remaining[recipe].subtract(runs);
+                if (readyOrder != null) readyOrder.consumed(recipe, remaining[recipe]);
                 used[recipe] = used[recipe].add(runs);
                 pass.add(PlanStep.batch(model.recipes.get(recipe).id(), runs));
             }
@@ -329,6 +368,7 @@ final class CountSchedule<K> implements AutoCloseable {
         for (var delta : summary.delta().entrySet()) if (!model.external.contains(delta.getKey())) {
             budget.check();
             held.merge(delta.getKey(), delta.getValue().multiply(copies), BigInteger::add);
+            if (readyOrder != null && delta.getValue().signum() > 0) readyOrder.changed(delta.getKey());
         }
     }
 
@@ -347,6 +387,7 @@ final class CountSchedule<K> implements AutoCloseable {
         programMemory = 0;
         passes = cursor = 0;
         visited.clear();
+        if (readyOrder != null) readyOrder.reset(remaining);
     }
 
     private boolean done() {
@@ -835,6 +876,7 @@ final class CountSchedule<K> implements AutoCloseable {
 
     @Override
     public void close() {
+        if (readyOrder != null) { readyOrder.close(); readyOrder = null; }
         if (word != null) { word.close(); word = null; }
         if (chains != null) { chains.close(); chains = null; }
         if (guidedOrder != null) {

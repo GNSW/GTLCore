@@ -7,9 +7,9 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
- * Positive-only two-source cover hints. Exact intersections expose intermediate
- * mixtures without enumerating firing counts. Neither this finite set of rounded
- * corners nor its failure proves anything about the complete refill problem.
+ * Two-source covers inside backward expansion. Single-output, same-input pairs
+ * admit exact residue counts; other pairs use positive-only corner hints. A
+ * declined pair or unsuccessful finite hint search proves no full-model fact.
  */
 final class RefillPairCounts<K> implements AutoCloseable {
     record Choice<K>(K key, GraphRecipe<K> first, GraphRecipe<K> second) {}
@@ -25,6 +25,8 @@ final class RefillPairCounts<K> implements AutoCloseable {
     private BigInteger x, y, cornerX, cornerY, bestX, bestY, bestSize;
     private SummaryComputation<K> computation;
     private PlanStep word;
+    private RefillBatchCounts<K> batches;
+    private boolean exactSameInput;
     private long memory;
 
     RefillPairCounts(Choice<K> choice, Function<K, BigInteger> deficit, PlanningBudget budget) {
@@ -40,12 +42,27 @@ final class RefillPairCounts<K> implements AutoCloseable {
         keys = a.outputs().keySet().iterator();
     }
 
+    static <K> RefillPairCounts<K> sameInput(Choice<K> choice, BigInteger need, PlanningBudget budget) {
+        var result = new RefillPairCounts<>(choice, key -> BigInteger.ZERO, budget);
+        result.exactSameInput = true;
+        if (!result.done) result.batches = new RefillBatchCounts<>(choice, need, budget);
+        return result;
+    }
+
+    boolean exactSameInput() { return exactSameInput; }
+
     boolean step() {
         budget.checkpoint();
         if (done) return true;
         if (computation != null) {
             if (!computation.step()) return false;
             done = true; return true;
+        }
+        if (batches != null) {
+            if (!batches.step()) return false;
+            bestX = batches.firstCount(); bestY = batches.secondCount(); batches = null;
+            if (bestX == null) { done = true; return true; }
+            beginSummary(); return false;
         }
         for (int n = 0; n < 32; n++) {
             budget.check();
@@ -92,10 +109,7 @@ final class RefillPairCounts<K> implements AutoCloseable {
                 if (j == rows.size()) { i++; j = i + 1; }
                 if (j >= rows.size()) {
                     if (bestSize == null) { done = true; return true; }
-                    word = new PlanStep.Sequence(List.of(PlanStep.batch(choice.first().id(), bestX),
-                            PlanStep.batch(choice.second().id(), bestY)));
-                    computation = new SummaryComputation<>(word,
-                            Map.of(choice.first().id(), choice.first(), choice.second().id(), choice.second()), budget);
+                    beginSummary();
                     return false;
                 }
                 var a = rows.get(i); var b = rows.get(j++);
@@ -109,6 +123,15 @@ final class RefillPairCounts<K> implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    private void beginSummary() {
+        var steps = new ArrayList<PlanStep>(2);
+        if (bestX.signum() > 0) steps.add(PlanStep.batch(choice.first().id(), bestX));
+        if (bestY.signum() > 0) steps.add(PlanStep.batch(choice.second().id(), bestY));
+        word = new PlanStep.Sequence(steps);
+        computation = new SummaryComputation<>(word,
+                Map.of(choice.first().id(), choice.first(), choice.second().id(), choice.second()), budget);
     }
 
     private static <K> BigInteger gain(GraphRecipe<K> recipe, K key) {

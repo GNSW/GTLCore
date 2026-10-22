@@ -27,24 +27,16 @@ final class DemandExpansion<K> {
     private long memory, expansionWork, summaryWork;
     private int phase, rootPasses;
     private boolean failed;
+    private boolean protectFinalGoals;
+    private Set<K> external = Set.of();
     private PlanStep result;
     private Frame satisfiedAncestor;
-    private final boolean preview;
-    private boolean completingPreview;
-    private K completionTarget;
-    private BigInteger completionTargetLoans = BigInteger.ZERO;
-    private int completionRefinements;
 
     DemandExpansion(Map<String, GraphRecipe<K>> recipes, Map<K, BigInteger> held, Map<K, BigInteger> goals, PlanningBudget budget) {
-        this(recipes, held, goals, budget, false);
-    }
-
-    DemandExpansion(Map<String, GraphRecipe<K>> recipes, Map<K, BigInteger> held, Map<K, BigInteger> goals, PlanningBudget budget, boolean preview) {
         this.recipes = recipes;
         this.held = new HashMap<>(held);
         this.goals = goals;
         this.budget = budget;
-        this.preview = preview;
         indexing = recipes.values().iterator();
         allowance = Math.min(1_000_000L, 32_768L + 256L * recipes.size());
         reserve(256L + 96L * (held.size() + goals.size()));
@@ -59,13 +51,27 @@ final class DemandExpansion<K> {
         }
     }
 
+    /** Optional executable ordering: reserve other final goals at each root
+     * delivery, while internal production may still borrow and return them. */
+    DemandExpansion<K> protectFinalGoals() { protectFinalGoals = true; return this; }
+
+    /** External ports are supplied by the owner, not a finite stock sentinel.
+     * The returned program still records their exact prefix requirement. */
+    DemandExpansion<K> externallySupplied(Set<K> supplied) {
+        if (phase != 0 || !frames.isEmpty()) throw new IllegalStateException("Expansion already started");
+        if (supplied.isEmpty()) return this;
+        external = Set.copyOf(supplied);
+        reserve(64L + 48L * external.size());
+        return this;
+    }
+
     private boolean advance() {
         budget.check();
         // A local strategy allowance counts its own continuation steps. Using
         // the shared budget delta also counted scheduler/parent steps, making
         // a plan fail depending on slice boundaries or the worker count.
         // All arithmetic and summary work still charge the global budget.
-        if (!completingPreview && (failed || expansionWork > allowance)) return true;
+        if (failed || expansionWork > allowance) return true;
         if (phase == 0) {
             if (indexing.hasNext()) {
                 GraphRecipe<K> recipe = indexing.next();
@@ -78,7 +84,6 @@ final class DemandExpansion<K> {
             }
             phase = 1;
         }
-        if (completingPreview) return completeDemand();
         if (satisfiedAncestor != null) {
             Frame satisfied = satisfiedAncestor;
             satisfiedAncestor = null;
@@ -95,7 +100,7 @@ final class DemandExpansion<K> {
         if (frames.isEmpty()) {
             for (var goal : goals.entrySet()) {
                 budget.check();
-                if (amount(goal.getKey()).compareTo(goal.getValue()) < 0) {
+                if (!external.contains(goal.getKey()) && amount(goal.getKey()).compareTo(goal.getValue()) < 0) {
                     if (++rootPasses > 64) return true;
                     push(goal.getKey(), goal.getValue());
                     return false;
@@ -129,14 +134,18 @@ final class DemandExpansion<K> {
             BigInteger repeats = gap.signum() <= 0 ? BigInteger.ZERO : CheckedAmounts.ceilDiv(gap, gain);
             for (K key : summary.keys()) {
                 budget.check();
+                if (external.contains(key)) continue;
                 BigInteger current = amount(key), need = summary.required(key), change = summary.delta(key);
-                if (supplementable(key, frame)) continue;
                 if (current.compareTo(need) < 0) {
                     repeats = BigInteger.ZERO;
                     break;
                 }
-                if (change.signum() < 0)
+                if (change.signum() < 0) {
                     repeats = repeats.min(current.subtract(need).divide(change.negate()).add(BigInteger.ONE));
+                    if (protectFinalGoals && frames.size() == 1 && !key.equals(frame.key))
+                        repeats = repeats.min(current.subtract(goals.getOrDefault(key, BigInteger.ZERO))
+                                .max(BigInteger.ZERO).divide(change.negate()));
+                }
                 Frame ancestor = active.get(key);
                 if (change.signum() > 0 && ancestor != null && ancestor != frame) {
                     // Stop at the first useful coproduct breakpoint. Fully
@@ -151,12 +160,9 @@ final class DemandExpansion<K> {
             // body, avoiding duplicate subtrees at every nesting level.
             BigInteger extra = repeats;
             if (extra.signum() > 0) {
-                for (K key : summary.keys()) if (supplementable(key, frame)) {
-                    BigInteger needed = summary.required(key).add(summary.delta(key).negate().max(BigInteger.ZERO).multiply(extra.subtract(BigInteger.ONE)));
-                    if (amount(key).compareTo(needed) < 0) set(key, needed);
-                }
                 for (var change : summary.delta().entrySet()) {
                     budget.check();
+                    if (external.contains(change.getKey())) continue;
                     set(change.getKey(), amount(change.getKey()).add(change.getValue().multiply(extra)));
                 }
                 if (frame.reentry) append(PlanStep.repeat(frame.body, extra));
@@ -233,19 +239,6 @@ final class DemandExpansion<K> {
         }
         if (frame.recipe == null) {
             if (frame.producer >= frame.alternatives.size()) {
-                // Only after the stocked alternatives have been tried may a
-                // proven-infeasible order construct a hypothetical raw refill.
-                // Real runtime inventory is never changed by this preview.
-                if (preview && !frame.supplementing && !frame.alternatives.isEmpty()) {
-                    frame.supplementing = true;
-                    frame.producer = frame.alternatives.size() - 1;
-                    return false;
-                }
-                if (supplementable(frame.key, frame)) {
-                    set(frame.key, frame.wanted);
-                    pop(true);
-                    return false;
-                }
                 pop(false);
                 return false;
             }
@@ -264,17 +257,24 @@ final class DemandExpansion<K> {
         // may temporarily consume and return an earlier catalyst.
         for (var input : frame.recipe.inputs().entrySet()) {
             budget.check();
-            if (amount(input.getKey()).compareTo(BigInteger.valueOf(input.getValue())) >= 0) continue;
+            if (external.contains(input.getKey())) continue;
+            BigInteger wanted = BigInteger.valueOf(input.getValue());
+            if (protectFinalGoals && frames.size() == 1 && !input.getKey().equals(frame.key))
+                wanted = wanted.add(goals.getOrDefault(input.getKey(), BigInteger.ZERO)
+                        .subtract(BigInteger.valueOf(frame.recipe.outputs().getOrDefault(input.getKey(), 0L))).max(BigInteger.ZERO));
+            if (amount(input.getKey()).compareTo(wanted) >= 0) continue;
             if (active.containsKey(input.getKey()) || frames.size() >= 4096) reject(frame);
-            else push(input.getKey(), BigInteger.valueOf(input.getValue()));
+            else push(input.getKey(), wanted);
             return false;
         }
         for (var input : frame.recipe.inputs().entrySet()) {
             budget.check();
+            if (external.contains(input.getKey())) continue;
             set(input.getKey(), amount(input.getKey()).subtract(BigInteger.valueOf(input.getValue())));
         }
         for (var output : frame.recipe.outputs().entrySet()) {
             budget.check();
+            if (external.contains(output.getKey())) continue;
             set(output.getKey(), amount(output.getKey()).add(BigInteger.valueOf(output.getValue())));
         }
         append(new PlanStep.Batch(frame.recipe.id(), 1));
@@ -289,166 +289,12 @@ final class DemandExpansion<K> {
         return held.getOrDefault(key, BigInteger.ZERO);
     }
 
-    /** Finish a diagnostic program with explicit intermediate refills, never physical stock. */
-    void completePreview(K target) {
-        if (!preview) throw new IllegalStateException("Refill completion requires a missing preview");
-        if (!goals.containsKey(target)) throw new IllegalArgumentException("Missing completion target");
-        completionTarget = target;
-        completingPreview = true;
-    }
-
-    private boolean completeDemand() {
-        if (frames.isEmpty()) {
-            for (var goal : goals.entrySet()) {
-                budget.check();
-                // The order must be produced. Residual seeds may instead be
-                // supplied explicitly; Candidate derives their exact initial
-                // reserve from the entire program. Manufacturing them here can
-                // rotate forever through mutually consuming seed goals.
-                if (!goal.getKey().equals(completionTarget)) continue;
-                if (amount(goal.getKey()).compareTo(goal.getValue().add(completionTargetLoans)) < 0) {
-                    push(goal.getKey(), goal.getValue());
-                    return false;
-                }
-            }
-            result = new PlanStep.Sequence(path);
-            return true;
-        }
-        Frame frame = frames.peek();
-        BigInteger wanted = frame.wanted.add(frame.key.equals(completionTarget) ? completionTargetLoans : BigInteger.ZERO);
-        // The path and ledger already contain each executed batch. A pending
-        // summary only proposes future repetitions; it owns no extra output.
-        if (frame.summary != null) {
-            frame.summary.close();
-            frame.summary = null;
-        }
-        if (amount(frame.key).compareTo(wanted) >= 0) {
-            pop(true);
-            return false;
-        }
-        GraphRecipe<K> recipe = frame.recipe;
-        if (recipe == null || gain(recipe, frame.key).signum() <= 0) {
-            recipe = null;
-            for (GraphRecipe<K> alternative : frame.alternatives) {
-                budget.check();
-                if (gain(alternative, frame.key).signum() > 0) {
-                    recipe = alternative;
-                    break;
-                }
-            }
-        }
-        if (recipe == null) {
-            // A stalled child may be supplied directly. The requested target must
-            // still be produced: supplying the order itself is no witness.
-            if (frame.key.equals(completionTarget)) return true;
-            set(frame.key, frame.wanted);
-            pop(true);
-            return false;
-        }
-        BigInteger runs = CheckedAmounts.ceilDiv(wanted.subtract(amount(frame.key)), gain(recipe, frame.key));
-        // Preserve useful funded alternatives before borrowing an intermediate.
-        // The detailed search may have stopped with a partially funded prefix;
-        // completing that prefix should not discard the remaining stock of all
-        // other sources. This is bounded diagnostic construction, not a claim
-        // that the resulting refill is globally minimal.
-        if (completionRefinements < 128 && frame.alternatives.size() <= 128) {
-            GraphRecipe<K> funded = null;
-            BigInteger fundedRuns = BigInteger.ZERO, fundedOutput = BigInteger.ZERO;
-            for (var alternative : frame.alternatives) {
-                budget.check();
-                BigInteger delta = gain(alternative, frame.key);
-                if (delta.signum() <= 0) continue;
-                BigInteger possible = fundedRuns(alternative, CheckedAmounts.ceilDiv(wanted.subtract(amount(frame.key)), delta));
-                BigInteger output = possible.multiply(delta);
-                if (output.compareTo(fundedOutput) > 0) {
-                    funded = alternative; fundedRuns = possible; fundedOutput = output;
-                }
-            }
-            if (funded != null) {
-                recipe = funded; runs = fundedRuns; completionRefinements++;
-            }
-        }
-        for (var input : recipe.inputs().entrySet()) {
-            budget.check();
-            BigInteger need = BigInteger.valueOf(input.getValue()).add(gain(recipe, input.getKey()).negate()
-                    .max(BigInteger.ZERO).multiply(runs.subtract(BigInteger.ONE)));
-            if (amount(input.getKey()).compareTo(need) < 0) {
-                // Expand an acyclic producer boundary when it is still cheap.
-                // A route back into an active demand instead receives an exact
-                // loan here; following it would turn lossy conversions or seed
-                // cycles into unbounded recursive refill requests.
-                if (completionRefinements < 128 && frames.size() < 64 && canCompleteInput(input.getKey())) {
-                    frame.recipe = recipe; completionRefinements++;
-                    push(input.getKey(), need); return false;
-                }
-                // A returned target can be borrowed to start a recipe, but the
-                // borrowed units must never satisfy the production obligation.
-                if (input.getKey().equals(completionTarget))
-                    completionTargetLoans = completionTargetLoans.add(need.subtract(amount(input.getKey())));
-                set(input.getKey(), need);
-            }
-        }
-        for (K key : recipe.inputs().keySet()) {
-            budget.check();
-            set(key, amount(key).add(gain(recipe, key).multiply(runs)));
-        }
-        for (var output : recipe.outputs().entrySet()) {
-            budget.check();
-            if (!recipe.inputs().containsKey(output.getKey()))
-                set(output.getKey(), amount(output.getKey()).add(BigInteger.valueOf(output.getValue()).multiply(runs)));
-        }
-        append(PlanStep.batch(recipe.id(), runs));
-        if (amount(frame.key).compareTo(wanted) >= 0) pop(true);
-        else frame.recipe = null;
-        return false;
-    }
-
-    private BigInteger fundedRuns(GraphRecipe<K> recipe, BigInteger limit) {
-        for (var input : recipe.inputs().entrySet()) {
-            budget.check();
-            BigInteger prefix = BigInteger.valueOf(input.getValue());
-            BigInteger available = amount(input.getKey());
-            if (available.compareTo(prefix) < 0) return BigInteger.ZERO;
-            BigInteger loss = gain(recipe, input.getKey()).negate();
-            if (loss.signum() > 0) limit = limit.min(available.subtract(prefix).divide(loss).add(BigInteger.ONE));
-        }
-        return limit;
-    }
-
-    private boolean canCompleteInput(K key) {
-        if (active.containsKey(key)) return false;
-        var alternatives = producers.getOrDefault(key, List.of());
-        if (alternatives.size() > 128) return false;
-        for (var recipe : alternatives) {
-            budget.check();
-            if (gain(recipe, key).signum() <= 0) continue;
-            boolean cycle = false;
-            for (K input : recipe.inputs().keySet()) {
-                budget.check();
-                if (active.containsKey(input)) { cycle = true; break; }
-            }
-            if (!cycle) return true;
-        }
-        return false;
-    }
-
-    private BigInteger gain(GraphRecipe<K> recipe, K key) {
-        return BigInteger.valueOf(recipe.outputs().getOrDefault(key, 0L))
-                .subtract(BigInteger.valueOf(recipe.inputs().getOrDefault(key, 0L)));
-    }
-
-    private boolean supplementable(K key, Frame frame) {
-        if (!preview || producers.containsKey(key)) return false;
-        if (frame.supplementing) return true;
-        return frames.stream().anyMatch(parent -> parent.supplementing);
-    }
-
     private boolean reopens(PlanStep.Batch loan, SequenceSummary<K> summary) {
         GraphRecipe<K> recipe = recipes.get(loan.recipe());
         for (var input : summary.required().entrySet()) {
             budget.check();
             K key = input.getKey();
-            if (amount(key).compareTo(input.getValue()) < 0 &&
+            if (!external.contains(key) && amount(key).compareTo(input.getValue()) < 0 &&
                     recipe.outputs().getOrDefault(key, 0L) > recipe.inputs().getOrDefault(key, 0L))
                 return true;
         }
@@ -458,7 +304,7 @@ final class DemandExpansion<K> {
     private boolean enabled(PlanStep.Batch batch) {
         for (var input : recipes.get(batch.recipe()).inputs().entrySet()) {
             budget.check();
-            if (amount(input.getKey()).compareTo(BigInteger.valueOf(input.getValue())) < 0) return false;
+            if (!external.contains(input.getKey()) && amount(input.getKey()).compareTo(BigInteger.valueOf(input.getValue())) < 0) return false;
         }
         return true;
     }
@@ -553,7 +399,7 @@ final class DemandExpansion<K> {
 
     private record Change<K>(K key, BigInteger previous) {}
 
-    private record Producer<K>(GraphRecipe<K> recipe, int blocked, int missing, BigInteger fundedOutput) {}
+    private record Producer<K>(GraphRecipe<K> recipe, int blocked, int missing) {}
 
     private final class Frame {
 
@@ -562,7 +408,7 @@ final class DemandExpansion<K> {
         final List<GraphRecipe<K>> alternatives;
         final int originalUndo = undo.size(), originalPath = path.size();
         int producer, unitUndo, unitPath, iterations;
-        boolean unitStarted, prefixSummary, reentry, supplementing;
+        boolean unitStarted, prefixSummary, reentry;
         GraphRecipe<K> recipe;
         PlanStep body;
         List<PlanStep> peeledPrefix;
@@ -583,24 +429,16 @@ final class DemandExpansion<K> {
                 List<Producer<K>> ranked = new ArrayList<>(candidates.size());
                 for (GraphRecipe<K> recipe : candidates) {
                     int blocked = 0, missing = 0;
-                    BigInteger funded = null;
                     for (var input : recipe.inputs().entrySet()) {
                         budget.check();
-                        if (preview) {
-                            BigInteger runs = amount(input.getKey()).divide(BigInteger.valueOf(input.getValue()));
-                            funded = funded == null ? runs : funded.min(runs);
-                        }
+                        if (external.contains(input.getKey())) continue;
                         if (amount(input.getKey()).compareTo(BigInteger.valueOf(input.getValue())) >= 0) continue;
                         missing++;
                         if (input.getKey().equals(key) || active.containsKey(input.getKey())) blocked++;
                     }
-                    ranked.add(new Producer<>(recipe, blocked, missing,
-                            funded == null ? wanted : funded.multiply(BigInteger.valueOf(recipe.outputs().get(key)))));
+                    ranked.add(new Producer<>(recipe, blocked, missing));
                 }
                 Comparator<Producer<K>> ordering = Comparator.comparingInt(Producer<K>::blocked).thenComparingInt(Producer<K>::missing);
-                // Diagnostic refills should first try a route that can cover the
-                // request with the supplied stock, retaining every other source.
-                if (preview) ordering = ordering.thenComparing(Producer<K>::fundedOutput, Comparator.reverseOrder());
                 ranked.sort(ordering);
                 alternatives = ranked.stream().map(Producer::recipe).toList();
             }

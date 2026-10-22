@@ -1,6 +1,5 @@
 package org.gtlcore.gtlcore.common.data.machines;
 
-import com.hepdd.gtmthings.data.CustomMachines;
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.api.machine.multiblock.CoilWorkableElectricMultipleRecipesMachine;
 import org.gtlcore.gtlcore.api.machine.multiblock.NoEnergyMultiblockMachine;
@@ -49,6 +48,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.material.Fluids;
 
+import com.hepdd.gtmthings.data.CustomMachines;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;

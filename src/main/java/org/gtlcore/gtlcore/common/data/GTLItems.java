@@ -377,6 +377,14 @@ public class GTLItems {
     public static ItemEntry<Item> FAST_CONVERSION_SIMULATE_CARD = register("fast_conversion_simulate_card", true);
 
     public static ItemEntry<Item> COMPRESSED_PUFFERFISH = register("compressed_pufferfish", true);
+    public static final ItemEntry<WearablePlushieItem> FISHBIG_TM = REGISTRATE
+            .item("fishbig_tm", WearablePlushieItem::new)
+            .model(NonNullBiConsumer.noop())
+            .register();
+    public static final ItemEntry<WearablePlushieItem> PIG_PLUSHIE = REGISTRATE
+            .item("pig_plushie", WearablePlushieItem::new)
+            .model(NonNullBiConsumer.noop())
+            .register();
     public static ItemEntry<ComponentItem> MIRACLE_CRYSTAL = REGISTRATE
             .item("miracle_crystal", ComponentItem::create)
             .properties(stack -> stack.stacksTo(16))

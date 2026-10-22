@@ -2,6 +2,10 @@
   "sources": [
     {
       "type": "minecraft:single",
+      "resource": "minecraft:entity/pig/pig"
+    },
+    {
+      "type": "minecraft:single",
       "resource": "gtlcore:block/crafting/1m_storage_light_on"
     },
     {

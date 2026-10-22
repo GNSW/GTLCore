@@ -1,0 +1,9 @@
+{
+  "type": "gtlcore:prank_fish",
+  "category": "misc",
+  "pattern": ["FFF", "F F", "FFF"],
+  "key": {
+    "F": {"item": "minecraft:pufferfish"}
+  },
+  "result": {"item": "gtlcore:fishbig_tm"}
+}

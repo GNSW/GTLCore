@@ -378,11 +378,11 @@ public class GTLItems {
 
     public static ItemEntry<Item> COMPRESSED_PUFFERFISH = register("compressed_pufferfish", true);
     public static final ItemEntry<WearablePlushieItem> FISHBIG_TM = REGISTRATE
-            .item("fishbig_tm", WearablePlushieItem::new)
+            .item("fishbig_tm", properties -> new WearablePlushieItem(GTLPlushies.FISHBIG_TM.get(), properties))
             .model(NonNullBiConsumer.noop())
             .register();
     public static final ItemEntry<WearablePlushieItem> PIG_PLUSHIE = REGISTRATE
-            .item("pig_plushie", WearablePlushieItem::new)
+            .item("pig_plushie", properties -> new WearablePlushieItem(GTLPlushies.PIG_PLUSHIE.get(), properties))
             .model(NonNullBiConsumer.noop())
             .register();
     public static ItemEntry<ComponentItem> MIRACLE_CRYSTAL = REGISTRATE

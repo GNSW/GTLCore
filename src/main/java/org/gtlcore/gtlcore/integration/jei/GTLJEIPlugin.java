@@ -139,9 +139,11 @@ public class GTLJEIPlugin implements IModPlugin {
         JeiMeInventoryTooltip.onRuntimeAvailable(runtime);
         JeiMissingIngredientBookmarks.onRuntimeAvailable(runtime);
         hideUnobtainableOres(runtime);
-        runtime.getIngredientManager().removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK,
-                runtime.getIngredientManager().getAllItemStacks().stream()
-                        .filter(stack -> stack.is(GTLItems.FISHBIG_TM.get())).toList());
+        var hiddenPlushies = new ArrayList<>(runtime.getIngredientManager().getAllItemStacks().stream()
+                .filter(stack -> stack.is(GTLItems.FISHBIG_TM.get())).toList());
+        // Also blacklist the base item if another plugin already removed it from the ingredient list.
+        if (hiddenPlushies.isEmpty()) hiddenPlushies.add(GTLItems.FISHBIG_TM.asStack());
+        runtime.getIngredientManager().removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hiddenPlushies);
         var list = new ArrayList<ItemStack>();
         for (int i = 1; i <= 32; i++) {
             list.add(IntCircuitBehaviour.stack(i));

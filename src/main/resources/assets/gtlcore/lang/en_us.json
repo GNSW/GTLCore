@@ -1,6 +1,8 @@
 {
   "item.gtlcore.fishbig_tm": "FishBig™",
   "item.gtlcore.pig_plushie": "Piggy",
+  "block.gtlcore.fishbig_tm": "FishBig™",
+  "block.gtlcore.pig_plushie": "Piggy",
   "gtlcore.ae.graph.cycle_refill": "Refill at a cycle boundary for this route. Another order or route may need less or no refill; this is not a proven minimum.",
   "gtlcore.ae.graph.terminal_refill": "No further production route was found in the captured patterns for this material.",
   "gtlcore.ae.graph.unexpanded_refill": "Expansion of this route is incomplete or restricted. This is not a proven basic-material shortage.",

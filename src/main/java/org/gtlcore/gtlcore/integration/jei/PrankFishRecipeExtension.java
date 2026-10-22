@@ -3,6 +3,8 @@ package org.gtlcore.gtlcore.integration.jei;
 import org.gtlcore.gtlcore.common.recipe.PrankFishRecipe;
 
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
@@ -22,7 +24,12 @@ public record PrankFishRecipeExtension(PrankFishRecipe recipe) implements ICraft
         grid.createAndSetInputs(builder, recipe.getIngredients().stream()
                 .map(ingredient -> Arrays.asList(ingredient.getItems())).toList(), getWidth(), getHeight());
         grid.createAndSetOutputs(builder, List.of(new ItemStack(
-                BuiltInRegistries.ITEM.get(new ResourceLocation("expatternprovider", "fishbig")))));
+                BuiltInRegistries.ITEM.get(new ResourceLocation("expatternprovider", "fishbig")))))
+                // JEI adds these before slot callbacks. Keep the real recipe ID for transfers and bookmarks.
+                .addRichTooltipCallback((slot, tooltip) -> tooltip.getLines().removeIf(line -> line.left().orElse(null) instanceof Component component &&
+                        component.getContents() instanceof TranslatableContents contents &&
+                        (contents.getKey().equals("jei.tooltip.recipe.by") ||
+                                contents.getKey().equals("jei.tooltip.recipe.id"))));
     }
 
     @Override

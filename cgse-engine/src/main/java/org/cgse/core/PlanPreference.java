@@ -121,6 +121,11 @@ final class PlanPreference<K> {
 
     static <K> PlanPreference<K> of(RegionSelection.Choice<K> choice, Set<K> produced, Map<K, BigInteger> demand,
                                     Map<K, Long> stock, Set<K> external, PlanningBudget budget) {
+        return of(choice, produced, demand, stock, external, Map.of(), budget);
+    }
+
+    static <K> PlanPreference<K> of(RegionSelection.Choice<K> choice, Set<K> produced, Map<K, BigInteger> demand,
+                                    Map<K, Long> stock, Set<K> external, Map<K, Long> seedCredits, PlanningBudget budget) {
         Map<K, BigInteger> required = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
         Set<K> keys = choice.summary().keys();
         keys.addAll(produced);
@@ -130,7 +135,8 @@ final class PlanPreference<K> {
             BigInteger delta = choice.summary().delta(key), net = delta.multiply(runs);
             BigInteger prefix = runs.signum() == 0 ? BigInteger.ZERO : choice.summary().required(key)
                     .add(delta.negate().max(BigInteger.ZERO).multiply(preceding));
-            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(choice.seeds().getOrDefault(key, 0L)));
+            long additional = Math.max(0, choice.seeds().getOrDefault(key, 0L) - seedCredits.getOrDefault(key, 0L));
+            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(additional));
             BigInteger initial = prefix.max(goal.subtract(net)).max(BigInteger.ZERO);
             put(required, key, initial);
             if (!external.contains(key)) put(missing, key, initial.subtract(PlanningInventory.exactAmount(stock, key)).max(BigInteger.ZERO));

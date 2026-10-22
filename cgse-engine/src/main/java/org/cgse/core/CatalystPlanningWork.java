@@ -15,7 +15,8 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
     private final PlanningBudget budget;
     private final long started = System.nanoTime();
     private GraphPlanningWork<K> current;
-    private GraphPlan<K> best, result;
+    private GraphPlan<K> best, result, preview, pending;
+    private RefillPreviewSelection<K> previewSelection;
     private int extra, low, high, attempts = 1;
     private boolean first = true, baseline, minimum;
 
@@ -29,21 +30,34 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
 
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
-        return result != null || current.advance(slice) && consume();
+        return result != null || (pending != null || current.advance(slice)) && consume();
     }
 
     public boolean step() {
-        return result != null || current.step() && consume();
+        return result != null || (pending != null || current.step()) && consume();
     }
 
     private boolean consume() {
-        GraphPlan<K> candidate = current.result();
-        budget.note("catalysts", "attempt=" + attempts + "; extra=" + extra + "; minimum=" + minimum + "; result=" + candidate.result());
+        if (pending == null) {
+            pending = current.result();
+            budget.note("catalysts", "attempt=" + attempts + "; extra=" + extra + "; minimum=" + minimum + "; result=" + pending.result());
+            if (completedPreview(pending)) {
+                if (preview == null) preview = pending;
+                else previewSelection = new RefillPreviewSelection<>(preview, pending, budget);
+            }
+        }
+        if (previewSelection != null) {
+            if (!previewSelection.step()) return false;
+            preview = previewSelection.result();
+            previewSelection = null;
+        }
+        GraphPlan<K> candidate = pending;
+        pending = null;
         if (switch (candidate.result()) {
             case TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT, QUEUE_LIMIT -> true;
             default -> false;
-        }) return finish(best == null ? candidate : unproven(best));
-        if (minimum) return finish(candidate);
+        }) return finish(best == null ? withPreview(candidate) : unproven(best));
+        if (minimum) return finish(withPreview(candidate));
         if (first) {
             first = false;
             if (candidate.feasible() || policy.parallelism() == 1) return finish(candidate);
@@ -71,6 +85,19 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
         // budget and preserve the last independently verified feasible plan.
         next(low + (high - low + 1) / 2);
         return false;
+    }
+
+    private static boolean completedPreview(GraphPlan<?> plan) {
+        return !plan.missingExact().isEmpty() && switch (plan.result()) {
+            case MISSING_INPUT, MISSING_SEED, INCOMPLETE_MODEL -> true;
+            default -> false;
+        };
+    }
+
+    private GraphPlan<K> withPreview(GraphPlan<K> plan) {
+        if (plan.feasible() || preview == null) return plan;
+        if (plan != preview) budget.note("catalysts", "retained_refill; missing_keys=" + preview.missingExact().size());
+        return preview;
     }
 
     private void next(int limit) {
@@ -101,7 +128,15 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
 
     @Override
     public GraphPlan<K> limited(PlanningBudget.Exhausted limit) {
-        return best == null ? current.limited(limit) : unproven(best);
+        if (result != null) return result;
+        if (best != null) { finish(unproven(best)); return result; }
+        // A later optional acceleration trial must not erase an earlier
+        // verified refill when it runs out of work, time or memory. Harvest a
+        // completed feasible result first; interrupted comparisons keep the
+        // already published preview unchanged.
+        var candidate = pending == null ? current.limited(limit) : pending;
+        finish(withPreview(candidate));
+        return result;
     }
 
     @Override
@@ -112,6 +147,9 @@ public final class CatalystPlanningWork<K> implements PlanningScheduler.Work<Gra
     @Override
     public void close() {
         current.close();
+        pending = null;
+        previewSelection = null;
+        preview = null;
     }
 
     @Override

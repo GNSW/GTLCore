@@ -55,18 +55,33 @@ final class GraphFallbackSearch<K> implements AutoCloseable {
     }
 
     boolean find() {
+        return findPriority() || findOrdered();
+    }
+
+    boolean findPriority() {
+        return findPriority(allowance);
+    }
+
+    boolean findPriority(long maximumWork) {
         // Prefer a later source that funds the whole request before exploring
         // mixtures of an earlier, resource-starved source. Both passes share
         // the same total work/choice limits and release their failed workspace.
-        workLimit = allowance / 2;
+        long grant = Math.min(allowance, maximumWork);
+        workLimit = grant / 2;
         if (search()) return true;
         reset();
         partial = true;
-        workLimit = allowance;
+        workLimit = grant;
         if (search()) return true;
+        return false;
+    }
+
+    /** Optional rankings can run after a complete fallback bill is retained. */
+    boolean findOrdered() {
         // Preserve both original priority passes and their work allowance.
         // Only failed searches use relaxed reachability and stable rankings.
         reset();
+        partial = true;
         sourceOrder = GraphFallbackSources.create(compiler, stock, external, target, force, budget);
         if (sourceOrder == null) return false;
         for (int pass = 0; pass < 2; pass++) {

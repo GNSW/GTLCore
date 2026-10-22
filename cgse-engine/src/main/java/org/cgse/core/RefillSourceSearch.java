@@ -51,6 +51,8 @@ final class RefillSourceSearch<K> implements AutoCloseable {
     private MissingMaterialExpansion<K> expansion;
     private RefillFrontier.Comparison<K> comparison;
     private boolean ranked, allocated;
+    private boolean baselineTried;
+    private boolean ordinaryWord = true, normalizing;
     private long memory;
 
     RefillSourceSearch(GraphCompiler<K> compiler, GraphPlan<K> original, Map<K, Long> stock,
@@ -99,7 +101,7 @@ final class RefillSourceSearch<K> implements AutoCloseable {
         try {
             budget.checkpoint();
             if (phase == Phase.DONE) return true;
-            if (budget.nodes() - started >= allowance) return finish();
+            if (!normalizing && budget.nodes() - started >= allowance) return finish();
             if (!allocated) { reserve(1024); allocated = true; }
             // Each child owns its slice. Never append a child to a full scan.
             if (phase == Phase.ORIGINAL) {
@@ -150,7 +152,12 @@ final class RefillSourceSearch<K> implements AutoCloseable {
             case BINDINGS -> {
                 // Check every old binding before a truncated hint scan is
                 // allowed to start trials. Late per-push bindings matter too.
-                if (recipes.hasNext()) { if (recipes.next().batchSensitiveInputs()) { declined = true; return finish(); } }
+                if (recipes.hasNext()) {
+                    var bound = recipes.next();
+                    if (finiteBatchConfiguration(bound)) { declined = true; return finish(); }
+                    ordinaryWord &= bound.inputs().size() == 1 && bound.outputs().size() == 1 &&
+                            bound.configurationInputs().isEmpty() && !bound.inputs().keySet().equals(bound.outputs().keySet());
+                }
                 else { recipes = original.recipes().values().iterator(); phase = Phase.SCAN; }
             }
             case SCAN -> {
@@ -171,7 +178,7 @@ final class RefillSourceSearch<K> implements AutoCloseable {
                 if (!sources.hasNext()) {
                     boundChoicesSeen |= multihop && boundSources >= 2;
                     jointChoicesSeen |= jointSources >= 2;
-                    if ((joint ? local.size() >= 2 : multihop && (!reallocate || local.size() >= 2))) for (var option : local) {
+                    if ((joint ? local.size() >= 2 : !reallocate || multihop && local.size() >= 2)) for (var option : local) {
                         if (choices.size() == MAX_CHOICES) break;
                         // The local list is constant-sized; charge retained hints.
                         reserve(96); choices.add(option);
@@ -179,7 +186,7 @@ final class RefillSourceSearch<K> implements AutoCloseable {
                     local.clear(); sources = null; phase = Phase.PORTS; break;
                 }
                 var source = sources.next();
-                if (excluded.contains(source.id()) || source.batchSensitiveInputs() ||
+                if (excluded.contains(source.id()) || finiteBatchConfiguration(source) ||
                         source.outputs().getOrDefault(key, 0L) <= source.inputs().getOrDefault(key, 0L)) break;
                 var binding = original.recipes().get(source.id());
                 if (binding != null && !binding.equals(source)) break;
@@ -226,6 +233,20 @@ final class RefillSourceSearch<K> implements AutoCloseable {
             }
             case TRIAL -> {
                 if (result.feasible()) return finish();
+                if (!reallocate && !joint && ordinaryWord && !baselineTried) {
+                    // A terminal bill can still encode an expensive or
+                    // stock-starved single-source word. Normalize the whole
+                    // demand once with ordinary funded mixtures before any
+                    // preferred-source trial. Ordinary-word normalization uses
+                    // the original request budget; the small optional hint quota
+                    // must not stop a wide stock split halfway through.
+                    baselineTried = true;
+                    choice = null;
+                    expansion = MissingMaterialExpansion.sourceAlternative(compiler, boundary, stock, external, excluded,
+                            force, ignoreTargetStock, budget, order, credit, Map.of());
+                    phase = Phase.EXPAND;
+                    break;
+                }
                 if (joint) {
                     var pair = nextPair();
                     if (pair == null) return finish();
@@ -257,6 +278,7 @@ final class RefillSourceSearch<K> implements AutoCloseable {
     private boolean beginTrials() {
         ports = inputs = null; sources = null; local.clear();
         if (choices.isEmpty()) return finish();
+        normalizing = ordinaryWord && !reallocate && !joint;
         reserve(1024);
         var funded = GraphPlan.ownedRefill(original, original.steps(), original.recipes(), original.initialExact(), Map.of(),
                 GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL, budget.nodes());
@@ -266,11 +288,12 @@ final class RefillSourceSearch<K> implements AutoCloseable {
     }
 
     private void endTrial(boolean accept) {
+        if (choice == null && baselineTried) normalizing = false;
         if (accept) {
             result = candidate; accepted++;
             // The retained word still owns its builders after the child closes.
             memory += expansion.takeResultCharge();
-        } else if (!reallocate && !joint) {
+        } else if (!reallocate && !joint && choice != null) {
             if (previousPreference == null) preferred.remove(choice.key());
             else preferred.put(choice.key(), previousPreference);
         }
@@ -331,6 +354,19 @@ final class RefillSourceSearch<K> implements AutoCloseable {
     boolean mayJoint() { return !declined && jointChoicesSeen; }
     RefillProducerOrder<K> completedOrder() { return ranked ? order : null; }
     private void reserve(long bytes) { budget.reserve(bytes); memory += bytes; }
+
+    /** Finite consumed configurations depend on dispatch grouping. A truly
+     * external configuration has no finite budget to invalidate when a source
+     * changes; its original physical binding and exact prefix are still kept. */
+    private boolean finiteBatchConfiguration(GraphRecipe<K> recipe) {
+        if (!recipe.batchSensitiveInputs()) return false;
+        for (var entry : recipe.configurationInputs().entrySet()) {
+            budget.check();
+            if (entry.getValue() > recipe.reusableInputs().getOrDefault(entry.getKey(), 0L) && !external.contains(entry.getKey()))
+                return true;
+        }
+        return false;
+    }
     @Override public void close() {
         if (verification != null) { verification.close(); verification = null; }
         if (expansion != null) { expansion.close(); expansion = null; }

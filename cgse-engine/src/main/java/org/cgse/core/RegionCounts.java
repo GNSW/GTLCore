@@ -12,6 +12,7 @@ final class RegionCounts<K> implements AutoCloseable {
     private final List<GraphRecipe<K>> recipes;
     private final Map<K, BigInteger> demand, goals;
     private final Map<K, Long> stock;
+    private Map<K, Long> seedCredits = Map.of();
     private final Set<K> external;
     private final boolean preserve;
     private final PlanningBudget budget;
@@ -31,6 +32,12 @@ final class RegionCounts<K> implements AutoCloseable {
     private int refinements;
     private BigInteger[] counts;
     private PlanStep body;
+
+    RegionCounts<K> seedCredits(Map<K, Long> credits) {
+        if (model != null) throw new IllegalStateException("Region counts already started");
+        seedCredits = credits;
+        return this;
+    }
 
     /** Small-SCC ratio recovery keeps its full quota, including sparse propagation-cycle elimination. */
     RegionCounts<K> scoutRegions(boolean enabled) {
@@ -151,7 +158,8 @@ final class RegionCounts<K> implements AutoCloseable {
         seeds.forEach((key, seed) -> reserve.merge(key, seed, Math::max));
         for (var entry : reserve.entrySet()) {
             K key = entry.getKey();
-            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(entry.getValue()));
+            long additional = Math.max(0, entry.getValue() - seedCredits.getOrDefault(key, 0L));
+            BigInteger goal = demand.getOrDefault(key, BigInteger.ZERO).add(BigInteger.valueOf(additional));
             if (PlanningInventory.exactAmount(stock, key).add(summary.delta(key)).compareTo(goal) < 0) {
                 goals.merge(key, goal, BigInteger::max);
                 changed = true;

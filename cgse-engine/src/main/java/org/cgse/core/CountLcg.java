@@ -274,7 +274,9 @@ final class CountLcg implements AutoCloseable {
     private final List<CountProof.Combination> derivedRows = new ArrayList<>();
     private final Set<ExactLinearProgram.Constraint> cycleRows = new HashSet<>();
     private int cycleDecisions = -1, cycleConflicts = -1;
-    private long cycleNext, cycleWork;
+    private long cycleNext, cycleWork, cycleStallStart;
+    private int propagationDecisions = -1, propagationConflicts = -1;
+    private long propagationStart;
     private CountLpLearning.Session lpSession;
     private CountIntegerLpLearning integerLpSession;
     private CountLcgReliability reliability;
@@ -485,7 +487,8 @@ final class CountLcg implements AutoCloseable {
                 return false;
             }
             if (!queue.isEmpty()) {
-                if (cutPropagationCycle()) return false;
+                if (compileMonotoneCycles() || cutPropagationCycle()) return false;
+                if (splitLongPropagation()) return false;
                 int id = queue.removeFirst();
                 queued.clear(id);
                 if (rowPool == null || rowPool.active(id)) {
@@ -643,6 +646,7 @@ final class CountLcg implements AutoCloseable {
             cycleDecisions = decisions;
             cycleConflicts = conflicts;
             cycleNext = lazyReasons + 128;
+            cycleStallStart = lazyReasons;
         }
         if (lazyReasons < cycleNext || cycleRows.size() >= 64 || cycleWork >= 32768 ||
                 learnedRelaxation && rows.size() >= rowActivity.length)
@@ -662,7 +666,8 @@ final class CountLcg implements AutoCloseable {
                         row.terms().values().stream().allMatch(v -> v.bitLength() <= 2048))
                     recent.add(reason.rowId);
             }
-            for (int a = 0; a < recent.size(); a++) for (int b = a + 1; b < recent.size(); b++) {
+            int paired = Math.min(8, recent.size());
+            for (int a = 0; a < paired; a++) for (int b = a + 1; b < paired; b++) {
                 int first = recent.get(a), second = recent.get(b);
                 var left = rows.get(first);
                 var right = rows.get(second);
@@ -717,11 +722,108 @@ final class CountLcg implements AutoCloseable {
                     return admitCycleCut(cut);
                 }
             }
-            return false;
+            long chainBytes = 524288;
+            if (low.length > 256 || lazyReasons - cycleStallStart < 1024 || recent.size() < 3 || work - started >= 4096 ||
+                    chainBytes > budget.availableBytes() / 8 || !budget.tryReserve(chainBytes))
+                return false;
+            try {
+                var cut = CountCycleElimination.find(rows, recent, low, high, this::charge, () -> work - started >= 4096);
+                return cut != null && !cycleRows.contains(cut.row()) && materialPropagationJump(cut.row()) && admitCycleCut(cut);
+            } finally { budget.release(chainBytes); }
         } finally {
             cycleWork += work - started;
             budget.release(scratch);
         }
+    }
+
+    private boolean monotoneCyclesTried;
+    private boolean compileMonotoneCycles() {
+        // The bounded compiler complements a medium sparse kernel. Scanning
+        // full catalog-sized portfolios here can displace their existing
+        // retained arms without reducing the remaining execution problem.
+        if (monotoneCyclesTried || low.length <= 256 || low.length > 512 || lazyReasons < 8192) return false;
+        monotoneCyclesTried = true;
+        long terms = 0;
+        for (int i = 0; i < originalRows; i++) { charge(); terms += rows.get(i).terms().size(); }
+        // Includes bounded 2048-bit coefficients and original-row ancestry
+        // for retained cuts as well as the component's elimination scratch.
+        long bytes = (6L << 20) + 512L * (terms + low.length + originalRows);
+        if (bytes > budget.availableBytes() / 4 || !budget.tryReserve(bytes)) return false;
+        long started = work; int accepted = 0;
+        try {
+            var cuts = CountMonotoneCycles.compile(rows.subList(0, originalRows), low.length, this::charge,
+                    () -> work - started >= 65536);
+            for (var cut : cuts) {
+                charge(); if (cycleRows.contains(cut.row()) || cycleRows.size() >= 64) continue;
+                if (materialPropagationJump(cut.row()) && admitCycleCut(cut)) accepted++;
+            }
+        } finally { budget.release(bytes); }
+        budget.note("count_monotone_cycles", "cuts=" + accepted + "; work=" + (work - started));
+        return accepted > 0;
+    }
+
+    /** Keep the ordinary trajectory unless a compiled loop closes a conflict
+     * or skips a substantial stretch of repeated bound propagation. */
+    private boolean materialPropagationJump(ExactLinearProgram.Constraint row) {
+        BigInteger minimum = BigInteger.ZERO; int infinite = 0;
+        for (var term : row.terms().entrySet()) {
+            charge(); BigInteger endpoint = term.getValue().signum() > 0 ? low[term.getKey()] : high[term.getKey()];
+            if (endpoint == null) infinite++;
+            else { integerCost(endpoint, term.getValue()); minimum = minimum.add(endpoint.multiply(term.getValue())); }
+        }
+        if (infinite == 0 && minimum.compareTo(row.upper()) > 0) return true;
+        for (var term : row.terms().entrySet()) {
+            charge(); int id = term.getKey(); BigInteger coefficient = term.getValue();
+            BigInteger endpoint = coefficient.signum() > 0 ? low[id] : high[id];
+            if (infinite > (endpoint == null ? 1 : 0)) continue;
+            BigInteger other = endpoint == null ? minimum : minimum.subtract(endpoint.multiply(coefficient));
+            if (coefficient.signum() < 0) {
+                BigInteger next = floor(row.upper().subtract(other), coefficient.negate()).negate();
+                if (next.compareTo(low[id].add(low[id].abs().max(BigInteger.valueOf(16)))) >= 0) return true;
+            } else if (high[id] != null) {
+                BigInteger next = floor(row.upper().subtract(other), coefficient);
+                if (next.compareTo(high[id].subtract(high[id].subtract(low[id]).shiftRight(1).max(BigInteger.valueOf(16)))) <= 0) return true;
+            }
+        }
+        return false;
+    }
+
+    /** A propagation queue need not reach a fixed point before a sound split.
+     * Large feedback systems can otherwise allocate millions of successively
+     * stronger reasons without making another search decision. Keep the queue,
+     * split a recently changing finite domain, and let ordinary conflict
+     * analysis prove or reject that branch. No stalled row becomes a nogood. */
+    private boolean splitLongPropagation() {
+        if (low.length <= 256) return false;
+        if (propagationDecisions != decisions || propagationConflicts != conflicts) {
+            propagationDecisions = decisions; propagationConflicts = conflicts;
+            propagationStart = lazyReasons;
+        }
+        if (lazyReasons - propagationStart < 8192) return false;
+        propagationStart = lazyReasons;
+        // Keep dense, still-wide frontiers on their existing trajectory. This
+        // complement targets a small active kernel left inside a large model.
+        int live = 0;
+        for (int i = 0; i < low.length; i++) {
+            charge();
+            if (!low[i].equals(high[i]) && ++live > 32) return false;
+        }
+        int best = -1, width = -1;
+        boolean up = false;
+        for (int at = trail.size() - 1, end = Math.max(0, trail.size() - 128); at >= end; at--) {
+            charge();
+            int id = trail.get(at).literal.variable;
+            if (high[id] == null || high[id].equals(low[id])) continue;
+            int bits = high[id].subtract(low[id]).bitLength();
+            if (bits > width) { best = id; width = bits; up = trail.get(at).literal.minimum; }
+        }
+        if (best < 0) return false;
+        observeDecision(false);
+        BigInteger middle = low[best].add(high[best].subtract(low[best]).shiftRight(1));
+        level++; decisions++;
+        tighten(up ? new Literal(best, true, middle.add(BigInteger.ONE)) : new Literal(best, false, middle), null);
+        budget.note("count_propagation_split", "variable=" + best + "; width_bits=" + width + "; pending_rows=" + queue.size());
+        return true;
     }
 
     private boolean admitCycleCut(CountLpLearning.Cut cut) {
@@ -730,6 +832,7 @@ final class CountLcg implements AutoCloseable {
         int capacity = rows.size() >= rowActivity.length ? rows.size() + 16 : rowActivity.length;
         long bytes = 2048L + 1024L * row.terms().size() + (copy ? 16L * rows.size() : 0) +
                 8L * (capacity - rowActivity.length);
+        for (var multiplier : cut.parents().values()) { charge(); bytes += 128L + (multiplier.bitLength() + 7L) / 8; }
         if (bytes > budget.availableBytes() / 8 || !budget.tryReserve(bytes)) return false;
         memory += bytes;
         if (copy) rows = new ArrayList<>(rows);

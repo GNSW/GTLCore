@@ -33,7 +33,6 @@ final class AllocationSearch<K> {
     private final Map<String, Map<String, BigInteger>> actionCounts = new HashMap<>();
     private PartialOrder<K> partialOrder;
     private long orderedAway;
-    private final Set<K> producedKeys = new HashSet<>();
     // This search models the available network plus hypothetical recipe deltas,
     // not the CPU's physical inventory. Stock at Long.MAX_VALUE must not forbid
     // a recipe with a positive byproduct: the final witness borrows only its
@@ -52,26 +51,17 @@ final class AllocationSearch<K> {
     private DemandExpansion<K> expansion;
     private LinearMacroCompilation<K> macros;
     private GraphPlan<K> result;
-    private final boolean preview;
-    private boolean completingPreview;
     private final List<GraphCompiler.QuantityCertificate<K>> certificates;
-    private long allocationStarted;
-    private long work, stepStarted;
     private long searchWork;
     private OrderProofs<K> proofs;
 
     AllocationSearch<K> proofs(OrderProofs<K> value) {
-        if (!preview) proofs = value;
+        proofs = value;
         return this;
     }
 
     AllocationSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
                      boolean preserve, boolean force, Set<String> excluded, PlanningBudget budget, long started) {
-        this(compiler, target, amount, stock, external, requiredSeeds, preserve, force, excluded, budget, started, false);
-    }
-
-    AllocationSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
-                     boolean preserve, boolean force, Set<String> excluded, PlanningBudget budget, long started, boolean preview) {
         this.compiler = compiler;
         this.target = target;
         this.amount = amount;
@@ -84,8 +74,7 @@ final class AllocationSearch<K> {
         this.excluded = excluded;
         this.budget = budget;
         this.started = started;
-        this.preview = preview;
-        certificates = preview ? List.of() : compiler.quantityCertificates(excluded);
+        certificates = compiler.quantityCertificates(excluded);
         goals.put(target, BigInteger.valueOf(amount));
         pending.add(target);
         requiredSeeds.forEach((key, count) -> goals.merge(key, BigInteger.valueOf(count), BigInteger::add));
@@ -93,7 +82,6 @@ final class AllocationSearch<K> {
     }
 
     boolean step() {
-        stepStarted = budget.threadWork();
         long searchBefore = budget.threadSearchWork();
         String previousFailure = budget.failureDetail();
         try {
@@ -108,30 +96,12 @@ final class AllocationSearch<K> {
             budget.note("allocation", "workspace_exhausted; other_frontiers_retained");
             return true;
         } finally {
-            work += budget.threadWork() - stepStarted;
             searchWork += budget.threadSearchWork() - searchBefore;
         }
     }
 
     /** Work performed by this retained frontier, excluding other strategies' turns. */
     long searchWork() { return searchWork; }
-
-    /** Retain the demand prefix while finishing a conservative, verifiable refill. */
-    boolean completePreview() {
-        if (!preview || phase == 3 || phase == 2 && checking == null) return false;
-        if (!completingPreview) {
-            completingPreview = true;
-            if (expansion != null) expansion.completePreview(target);
-            budget.note("missing_preview", "complete_retained_prefix; intermediate_refills_allowed");
-        }
-        return true;
-    }
-
-    boolean usedPreviewCompletion() { return completingPreview; }
-
-    private long usedWork() {
-        return work + budget.threadWork() - stepStarted;
-    }
 
     private boolean advance() {
         budget.check();
@@ -145,28 +115,13 @@ final class AllocationSearch<K> {
                 var recipe = recipes.get(index++);
                 summaries.add(SequenceSummary.recipe(recipe));
                 actionCounts.put(recipe.id(), macros == null ? Map.of(recipe.id(), BigInteger.ONE) : macros.counts(recipe.id()));
-                producedKeys.addAll(recipe.executionOutputs().keySet());
                 for (K key : recipe.inputs().keySet()) keyIds.computeIfAbsent(key, ignored -> keyIds.size());
                 for (K key : recipe.outputs().keySet()) keyIds.computeIfAbsent(key, ignored -> keyIds.size());
                 reserve(256L + 128L * (recipe.inputs().size() + recipe.outputs().size()));
             } else {
                 keyIds.computeIfAbsent(target, ignored -> keyIds.size());
-                K refill = null;
-                BigInteger refillGap = null;
-                if (preview) for (K key : keyIds.keySet()) if (!producedKeys.contains(key) && !external.contains(key)) {
-                    BigInteger gap = goals.getOrDefault(key, BigInteger.ZERO).subtract(PlanningInventory.exactAmount(stock, key));
-                    if (refillGap == null || gap.compareTo(refillGap) > 0) {
-                        refill = key;
-                        refillGap = gap;
-                    }
-                }
                 for (K key : keyIds.keySet()) {
                     BigInteger available = PlanningInventory.exactAmount(stock, key);
-                    // A one-unit diagnostic refill avoids fragmenting a large
-                    // compressed loop at its very last missing raw input. This
-                    // is hypothetical only: Candidate derives every borrowed
-                    // unit again from the independently summarized program.
-                    if (preview && key.equals(refill)) available = available.add(BigInteger.ONE);
                     // A finite, explicitly permitted external requirement for this
                     // candidate. This is not physical stock or a MAX_VALUE sentinel.
                     if (external.contains(key)) available = available.max(goals.getOrDefault(key, BigInteger.ZERO));
@@ -184,8 +139,7 @@ final class AllocationSearch<K> {
                 BigInteger targetGoal = BigInteger.valueOf(amount).add(force ? reserve.max(PlanningInventory.exactAmount(stock, target)) : reserve);
                 required.put(target, targetGoal);
                 requiredSeeds.forEach((key, count) -> required.merge(key, BigInteger.valueOf(count), BigInteger::max));
-                expansion = new DemandExpansion<>(relevant, held, required, budget, preview);
-                if (completingPreview) expansion.completePreview(target);
+                expansion = new DemandExpansion<>(relevant, held, required, budget).externallySupplied(external);
                 phase = 4;
             }
             return false;
@@ -203,15 +157,10 @@ final class AllocationSearch<K> {
             if (!expansion.step()) return false;
             if (expansion.result() != null) checking = candidate(expansion.result());
             else {
-                if (preview && !completingPreview) {
-                    completePreview();
-                    return false;
-                }
                 expansion.close();
                 expansion = null;
             }
             phase = 2;
-            allocationStarted = usedWork();
             return false;
         }
         if (checking != null) {
@@ -226,10 +175,6 @@ final class AllocationSearch<K> {
                 finish();
                 return true;
             }
-        }
-        if (preview && usedWork() - allocationStarted > 32_768L + 512L * recipes.size()) {
-            finish();
-            return true;
         }
         if (stack.isEmpty()) {
             finish();
@@ -482,7 +427,7 @@ final class AllocationSearch<K> {
 
     private Candidate<K> candidate(PlanStep witness) {
         return new Candidate<>(macros == null ? witness : macros.expand(witness), relevant, target, amount, stock,
-                requiredSeeds, external, preserve, force, preview, budget, started);
+                requiredSeeds, external, preserve, force, false, budget, started);
     }
 
     private boolean provenResourceConflict() {
@@ -679,6 +624,15 @@ final class AllocationSearch<K> {
                     for (GraphRecipe<K> recipe : producers.getOrDefault(key, List.of())) for (K input : recipe.inputs().keySet()) {
                         budget.check();
                         if (input.equals(checkingKey)) {
+                            // A batched cycle can borrow more than one seed
+                            // ledger can represent even when a different order
+                            // needs only a small startup. Reject this proposal,
+                            // not the request; never truncate its preservation
+                            // obligation or turn it into an infeasibility proof.
+                            if (summary.required(checkingKey).compareTo(ExactAmounts.LONG_MAX) > 0) {
+                                budget.note("allocation_seed", "candidate_declined; reason=seed_capacity");
+                                return true;
+                            }
                             seeds.merge(checkingKey, CheckedAmounts.amount(summary.required(checkingKey)), Math::max);
                             checkingKey = null;
                             todo.clear();

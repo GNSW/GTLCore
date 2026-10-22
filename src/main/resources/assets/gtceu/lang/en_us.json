@@ -944,7 +944,7 @@
   "gtceu.machine.space_elevator.tooltip.1": "Increasing voltage tier provides duration reduction for modules",
   "gtceu.machine.space_elevator.tooltip.2": "Fixed consumption of 128 CWU",
   "gtceu.machine.space_probe_surface_reception.tooltip.0": "Do not obstruct",
-  "gtceu.machine.star_ultimate_material_forge_factory.tooltip.0": "Max Parallel: 1000",
+  "gtceu.machine.star_ultimate_material_forge_factory.tooltip.0": "Max Parallel: 10000",
   "gtceu.machine.structure_check": "Update Structure Check",
   "gtceu.machine.super_alloy_blast_smelter.tooltip": "When running ebf and alloy blast smelter recipes:",
   "gtceu.machine.super_computation.tooltip.0": "Obtains computational power output based on different voltage tiers",

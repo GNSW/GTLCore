@@ -944,7 +944,7 @@
   "gtceu.machine.space_elevator.tooltip.1": "提升电压等级可为模块提供耗时减免",
   "gtceu.machine.space_elevator.tooltip.2": "固定消耗128算力",
   "gtceu.machine.space_probe_surface_reception.tooltip.0": "不要遮挡",
-  "gtceu.machine.star_ultimate_material_forge_factory.tooltip.0": "最大并行数：1000",
+  "gtceu.machine.star_ultimate_material_forge_factory.tooltip.0": "最大并行数：10000",
   "gtceu.machine.structure_check": "更新结构检查",
   "gtceu.machine.super_alloy_blast_smelter.tooltip": "运行电力高炉、合金冶炼炉配方时：",
   "gtceu.machine.super_computation.tooltip.0": "根据不同的电压等级获得算力输出",

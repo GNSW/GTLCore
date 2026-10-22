@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.common.data.machines;
 
+import com.hepdd.gtmthings.data.CustomMachines;
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.api.machine.multiblock.CoilWorkableElectricMultipleRecipesMachine;
 import org.gtlcore.gtlcore.api.machine.multiblock.NoEnergyMultiblockMachine;
@@ -573,7 +574,7 @@ public class MultiBlockMachineA {
                     .where("b", Predicates.blocks(GTBlocks.FUSION_COIL.get()))
                     .where("e", Predicates.blocks(Registries.getBlock("kubejs:aggregatione_core")))
                     .where("a", Predicates.blocks(ChemicalHelper.getBlock(TagPrefix.frameGt, GTMaterials.NaquadahEnriched)))
-                    .where("i", Predicates.blocks(GTMachines.ITEM_IMPORT_BUS[0].get()))
+                    .where("i", Predicates.blocks(GTMachines.ITEM_IMPORT_BUS[0].get()).or(Predicates.blocks(CustomMachines.HUGE_ITEM_IMPORT_BUS[0].get())))
                     .where("g", GTLPredicates.diffAbilities(List.of(PartAbility.EXPORT_ITEMS), List.of(PartAbility.IMPORT_ITEMS, PartAbility.IMPORT_FLUIDS)))
                     .where(" ", Predicates.any())
                     .build())
@@ -1176,7 +1177,7 @@ public class MultiBlockMachineA {
             .tooltips(Component.translatable("gtceu.machine.available_recipe_map_1.tooltip",
                     Component.translatable("gtceu.ultimate_material_forge")))
             .tooltipBuilder(GTLMachines.GTL_ADD)
-            .recipeModifiers((machine, recipe, params, result) -> GTRecipeModifiers.accurateParallel(machine, recipe, 1000, false).getFirst(), GTRecipeModifiers.ELECTRIC_OVERCLOCK.apply(OverclockingLogic.PERFECT_OVERCLOCK_SUBTICK))
+            .recipeModifiers((machine, recipe, params, result) -> GTRecipeModifiers.accurateParallel(machine, recipe, 10000, false).getFirst(), GTRecipeModifiers.ELECTRIC_OVERCLOCK.apply(OverclockingLogic.PERFECT_OVERCLOCK_SUBTICK))
             .appearanceBlock(GTLBlocks.MOLECULAR_CASING)
             .pattern((definition) -> MultiBlockMachineAStructureC.STAR_ULTIMATE_MATERIAL_FORGE_FACTORY
                     .where("~", Predicates.controller(Predicates.blocks(definition.get())))
@@ -1194,7 +1195,7 @@ public class MultiBlockMachineA {
                     .build())
             .additionalDisplay((controller, components) -> {
                 if (controller.isFormed()) {
-                    components.add(Component.translatable("gtceu.multiblock.parallel", Component.literal("1000").withStyle(ChatFormatting.DARK_PURPLE)).withStyle(ChatFormatting.GRAY));
+                    components.add(Component.translatable("gtceu.multiblock.parallel", Component.literal("10000").withStyle(ChatFormatting.DARK_PURPLE)).withStyle(ChatFormatting.GRAY));
                 }
             })
             .workableCasingRenderer(GTLCore.id("block/molecular_casing"), GTCEu.id("block/multiblock/fusion_reactor"))

@@ -16,7 +16,11 @@ import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /** Edits one locale/key at a time. The raw FTB reference, pages and progress never change here. */
@@ -27,6 +31,19 @@ public final class QuestTranslationScreen extends Screen {
     private final List<String> initialKeys;
     private final boolean allKeys;
     private List<String> keys;
+    private Map<String, List<QuestTranslationAccess.Location>> locations = Map.of();
+    private final Map<String, String> names = new LinkedHashMap<>();
+    private List<String> visibleKeys = List.of();
+    private boolean globalKeys;
+    private boolean onlyUntranslated;
+    private String nextAfterSave;
+    private int listWidth;
+    private Button saveNext;
+    private Button structure;
+    private Button locate;
+    private Button scope;
+    private Button untranslated;
+    private boolean indexReady;
     private String locale = QuestTranslationsClient.language();
     private String key;
     private String expected;
@@ -75,34 +92,30 @@ public final class QuestTranslationScreen extends Screen {
     @Override
     protected void init() {
         int left = 12;
-        int listWidth = Math.max(88, Math.min(180, width / 3));
-        textX = left + listWidth + 10;
-        int textWidth = Math.max(80, width - textX - 16);
-        int bodyBottom = height - 77;
-        int bodyTop = 76;
-        int bodyHeight = Math.max(70, bodyBottom - bodyTop);
-        sourceY = bodyTop + 12;
-        int sourceHeight = Math.max(25, bodyHeight / 3 - 12);
-        targetY = sourceY + sourceHeight + 18;
-        int targetHeight = Math.max(30, bodyBottom - targetY);
-        listRows = Math.max(1, (bodyHeight - 27) / 22);
+        listWidth = Math.max(100, Math.min(240, width / 3 - 8));
+        textX = left + listWidth + 12;
+        int textWidth = width - textX - 12;
+        int bodyBottom = height - 60;
+        sourceY = 110;
+        int sourceHeight = Math.max(24, (height - 210) / 3);
+        targetY = sourceY + sourceHeight + 24;
+        int targetHeight = Math.max(20, bodyBottom - targetY);
+        listRows = Math.max(1, (height - 174) / 32);
 
-        languageBox = addRenderableWidget(new EditBox(font, 70, 33, Math.max(42, Math.min(110, width - 292)), 20, label("language")));
+        languageBox = addRenderableWidget(new EditBox(font, 64, 34, 65, 18, label("language")));
         languageBox.setMaxLength(32);
         languageBox.setValue(locale);
         var dictionary = QuestTranslationsClient.snapshot(locale);
         if (dictionary != null && !dictionary.languages().isEmpty()) {
             languageBox.setTooltip(Tooltip.create(Component.literal(String.join(", ", dictionary.languages()))));
         }
-        addRenderableWidget(Button.builder(label("load"), b -> discardThen(this::loadLanguage))
-                .bounds(languageBox.getX() + languageBox.getWidth() + 5, 33, 48, 20).build());
-        addRenderableWidget(Button.builder(label("close"), b -> onClose()).bounds(width - 69, 33, 57, 20).build());
-        if (QuestTranslationAccess.description(object) != null) {
-            addRenderableWidget(Button.builder(label("structure"), b -> discardThen(() -> minecraft.setScreen(new QuestTranslationStructureScreen(this, object))))
-                    .bounds(width - 148, 33, 72, 20).build());
-        }
+        button(label("load"), 134, 34, 42, 18, b -> discardThen(this::loadLanguage));
+        button(label("close"), width - 60, 7, 48, 18, b -> onClose());
+        structure = button(label("structure"), width - 110, 34, 98, 18,
+                b -> discardThen(() -> minecraft.setScreen(new QuestTranslationStructureScreen(this, structureOwner()))));
 
-        searchBox = addRenderableWidget(new EditBox(font, left, bodyTop - 23, listWidth, 18, label("filter")));
+        searchBox = addRenderableWidget(new EditBox(font, left, 62, listWidth, 18, label("filter")));
+        searchBox.setMaxLength(256);
         searchBox.setHint(label("filter"));
         searchBox.setValue(filter);
         searchBox.setResponder(value -> {
@@ -110,32 +123,61 @@ public final class QuestTranslationScreen extends Screen {
             page = 0;
             rebuild();
         });
-        List<String> visibleKeys = filtered();
+        int half = (listWidth - 4) / 2;
+        scope = button(label(globalKeys ? "scope_all" : "scope_current"), left, 86, half, 18, b -> discardThen(() -> {
+            globalKeys = !globalKeys;
+            updateKeys();
+            if (!keys.contains(key)) {
+                key = keys.isEmpty() ? "" : keys.get(0);
+                loadDraft();
+            }
+            page = 0;
+            rebuild();
+        }));
+        untranslated = button(label(onlyUntranslated ? "untranslated" : "filter_all"), left + half + 4, 86, listWidth - half - 4, 18, b -> {
+            onlyUntranslated = !onlyUntranslated;
+            page = 0;
+            rebuild();
+        });
+        untranslated.setTooltip(Tooltip.create(label("untranslated_hint")));
+        visibleKeys = filtered();
         int pages = Math.max(1, (visibleKeys.size() + listRows - 1) / listRows);
         page = Math.min(page, pages - 1);
         for (int row = 0; row < listRows; row++) {
             int index = page * listRows + row;
             if (index >= visibleKeys.size()) break;
             String entry = visibleKeys.get(index);
-            String name = QuestTranslationAccess.keyLabel(object, entry).getString();
-            Button button = Button.builder(Component.literal(font.plainSubstrByWidth(name, listWidth - 9)),
-                    b -> discardThen(() -> select(entry))).bounds(left, bodyTop + row * 22, listWidth, 20).build();
-            button.active = !entry.equals(key) && !pending;
+            String name = names.getOrDefault(entry, entry);
+            boolean translated = dictionary != null && dictionary.translations().containsKey(entry);
+            String summary = (translated ? "✓ " : "○ ") + name;
+            String shortKey = entry.startsWith(QuestTranslationsClient.prefix()) ? entry.substring(QuestTranslationsClient.prefix().length()) : entry;
+            Button button = QuestTranslationWidgets.row(Component.literal(summary), shortKey, left, 110 + row * 32,
+                    listWidth, 30, entry.equals(key), b -> discardThen(() -> select(entry)));
+            button.active = !pending && !waiting;
             String source = dictionary == null ? "" : dictionary.source().getOrDefault(entry, "");
             button.setTooltip(Tooltip.create(Component.literal(name + "\n" + source + "\n" + entry)));
             addRenderableWidget(button);
         }
-        Button previous = addRenderableWidget(Button.builder(Component.literal("<"), b -> {
+        Button previous = button(Component.literal("<"), left, height - 56, 24, 18, b -> {
             page--;
             rebuild();
-        }).bounds(left, bodyBottom - 21, 28, 20).build());
+        });
         previous.active = page > 0;
-        Button next = addRenderableWidget(Button.builder(Component.literal(">"), b -> {
+        Button next = button(Component.literal(">"), left + listWidth - 24, height - 56, 24, 18, b -> {
             page++;
             rebuild();
-        }).bounds(left + listWidth - 28, bodyBottom - 21, 28, 20).build());
+        });
         next.active = page + 1 < pages;
 
+        Button copyKey = button(Component.literal(key), textX, 62, textWidth - 60, 18, b -> {
+            minecraft.keyboardHandler.setClipboard(key);
+            status = label("key_copied").getString();
+            error = false;
+        });
+        copyKey.setTooltip(Tooltip.create(Component.literal(key).append("\n").append(label("copy_key"))));
+        locate = button(label("locate"), width - 68, 62, 56, 18,
+                b -> minecraft.setScreen(new QuestTranslationLocationScreen(this, key, locations.getOrDefault(key, List.of()))));
+        locate.setTooltip(Tooltip.create(label("locate_hint")));
         sourceBox = addRenderableWidget(new ReadOnlyTextBox(textX, sourceY, textWidth, sourceHeight));
         sourceBox.setCharacterLimit(QuestTranslationCatalog.MAX_VALUE_LENGTH);
         translationBox = addRenderableWidget(new EditableTextBox(textX, targetY, textWidth, targetHeight));
@@ -143,41 +185,106 @@ public final class QuestTranslationScreen extends Screen {
         translationBox.setValue(draft);
         translationBox.setValueListener(value -> draft = value);
 
-        int buttonWidth = Math.max(55, (width - 40) / 4);
-        save = addRenderableWidget(Button.builder(label("save"), b -> save(false)).bounds(left, height - 66, buttonWidth, 20).build());
-        remove = addRenderableWidget(Button.builder(label("fallback"), b -> discardThen(() -> save(true)))
-                .bounds(left + buttonWidth + 5, height - 66, buttonWidth, 20).build());
-        enroll = addRenderableWidget(Button.builder(label("enroll"), b -> discardThen(() -> {
-            status = Component.translatable("gtlcore.quest_i18n.enrolling").getString();
+        enroll = button(label("enroll"), left, height - 32, half, 20, b -> discardThen(() -> {
+            status = label("enrolling").getString();
             QuestTranslationNetwork.enroll();
-        })).bounds(left + 2 * (buttonWidth + 5), height - 66, buttonWidth, 20).build());
-        reload = addRenderableWidget(Button.builder(label("reload"), b -> discardThen(() -> {
+        }));
+        reload = button(label("reload"), left + half + 4, height - 32, listWidth - half - 4, 20, b -> discardThen(() -> {
             status = label("loading").getString();
             QuestTranslationNetwork.reload();
-        })).bounds(left + 3 * (buttonWidth + 5), height - 66, buttonWidth, 20).build());
+        }));
+        save = button(label("save"), textX, height - 32, 44, 20, b -> save(false));
+        save.setTooltip(Tooltip.create(label("save").copy().append(" · Ctrl+S")));
+        remove = button(label("fallback"), textX + 48, height - 32, 55, 20, b -> discardThen(() -> save(true)));
+        saveNext = button(label("save_next"), textX + 107, height - 32, textWidth - 107, 20, b -> saveAndNext());
+        saveNext.setTooltip(Tooltip.create(label("save_next_hint")));
         applyState();
     }
 
-    private List<String> filtered() {
-        String query = filter.toLowerCase(java.util.Locale.ROOT);
+    private Button button(Component text, int x, int y, int width, int height, Button.OnPress action) {
+        return addRenderableWidget(QuestTranslationWidgets.button(text, x, y, width, height, action));
+    }
+
+    private void updateKeys() {
         var snapshot = QuestTranslationsClient.snapshot(locale);
-        return keys.stream().filter(value -> value.toLowerCase(java.util.Locale.ROOT).contains(query) ||
-                QuestTranslationAccess.keyLabel(object, value).getString().toLowerCase(java.util.Locale.ROOT).contains(query) ||
-                snapshot != null && (snapshot.source().getOrDefault(value, "").toLowerCase(java.util.Locale.ROOT).contains(query) ||
-                        snapshot.translations().getOrDefault(value, "").toLowerCase(java.util.Locale.ROOT).contains(query)))
+        if (!indexReady) {
+            locations = QuestTranslationAccess.locations();
+            indexReady = true;
+        }
+        List<String> current = allKeys ? QuestTranslationAccess.keys(object) : initialKeys;
+        var selected = new LinkedHashSet<>(current);
+        if (globalKeys) {
+            selected.addAll(locations.keySet());
+            if (snapshot != null) selected.addAll(snapshot.source().keySet());
+        }
+        keys = new ArrayList<>(selected);
+        if (globalKeys) keys.sort(String::compareTo);
+        names.clear();
+        for (String entry : keys) {
+            var usages = locations.getOrDefault(entry, List.of());
+            String name = usages.isEmpty() ? entry : usages.get(0).field().getString();
+            if (globalKeys && !usages.isEmpty()) {
+                String path = usages.get(0).path();
+                name = path.substring(path.contains(" / ") ? path.lastIndexOf(" / ") + 3 : 0) + " · " + name;
+            } else if (current.contains(entry)) name = QuestTranslationAccess.keyLabel(object, entry).getString();
+            names.put(entry, name);
+        }
+    }
+
+    private Object structureOwner() {
+        if (!globalKeys) return object;
+        var usages = locations.getOrDefault(key, List.of());
+        return usages.isEmpty() ? null : usages.get(0).owner();
+    }
+
+    private List<String> filtered() {
+        String query = filter.toLowerCase(Locale.ROOT);
+        var snapshot = QuestTranslationsClient.snapshot(locale);
+        return keys.stream().filter(value -> !onlyUntranslated || snapshot == null || !snapshot.translations().containsKey(value))
+                .filter(value -> value.toLowerCase(Locale.ROOT).contains(query) ||
+                        names.getOrDefault(value, value).toLowerCase(Locale.ROOT).contains(query) ||
+                        locations.getOrDefault(value, List.of()).stream().anyMatch(location -> location.path().toLowerCase(Locale.ROOT).contains(query)) ||
+                        snapshot != null && (snapshot.source().getOrDefault(value, "").toLowerCase(Locale.ROOT).contains(query) ||
+                                snapshot.translations().getOrDefault(value, "").toLowerCase(Locale.ROOT).contains(query)))
                 .toList();
+    }
+
+    private String adjacent(int offset) {
+        List<String> candidates = filtered();
+        int index = candidates.indexOf(key);
+        if (candidates.isEmpty()) return null;
+        if (index < 0) return candidates.get(offset > 0 ? 0 : candidates.size() - 1);
+        int next = index + offset;
+        return next < 0 || next >= candidates.size() ? null : candidates.get(next);
+    }
+
+    private void saveAndNext() {
+        if (!saveNext.active) return;
+        nextAfterSave = adjacent(1);
+        // In a filtered queue, wrap to remaining work before this entry, without revisiting it.
+        if (nextAfterSave == null && onlyUntranslated) {
+            nextAfterSave = filtered().stream().filter(value -> !value.equals(key)).findFirst().orElse(null);
+        }
+        save(false);
+        if (!pending) nextAfterSave = null;
     }
 
     private void rebuild() {
         boolean searching = searchBox != null && searchBox.isFocused();
+        int cursor = searching ? searchBox.getCursorPosition() : 0;
         clearWidgets();
         init();
-        if (searching) setFocused(searchBox);
+        if (searching) {
+            setFocused(searchBox);
+            searchBox.setCursorPosition(cursor);
+            searchBox.setHighlightPos(cursor);
+        }
     }
 
     private void select(String selected) {
         key = selected;
-        waiting = false;
+        page = Math.max(0, filtered().indexOf(key)) / Math.max(1, listRows);
+        waiting = QuestTranslationsClient.snapshot(locale) == null;
         loadDraft();
         rebuild();
     }
@@ -214,6 +321,13 @@ public final class QuestTranslationScreen extends Screen {
         boolean editable = snapshot != null && snapshot.enabled() && snapshot.canEdit() && !pending && !waiting;
         boolean known = snapshot != null && snapshot.source().containsKey(key);
         save.active = editable && known;
+        saveNext.active = save.active;
+        locate.active = !pending && !waiting && !locations.getOrDefault(key, List.of()).isEmpty();
+        scope.active = !pending && !waiting;
+        untranslated.active = !pending && !waiting;
+        searchBox.setEditable(!pending && !waiting);
+        Object owner = structureOwner();
+        structure.active = editable && owner != null && QuestTranslationAccess.description(owner) != null;
         remove.active = editable && known && !locale.equals(snapshot.defaultLanguage()) && expected != null;
         enroll.active = snapshot != null && snapshot.canEdit() && !pending && !waiting;
         reload.active = snapshot != null && snapshot.canEdit() && !pending && !waiting;
@@ -225,12 +339,8 @@ public final class QuestTranslationScreen extends Screen {
     public void received(QuestTranslationCatalog.Snapshot snapshot) {
         if (!snapshot.locale().equals(locale)) return;
         waiting = false;
-        List<String> latest = QuestTranslationAccess.keys(object);
-        if (allKeys) keys = new ArrayList<>(latest);
-        else {
-            // A quick-field editor remains focused on its original field after a dictionary reload.
-            keys = new ArrayList<>(initialKeys);
-        }
+        indexReady = false;
+        updateKeys();
         if (key.isEmpty() && !keys.isEmpty()) key = keys.get(0);
         if (!pending && !dirty()) loadDraft();
         else if (!Objects.equals(expected, snapshot.translations().get(key))) fail(label("conflict").getString());
@@ -255,11 +365,20 @@ public final class QuestTranslationScreen extends Screen {
         }
         if (!success) {
             pending = false;
+            nextAfterSave = null;
             fail(message);
         } else if (pending && Objects.equals(value, pendingValue)) {
             pending = false;
             loadDraft();
             status = label("saved").getString();
+            if (nextAfterSave != null) {
+                String next = nextAfterSave;
+                nextAfterSave = null;
+                select(next);
+                setFocused(translationBox);
+                return;
+            }
+            rebuild();
         } else if (pending) {
             // Broadcasts contain edits by other players too. A different value is not the
             // acknowledgement of our pending save; retain its draft until the CAS response.
@@ -285,7 +404,7 @@ public final class QuestTranslationScreen extends Screen {
     private void save(boolean fallback) {
         if (pending || waiting || key.isEmpty()) return;
         var snapshot = QuestTranslationsClient.snapshot(locale);
-        if (snapshot == null || !snapshot.canEdit()) return;
+        if (snapshot == null || !snapshot.enabled() || !snapshot.canEdit() || !snapshot.source().containsKey(key)) return;
         try {
             if (!fallback) QuestTranslationCatalog.validateValue(draft, snapshot.keyPrefix());
         } catch (IOException e) {
@@ -347,37 +466,71 @@ public final class QuestTranslationScreen extends Screen {
         translationBox.tick();
         if (pending && ++pendingTicks >= 200) {
             pending = false;
+            nextAfterSave = null;
             fail(label("timeout").getString());
             applyState();
         }
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderEditorBackground(graphics, parent, width, height, partialTick);
-        graphics.drawCenteredString(font, title, width / 2, 12, 0xFFFFFF);
-        graphics.drawString(font, label("language"), 12, 39, 0xDDDDDD);
-        graphics.drawString(font, label("source"), textX, sourceY - 11, 0xAAAAAA);
-        graphics.drawString(font, label("translation"), textX, targetY - 11, 0xFFFFFF);
-        graphics.drawString(font, font.plainSubstrByWidth(QuestTranslationAccess.keyLabel(object, key).getString(),
-                width - textX - 12), textX, 60, 0x77CCDD);
-        String information = waiting ? label("loading").getString() : status;
-        int y = height - 40;
-        for (var line : font.split(Component.literal(information), width - 24)) {
-            if (y > height - 12) break;
-            graphics.drawString(font, line, 12, y, error ? 0xFF7777 : 0xBBBBBB);
-            y += 10;
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (hasControlDown() && keyCode == GLFW.GLFW_KEY_S) {
+            if (save.active) save(false);
+            return true;
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        if (hasControlDown() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+            saveAndNext();
+            return true;
+        }
+        if (hasAltDown() && (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN)) {
+            String next = adjacent(keyCode == GLFW.GLFW_KEY_UP ? -1 : 1);
+            if (next != null) discardThen(() -> select(next));
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    static void renderEditorBackground(GuiGraphics graphics, Screen parent, int width, int height, float partialTick) {
-        // Keep the quest/editor underneath visible instead of dropping the user into a world overlay.
-        if (parent != null) parent.render(graphics, -1, -1, partialTick);
-        graphics.fill(0, 0, width, height, 0xB0000000);
-        graphics.fill(5, 5, width - 5, height - 5, 0xFF252A35);
-        graphics.fill(6, 6, width - 6, 27, 0xFF3C4351);
-        graphics.renderOutline(5, 5, width - 10, height - 10, 0xFF8792A5);
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (mouseX >= 12 && mouseX <= 12 + listWidth && mouseY >= 110 && mouseY < height - 60) {
+            int pages = Math.max(1, (visibleKeys.size() + listRows - 1) / listRows);
+            page = Math.max(0, Math.min(pages - 1, page + (delta > 0 ? -1 : 1)));
+            rebuild();
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderEditorBackground(graphics, width, height);
+        graphics.drawString(font, title, 12, 12, 0xE5EDF4, false);
+        graphics.drawString(font, label("language"), 12, 39, 0x94A9BA, false);
+        graphics.fill(textX - 7, 60, textX - 6, height - 11, 0xFF364352);
+        graphics.drawString(font, label("source"), textX, sourceY - 11, 0x94A9BA, false);
+        graphics.drawString(font, label("translation"), textX, targetY - 11, 0x63CBD2, false);
+        var usages = locations.getOrDefault(key, List.of());
+        String context = usages.isEmpty() ? label("unreferenced").getString() : usages.get(0).path() + " · " + usages.get(0).field().getString();
+        if (usages.size() > 1) context += " (" + usages.size() + ")";
+        graphics.drawString(font, font.plainSubstrByWidth(context, width - textX - 12), textX, 86, 0x94A9BA, false);
+        String count = visibleKeys.size() + " · " + (page + 1) + "/" + Math.max(1, (visibleKeys.size() + listRows - 1) / listRows);
+        graphics.drawCenteredString(font, count, 12 + listWidth / 2, height - 51, 0x94A9BA);
+        String information = waiting ? label("loading").getString() : status;
+        if (information.isEmpty() && dirty()) information = label("unsaved").getString();
+        graphics.drawString(font, font.plainSubstrByWidth(information, width - textX - 12), textX, height - 46,
+                error ? 0xFF7777 : 0x94A9BA, false);
+        if (visibleKeys.isEmpty()) graphics.drawWordWrap(font, label("no_matches"), 18, 118, listWidth - 12, 0x94A9BA);
+        super.render(graphics, mouseX, mouseY, partialTick);
+        if (mouseX >= textX && mouseY >= 84 && mouseY < 97) {
+            graphics.renderTooltip(font, font.split(Component.literal(context), Math.max(120, width / 2)), mouseX, mouseY);
+        }
+    }
+
+    static void renderEditorBackground(GuiGraphics graphics, int width, int height) {
+        // Never render a parent here: FTB screens change GUI scale/depth and leak their controls.
+        graphics.fill(0, 0, width, height, 0xFF181F29);
+        graphics.fill(0, 0, width, 28, 0xFF253241);
+        graphics.fill(0, 27, width, 28, 0xFF436174);
     }
 
     private final class ReadOnlyTextBox extends MultiLineEditBox {

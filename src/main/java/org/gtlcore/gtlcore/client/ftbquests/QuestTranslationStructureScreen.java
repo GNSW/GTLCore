@@ -37,7 +37,7 @@ final class QuestTranslationStructureScreen extends Screen {
 
     @Override
     protected void init() {
-        rows = Math.max(1, (height - 160) / 22);
+        rows = Math.max(1, (height - 165) / 32);
         int pages = Math.max(1, (lines.size() + rows - 1) / rows);
         page = Math.min(page, pages - 1);
         for (int row = 0; row < rows; row++) {
@@ -45,51 +45,51 @@ final class QuestTranslationStructureScreen extends Screen {
             if (index >= lines.size()) break;
             String raw = lines.get(index);
             String preview = QuestTranslationAccess.preview(raw);
-            Button line = addRenderableWidget(Button.builder(Component.literal((index + 1) + ". " + font.plainSubstrByWidth(preview, width - 130)), b -> {
-                selected = index;
-                rebuild();
-            }).bounds(12, 34 + row * 22, width - 92, 20).build());
-            line.active = index != selected;
+            Button line = addRenderableWidget(QuestTranslationWidgets.row(Component.literal((index + 1) + ". " + preview), raw,
+                    12, 36 + row * 32, width - 112, 30, index == selected, b -> {
+                        selected = index;
+                        rebuild();
+                    }));
             line.setTooltip(Tooltip.create(Component.literal(raw)));
         }
-        Button up = addRenderableWidget(Button.builder(Component.literal("↑"), b -> move(-1)).bounds(width - 70, 34, 26, 20).build());
-        Button down = addRenderableWidget(Button.builder(Component.literal("↓"), b -> move(1)).bounds(width - 40, 34, 26, 20).build());
+        Button up = button(Component.literal("↑"), width - 88, 36, 36, 20, b -> move(-1));
+        Button down = button(Component.literal("↓"), width - 48, 36, 36, 20, b -> move(1));
         up.active = selected > 0 && selected < lines.size();
         down.active = selected >= 0 && selected + 1 < lines.size();
-        Button remove = addRenderableWidget(Button.builder(QuestTranslationScreen.label("remove_paragraph"), b -> {
+        Button remove = button(QuestTranslationScreen.label("remove_paragraph"), width - 88, 62, 76, 20, b -> {
             if (selected < lines.size()) lines.remove(selected);
             selected = Math.max(0, Math.min(selected, lines.size() - 1));
             rebuild();
-        }).bounds(width - 70, 59, 56, 20).build());
+        });
         remove.active = !lines.isEmpty();
-        Button previous = addRenderableWidget(Button.builder(Component.literal("<"), b -> {
+        Button previous = button(Component.literal("<"), width - 88, 88, 36, 20, b -> {
             page--;
             rebuild();
-        })
-                .bounds(width - 70, 84, 26, 20).build());
-        Button next = addRenderableWidget(Button.builder(Component.literal(">"), b -> {
+        });
+        Button next = button(Component.literal(">"), width - 48, 88, 36, 20, b -> {
             page++;
             rebuild();
-        })
-                .bounds(width - 40, 84, 26, 20).build());
+        });
         previous.active = page > 0;
         next.active = page + 1 < pages;
-        input = addRenderableWidget(new MultiLineEditBox(font, 12, height - 112, width - 104, 51,
+        input = addRenderableWidget(new MultiLineEditBox(font, 12, height - 112, width - 112, 51,
                 QuestTranslationScreen.label("new_paragraph"), QuestTranslationScreen.label("new_paragraph")));
         input.setCharacterLimit(16384);
         input.setValue(newText);
         input.setValueListener(value -> newText = value);
-        addRenderableWidget(Button.builder(QuestTranslationScreen.label("add_paragraph"), b -> add(newText))
-                .bounds(width - 84, height - 112, 72, 20).build());
-        addRenderableWidget(Button.builder(QuestTranslationScreen.label("page_break"), b -> add("{@pagebreak}"))
-                .bounds(width - 84, height - 87, 72, 20).build());
-        Button save = addRenderableWidget(Button.builder(QuestTranslationScreen.label("save"), b -> {
+        button(QuestTranslationScreen.label("add_paragraph"), width - 88, height - 112, 76, 20, b -> add(newText));
+        button(QuestTranslationScreen.label("page_break"), width - 88, height - 87, 76, 20, b -> add("{@pagebreak}"));
+        Button save = button(QuestTranslationScreen.label("save"), 12, height - 43, 85, 20, b -> {
             if (QuestTranslationAccess.saveDescription(object, original, lines)) minecraft.setScreen(parent);
             else message = QuestTranslationScreen.label("conflict").getString();
-        }).bounds(12, height - 50, 85, 20).build());
+        });
         var snapshot = QuestTranslationsClient.snapshot(QuestTranslationsClient.language());
         save.active = snapshot != null && snapshot.canEdit();
-        addRenderableWidget(Button.builder(QuestTranslationScreen.label("close"), b -> onClose()).bounds(width - 97, height - 50, 85, 20).build());
+        button(QuestTranslationScreen.label("close"), width - 97, height - 43, 85, 20, b -> onClose());
+    }
+
+    private Button button(Component text, int x, int y, int width, int height, Button.OnPress action) {
+        return addRenderableWidget(QuestTranslationWidgets.button(text, x, y, width, height, action));
     }
 
     private void add(String value) {
@@ -134,10 +134,10 @@ final class QuestTranslationStructureScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        QuestTranslationScreen.renderEditorBackground(graphics, parent, width, height, partialTick);
-        graphics.drawCenteredString(font, title, width / 2, 12, 0xFFFFFF);
+        QuestTranslationScreen.renderEditorBackground(graphics, width, height);
+        graphics.drawString(font, title, 12, 12, 0xE5EDF4, false);
         graphics.drawString(font, font.plainSubstrByWidth(message.isEmpty() ? QuestTranslationScreen.label("enroll_hint").getString() : message,
-                width - 24), 12, height - 20, message.isEmpty() ? 0xBBBBBB : 0xFF7777);
+                width - 24), 12, height - 12, message.isEmpty() ? 0xBBBBBB : 0xFF7777);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 }

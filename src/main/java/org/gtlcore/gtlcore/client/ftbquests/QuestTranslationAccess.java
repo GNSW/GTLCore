@@ -3,6 +3,7 @@ package org.gtlcore.gtlcore.client.ftbquests;
 import org.gtlcore.gtlcore.GTLCore;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -57,6 +58,108 @@ public final class QuestTranslationAccess {
     /** Human-facing field labels preserve ownership when several targets have their own titles. */
     public static Component keyLabel(Object object, String key) {
         return entries(object).getOrDefault(key, Component.literal(key));
+    }
+
+    /** An index of actual references, independent of the spelling of generated or custom keys. */
+    static Map<String, List<Location>> locations() {
+        Map<String, List<Location>> result = new LinkedHashMap<>();
+        try {
+            Class<?> type = Class.forName(CLIENT_FILE);
+            Object file = type.getField("INSTANCE").get(null);
+            if (file == null) return result;
+            List<Object> owners = new ArrayList<>((Collection<?>) type.getMethod("getAllObjects").invoke(file));
+            if (!owners.contains(file)) owners.add(file);
+            for (Object owner : owners) {
+                CompoundTag tag = data(owner);
+                for (String field : tag.getAllKeys().stream().sorted().toList()) {
+                    if (List.of("tasks", "rewards", "quests", "chapters", "chapter_groups").contains(field)) continue;
+                    if (field.equals("description") && tag.get(field) instanceof ListTag paragraphs) {
+                        for (int i = 0; i < paragraphs.size(); i++) {
+                            Map<String, Component> fields = new LinkedHashMap<>();
+                            appendKeys(paragraphs.get(i), fields, label("entry_description", i + 1));
+                            appendLocations(result, owner, fields);
+                        }
+                        continue;
+                    }
+                    Map<String, Component> fields = new LinkedHashMap<>();
+                    appendField(field, tag.get(field), fields, "", 0);
+                    appendLocations(result, owner, fields);
+                }
+            }
+        } catch (ReflectiveOperationException | LinkageError e) {
+            report(e);
+        }
+        return result;
+    }
+
+    private static void appendLocations(Map<String, List<Location>> result, Object owner, Map<String, Component> fields) throws ReflectiveOperationException {
+        // Keep each field/paragraph separately, even when the same key is reused within one object.
+        if (fields.isEmpty()) return;
+        String path = locationPath(owner);
+        Object objectType = owner.getClass().getMethod("getObjectType").invoke(owner);
+        String type = (String) objectType.getClass().getMethod("getId").invoke(objectType);
+        for (var entry : fields.entrySet()) {
+            Component field = Component.translatable("ftbquests." + type).append(" · ").append(entry.getValue());
+            result.computeIfAbsent(entry.getKey(), ignored -> new ArrayList<>()).add(new Location(owner, field, path));
+        }
+    }
+
+    record Location(Object owner, Component field, String path) {}
+
+    private static String locationPath(Object owner) throws ReflectiveOperationException {
+        List<String> path = new ArrayList<>();
+        Object chapter = owner.getClass().getMethod("getQuestChapter").invoke(owner);
+        Object quest = containingQuest(owner);
+        if (chapter != null && chapter != owner) path.add(objectTitle(chapter));
+        if (quest != null && quest != owner) path.add(objectTitle(quest));
+        path.add(objectTitle(owner));
+        return String.join(" / ", path);
+    }
+
+    private static String objectTitle(Object object) throws ReflectiveOperationException {
+        String title = ((Component) object.getClass().getMethod("getTitle").invoke(object)).getString();
+        long id = ((Number) object.getClass().getMethod("getId").invoke(object)).longValue();
+        return title.isBlank() ? Long.toUnsignedString(id, 16) : title;
+    }
+
+    private static Object containingQuest(Object owner) throws ReflectiveOperationException {
+        Class<?> quest = Class.forName("dev.ftb.mods.ftbquests.quest.Quest");
+        if (quest.isInstance(owner)) return owner;
+        try {
+            return owner.getClass().getMethod("getQuest").invoke(owner);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
+    }
+
+    static boolean locate(Location location, Screen back) {
+        try {
+            Object owner = current(location.owner());
+            Object quest = containingQuest(owner);
+            Object screen = Class.forName(CLIENT_FILE).getMethod("openGui").invoke(null);
+            if (screen == null) return false;
+            Object chapter = owner.getClass().getMethod("getQuestChapter").invoke(owner);
+            if (chapter != null) screen.getClass().getMethod("selectChapter", Class.forName("dev.ftb.mods.ftbquests.quest.Chapter")).invoke(screen, chapter);
+            if (quest != null) screen.getClass().getMethod("open", Class.forName("dev.ftb.mods.ftbquests.quest.QuestObject"), boolean.class).invoke(screen, quest, false);
+            QuestTranslationNavigation.returnFrom(Minecraft.getInstance().screen, back);
+            return true;
+        } catch (ReflectiveOperationException | LinkageError e) {
+            report(e);
+            Minecraft.getInstance().setScreen(back);
+            return false;
+        }
+    }
+
+    static boolean editLocation(Location location, Screen back) {
+        try {
+            Object owner = current(location.owner());
+            owner.getClass().getMethod("onEditButtonClicked", Runnable.class)
+                    .invoke(owner, (Runnable) () -> Minecraft.getInstance().setScreen(back));
+            return true;
+        } catch (ReflectiveOperationException | LinkageError e) {
+            report(e);
+            return false;
+        }
     }
 
     private static Map<String, Component> entries(Object object) {

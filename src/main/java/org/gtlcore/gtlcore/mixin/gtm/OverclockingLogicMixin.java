@@ -74,6 +74,8 @@ public abstract class OverclockingLogicMixin {
         double vfPowParallel = 1.0;
 
         for (ocLevel = 0; ocAmount-- > 0; ++ocLevel) {
+            // Further overclocks cannot increase the int-backed parallel multiplier.
+            if (parallel >= Integer.MAX_VALUE) break;
             double potentialVoltage = eut * STD_VOLTAGE_FACTOR;
             if (potentialVoltage > (double) maxVoltage) break;
 
@@ -94,8 +96,10 @@ public abstract class OverclockingLogicMixin {
             }
         }
 
+        // Charge only the executable fraction of the last sub-tick overclock.
+        double parallelEUt = eut * Math.min(1.0, Integer.MAX_VALUE / parallel);
         ((IAdvancedOCResult) (Object) result).init(gTLCore$toRecipeEUt(eut / vfPowParallel), gTLCore$toRecipeDuration(duration),
-                (int) parallel, gTLCore$toRecipeEUt(eut), baseOCLevel, ocLevel, PERFECT_DURATION_FACTOR, STD_VOLTAGE_FACTOR);
+                (int) parallel, gTLCore$toRecipeEUt(parallelEUt), baseOCLevel, ocLevel, PERFECT_DURATION_FACTOR, STD_VOLTAGE_FACTOR);
     }
 
     @Inject(method = "getOverclockForTier", at = @At("HEAD"), remap = false, cancellable = true)
@@ -121,6 +125,8 @@ public abstract class OverclockingLogicMixin {
         double vfPowParallel = 1.0;
 
         for (ocLevel = 0; ocAmount-- > 0; ++ocLevel) {
+            // Further overclocks cannot increase the int-backed parallel multiplier.
+            if (parallel >= Integer.MAX_VALUE) break;
             double potentialVoltage = eut * voltageFactor;
             if (potentialVoltage > (double) maxVoltage) break;
 
@@ -141,8 +147,10 @@ public abstract class OverclockingLogicMixin {
             }
         }
 
+        // Charge only the executable fraction of the last sub-tick overclock.
+        double parallelEUt = eut * Math.min(1.0, Integer.MAX_VALUE / parallel);
         ((IAdvancedOCResult) (Object) result).init(gTLCore$toRecipeEUt(eut / vfPowParallel), gTLCore$toRecipeDuration(duration),
-                (int) parallel, gTLCore$toRecipeEUt(eut), baseOCLevel, ocLevel, durationFactor, voltageFactor);
+                (int) parallel, gTLCore$toRecipeEUt(parallelEUt), baseOCLevel, ocLevel, durationFactor, voltageFactor);
     }
 
     @Unique

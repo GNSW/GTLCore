@@ -12,6 +12,7 @@ public final class ByproductPatternIndex {
     private final Map<AEKey, List<IPatternDetails>> primaryOutputs, outputs;
     private final Map<Object, List<IPatternDetails>> fuzzyPrimary, fuzzyAll;
     private final Map<AEKey, Boolean> candidates;
+
     ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> primaryOutputs, Map<AEKey, List<IPatternDetails>> outputs,
                           Map<Object, List<IPatternDetails>> fuzzyPrimary,
                           Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates) {
@@ -122,8 +123,7 @@ public final class ByproductPatternIndex {
                     if (isPrimary) {
                         primaryOutputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
                         fuzzyPrimary.computeIfAbsent(family, ignored -> new ArrayList<>()).add(pattern);
-                    }
-                    else outputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
+                    } else outputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
                 }
                 return false;
             }

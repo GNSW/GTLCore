@@ -47,7 +47,7 @@ import java.util.function.Supplier;
 
 public final class WirelessAePackets {
 
-    private static final String PROTOCOL_VERSION = "27";
+    private static final String PROTOCOL_VERSION = "29";
     private static final MeInventoryRequestLimiter<ServerPlayer> TARGET_REQUEST_LIMITER = new MeInventoryRequestLimiter<>(8, 20);
     private static int nextPacketId;
 
@@ -64,6 +64,8 @@ public final class WirelessAePackets {
                 buffer -> new UnbindWithToolPacket(buffer.readBlockPos()), UnbindWithToolPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(ClearBindingToolPacket.class, (packet, buffer) -> {}, buffer -> new ClearBindingToolPacket(),
                 ClearBindingToolPacket::handle, NetworkDirection.PLAY_TO_SERVER);
+        registerPacket(SaveBindingToolNetworkPacket.class, SaveBindingToolNetworkPacket::encode,
+                SaveBindingToolNetworkPacket::decode, SaveBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(RenameNetworkPacket.class, RenameNetworkPacket::encode, RenameNetworkPacket::decode,
                 RenameNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(SetFavoriteNetworkPacket.class, SetFavoriteNetworkPacket::encode, SetFavoriteNetworkPacket::decode,
@@ -142,6 +144,29 @@ public final class WirelessAePackets {
                 ServerPlayer player = context.getSender();
                 if (player != null && !player.isSpectator()) {
                     WirelessNetworkBindingToolItem.clearSavedNetwork(player);
+                }
+            });
+            context.setPacketHandled(true);
+        }
+    }
+
+    public record SaveBindingToolNetworkPacket(int containerId, UUID frequency) {
+
+        private static void encode(SaveBindingToolNetworkPacket packet, FriendlyByteBuf buffer) {
+            buffer.writeVarInt(packet.containerId);
+            buffer.writeUUID(packet.frequency);
+        }
+
+        private static SaveBindingToolNetworkPacket decode(FriendlyByteBuf buffer) {
+            return new SaveBindingToolNetworkPacket(buffer.readVarInt(), buffer.readUUID());
+        }
+
+        private static void handle(SaveBindingToolNetworkPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
+            var context = contextSupplier.get();
+            context.enqueueWork(() -> {
+                ServerPlayer player = context.getSender();
+                if (player != null && player.containerMenu.containerId == packet.containerId) {
+                    WirelessNetworkBindingToolItem.saveNetworkFromMenu(player, packet.frequency);
                 }
             });
             context.setPacketHandled(true);

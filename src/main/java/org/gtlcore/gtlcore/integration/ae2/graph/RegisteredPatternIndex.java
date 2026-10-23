@@ -64,8 +64,12 @@ public final class RegisteredPatternIndex {
         // Old views own their roots and remain valid after these owners reset.
         if (!declarations.isEmpty() && removals.size() >= declarations.size() && removals.containsAll(declarations.keySet())) {
             declarations.clear();
-            primary.clear(); secondary.clear(); primaryFamilies.clear(); allFamilies.clear();
-            references.clear(); candidates.clear();
+            primary.clear();
+            secondary.clear();
+            primaryFamilies.clear();
+            allFamilies.clear();
+            references.clear();
+            candidates.clear();
             retainedBytes = 0;
             invalidate();
         }
@@ -131,11 +135,13 @@ public final class RegisteredPatternIndex {
     }
 
     private static final class RemovalBatch {
+
         final Removals<AEKey> primary = new Removals<>(), secondary = new Removals<>();
         final Removals<Object> primaryFamilies = new Removals<>(), allFamilies = new Removals<>();
     }
 
     private static final class Removals<K> {
+
         final Map<K, Set<IPatternDetails>> removed = new LinkedHashMap<>();
 
         void add(K key, IPatternDetails pattern) {

@@ -5,7 +5,12 @@ import org.gtlcore.gtlcore.common.data.GTLBlocks;
 import org.gtlcore.gtlcore.common.data.GTLItems;
 import org.gtlcore.gtlcore.common.item.PatternBoxBehavior;
 import org.gtlcore.gtlcore.config.ConfigHolder;
+import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
+import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem;
 import org.gtlcore.gtlcore.utils.Registries;
+
+import com.gregtechceu.gtceu.api.machine.MetaMachine;
+import com.gregtechceu.gtceu.api.machine.feature.IUIMachine;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -55,6 +60,20 @@ public class ForgeCommonEventListener {
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getEntity().getOffhandItem().getItem() instanceof WirelessNetworkBindingToolItem &&
+                WirelessAeNetworkRuntime.canOpenWirelessTargetMenu(event.getLevel(), event.getPos()) &&
+                MetaMachine.getMachine(event.getLevel(), event.getPos()) instanceof IUIMachine machine) {
+            event.setCanceled(true);
+            if (!event.getEntity().mayBuild() || !event.getLevel().mayInteract(event.getEntity(), event.getPos())) {
+                event.setCancellationResult(InteractionResult.FAIL);
+                return;
+            }
+            event.setCancellationResult(InteractionResult.SUCCESS);
+            if (event.getEntity() instanceof ServerPlayer player) {
+                WirelessNetworkBindingToolItem.openNetworkTab(player, machine, event.getHitVec());
+            }
+            return;
+        }
         if (event.getItemStack().is(GTLItems.PATTERN_BOX.asItem())) {
             InteractionResult result = PatternBoxBehavior.handleBlockUse(event.getItemStack(),
                     new UseOnContext(event.getLevel(), event.getEntity(), event.getHand(), event.getItemStack(), event.getHitVec()));

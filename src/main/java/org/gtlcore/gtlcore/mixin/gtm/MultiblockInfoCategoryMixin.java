@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.mixin.gtm;
 
+import org.gtlcore.gtlcore.integration.jei.PreviewJeiTransfer;
 import org.gtlcore.gtlcore.integration.jei.SlotRecipeWidget;
 
 import com.gregtechceu.gtceu.api.machine.MultiblockMachineDefinition;
@@ -58,6 +59,7 @@ public abstract class MultiblockInfoCategoryMixin extends ModularUIRecipeCategor
     @Override
     public void setRecipe(@NotNull IRecipeLayoutBuilder builder, MultiblockInfoWrapper wrapper, @NotNull IFocusGroup focuses) {
         wrapper.setRecipeWidget(0, 0);
+        PreviewJeiTransfer.bind(wrapper);
         List<Widget> flatVisibleWidgetCollection = wrapper.modularUI.getFlatWidgetCollection();
         for (int i = 0; i < flatVisibleWidgetCollection.size(); i++) {
             var widget = flatVisibleWidgetCollection.get(i);

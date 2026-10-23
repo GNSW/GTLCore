@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.machine.multiblock.ParallelMachine;
 import org.gtlcore.gtlcore.api.machine.trait.ILockRecipe;
 import org.gtlcore.gtlcore.api.machine.trait.IRecipeCapabilityMachine;
 import org.gtlcore.gtlcore.api.machine.trait.IRecipeStatus;
+import org.gtlcore.gtlcore.api.recipe.IAdvancedContentModifier;
 import org.gtlcore.gtlcore.api.recipe.IGTRecipe;
 import org.gtlcore.gtlcore.api.recipe.RecipeResult;
 
@@ -15,7 +16,6 @@ import com.gregtechceu.gtceu.api.machine.trait.RecipeLogic;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.RecipeHelper;
 import com.gregtechceu.gtceu.api.recipe.content.Content;
-import com.gregtechceu.gtceu.api.recipe.content.ContentModifier;
 import com.gregtechceu.gtceu.data.recipe.builder.GTRecipeBuilder;
 
 import net.minecraft.nbt.CompoundTag;
@@ -109,7 +109,7 @@ public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IR
             if (match == null) continue;
             var p = getMaxParallel(machine, match, remain);
             if (p <= 0) continue;
-            else if (p > 1) match = match.copy(ContentModifier.multiplier(p), false);
+            else if (p > 1) match = match.copy(IAdvancedContentModifier.preciseMultiplier(p), false);
             ((IGTRecipe) match).setRealParallels(p);
             match = getRecipeOutputChance(machine, match);
             if (handleRecipeInput(machine, match)) {

@@ -230,14 +230,34 @@ public final class QuestTranslationNetwork {
             if (!canEdit(player)) throw new IOException("FTB Quests editing permission is required");
             getCatalog(player);
             if (questFile == null) throw new IOException("FTB Quests is unavailable");
-            // Load completely before publishing; malformed imports retain the previous good catalog.
-            QuestTranslationCatalog loaded = load(questFile);
-            catalog = loaded;
-            loadError = null;
-            for (ServerPlayer subscriber : SUBSCRIBERS.values()) send(subscriber, new Invalidate());
+            reloadCatalog(questFile);
         } catch (IOException e) {
             send(player, new Result("", "", null, false, e.getMessage()));
         }
+    }
+
+    /** FTB reloads the same ServerQuestFile instance, so identity checks alone miss external edits. */
+    public static void questFileReloaded(Object file, MinecraftServer server) {
+        // Initial loading stays lazy; there are no subscribed clients yet.
+        if (owner != server) return;
+        try {
+            reloadCatalog(file);
+        } catch (IOException e) {
+            loadError = e.getMessage();
+            GTLCore.LOGGER.error("Could not reload quest translations", e);
+            for (ServerPlayer subscriber : SUBSCRIBERS.values()) {
+                if (canEdit(subscriber)) send(subscriber, new Result("", "", null, false, loadError));
+            }
+        }
+    }
+
+    private static void reloadCatalog(Object file) throws IOException {
+        // Load completely before publishing; malformed imports retain the previous good catalog.
+        QuestTranslationCatalog loaded = load(file);
+        questFile = file;
+        catalog = loaded;
+        loadError = null;
+        for (ServerPlayer subscriber : SUBSCRIBERS.values()) send(subscriber, new Invalidate());
     }
 
     private static void enrollOnServer(NetworkEvent.Context context) {

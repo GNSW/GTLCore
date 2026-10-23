@@ -78,9 +78,16 @@ final class QuestTranslationStructureScreen extends Screen {
         input.setValue(newText);
         input.setValueListener(value -> newText = value);
         button(QuestTranslationScreen.label("add_paragraph"), width - 88, height - 112, 76, 20, b -> add(newText));
-        button(QuestTranslationScreen.label("page_break"), width - 88, height - 87, 76, 20, b -> add("{@pagebreak}"));
+        button(QuestTranslationScreen.label("page_break"), width - 88, height - 87, 76, 20, b -> {
+            insert("{@pagebreak}");
+            rebuild();
+        });
         Button save = button(QuestTranslationScreen.label("save"), 12, height - 43, 85, 20, b -> {
-            if (QuestTranslationAccess.saveDescription(object, original, lines)) minecraft.setScreen(parent);
+            List<String> replacement = new ArrayList<>(lines);
+            // Save includes the pending paragraph even when Add was not pressed.
+            // Keep the draft intact if the structure changed while this screen was open.
+            if (!newText.isEmpty()) replacement.add(insertionIndex(), newText);
+            if (QuestTranslationAccess.saveDescription(object, original, replacement)) minecraft.setScreen(parent);
             else message = QuestTranslationScreen.label("conflict").getString();
         });
         var snapshot = QuestTranslationsClient.snapshot(QuestTranslationsClient.language());
@@ -93,12 +100,20 @@ final class QuestTranslationStructureScreen extends Screen {
     }
 
     private void add(String value) {
-        int index = lines.isEmpty() ? 0 : Math.min(selected + 1, lines.size());
+        insert(value);
+        newText = "";
+        rebuild();
+    }
+
+    private int insertionIndex() {
+        return lines.isEmpty() ? 0 : Math.min(selected + 1, lines.size());
+    }
+
+    private void insert(String value) {
+        int index = insertionIndex();
         lines.add(index, value);
         selected = index;
         page = index / rows;
-        newText = "";
-        rebuild();
     }
 
     private void move(int offset) {

@@ -560,11 +560,10 @@ public class MultiBlockMachineA {
             .rotationState(RotationState.ALL)
             .recipeType(GTLRecipeTypes.AGGREGATION_DEVICE_RECIPES)
             .tooltips(Component.translatable("gtceu.machine.aggregation_device.tooltip.0"))
-            .tooltips(Component.translatable("gtceu.machine.perfect_oc"))
             .tooltips(Component.translatable("gtceu.machine.available_recipe_map_1.tooltip",
                     Component.translatable("gtceu.aggregation_device")))
             .tooltipBuilder(GTLMachines.GTL_ADD)
-            .recipeModifiers((machine, recipe, params, result) -> GTRecipeModifiers.accurateParallel(machine, recipe, (int) Math.pow(2, (((WorkableElectricMultiblockMachine) machine).getTier() - GTValues.UEV)), false).getFirst(), GTRecipeModifiers.ELECTRIC_OVERCLOCK.apply(OverclockingLogic.PERFECT_OVERCLOCK_SUBTICK))
+            .recipeModifiers((machine, recipe, params, result) -> GTRecipeModifiers.accurateParallel(machine, recipe, (int) Math.pow(2, (((WorkableElectricMultiblockMachine) machine).getTier() - GTValues.UEV)), false).getFirst(), GTRecipeModifiers.ELECTRIC_OVERCLOCK.apply(OverclockingLogic.NON_PERFECT_OVERCLOCK_SUBTICK))
             .appearanceBlock(GTBlocks.FUSION_CASING)
             .pattern((definition) -> MultiBlockMachineAStructureA.AGGREGATION_DEVICE
                     .where("~", Predicates.controller(Predicates.blocks(definition.get())))

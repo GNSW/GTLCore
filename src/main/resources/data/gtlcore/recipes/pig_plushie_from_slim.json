@@ -1,0 +1,6 @@
+{
+  "type": "gtlcore:plushie_conversion",
+  "category": "misc",
+  "ingredients": [{"item": "gtlcore:slim_pig_plushie"}],
+  "result": {"item": "gtlcore:pig_plushie"}
+}

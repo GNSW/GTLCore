@@ -21,8 +21,10 @@ public final class GTLPlushies {
             () -> new PlushieBlock(Block.box(-1, 0, 2, 17, 21, 15)));
     public static final RegistryObject<PlushieBlock> PIG_PLUSHIE = BLOCKS.register("pig_plushie",
             () -> new PlushieBlock(Block.box(2, 0, 0.75, 14, 16.5, 15)));
+    public static final RegistryObject<PlushieBlock> SLIM_PIG_PLUSHIE = BLOCKS.register("slim_pig_plushie",
+            () -> new PlushieBlock(Block.box(4, 0, 0, 12, 12, 16)));
     public static final RegistryObject<BlockEntityType<PlushieBlockEntity>> BLOCK_ENTITY = BLOCK_ENTITIES.register("plushie",
-            () -> BlockEntityType.Builder.of(PlushieBlockEntity::new, FISHBIG_TM.get(), PIG_PLUSHIE.get()).build(null));
+            () -> BlockEntityType.Builder.of(PlushieBlockEntity::new, FISHBIG_TM.get(), PIG_PLUSHIE.get(), SLIM_PIG_PLUSHIE.get()).build(null));
 
     private GTLPlushies() {}
 

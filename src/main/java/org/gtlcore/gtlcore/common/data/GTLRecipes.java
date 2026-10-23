@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.common.data;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.common.recipe.PlushieConversionRecipe;
 import org.gtlcore.gtlcore.common.recipe.PrankFishRecipe;
 
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -19,6 +20,8 @@ public class GTLRecipes {
             ForgeRegistries.RECIPE_SERIALIZERS, GTLCore.MOD_ID);
     public static final RegistryObject<PrankFishRecipe.Serializer> PRANK_FISH = SERIALIZERS.register(
             "prank_fish", PrankFishRecipe.Serializer::new);
+    public static final RegistryObject<PlushieConversionRecipe.Serializer> PLUSHIE_CONVERSION = SERIALIZERS.register(
+            "plushie_conversion", PlushieConversionRecipe.Serializer::new);
 
     public static void register(IEventBus eventBus) {
         SERIALIZERS.register(eventBus);

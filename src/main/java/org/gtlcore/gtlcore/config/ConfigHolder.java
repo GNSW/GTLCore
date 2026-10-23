@@ -425,6 +425,12 @@ public class ConfigHolder {
     public static class PreviewOptions {
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.orbitSensitivity.comment")
+        @Configurable.Range(min = 0, max = 180)
+        // Blender's default turntable sensitivity, in degrees per UI pixel.
+        public double orbitSensitivity = 0.4;
+
+        @Configurable
         @Configurable.Comment("config.gtlcore.option.enabled.comment")
         public boolean enabled = true;
         @Configurable

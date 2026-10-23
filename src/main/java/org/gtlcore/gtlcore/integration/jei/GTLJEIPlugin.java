@@ -136,6 +136,7 @@ public class GTLJEIPlugin implements IModPlugin {
 
     @Override
     public void onRuntimeAvailable(@NotNull IJeiRuntime runtime) {
+        PreviewJeiTransfer.setRuntime(runtime);
         JeiMeInventoryTooltip.onRuntimeAvailable(runtime);
         JeiMissingIngredientBookmarks.onRuntimeAvailable(runtime);
         hideUnobtainableOres(runtime);
@@ -153,6 +154,7 @@ public class GTLJEIPlugin implements IModPlugin {
 
     @Override
     public void onRuntimeUnavailable() {
+        PreviewJeiTransfer.setRuntime(null);
         TagGroupOverlay.closeActive();
         JeiMeInventoryTooltip.onRuntimeUnavailable();
         JeiMissingIngredientBookmarks.onRuntimeUnavailable();

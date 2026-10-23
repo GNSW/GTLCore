@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.ldlib.client;
 
 import com.lowdragmc.lowdraglib.gui.widget.SceneWidget;
+import com.lowdragmc.lowdraglib.utils.BlockPosFace;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -9,8 +10,17 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(value = SceneWidget.class, remap = false)
 public interface PreviewSceneAccessor {
 
+    @Accessor("draggable")
+    boolean gtlcore$draggable();
+
     @Accessor("dragging")
     boolean gtlcore$dragging();
+
+    @Accessor("dragging")
+    void gtlcore$dragging(boolean dragging);
+
+    @Accessor("clickPosFace")
+    void gtlcore$clickPosFace(BlockPosFace clickPosFace);
 
     @Accessor("useOrtho")
     boolean gtlcore$ortho();

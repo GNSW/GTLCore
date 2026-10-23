@@ -20,14 +20,16 @@ public interface GraphProviderSnapshot {
         // Only AE's concrete processing patterns have immutable encoded input
         // and output semantics. Equality alone cannot certify addon callbacks.
         if (previous == null || gtlcore$planningPriority() != previous.gtlcore$planningPriority() ||
-                !gtlcore$planningEmitables().equals(previous.gtlcore$planningEmitables())) return false;
+                !gtlcore$planningEmitables().equals(previous.gtlcore$planningEmitables()))
+            return false;
         var current = gtlcore$planningPatterns();
         var old = previous.gtlcore$planningPatterns();
         if (current.size() != old.size()) return false;
         for (int i = 0; i < current.size(); i++) {
             IPatternDetails a = current.get(i), b = old.get(i);
             if (a.getClass() != AEProcessingPattern.class || b.getClass() != AEProcessingPattern.class ||
-                    !a.equals(b)) return false;
+                    !a.equals(b))
+                return false;
         }
         return true;
     }

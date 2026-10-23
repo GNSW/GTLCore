@@ -2,16 +2,20 @@ package org.gtlcore.gtlcore.client.ae2.wireless;
 
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAePackets;
+import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem;
 import org.gtlcore.gtlcore.integration.wildcard.WildcardPatternCompat;
 
 import com.gregtechceu.gtceu.api.gui.fancy.FancyMachineUIWidget;
 import com.gregtechceu.gtceu.api.gui.fancy.IFancyUIProvider;
 import com.gregtechceu.gtceu.api.gui.fancy.TabsWidget;
+import com.gregtechceu.gtceu.api.machine.MetaMachine;
+import com.gregtechceu.gtceu.api.machine.feature.IUIMachine;
 
 import com.lowdragmc.lowdraglib.gui.modular.ModularUIGuiContainer;
 import com.lowdragmc.lowdraglib.gui.texture.IGuiTexture;
 import com.lowdragmc.lowdraglib.gui.widget.Widget;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -22,6 +26,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
@@ -30,6 +35,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -98,6 +104,8 @@ final class WirelessAeScreenHooks {
     private static Direction recentClickedSide;
     private static Vec3 recentClickedLocation;
     private static long recentClickedAtMillis;
+    private static BlockPos pendingBindingToolPos;
+    private static ModularUIGuiContainer bindingToolScreen;
     private static final Map<ReflectionKey, Optional<Method>> METHOD_CACHE = new HashMap<>();
     private static final Map<ReflectionKey, Optional<Field>> FIELD_CACHE = new HashMap<>();
     private static Screen cachedScreen;
@@ -125,7 +133,7 @@ final class WirelessAeScreenHooks {
     private WirelessAeScreenHooks() {}
 
     static void register() {
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(WirelessAeScreenHooks::onRightClickBlock);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST, true, WirelessAeScreenHooks::onRightClickBlock);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(WirelessAeScreenHooks::onLeftClickEmpty);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(WirelessAeScreenHooks::onScreenInit);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(WirelessAeScreenHooks::onClientTick);
@@ -146,10 +154,14 @@ final class WirelessAeScreenHooks {
         recentClickedSide = hitResult == null ? event.getFace() : hitResult.getDirection();
         recentClickedLocation = hitResult == null ? null : hitResult.getLocation();
         recentClickedAtMillis = System.currentTimeMillis();
+        pendingBindingToolPos = event.getEntity().getOffhandItem().getItem() instanceof WirelessNetworkBindingToolItem &&
+                WirelessAeNetworkRuntime.canOpenWirelessTargetMenu(event.getLevel(), event.getPos()) &&
+                MetaMachine.getMachine(event.getLevel(), event.getPos()) instanceof IUIMachine ? event.getPos().immutable() : null;
     }
 
     private static void onScreenInit(ScreenEvent.Init.Post event) {
         installWirelessUiForScreen(event.getScreen());
+        pendingBindingToolPos = null;
         ticksUntilUiRefresh = UI_REFRESH_TICKS;
     }
 
@@ -252,6 +264,12 @@ final class WirelessAeScreenHooks {
         WirelessAeFancyPageProvider provider = getOrCreateFancyProvider(screen, targetPos, fancy);
         ensureFancyPageList(fancy, provider);
         ensureWirelessSideTab(fancy.getSideTabsWidget(), provider);
+        if (targetPos.equals(pendingBindingToolPos)) {
+            pendingBindingToolPos = null;
+            bindingToolScreen = screen;
+            // Set the initial page during screen initialization, before its first render.
+            fancy.getSideTabsWidget().getOnTabClick().accept(provider);
+        }
     }
 
     private static boolean isWildcardPatternHeldItemUi(FancyMachineUIWidget fancy) {
@@ -374,6 +392,9 @@ final class WirelessAeScreenHooks {
     }
 
     private static void closeEmbeddedPanelIfScreenChanged(Screen screen) {
+        if (bindingToolScreen != screen) {
+            bindingToolScreen = null;
+        }
         if (cachedScreen != screen) {
             cachedScreen = null;
             cachedTargetPos = null;
@@ -494,7 +515,8 @@ final class WirelessAeScreenHooks {
         for (int i = 0; i < rows; i++) {
             WirelessAePackets.TargetNetworkEntry entry = embeddedEntries.get(embeddedScrollOffset + i);
             int rowY = listY + i * NETWORK_ROW_HEIGHT;
-            boolean hovered = !lockedByCableConnection && !entry.connected() && isInsideRect(mouseX, mouseY, contentX, rowY, rowWidth, 20);
+            boolean hovered = (bindingToolScreen == embeddedScreen || (!lockedByCableConnection && !entry.connected())) &&
+                    isInsideRect(mouseX, mouseY, contentX, rowY, rowWidth, 20);
             drawNetworkRow(graphics, contentX, rowY, rowWidth, entry, hovered);
         }
 
@@ -549,7 +571,7 @@ final class WirelessAeScreenHooks {
     }
 
     private static void handleWirelessPageClick(BlockPos targetPos, int x, int y, int width, int height,
-                                                double mouseX, double mouseY) {
+                                                double mouseX, double mouseY, int button) {
         if (!isInsideRect(mouseX, mouseY, x, y, width, height) || !embeddedHasData) {
             return;
         }
@@ -564,7 +586,7 @@ final class WirelessAeScreenHooks {
         int maxRows = Math.max(1, (y + height - bottomReserve - listY) / NETWORK_ROW_HEIGHT);
         embeddedScrollOffset = WirelessAeStyle.clampScrollOffset(embeddedScrollOffset, embeddedEntries.size(), maxRows);
         boolean hasScrollbar = WirelessAeStyle.needsScrollbar(embeddedEntries.size(), maxRows);
-        if (hasScrollbar && isInsideRect(mouseX, mouseY, contentX + contentWidth - FANCY_SCROLLBAR_WIDTH, listY, FANCY_SCROLLBAR_WIDTH, maxRows * NETWORK_ROW_HEIGHT - 4)) {
+        if (button == 0 && hasScrollbar && isInsideRect(mouseX, mouseY, contentX + contentWidth - FANCY_SCROLLBAR_WIDTH, listY, FANCY_SCROLLBAR_WIDTH, maxRows * NETWORK_ROW_HEIGHT - 4)) {
             embeddedDraggingScrollbar = true;
             updateEmbeddedScrollOffsetFromMouse(mouseY, listY, maxRows * NETWORK_ROW_HEIGHT - 4, maxRows);
             return;
@@ -576,6 +598,13 @@ final class WirelessAeScreenHooks {
         for (int i = 0; i < rows; i++) {
             int rowY = listY + i * NETWORK_ROW_HEIGHT;
             if (isInsideRect(mouseX, mouseY, contentX, rowY, rowWidth, 20)) {
+                if (button == 1) {
+                    WirelessAePackets.CHANNEL.sendToServer(
+                            new WirelessAePackets.SaveBindingToolNetworkPacket(
+                                    bindingToolScreen.getMenu().containerId,
+                                    embeddedEntries.get(embeddedScrollOffset + i).frequency()));
+                    return;
+                }
                 if (lockedByCableConnection) {
                     return;
                 }
@@ -584,12 +613,44 @@ final class WirelessAeScreenHooks {
             }
         }
 
-        if (disconnectable != null) {
+        if (button == 0 && disconnectable != null) {
             int disconnectY = y + height - 30;
             if (isInsideRect(mouseX, mouseY, contentX, disconnectY, contentWidth, 20)) {
                 disconnectEmbeddedEntry(targetPos, disconnectable);
             }
         }
+    }
+
+    private static List<Component> getWirelessPageTooltip(int x, int y, int width, int height, int mouseX, int mouseY) {
+        if (!embeddedHasData) {
+            return List.of();
+        }
+        int contentX = x + PANEL_MARGIN + 6;
+        int contentWidth = width - (PANEL_MARGIN + 6) * 2;
+        int listY = y + FANCY_HEADER_HEIGHT + 8 + 18;
+        WirelessAePackets.TargetNetworkEntry disconnectable = getDisconnectableEntry();
+        int bottomReserve = disconnectable == null ? 8 : 36;
+        int maxRows = Math.max(1, (y + height - bottomReserve - listY) / NETWORK_ROW_HEIGHT);
+        boolean hasScrollbar = WirelessAeStyle.needsScrollbar(embeddedEntries.size(), maxRows);
+        int rowWidth = contentWidth - (hasScrollbar ? FANCY_SCROLLBAR_WIDTH + FANCY_SCROLLBAR_GAP : 0);
+        int rows = Math.min(maxRows, Math.max(0, embeddedEntries.size() - embeddedScrollOffset));
+        for (int i = 0; i < rows; i++) {
+            if (isInsideRect(mouseX, mouseY, contentX, listY + i * NETWORK_ROW_HEIGHT, rowWidth, 20)) {
+                WirelessAePackets.TargetNetworkEntry entry = embeddedEntries.get(embeddedScrollOffset + i);
+                List<Component> tooltip = new ArrayList<>();
+                tooltip.add(Component.literal(entry.name()));
+                String leftClickKey = entry.connected() ? "tooltip.gtlcore.wireless_target.already_connected" :
+                        isLockedByCableConnection() ? "tooltip.gtlcore.wireless_target.connection_locked" :
+                                "tooltip.gtlcore.wireless_target.connect";
+                tooltip.add(Component.translatable(leftClickKey).withStyle(ChatFormatting.GRAY));
+                if (bindingToolScreen == embeddedScreen) {
+                    tooltip.add(Component.translatable("tooltip.gtlcore.wireless_target.save_to_tool").withStyle(ChatFormatting.AQUA));
+                }
+                return tooltip;
+            }
+        }
+        return disconnectable != null && isInsideRect(mouseX, mouseY, contentX, y + height - 30, contentWidth, 20) ?
+                List.of(Component.translatable("tooltip.gtlcore.wireless_target.disconnect")) : List.of();
     }
 
     private static boolean scrollEmbedded(double wheelDelta, int x, int y, int width, int height,
@@ -985,12 +1046,25 @@ final class WirelessAeScreenHooks {
         }
 
         @Override
+        public void drawInForeground(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
+            if (Minecraft.getInstance().screen != this.screen) {
+                return;
+            }
+            List<Component> tooltip = getWirelessPageTooltip(
+                    getPositionX(), getPositionY(), getSizeWidth(), getSizeHeight(), mouseX, mouseY);
+            if (!tooltip.isEmpty()) {
+                ((ModularUIGuiContainer) this.screen).setHoverTooltip(tooltip, ItemStack.EMPTY, null, null);
+            }
+        }
+
+        @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (button != 0 || Minecraft.getInstance().screen != this.screen || !isMouseOverElement(mouseX, mouseY)) {
+            if ((button != 0 && (button != 1 || bindingToolScreen != this.screen)) ||
+                    Minecraft.getInstance().screen != this.screen || !isMouseOverElement(mouseX, mouseY)) {
                 return false;
             }
             handleWirelessPageClick(targetPos, getPositionX(), getPositionY(),
-                    getSizeWidth(), getSizeHeight(), mouseX, mouseY);
+                    getSizeWidth(), getSizeHeight(), mouseX, mouseY, button);
             playButtonClickSound();
             return true;
         }

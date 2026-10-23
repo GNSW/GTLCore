@@ -63,6 +63,7 @@ final class PatternIndexMap<K, V> {
         var capturedOrder = ordered;
         int capturedSize = size;
         return new AbstractMap<>() {
+
             @Override
             public V get(Object key) {
                 return lookup(capturedHashes, key);
@@ -87,6 +88,7 @@ final class PatternIndexMap<K, V> {
             @Override
             public Set<Entry<K, V>> entrySet() {
                 return new AbstractSet<>() {
+
                     @Override
                     public int size() {
                         return capturedSize;
@@ -95,14 +97,22 @@ final class PatternIndexMap<K, V> {
                     @Override
                     public Iterator<Entry<K, V>> iterator() {
                         return new Iterator<>() {
-                            final Deque<Node<Value<K, V>>> path = new ArrayDeque<>();
-                            { descend(capturedOrder); }
 
-                            private void descend(Node<Value<K, V>> node) {
-                                while (node != null) { path.push(node); node = node.left; }
+                            final Deque<Node<Value<K, V>>> path = new ArrayDeque<>();
+                            {
+                                descend(capturedOrder);
                             }
 
-                            public boolean hasNext() { return !path.isEmpty(); }
+                            private void descend(Node<Value<K, V>> node) {
+                                while (node != null) {
+                                    path.push(node);
+                                    node = node.left;
+                                }
+                            }
+
+                            public boolean hasNext() {
+                                return !path.isEmpty();
+                            }
 
                             public Entry<K, V> next() {
                                 if (path.isEmpty()) throw new NoSuchElementException();
@@ -127,6 +137,7 @@ final class PatternIndexMap<K, V> {
     }
 
     private static final class Node<V> {
+
         final long key;
         final V value;
         final Node<V> left, right;
@@ -141,7 +152,9 @@ final class PatternIndexMap<K, V> {
         }
     }
 
-    private static int height(Node<?> node) { return node == null ? 0 : node.height; }
+    private static int height(Node<?> node) {
+        return node == null ? 0 : node.height;
+    }
 
     private static <V> V find(Node<V> node, long key) {
         while (node != null) {

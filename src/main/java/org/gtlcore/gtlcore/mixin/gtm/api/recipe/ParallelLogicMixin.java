@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.gtm.api.recipe;
 
 import org.gtlcore.gtlcore.api.recipe.BatchProcessing;
+import org.gtlcore.gtlcore.api.recipe.IAdvancedContentModifier;
 import org.gtlcore.gtlcore.api.recipe.IGTRecipe;
 import org.gtlcore.gtlcore.api.recipe.IParallelLogic;
 
@@ -8,7 +9,6 @@ import com.gregtechceu.gtceu.api.capability.recipe.IRecipeCapabilityHolder;
 import com.gregtechceu.gtceu.api.capability.recipe.RecipeCapability;
 import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
-import com.gregtechceu.gtceu.api.recipe.content.ContentModifier;
 import com.gregtechceu.gtceu.api.recipe.modifier.ParallelLogic;
 
 import com.google.common.primitives.Ints;
@@ -75,7 +75,7 @@ public abstract class ParallelLogicMixin {
             Objects.requireNonNull(machine);
             int limitByOutput = limitByOutputMerging(currentRecipe, machine, multiplierByInputs, machine::canVoidRecipeOutputs);
             if (limitByOutput > 1) {
-                GTRecipe multiRecipe = currentRecipe.copy(ContentModifier.multiplier(limitByOutput), modifyDuration);
+                GTRecipe multiRecipe = currentRecipe.copy(IAdvancedContentModifier.preciseMultiplier(limitByOutput), modifyDuration);
                 ((IGTRecipe) multiRecipe).setRealParallels((long) limitByOutput * ((IGTRecipe) currentRecipe).getRealParallels());
                 if (!BatchProcessing.isEnabled(machine.self())) {
                     multiRecipe = IParallelLogic.getRecipeOutputChance(machine, multiRecipe);

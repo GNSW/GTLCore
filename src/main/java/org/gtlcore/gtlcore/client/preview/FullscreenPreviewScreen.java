@@ -2,28 +2,34 @@ package org.gtlcore.gtlcore.client.preview;
 
 import org.gtlcore.gtlcore.mixin.ldlib.client.PreviewSceneAccessor;
 
+import com.gregtechceu.gtceu.api.gui.GuiTextures;
+
+import com.lowdragmc.lowdraglib.gui.widget.WidgetGroup;
+
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Optional;
 
-/** Borrows the existing client-only widget without replacing its UI, world, slots or renderer. */
+/** Reuses the preview world and renderer with a fullscreen window and candidate palette. */
 public final class FullscreenPreviewScreen extends Screen {
 
     private final Screen parent;
     private final PreviewControls controls;
-    private boolean panning;
+    private final PreviewNavigation navigation;
+    private boolean navigating;
+    private boolean selectingScene;
 
     public FullscreenPreviewScreen(Screen parent, PreviewControls controls) {
         super(Component.translatable("gui.gtlcore.preview.fullscreen"));
         this.parent = parent;
         this.controls = controls;
+        navigation = new PreviewNavigation(controls.scene());
     }
 
     public PreviewControls controls() {
@@ -32,15 +38,15 @@ public final class FullscreenPreviewScreen extends Screen {
 
     @Override
     protected void init() {
-        panning = false;
+        navigating = false;
+        selectingScene = false;
         controls.enter(width, height);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, 0xFF303336);
-        graphics.fill(0, 0, width, controls.headerHeight(), 0xFF45484A);
-        graphics.fill(0, height - 28, width, height, 0xFF45484A);
+        renderBackground(graphics);
+        GuiTextures.BACKGROUND.draw(graphics, mouseX, mouseY, 8, 8, width - 16, height - 16);
         var widget = controls.widget();
         var gui = widget.getGui().getModularUIGui();
         gui.tooltipTexts = null;
@@ -50,6 +56,7 @@ public final class FullscreenPreviewScreen extends Screen {
         try {
             widget.drawInBackground(graphics, mouseX, mouseY, partialTick);
             widget.drawInForeground(graphics, mouseX, mouseY, partialTick);
+            controls.drawRotationOrigin(graphics);
             RenderSystem.depthMask(true);
             RenderSystem.enableDepthTest();
             if (gui.tooltipTexts != null && !gui.tooltipTexts.isEmpty()) {
@@ -57,6 +64,7 @@ public final class FullscreenPreviewScreen extends Screen {
                         Optional.ofNullable(gui.tooltipComponent), mouseX, mouseY);
             }
         } finally {
+            graphics.flush();
             RenderSystem.depthMask(true);
             RenderSystem.enableDepthTest();
             RenderSystem.setShaderColor(1, 1, 1, 1);
@@ -68,53 +76,67 @@ public final class FullscreenPreviewScreen extends Screen {
         controls.widget().updateScreen();
     }
 
+    private WidgetGroup inputWidgets() {
+        // LDLib resets this per input event before allowing a widget to acquire focus.
+        var widget = controls.widget();
+        widget.getGui().getModularUIGui().focused = false;
+        return widget;
+    }
+
     @Override
     public boolean mouseClicked(double x, double y, int button) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
-            panning = controls.canPan(x, y);
-            return panning;
+        if (navigating) return true;
+        boolean overScene = controls.canNavigate(x, y);
+        if (overScene && button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+            ((PreviewSceneAccessor) controls.scene()).gtlcore$clickPosFace(null);
+            navigation.begin();
+            navigating = true;
+            selectingScene = false;
+            return true;
         }
-        if (panning) return true;
-        return controls.widget().mouseClicked(x, y, button);
+        if (overScene && button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return true;
+        selectingScene = overScene && button == GLFW.GLFW_MOUSE_BUTTON_LEFT;
+        return inputWidgets().mouseClicked(x, y, button);
     }
 
     @Override
     public boolean mouseReleased(double x, double y, int button) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
-            boolean handled = panning;
-            panning = false;
-            return handled;
+        if (navigating) {
+            if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) navigating = false;
+            return true;
         }
-        if (panning) return true;
-        return controls.widget().mouseReleased(x, y, button);
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) selectingScene = false;
+        return inputWidgets().mouseReleased(x, y, button);
     }
 
     @Override
     public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
-            if (!panning) return false;
-            var scene = controls.scene();
-            var renderer = scene.getRenderer();
-            var access = (PreviewSceneAccessor) scene;
-            double scale = access.gtlcore$ortho() ? 2.0 * access.gtlcore$range() * scene.getZoom() / Math.max(1, scene.getSizeWidth()) : 2.0 * renderer.getEyePos().distance(renderer.getLookAt()) * Math.tan(Math.toRadians(((PreviewRendererAccess) renderer).gtlcore$fov()) / 2) /
-                    Math.max(1, scene.getSizeHeight());
-            var offset = PreviewPan.offset(renderer.getEyePos(), renderer.getLookAt(), renderer.getWorldUp(),
-                    dx, dy, scale);
-            scene.setCenter(new Vector3f(scene.getCenter()).add(offset));
+        if (navigating) {
+            if (button == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+                if (hasShiftDown()) navigation.pan(dx, dy);
+                else navigation.rotate(dx, dy);
+            }
             return true;
         }
-        if (panning) return true;
-        return controls.widget().mouseDragged(x, y, button, dx, dy);
+        if (selectingScene && button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            ((PreviewSceneAccessor) controls.scene()).gtlcore$clickPosFace(null);
+            return true;
+        }
+        return inputWidgets().mouseDragged(x, y, button, dx, dy);
     }
 
     @Override
     public boolean mouseScrolled(double x, double y, double delta) {
-        return controls.widget().mouseWheelMove(x, y, delta);
+        if (controls.canNavigate(x, y)) {
+            navigation.zoom(delta);
+            return true;
+        }
+        return inputWidgets().mouseWheelMove(x, y, delta);
     }
 
     @Override
     public void mouseMoved(double x, double y) {
-        controls.widget().mouseMoved(x, y);
+        inputWidgets().mouseMoved(x, y);
     }
 
     @Override
@@ -123,17 +145,17 @@ public final class FullscreenPreviewScreen extends Screen {
             onClose();
             return true;
         }
-        return super.keyPressed(key, scanCode, modifiers) || controls.widget().keyPressed(key, scanCode, modifiers);
+        return super.keyPressed(key, scanCode, modifiers) || inputWidgets().keyPressed(key, scanCode, modifiers);
     }
 
     @Override
     public boolean keyReleased(int key, int scanCode, int modifiers) {
-        return controls.widget().keyReleased(key, scanCode, modifiers);
+        return inputWidgets().keyReleased(key, scanCode, modifiers);
     }
 
     @Override
     public boolean charTyped(char character, int modifiers) {
-        return controls.widget().charTyped(character, modifiers);
+        return inputWidgets().charTyped(character, modifiers);
     }
 
     @Override
@@ -143,14 +165,16 @@ public final class FullscreenPreviewScreen extends Screen {
 
     @Override
     public void onClose() {
-        panning = false;
+        navigating = false;
+        selectingScene = false;
         controls.exit();
         minecraft.setScreen(parent);
     }
 
     @Override
     public void removed() {
-        panning = false;
+        navigating = false;
+        selectingScene = false;
         controls.exit();
     }
 }

@@ -1,8 +1,8 @@
 package org.gtlcore.gtlcore.mixin.ae2.service;
 
 import org.gtlcore.gtlcore.integration.ae2.graph.ByproductPatternIndex;
-import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderVersion;
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderSnapshot;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderVersion;
 import org.gtlcore.gtlcore.integration.ae2.graph.RegisteredPatternIndex;
 
 import appeng.api.crafting.IPatternDetails;

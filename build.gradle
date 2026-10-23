@@ -122,6 +122,7 @@ dependencies {
     modCompileOnly("mezz.jei:jei-$project.minecraft_version-forge:$project.jei_version") { transitive = false }
     modCompileOnly("curse.maven:emi-580555:6420945") { transitive = false }
     modCompileOnly("me.shedaniel:RoughlyEnoughItems-api:12.1.725") { transitive = false }
+    modCompileOnly("top.theillusivec4.curios:curios-forge:5.14.1+1.20.1:api") { transitive = false }
 
     modImplementation("com.gregtechceu.gtceu:gtceu-$project.minecraft_version:$project.gtceu_version") { transitive = false }
     modImplementation("com.lowdragmc.ldlib:ldlib-forge-$project.minecraft_version:$project.ldlib_version") { transitive = false }

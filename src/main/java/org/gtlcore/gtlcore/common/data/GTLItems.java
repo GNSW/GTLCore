@@ -385,6 +385,10 @@ public class GTLItems {
             .item("pig_plushie", properties -> new WearablePlushieItem(GTLPlushies.PIG_PLUSHIE.get(), properties))
             .model(NonNullBiConsumer.noop())
             .register();
+    public static final ItemEntry<WearablePlushieItem> SLIM_PIG_PLUSHIE = REGISTRATE
+            .item("slim_pig_plushie", properties -> new WearablePlushieItem(GTLPlushies.SLIM_PIG_PLUSHIE.get(), properties))
+            .model(NonNullBiConsumer.noop())
+            .register();
     public static ItemEntry<ComponentItem> MIRACLE_CRYSTAL = REGISTRATE
             .item("miracle_crystal", ComponentItem::create)
             .properties(stack -> stack.stacksTo(16))

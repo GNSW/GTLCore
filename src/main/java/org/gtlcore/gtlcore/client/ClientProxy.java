@@ -3,11 +3,13 @@ package org.gtlcore.gtlcore.client;
 import org.gtlcore.gtlcore.api.event.SourceTooltipRegistrationEvent;
 import org.gtlcore.gtlcore.client.ae2.wireless.WirelessAeClient;
 import org.gtlcore.gtlcore.client.bloom.BloomClient;
+import org.gtlcore.gtlcore.client.renderer.item.PlushieCurioRenderer;
 import org.gtlcore.gtlcore.client.renderer.machine.HarmonyAnimationRenderer;
 import org.gtlcore.gtlcore.common.CommonProxy;
 
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
@@ -34,6 +36,9 @@ public class ClientProxy extends CommonProxy {
     @Override
     protected void clientSetup(final FMLClientSetupEvent event) {
         super.clientSetup(event);
+        if (ModList.get().isLoaded("curios")) {
+            PlushieCurioRenderer.register();
+        }
         event.enqueueWork(() -> {
             // Fire event to allow mods to register their own source tooltips
             FMLJavaModLoadingContext.get().getModEventBus().post(new SourceTooltipRegistrationEvent());

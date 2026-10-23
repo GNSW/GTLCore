@@ -18,6 +18,7 @@ public class GTLCreativeModeTabs {
                 // Their blocks use DeferredRegister, so the Registrate block-item generator skips them.
                 output.accept(GTLItems.FISHBIG_TM.get());
                 output.accept(GTLItems.PIG_PLUSHIE.get());
+                output.accept(GTLItems.SLIM_PIG_PLUSHIE.get());
             })
                     .title(REGISTRATE.addLang("itemGroup", GTLCore.id("creative_tab"), "GTL Core"))
                     .icon(GTLItems.MEGA_ULTIMATE_BATTERY::asStack)

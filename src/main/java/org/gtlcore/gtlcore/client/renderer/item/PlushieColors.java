@@ -13,7 +13,7 @@ public final class PlushieColors {
 
     public static void register(RegisterColorHandlersEvent.Item event) {
         event.register((stack, tint) -> tint == 0 ? ((WearablePlushieItem) stack.getItem()).getColor(stack) : -1,
-                GTLItems.FISHBIG_TM.get(), GTLItems.PIG_PLUSHIE.get());
+                GTLItems.FISHBIG_TM.get(), GTLItems.PIG_PLUSHIE.get(), GTLItems.SLIM_PIG_PLUSHIE.get());
     }
 
     public static void registerBlocks(RegisterColorHandlersEvent.Block event) {
@@ -23,6 +23,6 @@ public final class PlushieColors {
                 return plushie.getColor();
             }
             return -1;
-        }, GTLPlushies.FISHBIG_TM.get(), GTLPlushies.PIG_PLUSHIE.get());
+        }, GTLPlushies.FISHBIG_TM.get(), GTLPlushies.PIG_PLUSHIE.get(), GTLPlushies.SLIM_PIG_PLUSHIE.get());
     }
 }

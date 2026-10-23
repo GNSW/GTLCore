@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "gtlcore:block/slim_pig_plushie"},
+    "facing=east": {"model": "gtlcore:block/slim_pig_plushie", "y": 90},
+    "facing=south": {"model": "gtlcore:block/slim_pig_plushie", "y": 180},
+    "facing=west": {"model": "gtlcore:block/slim_pig_plushie", "y": 270}
+  }
+}

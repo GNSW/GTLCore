@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 
 /** Shared, compact controls for the translation workbench. */
@@ -41,9 +42,9 @@ final class QuestTranslationWidgets {
             graphics.fill(x, y, x + width, y + height, fill);
             graphics.renderOutline(x, y, width, height, selected ? 0xFF63CBD2 : 0xFF485665);
             int color = active || selected ? 0xE5EDF4 : 0x788795;
-            String text = font.plainSubstrByWidth(getMessage().getString(), width - 12);
+            var text = Language.getInstance().getVisualOrder(font.substrByWidth(getMessage(), width - 12));
             if (detail.isEmpty()) {
-                graphics.drawCenteredString(font, text, x + width / 2, y + (height - 8) / 2, color);
+                graphics.drawString(font, text, x + (width - font.width(text)) / 2, y + (height - 8) / 2, color, false);
             } else {
                 graphics.fill(x, y, x + 2, y + height, selected ? 0xFF63CBD2 : 0xFF485665);
                 graphics.drawString(font, text, x + 6, y + 4, color, false);

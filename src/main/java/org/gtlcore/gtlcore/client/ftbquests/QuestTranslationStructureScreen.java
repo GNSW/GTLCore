@@ -1,5 +1,8 @@
 package org.gtlcore.gtlcore.client.ftbquests;
 
+import org.gtlcore.gtlcore.integration.ftbquests.QuestTranslationNetwork;
+import org.gtlcore.gtlcore.integration.ftbquests.QuestTranslationParagraphDraft;
+
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.MultiLineEditBox;
@@ -8,118 +11,206 @@ import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
-/** Reorders paragraph references, rather than copying translated prose over their persistent keys. */
+/** Authors source paragraphs while preserving their language keys and rich-text structure. */
 final class QuestTranslationStructureScreen extends Screen {
 
     private final Screen parent;
     private final Object object;
-    private final List<String> original;
-    private final List<String> lines;
+    private final QuestTranslationParagraphDraft draft;
+    private final String sourceLanguage;
     private int selected;
     private int page;
+    private int rows;
+    private long generation;
+    private int lastClicked = -1;
+    private long lastClick;
     private String newText = "";
     private String message = "";
-    private int rows;
     private MultiLineEditBox input;
+    private UUID request;
+    private int pendingTicks;
 
     QuestTranslationStructureScreen(Screen parent, Object object) {
         super(QuestTranslationScreen.label("structure"));
         this.parent = parent;
         this.object = object;
+        var snapshot = QuestTranslationsClient.snapshot(QuestTranslationsClient.language());
         List<String> description = QuestTranslationAccess.description(object);
-        this.original = description == null ? List.of() : List.copyOf(description);
-        this.lines = new ArrayList<>(original);
+        draft = snapshot == null || description == null ? null :
+                new QuestTranslationParagraphDraft(QuestTranslationAccess.id(object), description, snapshot);
+        sourceLanguage = snapshot == null ? "" : snapshot.defaultLanguage();
+    }
+
+    private List<String> lines() {
+        return draft == null ? List.of() : draft.lines();
+    }
+
+    private boolean canEdit() {
+        var snapshot = QuestTranslationsClient.snapshot(QuestTranslationsClient.language());
+        return draft != null && snapshot != null && snapshot.enabled() && snapshot.canEdit() && request == null;
     }
 
     @Override
     protected void init() {
-        rows = Math.max(1, (height - 165) / 32);
-        int pages = Math.max(1, (lines.size() + rows - 1) / rows);
-        page = Math.min(page, pages - 1);
+        generation = QuestTranslationsClient.generation();
+        rows = Math.max(1, (height - 151) / 32);
+        int pages = Math.max(1, (lines().size() + rows - 1) / rows);
+        page = Math.max(0, Math.min(page, pages - 1));
         for (int row = 0; row < rows; row++) {
             int index = page * rows + row;
-            if (index >= lines.size()) break;
-            String raw = lines.get(index);
-            String preview = QuestTranslationAccess.preview(raw);
-            Button line = addRenderableWidget(QuestTranslationWidgets.row(Component.literal((index + 1) + ". " + preview), raw,
+            if (index >= lines().size()) break;
+            Component preview = QuestTranslationAccess.previewComponent(draft.text(index));
+            Button line = addRenderableWidget(QuestTranslationWidgets.row(
+                    Component.literal((index + 1) + ". ").append(preview), lines().get(index),
                     12, 36 + row * 32, width - 112, 30, index == selected, b -> {
+                        long now = System.currentTimeMillis();
+                        boolean twice = lastClicked == index && now - lastClick < 250;
                         selected = index;
-                        rebuild();
+                        lastClicked = index;
+                        lastClick = now;
+                        if (twice) editSelected();
+                        else rebuild();
                     }));
-            line.setTooltip(Tooltip.create(Component.literal(raw)));
+            line.setTooltip(Tooltip.create(preview.copy().append("\n").append(QuestTranslationScreen.label("edit_paragraph_hint"))));
+            line.active = request == null;
         }
-        Button up = button(Component.literal("↑"), width - 88, 36, 36, 20, b -> move(-1));
-        Button down = button(Component.literal("↓"), width - 48, 36, 36, 20, b -> move(1));
-        up.active = selected > 0 && selected < lines.size();
-        down.active = selected >= 0 && selected + 1 < lines.size();
-        Button remove = button(QuestTranslationScreen.label("remove_paragraph"), width - 88, 62, 76, 20, b -> {
-            if (selected < lines.size()) lines.remove(selected);
-            selected = Math.max(0, Math.min(selected, lines.size() - 1));
+        Button edit = button(QuestTranslationScreen.label("edit_paragraph"), width - 98, 36, 86, 20, b -> editSelected());
+        edit.active = canEdit() && selected < lines().size();
+        Button up = button(Component.literal("↑"), width - 98, 60, 40, 20, b -> move(-1));
+        Button down = button(Component.literal("↓"), width - 52, 60, 40, 20, b -> move(1));
+        up.active = canEdit() && selected > 0 && selected < lines().size();
+        down.active = canEdit() && selected + 1 < lines().size();
+        Button remove = button(QuestTranslationScreen.label("remove_paragraph"), width - 98, 84, 86, 20, b -> {
+            if (selected < lines().size()) lines().remove(selected);
+            selected = Math.max(0, Math.min(selected, lines().size() - 1));
             rebuild();
         });
-        remove.active = !lines.isEmpty();
-        Button previous = button(Component.literal("<"), width - 88, 88, 36, 20, b -> {
+        remove.active = canEdit() && !lines().isEmpty();
+        Button previous = button(Component.literal("<"), width - 98, 108, 40, 20, b -> {
             page--;
             rebuild();
         });
-        Button next = button(Component.literal(">"), width - 48, 88, 36, 20, b -> {
+        Button next = button(Component.literal(">"), width - 52, 108, 40, 20, b -> {
             page++;
             rebuild();
         });
-        previous.active = page > 0;
-        next.active = page + 1 < pages;
-        input = addRenderableWidget(new MultiLineEditBox(font, 12, height - 112, width - 112, 51,
+        previous.active = request == null && page > 0;
+        next.active = request == null && page + 1 < pages;
+        input = addRenderableWidget(new MultiLineEditBox(font, 12, height - 107, width - 124, 51,
                 QuestTranslationScreen.label("new_paragraph"), QuestTranslationScreen.label("new_paragraph")));
         input.setCharacterLimit(16384);
         input.setValue(newText);
         input.setValueListener(value -> newText = value);
-        button(QuestTranslationScreen.label("add_paragraph"), width - 88, height - 112, 76, 20, b -> add(newText));
-        button(QuestTranslationScreen.label("page_break"), width - 88, height - 87, 76, 20, b -> {
-            insert("{@pagebreak}");
+        input.active = canEdit();
+        button(QuestTranslationScreen.label("add_paragraph"), width - 98, height - 107, 86, 20,
+                b -> add(inputLines())).active = canEdit();
+        button(QuestTranslationScreen.label("format_links"), width - 98, height - 83, 86, 20,
+                b -> openRich(-1, newText, "")).active = canEdit();
+        button(QuestTranslationScreen.label("page_break"), width - 98, height - 59, 86, 20, b -> {
+            int index = insertionIndex();
+            lines().add(index, "{@pagebreak}");
+            selected = index;
+            page = selected / rows;
             rebuild();
-        });
-        Button save = button(QuestTranslationScreen.label("save"), 12, height - 43, 85, 20, b -> {
-            List<String> replacement = new ArrayList<>(lines);
-            // Save includes the pending paragraph even when Add was not pressed.
-            // Keep the draft intact if the structure changed while this screen was open.
-            if (!newText.isEmpty()) replacement.add(insertionIndex(), newText);
-            if (QuestTranslationAccess.saveDescription(object, original, replacement)) minecraft.setScreen(parent);
-            else message = QuestTranslationScreen.label("conflict").getString();
-        });
-        var snapshot = QuestTranslationsClient.snapshot(QuestTranslationsClient.language());
-        save.active = snapshot != null && snapshot.canEdit();
-        button(QuestTranslationScreen.label("close"), width - 97, height - 43, 85, 20, b -> onClose());
+        }).active = canEdit();
+        button(QuestTranslationScreen.label("save"), 12, height - 35, 85, 20, b -> save()).active = canEdit();
+        button(QuestTranslationScreen.label("close"), width - 98, height - 35, 86, 20, b -> onClose()).active = request == null;
     }
 
     private Button button(Component text, int x, int y, int width, int height, Button.OnPress action) {
         return addRenderableWidget(QuestTranslationWidgets.button(text, x, y, width, height, action));
     }
 
-    private void add(String value) {
-        insert(value);
-        newText = "";
+    private void add(List<String> value) {
+        try {
+            int index = insertionIndex();
+            draft.insert(index, value);
+            selected = index + value.size() - 1;
+            page = selected / rows;
+            newText = "";
+            message = "";
+        } catch (IOException e) {
+            message = e.getMessage();
+        }
         rebuild();
     }
 
     private int insertionIndex() {
-        return lines.isEmpty() ? 0 : Math.min(selected + 1, lines.size());
+        return lines().isEmpty() ? 0 : Math.min(selected + 1, lines().size());
     }
 
-    private void insert(String value) {
-        int index = insertionIndex();
-        lines.add(index, value);
-        selected = index;
-        page = index / rows;
+    private List<String> inputLines() {
+        return Arrays.asList(newText.split("\n", -1));
+    }
+
+    private void editSelected() {
+        if (canEdit() && selected < lines().size()) openRich(selected, draft.text(selected), "");
+    }
+
+    private void openRich(int index, String text, String error) {
+        Component heading = error.isEmpty() ? Component.translatable("gtlcore.quest_i18n.source_editor", sourceLanguage) :
+                Component.literal(error);
+        if (!QuestTranslationRichEditor.open(this, heading, text, replacement -> {
+            if (index < 0) {
+                newText = String.join("\n", replacement);
+                rebuild();
+                return;
+            }
+            try {
+                draft.replace(index, replacement);
+                selected = Math.min(index, Math.max(0, lines().size() - 1));
+                message = "";
+                rebuild();
+            } catch (IOException e) {
+                openRich(index, String.join("\n", replacement), e.getMessage());
+            }
+        })) {
+            message = QuestTranslationScreen.label("rich_editor_failed").getString();
+        }
+    }
+
+    private void save() {
+        if (!canEdit()) return;
+        try {
+            var submitted = draft.copy();
+            // Include pending input; retain the live draft until the server acknowledges it.
+            if (!newText.isEmpty()) submitted.insert(insertionIndex(), inputLines());
+            request = UUID.randomUUID();
+            pendingTicks = 0;
+            QuestTranslationNetwork.saveDescription(new QuestTranslationNetwork.DescriptionEdit(
+                    request, QuestTranslationAccess.id(object), submitted.original(),
+                    List.copyOf(submitted.lines()), submitted.changes()));
+            message = QuestTranslationScreen.label("saving").getString();
+            rebuild();
+        } catch (IOException e) {
+            request = null;
+            message = e.getMessage();
+            rebuild();
+        }
+    }
+
+    void saved(UUID reply, boolean success, String error) {
+        if (!reply.equals(request)) return;
+        request = null;
+        if (success) {
+            if (parent instanceof QuestTranslationScreen screen) screen.invalidated();
+            minecraft.setScreen(parent);
+        } else {
+            message = error;
+            rebuild();
+        }
     }
 
     private void move(int offset) {
         int next = selected + offset;
-        if (next < 0 || next >= lines.size()) return;
-        Collections.swap(lines, selected, next);
+        if (next < 0 || next >= lines().size()) return;
+        Collections.swap(lines(), selected, next);
         selected = next;
         page = selected / rows;
         rebuild();
@@ -132,7 +223,8 @@ final class QuestTranslationStructureScreen extends Screen {
 
     @Override
     public void onClose() {
-        if (lines.equals(original) && newText.isEmpty()) minecraft.setScreen(parent);
+        if (request != null) return;
+        if ((draft == null || !draft.dirty()) && newText.isEmpty()) minecraft.setScreen(parent);
         else minecraft.setScreen(new ConfirmScreen(accepted -> minecraft.setScreen(accepted ? parent : this),
                 QuestTranslationScreen.label("discard_title"), QuestTranslationScreen.label("discard_message")));
     }
@@ -145,14 +237,20 @@ final class QuestTranslationStructureScreen extends Screen {
     @Override
     public void tick() {
         input.tick();
+        if (request != null && ++pendingTicks >= 200) {
+            request = null;
+            message = QuestTranslationScreen.label("timeout").getString();
+            rebuild();
+        } else if (generation != QuestTranslationsClient.generation()) rebuild();
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         QuestTranslationScreen.renderEditorBackground(graphics, width, height);
-        graphics.drawString(font, title, 12, 12, 0xE5EDF4, false);
-        graphics.drawString(font, font.plainSubstrByWidth(message.isEmpty() ? QuestTranslationScreen.label("enroll_hint").getString() : message,
-                width - 24), 12, height - 12, message.isEmpty() ? 0xBBBBBB : 0xFF7777);
+        graphics.drawString(font, title.copy().append(" · " + sourceLanguage), 12, 12, 0xE5EDF4, false);
+        graphics.drawString(font, font.plainSubstrByWidth(message.isEmpty() ?
+                QuestTranslationScreen.label("paragraph_hint").getString() : message, width - 24),
+                12, height - 10, message.isEmpty() ? 0xBBBBBB : 0xFF7777);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 }

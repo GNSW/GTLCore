@@ -359,11 +359,23 @@ public final class QuestTranslationAccess {
     }
 
     public static String preview(String raw) {
+        return previewComponent(raw).getString();
+    }
+
+    public static Component previewComponent(String raw) {
         try {
             Class<?> text = Class.forName("dev.ftb.mods.ftbquests.util.TextUtils");
-            return ((Component) text.getMethod("parseRawText", String.class).invoke(null, raw)).getString();
+            return (Component) text.getMethod("parseRawText", String.class).invoke(null, raw);
         } catch (ReflectiveOperationException | LinkageError e) {
-            return raw;
+            return Component.literal(raw);
+        }
+    }
+
+    public static long id(Object object) {
+        try {
+            return ((Number) object.getClass().getMethod("getId").invoke(object)).longValue();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException("Not an FTB quest object", e);
         }
     }
 

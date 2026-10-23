@@ -1,6 +1,12 @@
 {
   "gtlcore.quest_i18n.editor": "任务译文编辑器",
   "gtlcore.quest_i18n.structure": "段落与分页",
+  "gtlcore.quest_i18n.edit_paragraph": "编辑段落",
+  "gtlcore.quest_i18n.edit_paragraph_hint": "双击编辑此段原文，可使用格式化与链接工具。",
+  "gtlcore.quest_i18n.format_links": "格式与链接",
+  "gtlcore.quest_i18n.source_editor": "编辑段落原文（%s）",
+  "gtlcore.quest_i18n.rich_editor_failed": "无法打开 FTB 文本编辑器，请查看日志。",
+  "gtlcore.quest_i18n.paragraph_hint": "双击修改段落，保存时自动收集新增原文；其他语言请在译文编辑器修改。",
   "gtlcore.quest_i18n.remove_paragraph": "删除段落",
   "gtlcore.quest_i18n.new_paragraph": "新段落原文",
   "gtlcore.quest_i18n.add_paragraph": "添加段落",

@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -32,8 +33,9 @@ import java.util.function.Function;
 /** Separate server-authoritative channel; editing a translation never rewrites a quest or its progress. */
 public final class QuestTranslationNetwork {
 
-    private static final String VERSION = "1";
+    private static final String VERSION = "2";
     private static final int CHUNK_LENGTH = 16000;
+    private static final int MAX_DESCRIPTION_EDIT = 262144;
     private static final int MAX_SNAPSHOT_LENGTH = QuestTranslationCatalog.MAX_FILE_BYTES * 2 + 65536;
     private static final Gson JSON = new Gson();
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
@@ -62,6 +64,8 @@ public final class QuestTranslationNetwork {
         void edited(String locale, String key, String value, boolean success, String message);
 
         void invalidated();
+
+        default void descriptionEdited(UUID request, boolean success, String message) {}
     }
 
     public static void setClientReceiver(ClientReceiver receiver) {
@@ -87,6 +91,17 @@ public final class QuestTranslationNetwork {
             if (client != null) client.invalidated();
         }, NetworkDirection.PLAY_TO_CLIENT);
         register(6, Enroll.class, (p, b) -> {}, b -> new Enroll(), (p, c) -> enrollOnServer(c), NetworkDirection.PLAY_TO_SERVER);
+        register(7, DescriptionEdit.class, (p, b) -> b.writeUtf(JSON.toJson(p), MAX_DESCRIPTION_EDIT),
+                b -> JSON.fromJson(b.readUtf(MAX_DESCRIPTION_EDIT), DescriptionEdit.class),
+                QuestTranslationNetwork::descriptionOnServer, NetworkDirection.PLAY_TO_SERVER);
+        register(8, DescriptionResult.class, (p, b) -> {
+            b.writeUUID(p.request);
+            b.writeBoolean(p.success);
+            b.writeUtf(p.message, 2048);
+        }, b -> new DescriptionResult(b.readUUID(), b.readBoolean(), b.readUtf(2048)),
+                (p, c) -> {
+                    if (client != null) client.descriptionEdited(p.request, p.success, p.message);
+                }, NetworkDirection.PLAY_TO_CLIENT);
         MinecraftForge.EVENT_BUS.addListener(QuestTranslationNetwork::stopped);
         MinecraftForge.EVENT_BUS.addListener(QuestTranslationNetwork::loggedOut);
     }
@@ -119,6 +134,33 @@ public final class QuestTranslationNetwork {
 
     public static void enroll() {
         CHANNEL.sendToServer(new Enroll());
+    }
+
+    public record DescriptionEdit(UUID request, long questId, List<String> expected, List<String> lines,
+                                  Map<String, QuestTranslationCatalog.SourceEdit> edits) {}
+
+    private record DescriptionResult(UUID request, boolean success, String message) {}
+
+    public static void saveDescription(DescriptionEdit edit) throws IOException {
+        if (JSON.toJson(edit).length() > MAX_DESCRIPTION_EDIT) throw new IOException("Quest paragraph edit is too large");
+        CHANNEL.sendToServer(edit);
+    }
+
+    private static void descriptionOnServer(DescriptionEdit edit, NetworkEvent.Context context) {
+        ServerPlayer player = context.getSender();
+        if (!budget(player) || edit == null || edit.request == null) return;
+        try {
+            if (!canEdit(player)) throw new IOException("FTB Quests editing permission is required");
+            QuestTranslationCatalog active = getCatalog(player);
+            if (active == null) throw new IOException("Quest translations are unavailable");
+            QuestTranslationDescriptionSave.save(questFile, active, player.server, edit);
+            SUBSCRIBERS.put(player.getUUID(), player);
+            for (ServerPlayer subscriber : SUBSCRIBERS.values()) send(subscriber, new Invalidate());
+            send(player, new DescriptionResult(edit.request, true, ""));
+        } catch (IOException e) {
+            GTLCore.LOGGER.warn("Could not save quest paragraphs", e);
+            send(player, new DescriptionResult(edit.request, false, e.getMessage() == null ? "Could not save quest paragraphs" : e.getMessage()));
+        }
     }
 
     private static Object serverFile() {

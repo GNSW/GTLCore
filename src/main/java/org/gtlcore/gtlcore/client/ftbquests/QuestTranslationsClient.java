@@ -190,6 +190,13 @@ public final class QuestTranslationsClient implements QuestTranslationNetwork.Cl
     }
 
     @Override
+    public void descriptionEdited(java.util.UUID request, boolean success, String message) {
+        if (Minecraft.getInstance().screen instanceof QuestTranslationStructureScreen screen) {
+            screen.saved(request, success, message);
+        }
+    }
+
+    @Override
     public void invalidated() {
         // Do not publish an empty dictionary between invalidation and the replacement chunks.
         // FTB parses plain references into literal components, which can outlive that gap.

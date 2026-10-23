@@ -1,6 +1,12 @@
 {
   "gtlcore.quest_i18n.editor": "Quest translations",
   "gtlcore.quest_i18n.structure": "Structure",
+  "gtlcore.quest_i18n.edit_paragraph": "Edit paragraph",
+  "gtlcore.quest_i18n.edit_paragraph_hint": "Double-click to edit this source paragraph with formatting and link tools.",
+  "gtlcore.quest_i18n.format_links": "Format / links",
+  "gtlcore.quest_i18n.source_editor": "Edit source paragraph (%s)",
+  "gtlcore.quest_i18n.rich_editor_failed": "Could not open the FTB text editor. See the log for details.",
+  "gtlcore.quest_i18n.paragraph_hint": "Double-click a paragraph to edit. Save also collects new source text; translations stay in the workbench.",
   "gtlcore.quest_i18n.remove_paragraph": "Remove",
   "gtlcore.quest_i18n.new_paragraph": "New paragraph text",
   "gtlcore.quest_i18n.add_paragraph": "Add paragraph",

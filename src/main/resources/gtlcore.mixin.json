@@ -95,6 +95,7 @@
     "ftbquests.QuestTranslationListConfigMixin",
     "ftbquests.QuestTranslationNativeOverlayMixin",
     "ftbquests.QuestTranslationQuickEditMixin",
+    "ftbquests.QuestTranslationRichTextMixin",
     "jei.PreviewTooltipComponentMixin",
     "jei.RecipeBookmarkElementMixin",
     "jei.PatternStatusRenderMixin",

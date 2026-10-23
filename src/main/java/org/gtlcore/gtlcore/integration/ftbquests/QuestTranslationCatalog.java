@@ -193,6 +193,33 @@ public final class QuestTranslationCatalog {
         save(locale, previous, changed);
     }
 
+    /** Compare-and-set source text; a null expected value denotes a new key. */
+    public record SourceEdit(String expected, String value) {}
+
+    /** Commits a paragraph draft's source edits together, after checking every original value. */
+    public synchronized void editSource(Map<String, SourceEdit> edits) throws IOException {
+        Map<String, String> previous = languages.get(defaultLanguage);
+        Map<String, String> changed = new TreeMap<>(previous);
+        for (var entry : edits.entrySet()) {
+            validateKey(entry.getKey(), keyPrefix);
+            SourceEdit edit = entry.getValue();
+            if (edit == null) throw new IOException("Missing quest source edit");
+            validateValue(edit.value, keyPrefix);
+            if (!Objects.equals(previous.get(entry.getKey()), edit.expected)) {
+                throw new IOException("Quest source changed by another editor; reopen the paragraph before saving");
+            }
+            changed.put(entry.getKey(), edit.value);
+        }
+        if (changed.size() > MAX_ENTRIES) throw new IOException("Too many quest translation keys");
+        if (!changed.equals(previous)) save(defaultLanguage, previous, changed);
+    }
+
+    synchronized void restoreSource(Map<String, String> expected, Map<String, String> replacement) throws IOException {
+        Map<String, String> previous = languages.get(defaultLanguage);
+        if (!previous.equals(expected)) throw new IOException("Quest source changed during rollback");
+        if (!previous.equals(replacement)) save(defaultLanguage, previous, replacement);
+    }
+
     /** Adds newly authored text before the quest is allowed to reference its keys. */
     public synchronized void addSource(Map<String, String> additions) throws IOException {
         if (additions.isEmpty()) return;

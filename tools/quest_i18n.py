@@ -711,13 +711,51 @@ def convert(source: Path, output: Path, audit_path: Path | None = None,
     return {key: value for key, value in audit.items() if key not in ("fields", "source_files_sha256", "output_files_sha256", "statistics")}
 
 
-def validate_translation(catalog: dict[str, str], translations: Any) -> dict[str, str]:
+def ftb_format_keys(quests: Path) -> set[str]:
+    """Find keys actually consumed by FTB's formatter, not JSON translate nodes."""
+    _, fields, _ = scan(quests)
+    keys = set()
+    for field in fields:
+        for raw in field.source if isinstance(field.source, list) else [field.source]:
+            # Matches FTB Quests TextUtils.JSON_TEXT_PATTERN. JSON Components
+            # render literal translations and must not receive FTB backslashes.
+            if re.match(r'^[{\[]\s*"', raw):
+                continue
+            keys.update(re.findall(r'(?<!\\)\{(' + re.escape(PREFIX) + r'[a-z0-9_.-]+)\}', raw))
+    return keys
+
+
+def validate_ftb_formatting(text: str, key: str) -> None:
+    """Reject invalid FTB Library 2001 formatting markers before deployment."""
+    index = 0
+    while index < len(text):
+        marker = text[index]
+        if marker not in "&§" or (index > 0 and text[index - 1] == "\\"):
+            index += 1
+            continue
+        code = text[index + 1:index + 2]
+        if code == "#" and re.fullmatch(r"[0-9a-fA-F]{6}", text[index + 2:index + 8]):
+            index += 8
+            continue
+        if code and code in "0123456789abcdefklmnor":
+            index += 2
+            continue
+        raise ValueError(
+            f"Invalid FTB formatting marker at character {index}: {key}; "
+            r"escape a literal & as \& in text (\\& in JSON), or use 'and'"
+        )
+
+
+def validate_translation(catalog: dict[str, str], translations: Any,
+                         format_keys: set[str] | None = None) -> dict[str, str]:
     validate_dictionary(catalog)
     validate_dictionary(translations)
     unknown = sorted(set(translations) - set(catalog))
     if unknown:
         raise ValueError(f"Unknown translation keys: {unknown[:10]}")
     for key, text in translations.items():
+        if format_keys is not None and key in format_keys:
+            validate_ftb_formatting(text, key)
         if not text and catalog[key]:
             raise ValueError(f"Empty target would hide source text: {key}; omit untranslated keys")
         if re.search(r"\{(?:@|image:)[^}]*\}", text):
@@ -748,11 +786,13 @@ def export_job(quests: Path, output: Path, target_language: str):
     validate_translation(catalog, translated)
     metadata = new_destination(output.with_suffix(".meta.json"))
     require_separate_trees(quests, metadata)
+    format_keys = ftb_format_keys(quests)
     # The translator receives a plain key:string JSON file, without job wrappers
     # or administrative strings that might themselves get translated.
     write_new(output, dictionary_bytes(catalog))
     write_new(metadata, json_bytes({"format": 1, "source_language": DEFAULT_LANGUAGE,
-                                   "target_language": target_language, "source_sha256": digest_json(catalog)}))
+                                   "target_language": target_language, "source_sha256": digest_json(catalog),
+                                   "ftb_format_keys": sorted(format_keys)}))
     return {"export": str(output), "metadata": str(metadata), "source_keys": len(catalog),
             "existing_target_keys": len(translated)}
 
@@ -770,7 +810,9 @@ def import_job(quests: Path, job_path: Path, output: Path, metadata_path: Path |
         raise ValueError("Invalid target language")
     if job.get("source_sha256") != digest_json(catalog):
         raise ValueError("Source text changed since export; review and export a new translation job")
-    target = validate_translation(catalog, read_json(job_path))
+    # Recompute from the actual quest structure, not editable job metadata or a
+    # naming convention: one key may be shared by literal and formatted fields.
+    target = validate_translation(catalog, read_json(job_path), ftb_format_keys(quests))
     if output.name != locale + ".json":
         raise ValueError("Import output filename must match the target locale")
     write_new(output, dictionary_bytes(target))

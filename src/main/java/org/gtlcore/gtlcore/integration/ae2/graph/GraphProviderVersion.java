@@ -7,6 +7,11 @@ public interface GraphProviderVersion {
 
     long gtlcore$providerGeneration();
 
+    /** Effective planning changes; execution still observes every provider refresh. */
+    default long gtlcore$planningGeneration() {
+        return gtlcore$providerGeneration();
+    }
+
     /** Live registered patterns; iterate on the server thread while the revision is unchanged. */
     Iterable<IPatternDetails> gtlcore$registeredPatterns();
 

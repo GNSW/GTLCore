@@ -80,6 +80,11 @@ public abstract class CraftingServiceMixin implements IMaxFastCraftingProviderVe
     }
 
     @Override
+    public long gtlcore$graphPlanningGeneration() {
+        return ((GraphProviderVersion) this.craftingProviders).gtlcore$planningGeneration();
+    }
+
+    @Override
     public Iterable<IPatternDetails> gtlcore$registeredGraphPatterns() {
         return ((GraphProviderVersion) this.craftingProviders).gtlcore$registeredPatterns();
     }

@@ -1,20 +1,53 @@
 package org.gtlcore.gtlcore.mixin.ae2.service;
 
 import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderVersion;
+import org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderSnapshot;
 
 import appeng.api.crafting.IPatternDetails;
+import appeng.api.stacks.AEKey;
 import appeng.me.service.helpers.NetworkCraftingProviders;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
 import java.util.Map;
+import java.util.List;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 @Mixin(targets = "appeng.me.service.helpers.NetworkCraftingProviders$ProviderState")
-public abstract class NetworkCraftingProviderStateMixin {
+public abstract class NetworkCraftingProviderStateMixin implements GraphProviderSnapshot {
+
+    @Shadow(remap = false)
+    @Final
+    private List<IPatternDetails> patterns;
+
+    @Shadow(remap = false)
+    @Final
+    private Set<AEKey> emitableItems;
+
+    @Shadow(remap = false)
+    @Final
+    private int priority;
+
+    @Override
+    public List<IPatternDetails> gtlcore$planningPatterns() {
+        return patterns;
+    }
+
+    @Override
+    public Set<AEKey> gtlcore$planningEmitables() {
+        return emitableItems;
+    }
+
+    @Override
+    public int gtlcore$planningPriority() {
+        return priority;
+    }
 
     @WrapOperation(method = "mount",
                    at = @At(value = "INVOKE",

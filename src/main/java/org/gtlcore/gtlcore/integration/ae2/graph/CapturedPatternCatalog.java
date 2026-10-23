@@ -39,6 +39,7 @@ public final class CapturedPatternCatalog {
     private volatile List<Entry> entries;
     private final int size;
     private volatile Prepared prepared;
+    private volatile boolean invalidated;
     private volatile long retainedBytes;
     private long lastAccess = System.nanoTime();
 
@@ -55,6 +56,14 @@ public final class CapturedPatternCatalog {
     public boolean mayContainBinding(String binding) {
         Prepared current = prepared;
         return current == null || current.bindings().containsKey(binding);
+    }
+
+    void invalidate() {
+        invalidated = true;
+    }
+
+    void checkValid() {
+        if (invalidated) throw new GraphSnapshotChanged("GRAPH_BINDING_INVALIDATED_DURING_SNAPSHOT");
     }
 
     public Build build(PlanningBudget budget) {
@@ -115,6 +124,7 @@ public final class CapturedPatternCatalog {
 
         @Override
         public boolean advance(PlanningScheduler.Slice slice) {
+            checkValid();
             if (prepared != null) {
                 result = prepared;
                 return true;

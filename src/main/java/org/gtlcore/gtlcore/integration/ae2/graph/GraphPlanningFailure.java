@@ -19,6 +19,7 @@ public final class GraphPlanningFailure extends PlanningFailure {
     public static String messageKey(Throwable error) {
         var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
         for (Throwable cause = error; cause != null && seen.add(cause); cause = cause.getCause()) {
+            if (cause instanceof GraphSnapshotChanged) return "gtlcore.ae.graph.failure.snapshot_changed";
             if (cause instanceof PlanningFailure failure && INVENTORY_PRECISION_LIMIT.equals(failure.detail())) {
                 return "gtlcore.ae.graph.failure." + INVENTORY_PRECISION_LIMIT;
             }

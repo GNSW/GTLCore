@@ -92,6 +92,7 @@ public final class GraphSnapshots {
                     // bounded batch. Keep the same global deadline and check
                     // cancellation inside every capture step.
                     for (int step = 0; step < 128 && System.nanoTime() - deadline < 0; step++) {
+                        request.steps++;
                         if (request.capture.step(deadline)) {
                             complete = true;
                             break;
@@ -108,8 +109,22 @@ public final class GraphSnapshots {
                         request.timing.accept(new Timing(request.nanos, request.idleNanos, request.tickSlices,
                                 request.idleSlices, request.maxSliceNanos));
                         request.future.complete(request.capture.result());
-                    } else pending.addLast(request);
+                    } else {
+                        pending.addLast(request);
+                        long now = System.nanoTime();
+                        if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging && now - request.lastReport >= 10_000_000_000L) {
+                            request.lastReport = now;
+                            GTLCore.LOGGER.info("[Graph Crafting] snapshot progress {} elapsed_ms={} active_ms={} steps={} tick_slices={} idle_slices={} queued={}",
+                                    request.capture.progress(), (now - request.started) / 1_000_000.0, request.nanos / 1_000_000.0,
+                                    request.steps, request.tickSlices, request.idleSlices, pending.size());
+                        }
+                    }
                 } catch (Throwable error) {
+                    try {
+                        request.budget.note("snapshot_state", request.capture.progress());
+                    } catch (Throwable diagnosticFailure) {
+                        error.addSuppressed(diagnosticFailure);
+                    }
                     request.future.completeExceptionally(error);
                 }
             }
@@ -140,6 +155,8 @@ public final class GraphSnapshots {
         final CompletableFuture<GtlPatternCatalog.Snapshot> future;
         final Consumer<Timing> timing;
         long nanos, idleNanos, maxSliceNanos;
+        final long started = System.nanoTime();
+        long lastReport = started, steps;
         int tickSlices, idleSlices;
 
         Request(GtlPatternCatalog.Capture capture, PlanningBudget budget, CompletableFuture<GtlPatternCatalog.Snapshot> future, Consumer<Timing> timing) {

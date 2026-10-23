@@ -67,15 +67,17 @@ public final class GtlPatternCatalog {
     private Object recipeManager;
     private static long dataGeneration;
     private long cachedDataGeneration = -1;
-    private long invalidationGeneration;
     private ByproductPatternIndex byproducts;
     private long byproductRevision = -1;
 
     /** A failed execution preflight disproves the cached catalog, even without a provider event. */
     public void invalidateBinding(String binding) {
-        cache.values().removeIf(structure -> structure.catalog().mayContainBinding(binding));
+        cache.values().removeIf(structure -> {
+            if (!structure.catalog().mayContainBinding(binding)) return false;
+            structure.catalog().invalidate();
+            return true;
+        });
         byproducts = null;
-        invalidationGeneration++;
     }
 
     public Snapshot capture(IGrid grid, CraftingService service, Level level, IActionSource source, AEKey target, PlanningBudget budget) {
@@ -125,7 +127,6 @@ public final class GtlPatternCatalog {
         private final Iterator<AEKey> discoveryKeys;
         private long revision;
         private final long dataRevision;
-        private final long invalidationRevision;
         private final boolean simulate;
         private final boolean refreshInventory;
         private final Map<AEKey, List<Signature>> dependencies = new LinkedHashMap<>();
@@ -158,6 +159,7 @@ public final class GtlPatternCatalog {
         private ExactInventoryRead exactInventory;
         private AEKey exactInventoryKey;
         private final Set<AEKey> emitted = new LinkedHashSet<>(), fuzzy = new HashSet<>();
+        private final Set<AEKey> providerEmitted = new HashSet<>();
         private final Set<Object> fuzzyPrimary = new HashSet<>();
         private Structure structure;
         private boolean hit, bounded;
@@ -169,6 +171,8 @@ public final class GtlPatternCatalog {
         private Snapshot result;
         private CandidateCapture normalizing;
         private ByproductPatternIndex sourceIndex;
+        private ByproductPatternIndex validationIndex;
+        private boolean dependenciesValidated;
         private ByproductPatternIndex.Build indexing;
         private long indexingRevision = -1;
 
@@ -194,7 +198,6 @@ public final class GtlPatternCatalog {
                             InventorySnapshot.copyOf(available);
             revision = ((GraphRequestTracker) service).gtlcore$graphPlanningGeneration();
             dataRevision = dataGeneration;
-            invalidationRevision = invalidationGeneration;
             if (recipeManager != level.getRecipeManager() || cachedDataGeneration != dataRevision) {
                 cache.clear();
                 byproducts = null;
@@ -225,8 +228,6 @@ public final class GtlPatternCatalog {
             budget.compilationCheck();
             budget.phase(PlanningBudget.Phase.SNAPSHOT);
             if (!prepareSources()) return false;
-            if (!hit && potentialSource != null && potentialSource != sourceIndex)
-                throw new IllegalStateException("GRAPH_PATTERN_CHANGED_DURING_SNAPSHOT");
             if (discoveryKeys.hasNext()) {
                 budget.reserve(96);
                 additionalDiscovery.add(discoveryKeys.next(), 1);
@@ -397,15 +398,24 @@ public final class GtlPatternCatalog {
                                 exactInventory = new ExactInventoryRead(storage.getInventory(), resource, source, budget);
                             }
                         }
-                        if (service.canEmitFor(resource)) emitted.add(resource);
+                        if (service.canEmitFor(resource)) {
+                            emitted.add(resource);
+                            providerEmitted.add(resource);
+                        }
                         if (exactInventory != null) return false;
                     }
                     if (!keys.hasNext()) {
-                        if (dataRevision != dataGeneration) throw new IllegalStateException("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
-                        if (invalidationRevision != invalidationGeneration) throw new IllegalStateException("GRAPH_BINDING_INVALIDATED_DURING_SNAPSHOT");
+                        if (dataRevision != dataGeneration) throw new GraphSnapshotChanged("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
+                        structure.catalog().checkValid();
                         long latest = ((GraphRequestTracker) service).gtlcore$graphPlanningGeneration();
-                        if (revision != latest) {
-                            revision = latest;
+                        if (!dependenciesValidated && revision != latest) {
+                            // Validate this request once against another immutable view.
+                            // Global provider churn must not rewind an already completed
+                            // dependency scan. Keep the original revision on the cache:
+                            // a later request will validate against its own newer view.
+                            validationIndex = ((GraphRequestTracker) service).gtlcore$patternSources();
+                            if (validationIndex == null)
+                                throw new GraphSnapshotChanged("GRAPH_PATTERN_CHANGED_DURING_SNAPSHOT");
                             phase = 7;
                             keys = structure.dependencies().keySet().iterator();
                             patterns = null;
@@ -413,7 +423,8 @@ public final class GtlPatternCatalog {
                         }
                         if (structure.providerRevision() != revision) structure = new Structure(structure.catalog(), structure.resources(),
                                 structure.inputTemplates(), structure.fuzzyKeys(), structure.boundedAlternatives(), structure.dependencies(), revision);
-                        cache.put(roots, structure);
+                        Structure newer = cache.get(roots);
+                        if (newer == null || newer.providerRevision() <= structure.providerRevision()) cache.put(roots, structure);
                         trimRetainedCaches();
                         long weight = cache.values().stream().mapToLong(value -> value.resources().size() + value.catalog().size()).sum();
                         // One catalog is already bounded by the request's graph/memory
@@ -437,15 +448,26 @@ public final class GtlPatternCatalog {
                     }
                     if (patterns != null) {
                         patterns = null;
-                        if (!versions.equals(structure.dependencies().get(key))) throw new IllegalStateException("GRAPH_PATTERN_CHANGED_DURING_SNAPSHOT");
+                        if (!sameDefinitions(versions, structure.dependencies().get(key)))
+                            throw new GraphSnapshotChanged("GRAPH_PATTERN_CHANGED_DURING_SNAPSHOT: " + key);
                     }
                     if (keys.hasNext()) {
                         key = keys.next();
                         versions = new ArrayList<>();
-                        patterns = sources(key).iterator();
+                        patterns = sources(key, validationIndex).iterator();
                     } else {
+                        phase = 8;
+                        keys = structure.resources().iterator();
+                    }
+                }
+                case 8 -> {
+                    if (keys.hasNext()) {
+                        AEKey resource = keys.next();
+                        if (service.canEmitFor(resource) != providerEmitted.contains(resource))
+                            throw new GraphSnapshotChanged("GRAPH_EMITTER_CHANGED_DURING_SNAPSHOT: " + resource);
+                    } else {
+                        dependenciesValidated = true;
                         phase = 3;
-                        keys = Collections.emptyIterator();
                     }
                 }
                 default -> {
@@ -456,8 +478,11 @@ public final class GtlPatternCatalog {
         }
 
         private boolean prepareSources() {
-            if (dataRevision != dataGeneration) throw new IllegalStateException("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
-            if (invalidationRevision != invalidationGeneration) throw new IllegalStateException("GRAPH_BINDING_INVALIDATED_DURING_SNAPSHOT");
+            if (dataRevision != dataGeneration) throw new GraphSnapshotChanged("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
+            if (structure != null) structure.catalog().checkValid();
+            // Pin the request's immutable registry view. Looking up a fresh view
+            // every step couples unrelated provider edits to this request.
+            if (sourceIndex != null) return true;
             var registered = ((GraphRequestTracker) service).gtlcore$patternSources();
             if (registered != null) {
                 sourceIndex = registered;
@@ -485,10 +510,14 @@ public final class GtlPatternCatalog {
         }
 
         private List<IPatternDetails> sources(AEKey resource) {
+            return sources(resource, sourceIndex);
+        }
+
+        private List<IPatternDetails> sources(AEKey resource, ByproductPatternIndex index) {
             var primary = service.getCraftingFor(resource);
             if (flexible.contains(resource.getPrimaryKey()))
-                return sourceIndex.fuzzySources(resource, primary, roots.discoverByproducts());
-            return roots.discoverByproducts() ? sourceIndex.sources(resource, primary) : List.copyOf(primary);
+                return index.fuzzySources(resource, primary, roots.discoverByproducts());
+            return roots.discoverByproducts() ? index.sources(resource, primary) : index.primarySources(resource, primary);
         }
 
         private boolean preparePotential() {
@@ -576,11 +605,46 @@ public final class GtlPatternCatalog {
             if (result == null) throw new IllegalStateException("Snapshot incomplete");
             return result;
         }
+
+        String progress() {
+            String stage = switch (phase) {
+                case 0 -> "cached_dependencies";
+                case 1 -> "candidate_discovery";
+                case 2 -> "fuzzy_inventory";
+                case 3 -> "physical_inventory";
+                case 4 -> "complete";
+                case 5 -> "freeze_patterns";
+                case 7 -> "validate_dependencies";
+                case 8 -> "validate_emitters";
+                default -> "unknown";
+            };
+            return "target=" + roots.target() + "; stage=" + stage + "; patterns=" + captureOrder.size() +
+                    "; dependencies=" + (structure == null ? dependencies.size() : structure.dependencies().size()) +
+                    "; stock_keys=" + stock.size() + "; candidates=" + potentialCount +
+                    "; registry=" + revision + "; current_registry=" + ((GraphRequestTracker) service).gtlcore$graphPlanningGeneration();
+        }
     }
 
     static void includeFuzzyKeys(Set<AEKey> target, KeyCounter source, AEKey template) {
         for (var entry : source.findFuzzy(template, FuzzyMode.IGNORE_ALL))
             if (entry.getLongValue() > 0) target.add(entry.getKey());
+    }
+
+    private static boolean sameDefinitions(List<Signature> actual, List<Signature> expected) {
+        if (actual.equals(expected)) return true;
+        if (expected == null || actual.size() != expected.size()) return false;
+        // Equal-priority provider refreshes can reorder handles without changing
+        // any usable recipe. Keep strict ordering for cache reuse (phase 0), but
+        // do not invalidate a completed request solely for this permutation.
+        var counts = new HashMap<Signature, Integer>();
+        for (var signature : expected) counts.merge(signature, 1, Integer::sum);
+        for (var signature : actual) {
+            Integer remaining = counts.get(signature);
+            if (remaining == null) return false;
+            if (remaining == 1) counts.remove(signature);
+            else counts.put(signature, remaining - 1);
+        }
+        return counts.isEmpty();
     }
 
     private static List<GraphRecipe<AEKey>> normalize(IPatternDetails pattern, String binding, KeyCounter available, Level level) {

@@ -939,6 +939,7 @@ public class MachineRecipe {
                 .duration(400).EUt(VA[EV]).save(provider);
 
         ASSEMBLER_RECIPES.recipeBuilder("wireless_network_binding_tool")
+                .circuitMeta(1)
                 .inputItems(WIRELESS_TOOL.asItem())
                 .inputItems(CIRCUIT.getIngredient(EV))
                 .inputItems(EMITTER_EV)

@@ -9,42 +9,48 @@ import java.util.*;
 /** Declared output identities support candidate discovery, never synthetic stock. */
 public final class ByproductPatternIndex {
 
-    private final Map<AEKey, List<IPatternDetails>> outputs;
+    private final Map<AEKey, List<IPatternDetails>> primaryOutputs, outputs;
     private final Map<Object, List<IPatternDetails>> fuzzyPrimary, fuzzyAll;
     private final Map<AEKey, Boolean> candidates;
-    private final Runnable validate;
-
-    private ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> outputs,
-                                  Map<Object, List<IPatternDetails>> fuzzyPrimary,
-                                  Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates) {
-        this(outputs, fuzzyPrimary, fuzzyAll, candidates, () -> {});
-    }
-
-    ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> outputs,
+    ByproductPatternIndex(Map<AEKey, List<IPatternDetails>> primaryOutputs, Map<AEKey, List<IPatternDetails>> outputs,
                           Map<Object, List<IPatternDetails>> fuzzyPrimary,
-                          Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates,
-                          Runnable validate) {
+                          Map<Object, List<IPatternDetails>> fuzzyAll, Map<AEKey, Boolean> candidates) {
+        this.primaryOutputs = Collections.unmodifiableMap(primaryOutputs);
         this.outputs = Collections.unmodifiableMap(outputs);
         this.fuzzyPrimary = Collections.unmodifiableMap(fuzzyPrimary);
         this.fuzzyAll = Collections.unmodifiableMap(fuzzyAll);
         this.candidates = Collections.unmodifiableMap(candidates);
-        this.validate = validate;
     }
 
     Iterator<AEKey> candidates(boolean includeSecondary) {
-        validate.run();
         return candidates.entrySet().stream().filter(entry -> includeSecondary || entry.getValue())
                 .map(Map.Entry::getKey).iterator();
     }
 
     List<IPatternDetails> fuzzySources(AEKey key, Collection<IPatternDetails> primary, boolean includeSecondary) {
-        validate.run();
-        return merge(primary, (includeSecondary ? fuzzyAll : fuzzyPrimary).getOrDefault(key.getPrimaryKey(), List.of()));
+        return ordered(primary, (includeSecondary ? fuzzyAll : fuzzyPrimary).getOrDefault(key.getPrimaryKey(), List.of()));
     }
 
     List<IPatternDetails> sources(AEKey key, Collection<IPatternDetails> primary) {
-        validate.run();
-        return merge(primary, outputs.getOrDefault(key, List.of()));
+        return ordered(primary, merge(primaryOutputs.getOrDefault(key, List.of()), outputs.getOrDefault(key, List.of())));
+    }
+
+    List<IPatternDetails> primarySources(AEKey key, Collection<IPatternDetails> primary) {
+        return ordered(primary, primaryOutputs.getOrDefault(key, List.of()));
+    }
+
+    /** Keep AE's preferred order where possible, but membership and handles belong to this version. */
+    private static List<IPatternDetails> ordered(Collection<IPatternDetails> live, List<IPatternDetails> captured) {
+        if (captured.isEmpty()) return List.of();
+        var remaining = new LinkedHashMap<IPatternDetails, IPatternDetails>();
+        for (var pattern : captured) remaining.putIfAbsent(pattern, pattern);
+        var result = new ArrayList<IPatternDetails>(remaining.size());
+        for (var pattern : live) {
+            var old = remaining.remove(pattern);
+            if (old != null) result.add(old);
+        }
+        result.addAll(remaining.values());
+        return result;
     }
 
     private static List<IPatternDetails> merge(Collection<IPatternDetails> primary, List<IPatternDetails> secondary) {
@@ -64,6 +70,7 @@ public final class ByproductPatternIndex {
 
         private final Iterator<IPatternDetails> patterns;
         private final Map<AEKey, List<IPatternDetails>> outputs = new LinkedHashMap<>();
+        private final Map<AEKey, List<IPatternDetails>> primaryOutputs = new LinkedHashMap<>();
         private final Map<Object, List<IPatternDetails>> fuzzyPrimary = new LinkedHashMap<>(), fuzzyAll = new LinkedHashMap<>();
         private final Map<AEKey, Boolean> candidates = new LinkedHashMap<>();
         private final Set<IPatternDetails> seen = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -112,7 +119,10 @@ public final class ByproductPatternIndex {
                     candidates.merge(output.what(), isPrimary, (left, right) -> left || right);
                     Object family = output.what().getPrimaryKey();
                     if (primaryKeys.add(family)) fuzzyAll.computeIfAbsent(family, ignored -> new ArrayList<>()).add(pattern);
-                    if (isPrimary) fuzzyPrimary.computeIfAbsent(family, ignored -> new ArrayList<>()).add(pattern);
+                    if (isPrimary) {
+                        primaryOutputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
+                        fuzzyPrimary.computeIfAbsent(family, ignored -> new ArrayList<>()).add(pattern);
+                    }
                     else outputs.computeIfAbsent(output.what(), ignored -> new ArrayList<>()).add(pattern);
                 }
                 return false;
@@ -133,7 +143,7 @@ public final class ByproductPatternIndex {
                 freezingFamilies = fuzzyAll.entrySet().iterator();
                 return false;
             }
-            result = new ByproductPatternIndex(outputs, fuzzyPrimary, fuzzyAll, candidates);
+            result = new ByproductPatternIndex(primaryOutputs, outputs, fuzzyPrimary, fuzzyAll, candidates);
             budget.note("byproduct_index", "patterns=" + seen.size() + "; secondary_keys=" + outputs.size());
             return true;
         }

@@ -138,6 +138,7 @@
   "gtlcore.ae.graph.failure.memory_limit": "Planning reached its memory budget before completing. Adjust the graph memory budget and retry.",
   "gtlcore.ae.graph.failure.graph_limit": "The recipe graph or input alternatives exceed a planning size limit. Reduce the alternatives and retry.",
   "gtlcore.ae.graph.failure.queue_limit": "The graph planning queue is full. Please retry later.",
+  "gtlcore.ae.graph.failure.snapshot_changed": "A pattern or supply source used by this order changed during capture. Please retry.",
   "gtlcore.ae.graph.failure.unsupported_pattern_semantics": "A pattern uses unsupported input or output rules. See the log for pattern details.",
   "gtlcore.ae.graph.failure.amount_limit": "A quantity exceeds the execution interface's range. Reduce the request and retry.",
   "gtlcore.ae.graph.failure.missing_input": "This plan lacks materials; a complete refill preview is not available.",

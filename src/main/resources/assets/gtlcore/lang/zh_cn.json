@@ -138,6 +138,7 @@
   "gtlcore.ae.graph.failure.memory_limit": "规划达到内存预算，尚未完成判断。请调整图合成内存预算后重试。",
   "gtlcore.ae.graph.failure.graph_limit": "配方图或候选输入超过规划规模限制，尚未完成判断。请缩小候选范围后重试。",
   "gtlcore.ae.graph.failure.queue_limit": "图合成规划队列已满，请稍后重试。",
+  "gtlcore.ae.graph.failure.snapshot_changed": "读取期间，本次订单涉及的样板或供应来源发生了变化。请重试。",
   "gtlcore.ae.graph.failure.unsupported_pattern_semantics": "订单包含尚不支持的样板输入或输出规则，请查看日志中的样板详情。",
   "gtlcore.ae.graph.failure.amount_limit": "本次订单的某个数量超出了执行接口支持的范围，请减少数量后重试。",
   "gtlcore.ae.graph.failure.missing_input": "当前方案缺少材料，尚未生成完整的补料预览。",

@@ -262,6 +262,7 @@ public final class CraftingEngineRouter {
                 preparing = snapshot.structure().catalog().build(budget);
                 catalogPreparationStarted = System.nanoTime();
             }
+            snapshot.structure().catalog().checkValid();
             if (compiler == null) {
                 long started = System.nanoTime();
                 boolean ready = preparing.advance(slice);

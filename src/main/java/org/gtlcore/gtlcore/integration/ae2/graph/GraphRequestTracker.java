@@ -13,6 +13,10 @@ public interface GraphRequestTracker {
         return 0;
     }
 
+    default long gtlcore$graphPlanningGeneration() {
+        return gtlcore$graphProviderGeneration();
+    }
+
     default void gtlcore$invalidateGraphBinding(String binding) {}
 
     default ByproductPatternIndex gtlcore$patternSources() {

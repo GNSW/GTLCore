@@ -192,7 +192,7 @@ public final class GtlPatternCatalog {
             discoveryInventory = source == null ? InventorySnapshot.EMPTY :
                     storage instanceof InventorySnapshotVersion version ? version.gtlcore$inventorySnapshot() :
                             InventorySnapshot.copyOf(available);
-            revision = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
+            revision = ((GraphRequestTracker) service).gtlcore$graphPlanningGeneration();
             dataRevision = dataGeneration;
             invalidationRevision = invalidationGeneration;
             if (recipeManager != level.getRecipeManager() || cachedDataGeneration != dataRevision) {
@@ -403,7 +403,7 @@ public final class GtlPatternCatalog {
                     if (!keys.hasNext()) {
                         if (dataRevision != dataGeneration) throw new IllegalStateException("GRAPH_DATA_CHANGED_DURING_SNAPSHOT");
                         if (invalidationRevision != invalidationGeneration) throw new IllegalStateException("GRAPH_BINDING_INVALIDATED_DURING_SNAPSHOT");
-                        long latest = ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
+                        long latest = ((GraphRequestTracker) service).gtlcore$graphPlanningGeneration();
                         if (revision != latest) {
                             revision = latest;
                             phase = 7;

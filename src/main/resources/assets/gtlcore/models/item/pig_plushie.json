@@ -1,0 +1,1123 @@
+{
+  "gui_light": "side",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "pig": "minecraft:entity/pig/pig",
+    "particle": "minecraft:entity/pig/pig"
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        30,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        -0.5,
+        0
+      ],
+      "scale": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "ground": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        3,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.75,
+        0.75,
+        0.75
+      ]
+    },
+    "thirdperson_righthand": {
+      "rotation": [
+        75,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        75,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        2.5,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        0,
+        225,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        0.6,
+        0.6,
+        0.6
+      ]
+    },
+    "head": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        12,
+        0
+      ],
+      "scale": [
+        0.7,
+        0.7,
+        0.7
+      ]
+    }
+  },
+  "elements": [
+    {
+      "name": "body",
+      "from": [
+        2,
+        3,
+        2
+      ],
+      "to": [
+        14,
+        14,
+        14
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            0,
+            4,
+            2,
+            8
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            6,
+            4,
+            8,
+            8
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            4,
+            4,
+            6,
+            8
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            4,
+            0,
+            6,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "rounded_top",
+      "from": [
+        2.75,
+        14,
+        2.75
+      ],
+      "to": [
+        13.25,
+        15,
+        13.25
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "rounded_bottom",
+      "from": [
+        3,
+        2.5,
+        3
+      ],
+      "to": [
+        13,
+        3,
+        13
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "snout",
+      "from": [
+        5,
+        6,
+        0.75
+      ],
+      "to": [
+        11,
+        9.5,
+        2.05
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            4.25,
+            8.5,
+            5.25,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            4,
+            8.5,
+            4.25,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            5.25,
+            8.5,
+            5.5,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            4.25,
+            8,
+            5.25,
+            8.5
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            5.25,
+            8,
+            6.25,
+            8.5
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "left_eye",
+      "from": [
+        3.9,
+        10.1,
+        1.96
+      ],
+      "to": [
+        5.2,
+        11.6,
+        2.02
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "right_eye",
+      "from": [
+        10.8,
+        10.1,
+        1.96
+      ],
+      "to": [
+        12.1,
+        11.6,
+        2.02
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            5.5,
+            2.25,
+            6
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "left_ear",
+      "from": [
+        2.8,
+        14.5,
+        3.1
+      ],
+      "to": [
+        5.1,
+        16.5,
+        5.2
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "right_ear",
+      "from": [
+        10.9,
+        14.5,
+        3.1
+      ],
+      "to": [
+        13.2,
+        16.5,
+        5.2
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "tail",
+      "from": [
+        7,
+        6,
+        13.95
+      ],
+      "to": [
+        9,
+        8,
+        15
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            0,
+            4,
+            4
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "front_left_leg",
+      "from": [
+        3,
+        0,
+        3
+      ],
+      "to": [
+        6,
+        3.1,
+        6
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1,
+            10,
+            2,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            0,
+            10,
+            1,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            3,
+            10,
+            4,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            10,
+            3,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            1,
+            8,
+            2,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            8,
+            3,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "front_right_leg",
+      "from": [
+        10,
+        0,
+        3
+      ],
+      "to": [
+        13,
+        3.1,
+        6
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1,
+            10,
+            2,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            0,
+            10,
+            1,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            3,
+            10,
+            4,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            10,
+            3,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            1,
+            8,
+            2,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            8,
+            3,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "back_left_leg",
+      "from": [
+        3,
+        0,
+        10
+      ],
+      "to": [
+        6,
+        3.1,
+        13
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1,
+            10,
+            2,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            0,
+            10,
+            1,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            3,
+            10,
+            4,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            10,
+            3,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            1,
+            8,
+            2,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            8,
+            3,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    },
+    {
+      "name": "back_right_leg",
+      "from": [
+        10,
+        0,
+        10
+      ],
+      "to": [
+        13,
+        3.1,
+        13
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1,
+            10,
+            2,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "east": {
+          "uv": [
+            0,
+            10,
+            1,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "south": {
+          "uv": [
+            3,
+            10,
+            4,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "west": {
+          "uv": [
+            2,
+            10,
+            3,
+            13
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "up": {
+          "uv": [
+            1,
+            8,
+            2,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        },
+        "down": {
+          "uv": [
+            2,
+            8,
+            3,
+            10
+          ],
+          "texture": "#pig",
+          "tintindex": 0
+        }
+      }
+    }
+  ]
+}

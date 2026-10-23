@@ -86,6 +86,8 @@ public class RemoveRecipe {
         }
 
         consumer.accept(ExtendedAE.id("assembler_matrix_frame"));
+        // The original pufferfish ring now makes the cosmetic imitation instead.
+        consumer.accept(ExtendedAE.id("fishbig"));
         consumer.accept(ExtendedAE.id("assembler_matrix_wall"));
         consumer.accept(ExtendedAE.id("assembler_matrix_glass"));
         consumer.accept(AppEng.makeId("network/blocks/quantum_link"));

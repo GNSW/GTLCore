@@ -4,7 +4,9 @@ import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.client.ae2.graph.CraftingRingScreen;
 import org.gtlcore.gtlcore.client.ae2.graph.GraphViewSettingsScreen;
 import org.gtlcore.gtlcore.client.ae2.wireless.MEChamberManagerTerminalScreen;
+import org.gtlcore.gtlcore.common.data.GTLItems;
 import org.gtlcore.gtlcore.common.data.machines.MultiBlockMachineA;
+import org.gtlcore.gtlcore.common.recipe.PrankFishRecipe;
 import org.gtlcore.gtlcore.integration.jei.grouping.TagGroupOverlay;
 
 import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
@@ -40,6 +42,7 @@ import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.ISubtypeRegistration;
+import mezz.jei.api.registration.IVanillaCategoryExtensionRegistration;
 import mezz.jei.api.runtime.IClickableIngredient;
 import mezz.jei.api.runtime.IJeiRuntime;
 import org.jetbrains.annotations.NotNull;
@@ -72,6 +75,11 @@ public class GTLJEIPlugin implements IModPlugin {
         if (LDLib.isReiLoaded() || LDLib.isEmiLoaded()) return;
         registration.useNbtForSubtypes(GTItems.TURBINE_ROTOR.asItem());
         registration.useNbtForSubtypes(GTItems.INTEGRATED_CIRCUIT.asItem());
+    }
+
+    @Override
+    public void registerVanillaCategoryExtensions(IVanillaCategoryExtensionRegistration registration) {
+        registration.getCraftingCategory().addCategoryExtension(PrankFishRecipe.class, PrankFishRecipeExtension::new);
     }
 
     @Override
@@ -131,6 +139,11 @@ public class GTLJEIPlugin implements IModPlugin {
         JeiMeInventoryTooltip.onRuntimeAvailable(runtime);
         JeiMissingIngredientBookmarks.onRuntimeAvailable(runtime);
         hideUnobtainableOres(runtime);
+        var hiddenPlushies = new ArrayList<>(runtime.getIngredientManager().getAllItemStacks().stream()
+                .filter(stack -> stack.is(GTLItems.FISHBIG_TM.get())).toList());
+        // Also blacklist the base item if another plugin already removed it from the ingredient list.
+        if (hiddenPlushies.isEmpty()) hiddenPlushies.add(GTLItems.FISHBIG_TM.asStack());
+        runtime.getIngredientManager().removeIngredientsAtRuntime(VanillaTypes.ITEM_STACK, hiddenPlushies);
         var list = new ArrayList<ItemStack>();
         for (int i = 1; i <= 32; i++) {
             list.add(IntCircuitBehaviour.stack(i));

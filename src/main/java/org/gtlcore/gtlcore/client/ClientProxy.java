@@ -21,6 +21,10 @@ public class ClientProxy extends CommonProxy {
 
     public static void init() {
         CraftingUnitModelProvider.initCraftingUnitModels();
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(
+                org.gtlcore.gtlcore.client.renderer.item.PlushieColors::register);
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(
+                org.gtlcore.gtlcore.client.renderer.item.PlushieColors::registerBlocks);
         BloomClient.init();
         org.gtlcore.gtlcore.client.monitor.EnergyMonitorRenderer.register(FMLJavaModLoadingContext.get().getModEventBus());
         WirelessAeClient.register(FMLJavaModLoadingContext.get().getModEventBus());

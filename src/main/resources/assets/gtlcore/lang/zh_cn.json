@@ -1,4 +1,8 @@
 {
+  "item.gtlcore.fishbig_tm": "鱼大™",
+  "item.gtlcore.pig_plushie": "猪咪",
+  "block.gtlcore.fishbig_tm": "鱼大™",
+  "block.gtlcore.pig_plushie": "猪咪",
   "gtlcore.ae.graph.cycle_refill": "当前方案在循环边界需要补料。换顺序或生产路径可能减少或免除补料，尚未证明这是最少补料。",
   "gtlcore.ae.graph.terminal_refill": "在已读取的样板中，未找到可继续展开此材料的生产路径。",
   "gtlcore.ae.graph.unexpanded_refill": "此方案的展开尚未完成或受到限制，不能据此认定缺少基础材料。",

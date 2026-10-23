@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "gtlcore:block/fishbig_tm"},
+    "facing=east": {"model": "gtlcore:block/fishbig_tm", "y": 90},
+    "facing=south": {"model": "gtlcore:block/fishbig_tm", "y": 180},
+    "facing=west": {"model": "gtlcore:block/fishbig_tm", "y": 270}
+  }
+}

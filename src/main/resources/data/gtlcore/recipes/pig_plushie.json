@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": ["PPP", "P P", "PPP"],
+  "key": {
+    "P": {"item": "minecraft:porkchop"}
+  },
+  "result": {"item": "gtlcore:pig_plushie"}
+}

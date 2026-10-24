@@ -54,6 +54,8 @@ public final class GraphJobRuntime<K> {
     private final ResourceLedger<K> owned;
     private DagScheduler<K> dag;
     private DependencyScheduler<K> pipeline;
+    private final AdaptiveScheduling<K> adaptive = new AdaptiveScheduling<>();
+    private final OutputObligations.ReturnObserver<K> returnObserver = adaptive::returned;
     private final Map<K, Long> expected = new LinkedHashMap<>();
     private final Map<K, BigInteger> deferredExternal = new LinkedHashMap<>();
     private final OutputObligations<K> obligations;
@@ -98,7 +100,7 @@ public final class GraphJobRuntime<K> {
         this.plan = plan;
         this.owned = new ResourceLedger<>(initial);
         this.dag = DagScheduler.create(plan, Map.of());
-        this.pipeline = dag == null ? new DependencyScheduler<>(plan, plan.steps()) : null;
+        this.pipeline = dag == null ? new DependencyScheduler<>(plan, plan.steps(), adaptive) : null;
         this.expected.putAll(GraphRecipe.amounts(emitted));
         this.obligations = new OutputObligations<>(emitted);
         deferredExternal.putAll(ExactAmounts.copy(deferred));
@@ -155,7 +157,7 @@ public final class GraphJobRuntime<K> {
         }
         if (pending != null && !remainingCounts.equals(PlanCountComputation.of(pending)))
             throw new IllegalArgumentException("Cursor and accepted batch counts disagree");
-        this.pipeline = dag == null ? new DependencyScheduler<>(plan, pending) : null;
+        this.pipeline = dag == null ? new DependencyScheduler<>(plan, pending, adaptive) : null;
         remainingDelivery = CheckedAmounts.nonNegative(saved.remainingDelivery());
         if (remainingDelivery > plan.amount()) throw new IllegalArgumentException("Invalid delivery remainder");
         state = saved.state();
@@ -206,8 +208,14 @@ public final class GraphJobRuntime<K> {
         return tick(adapter, tick, workBudget, System::nanoTime);
     }
 
+    /** Live host policy; disabling drops only optional timing observations, never owned work. */
+    public void intelligentScheduling(boolean enabled) { adaptive.enabled(enabled); }
+
+    public boolean intelligentScheduling() { return adaptive.enabled(); }
+
     int tick(Adapter<K> adapter, long tick, int workBudget, LongSupplier clock) {
         if (preparedOutputs != null || settlementEscrow != null) return 0;
+        adaptive.tick(tick, state == State.RUNNING && !suspended && !replanning && !needsStateReplan);
         if (state == State.SETTLING || state == State.CANCELLING) {
             settle(adapter, workBudget);
             return 0;
@@ -282,6 +290,12 @@ public final class GraphJobRuntime<K> {
                     reason = "WAIT_PREFIX_RESERVATION";
                     continue;
                 }
+                batch = pipeline.growthLimit(batch, key -> CheckedAmounts.add(owned.get(key), expected.getOrDefault(key, 0L)));
+                if (batch == 0) {
+                    reason = "WAIT_GROWTH_WINDOW";
+                    pipeline.retry(tick + 1);
+                    continue;
+                }
             }
             try {
                 batch = Math.min(batch, Math.max(0, adapter.capacity(recipe, batch)));
@@ -293,6 +307,7 @@ public final class GraphJobRuntime<K> {
             }
             if (batch == 0) {
                 reason = "WAIT_PROVIDER_OR_ENERGY";
+                adaptive.blocked(recipe.id());
                 if (dag != null) dag.retry(tick + 5);
                 else pipeline.retry(tick + 5);
                 continue;
@@ -376,6 +391,9 @@ public final class GraphJobRuntime<K> {
             // Install an ambiguous owner before calling the provider: synchronous
             // receipts and synchronous saves must already have a real owner.
             preparingOwner = obligations.dispatch(recipe.id(), batch, outputs, true, returns);
+            // Variable state returns trigger replanning; do not train an ordinary
+            // cycle timer on a prediction whose actual material can differ.
+            if (returns.isEmpty()) adaptive.begin(preparingOwner, recipe.id(), batch, outputs);
             preparingReturned = false;
             Outcome outcome;
             try {
@@ -395,6 +413,7 @@ public final class GraphJobRuntime<K> {
             }
             if (outcome == Outcome.ACCEPTED) {
                 obligations.confirm(preparingOwner);
+                adaptive.confirm(preparingOwner);
                 recoveryStage = CheckedAmounts.add(recoveryStage, 1);
                 if (dag == null) pipeline.accepted(batch);
                 else dag.accepted(batch);
@@ -419,6 +438,7 @@ public final class GraphJobRuntime<K> {
                 pushed++;
                 reason = needsStateReplan ? "STATE_RETURN_CHANGED" : "";
             } else if (outcome == Outcome.IN_DOUBT) {
+                adaptive.reject(preparingOwner);
                 uncertainInputs = escrow; // evidence of a possible transfer, NOT held inventory
                 commitPreparedOutputs();
                 owned.restore(synchronousReturns);
@@ -426,6 +446,7 @@ public final class GraphJobRuntime<K> {
                 reason = "DISPATCH_IN_DOUBT";
             } else {
                 obligations.reject(preparingOwner);
+                adaptive.reject(preparingOwner);
                 synchronousExpectedReturns.forEach((key, amount) -> expected.compute(key, (ignored, value) -> value.longValue() == amount ? null : value - amount));
                 owned.restore(synchronousReturns);
                 owned.restore(escrow);
@@ -472,7 +493,7 @@ public final class GraphJobRuntime<K> {
         long alreadyBuffered = synchronousReturns == null ? 0 : synchronousReturns.getOrDefault(key, 0L);
         long accepted = Math.min(Math.min(amount, requested), Long.MAX_VALUE - owned.get(key) - alreadyBuffered);
         if (accepted <= 0 || simulate) return Math.max(0, accepted);
-        var receipt = obligations.receive(key, accepted, preparingOwner);
+        var receipt = obligations.receive(key, accepted, preparingOwner, adaptive.observing() ? returnObserver : null);
         K predicted = receipt.predicted();
         long left = waiting(predicted) - accepted;
         if (preparedOutputs != null) preparedOutputs.put(predicted, left);
@@ -725,7 +746,7 @@ public final class GraphJobRuntime<K> {
         Map<String, BigInteger> history = new LinkedHashMap<>(committedHistory);
         acceptedRuns.forEach((id, count) -> history.merge(id, count, BigInteger::add));
         var newDag = DagScheduler.create(replacement, Map.of());
-        var newPipeline = newDag == null ? new DependencyScheduler<>(replacement, replacement.steps()) : null;
+        var newPipeline = newDag == null ? new DependencyScheduler<>(replacement, replacement.steps(), adaptive) : null;
         owned.restore(extraHeld);
         obligations.addExternal(extraExternal);
         // These were unreceived requests for the old suffix, not held items or
@@ -743,6 +764,7 @@ public final class GraphJobRuntime<K> {
         plan = replacement;
         dag = newDag;
         pipeline = newPipeline;
+        adaptive.reset();
         initializePending();
         replanning = false;
         needsStateReplan = false;

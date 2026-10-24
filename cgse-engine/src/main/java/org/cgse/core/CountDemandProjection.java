@@ -14,10 +14,12 @@ final class CountDemandProjection implements AutoCloseable {
     private static final int MAX_VARIABLES = 8192, MAX_TERMS = 65536, MAX_BLOCK = 32, MAX_EXPRESSION = 128;
     private final int variables;
     private final int expressionLimit;
+    private final int freeVariableLimit;
+    private final boolean repairPivots;
     private final List<ExactLinearProgram.Constraint> original;
     private final PlanningBudget budget;
     private final long allowance;
-    private long memory, work;
+    private long memory, work, projectionBase;
     private final List<List<Edge>> columns = new ArrayList<>();
     private final ArrayDeque<Integer> queue = new ArrayDeque<>();
     private final BitSet queued = new BitSet();
@@ -30,7 +32,7 @@ final class CountDemandProjection implements AutoCloseable {
     private final LinkedHashMap<Map<Integer, BigInteger>, BigInteger> projected = new LinkedHashMap<>();
     private List<ExactLinearProgram.Constraint> reduced;
     private BigInteger[] costs;
-    private final CountNumericRelaxation.Session numeric = new CountNumericRelaxation.Session(true);
+    private final CountNumericRelaxation.Session numeric;
     private int phase, block, cursor, updates, validation;
     private long visitStart;
     private boolean done;
@@ -44,8 +46,16 @@ final class CountDemandProjection implements AutoCloseable {
      * the ordinary projection's cost or cutoff. Neither limit proves failure. */
     CountDemandProjection(int variables, List<ExactLinearProgram.Constraint> rows,
                           PlanningBudget budget, long allowance, int expressionLimit) {
+        this(variables, rows, budget, allowance, expressionLimit, false);
+    }
+
+    CountDemandProjection(int variables, List<ExactLinearProgram.Constraint> rows,
+                          PlanningBudget budget, long allowance, int expressionLimit, boolean wideProjection) {
         if (expressionLimit < 1 || expressionLimit > 512) throw new IllegalArgumentException("Invalid expression limit");
         this.expressionLimit = expressionLimit;
+        freeVariableLimit = wideProjection ? 1024 : 512;
+        repairPivots = wideProjection;
+        numeric = new CountNumericRelaxation.Session(true, wideProjection);
         this.variables = variables; original = rows; this.budget = budget; this.allowance = Math.max(0, allowance);
         if (variables <= 0 || variables > MAX_VARIABLES || rows.size() > 8192 || allowance <= 0) { done = true; return; }
         visitStart = budget.threadWork();
@@ -95,6 +105,11 @@ final class CountDemandProjection implements AutoCloseable {
                         if (canonical[v] == v && pivot[v] >= 0) {
                             var expression = new LinkedHashMap<Integer, ExactRational>();
                             add(expression, expressions.get(v), ExactRational.ONE.negate());
+                            if (repairPivots && expression.size() == 1 &&
+                                    expression.getOrDefault(-1, ExactRational.ZERO).signum() > 0) {
+                                releasePivot(v);
+                                return false;
+                            }
                             constrain(expression, BigInteger.ZERO);
                         }
                     } else { finishProjection(); phase = 4; }
@@ -204,15 +219,37 @@ final class CountDemandProjection implements AutoCloseable {
                 strength[producer] = value; pivot[producer] = r;
             }
         }
+        projectionBase = memory;
+        buildExpressions();
+    }
+
+    private void buildExpressions() {
         buildBlocks();
         for (int v = 0; v < variables; v++) {
             hit(); if (canonical[v] != v || pivot[v] >= 0) continue;
             free.add(v); var expression = new LinkedHashMap<Integer, ExactRational>(); put(expression, v, ExactRational.ONE);
             expressions.put(v, expression);
         }
-        if (free.size() > 512) throw new Limit();
+        if (free.size() > freeVariableLimit) throw new Limit();
         freeIndex = new int[variables]; Arrays.fill(freeIndex, -1);
         for (int i = 0; i < free.size(); i++) freeIndex[free.get(i)] = i;
+    }
+
+    private void releasePivot(int variable) {
+        // Tight material equalities are a candidate choice. Integer lower
+        // bounds can select a row whose fractional equality fixes a producer
+        // below zero. Keep that row as an inequality and free its producer;
+        // the original integer rows still decide whether any candidate is valid.
+        // Each retry removes a pivot and spends the same finite allowance.
+        budget.note("count_demand_repivot", "released_optional_equality; variable=" + variable + "; row=" + pivot[variable]);
+        pivot[variable] = -1;
+        free.clear(); blocks.clear(); expressions.clear(); projected.clear();
+        freeIndex = null;
+        budget.release(memory - projectionBase);
+        memory = projectionBase;
+        block = cursor = 0;
+        phase = 1;
+        buildExpressions();
     }
 
     /** Iterative Kosaraju; dependency edges are visited in reverse component order. */

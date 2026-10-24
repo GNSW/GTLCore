@@ -154,6 +154,8 @@
   "gtlcore.ae.graph.cycle_reference_info": "This is a back-reference, not additional missing input. Check the confirmation list for inputs and seeds.",
   "config.gtlcore.option.ae2CraftingEngine": "AE Crafting Engine (restart required)",
   "config.gtlcore.option.ae2CraftingEngine.comment": "Engine for new crafting jobs: LEGACY uses the original engine; GRAPH uses CGSE (Compiled Graph Solving Engine), supporting cyclic recipes. Restart required. AE2 calculation mode only affects LEGACY.",
+  "config.gtlcore.option.ae2GraphIntelligentScheduling": "Enable Intelligent Graph Crafting Scheduling",
+  "config.gtlcore.option.ae2GraphIntelligentScheduling.comment": "GRAPH only; enabled by default. Use actual cycle returns to balance growth and downstream consumption, helping productive cycles increase batch sizes. Slower returns allow downstream work to proceed. Disable to use ordinary graph scheduling. Changes apply to running jobs.",
   "config.gtlcore.option.ae2GraphSeedPolicy": "Graph Crafting Seed Policy",
   "config.gtlcore.option.ae2GraphByteCostMode": "Graph Crafting CPU Byte Cost",
   "config.gtlcore.option.ae2GraphByteCostMode.comment": "GRAPH only. LEGACY (default) preserves the existing material, execution and dependency charges. COMPACT charges ceil(sum of initial required amounts / each key type's amount per byte) + 8 bytes per distinct used recipe task. Initial amounts include seeds and material awaiting external supply or refill, counted once. Intermediate products and repeated executions add no charge. This is an admission rule, not physical memory or peak inventory usage. Changes apply to newly calculated plans; existing previews retain their cost.",

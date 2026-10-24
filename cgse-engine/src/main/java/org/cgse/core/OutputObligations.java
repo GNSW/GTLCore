@@ -135,6 +135,12 @@ public final class OutputObligations<K> {
     }
 
     public Receipt<K> receive(K key, long amount, long preparingId) {
+        return receive(key, amount, preparingId, null);
+    }
+
+    interface ReturnObserver<K> { void returned(long owner, K key, long amount); }
+
+    Receipt<K> receive(K key, long amount, long preparingId, ReturnObserver<K> observer) {
         CheckedAmounts.nonNegative(amount);
         var group = alternatives.get(key);
         if (group != null) {
@@ -148,6 +154,7 @@ public final class OutputObligations<K> {
                 reduce(variable.ticket.remaining, predicted, received);
                 variable.remaining -= received;
                 remaining -= received;
+                if (observer != null) observer.returned(variable.ticket.id, key, received);
                 if (variable.ticket.id == preparingId) preparing = CheckedAmounts.add(preparing, received);
                 if (variable.remaining == 0) {
                     group.removeFirst();
@@ -174,6 +181,7 @@ public final class OutputObligations<K> {
             if (ticket.id == preparingId) preparing = CheckedAmounts.add(preparing, returned);
             reduce(ticket.remaining, key, returned);
             amount -= returned;
+            if (observer != null) observer.returned(ticket.id, key, returned);
             if (!ticket.remaining.containsKey(key)) queue.removeFirst();
             if (ticket.remaining.isEmpty()) {
                 flights.remove(ticket.id);

@@ -244,6 +244,10 @@ public class ConfigHolder {
         public AECraftingEngine ae2CraftingEngine = AECraftingEngine.GRAPH;
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2GraphIntelligentScheduling.comment")
+        public boolean ae2GraphIntelligentScheduling = true;
+
+        @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2GraphSeedPolicy.comment")
         public AEGraphSeedPolicy ae2GraphSeedPolicy = AEGraphSeedPolicy.PRESERVE;
 

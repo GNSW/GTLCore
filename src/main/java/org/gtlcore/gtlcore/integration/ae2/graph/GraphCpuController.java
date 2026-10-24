@@ -188,6 +188,7 @@ public final class GraphCpuController {
 
     public void tick(IEnergyService energy, CraftingService service) {
         if (runtime == null || !host.active()) return;
+        runtime.intelligentScheduling(ConfigHolder.INSTANCE.ae.ae2GraphIntelligentScheduling);
         long start = System.nanoTime();
         if (link.isCanceled()) runtime.cancel();
         adapter.services(service, energy);
@@ -479,6 +480,7 @@ public final class GraphCpuController {
                 recovery.status() == RecoveryObligation.Status.INTERMEDIATE))
             waiting |= CraftingDispatchReason.RECOVERY_PENDING.mask();
         if (waiting != 0) return waiting;
+        if (runtime.reason().equals("WAIT_GROWTH_WINDOW")) return CraftingDispatchReason.WAITING_FOR_OUTPUTS.mask();
         if (runtime.reason().equals("WAIT_INPUT") || runtime.reason().equals("WAIT_PREFIX_RESERVATION"))
             return CraftingDispatchReason.WAITING_FOR_INPUTS.mask();
         if (runtime.reason().equals("WAIT_INVENTORY_CAPACITY")) return CraftingDispatchReason.WAITING_FOR_CAPACITY.mask();

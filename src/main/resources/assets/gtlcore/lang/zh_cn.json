@@ -154,6 +154,8 @@
   "gtlcore.ae.graph.cycle_reference_info": "此节点表示环的闭合，不是额外缺料。实际输入与种子请查看合成确认列表。",
   "config.gtlcore.option.ae2CraftingEngine": "AE 合成引擎（需要重启）",
   "config.gtlcore.option.ae2CraftingEngine.comment": "选择新合成任务使用的引擎：LEGACY 为原有引擎；GRAPH 为 CGSE（编译图求解引擎，Compiled Graph Solving Engine），支持循环配方。修改后需要重启。AE2 下单计算模式仅影响 LEGACY。",
+  "config.gtlcore.option.ae2GraphIntelligentScheduling": "启用图合成智能调度",
+  "config.gtlcore.option.ae2GraphIntelligentScheduling.comment": "仅用于 GRAPH，默认开启。根据循环材料的实际回流调整扩产与下游用料，帮助增殖循环扩大批量；回流变慢时允许下游继续推进。关闭后使用普通图调度。修改后对执行中的任务生效。",
   "config.gtlcore.option.ae2GraphSeedPolicy": "图合成种子策略",
   "config.gtlcore.option.ae2GraphByteCostMode": "图合成 CPU 字节计费模式",
   "config.gtlcore.option.ae2GraphByteCostMode.comment": "仅用于 GRAPH。LEGACY（默认）保留现有物料、执行次数和依赖计费。COMPACT 按初始所需物料除以各类型每字节数量，全部求和后向上取整，再加每种实际使用配方任务 8 字节。初始物料含种子、等待外部供应和待补物料，只计一次；中间产物及重复执行次数不另收费。这是 CPU 准入规则，不代表实际内存或库存峰值。修改后对新规划生效，已有预览保持原计费。",

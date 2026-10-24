@@ -27,14 +27,20 @@ final class CountNumericRelaxation {
         private BigInteger[] objective;
         private Saved previous;
         private long memory, reused, rebuilt, invalidated, fallbacks, restored;
-        private final boolean retainCold;
+        private final boolean retainCold, wideProjection;
         private boolean coldPending, warmPending;
         private long resumed, warmResumed;
 
         Session() { this(false); }
 
         /** Explicit opt-in: retain primal and dual progress at safe continuation boundaries. */
-        Session(boolean retainCold) { this.retainCold = retainCold; }
+        Session(boolean retainCold) { this(retainCold, false); }
+
+        /** A separate projected candidate may use a wider, still bounded tableau. */
+        Session(boolean retainCold, boolean wideProjection) {
+            this.retainCold = retainCold;
+            this.wideProjection = wideProjection;
+        }
 
         Result solve(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] costs,
                      PlanningBudget budget, long maximumWork) {
@@ -45,7 +51,7 @@ final class CountNumericRelaxation {
             long started = budget.threadWork();
             try {
                 budget.checkpoint();
-                if (!admissible(variables, rows, costs, maximumWork)) {
+                if (!admissible(variables, rows, costs, maximumWork, wideProjection)) {
                     clear();
                     return null;
                 }
@@ -144,7 +150,7 @@ final class CountNumericRelaxation {
                 if (!reserved) {
                     // Retaining a matrix is optional; its smaller cold workspace
                     // can still fit under the same request's memory limit.
-                    var result = CountNumericRelaxation.solve(variables, rows, costs, budget, remaining);
+                    var result = CountNumericRelaxation.solve(variables, rows, costs, budget, remaining, wideProjection);
                     return result == null ? null : accounted(result, started);
                 }
                 memory = bytes;
@@ -303,7 +309,12 @@ final class CountNumericRelaxation {
 
     static Result solve(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective,
                         PlanningBudget budget, long maximumWork) {
-        if (!admissible(variables, rows, objective, maximumWork)) return null;
+        return solve(variables, rows, objective, budget, maximumWork, false);
+    }
+
+    private static Result solve(int variables, List<ExactLinearProgram.Constraint> rows, BigInteger[] objective,
+                                PlanningBudget budget, long maximumWork, boolean wideProjection) {
+        if (!admissible(variables, rows, objective, maximumWork, wideProjection)) return null;
         long bytes = workspaceBytes(variables, rows.size());
         if (!budget.tryReserve(bytes)) return null;
         CountNumericRelaxation solver = null;
@@ -362,8 +373,17 @@ final class CountNumericRelaxation {
 
     private static boolean admissible(int variables, List<ExactLinearProgram.Constraint> rows,
                                       BigInteger[] objective, long maximumWork) {
-        return variables >= 1 && variables <= 512 && objective.length == variables && rows.size() <= 2048 &&
-                (rows.size() + 2L) * (variables + 2L) <= 1_048_576 && maximumWork >= 1;
+        return admissible(variables, rows, objective, maximumWork, false);
+    }
+
+    private static boolean admissible(int variables, List<ExactLinearProgram.Constraint> rows,
+                                      BigInteger[] objective, long maximumWork, boolean wideProjection) {
+        // Sparse stock-supported requests can leave more free coordinates than
+        // larger orders. Bound the actual rectangle as well as each dimension;
+        // ordinary branch relaxations retain their previous admission limits.
+        return variables >= 1 && variables <= (wideProjection ? 1024 : 512) &&
+                objective.length == variables && rows.size() <= 2048 &&
+                (rows.size() + 2L) * (variables + 2L) <= (wideProjection ? 2_097_152 : 1_048_576) && maximumWork >= 1;
     }
 
     private static long workspaceBytes(int variables, int rows) {
@@ -531,7 +551,7 @@ final class CountNumericRelaxation {
             warmColumn++;
         }
         while (warmRow < rowCount) {
-            // At most one row (512 terms) completes past a local slice; the
+            // At most one row (1024 terms for wide projections) completes past a local slice; the
             // request's cancellation, time and total work checks remain active.
             atomicPivot = retainedCold;
             try {

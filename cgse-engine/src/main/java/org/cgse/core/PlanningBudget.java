@@ -114,6 +114,7 @@ public final class PlanningBudget {
     private final AtomicBoolean cancelRequested = new AtomicBoolean();
     private final AtomicBoolean lpProximityClaimed = new AtomicBoolean();
     private final AtomicBoolean lpCoreClaimed = new AtomicBoolean();
+    private final AtomicBoolean terminalProjectionClaimed = new AtomicBoolean();
     private volatile Phase phase = Phase.QUEUED;
     private volatile String failureDetail = "";
     private final Deque<String> diagnostics = new ArrayDeque<>();
@@ -143,6 +144,9 @@ public final class PlanningBudget {
 
     /** One bounded conflict-learning core across all representations and workers. */
     boolean claimLpCore() { return lpCoreClaimed.compareAndSet(false, true); }
+
+    /** One structural terminal-boundary tail across all views of this order. */
+    boolean claimTerminalProjection() { return terminalProjectionClaimed.compareAndSet(false, true); }
 
     public PlanningBudget(long milliseconds, long maxNodes, BooleanSupplier cancelled) {
         this(milliseconds, maxNodes, 64L << 20, cancelled, System::nanoTime);

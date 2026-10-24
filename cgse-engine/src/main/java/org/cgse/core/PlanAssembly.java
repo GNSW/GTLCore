@@ -4,6 +4,7 @@
 package org.cgse.core;
 
 import java.math.BigInteger;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -18,6 +19,8 @@ final class PlanAssembly<K> implements AutoCloseable {
     private final boolean preserve;
     private final PlanStep steps;
     private final Map<String, GraphRecipe<K>> recipes;
+    private Collection<GraphRecipe<K>> startupRecipes;
+    private Set<String> startupExcluded = Set.of();
     private final Map<K, Long> seeds, stock;
     private final Set<K> external;
     private final GraphCompiler.Compiled<K> graph;
@@ -34,7 +37,10 @@ final class PlanAssembly<K> implements AutoCloseable {
     private GraphRecipe<K> current;
     private int phase, regionIndex, recipeIndex;
     private boolean missingSeed;
+    private boolean deferMissingStartup;
     private GraphPlan<K> result;
+    private SeedStartupGuard<K> startup;
+    private Map<K, Long> startupLoans = Map.of();
     private final CatalystPolicy catalystPolicy;
 
     PlanAssembly(K target, long amount, boolean preserve, PlanStep steps, Map<String, GraphRecipe<K>> recipes,
@@ -43,9 +49,11 @@ final class PlanAssembly<K> implements AutoCloseable {
             this.target = target;
             this.amount = amount;
             this.preserve = preserve;
-            this.steps = PlanFlowPruning.optimize(PlanEGraph.optimize(steps, budget), recipes, budget);
+            this.steps = PlanFlowPruning.optimize(PlanEGraph.optimize(steps, budget), recipes, budget,
+                    target, amount, seeds, preserve);
             this.recipes = recipes;
-            this.seeds = seeds;
+            startupRecipes = recipes.values();
+            this.seeds = new LinkedHashMap<>(seeds);
             this.stock = stock;
             this.external = external;
             this.graph = graph;
@@ -55,6 +63,21 @@ final class PlanAssembly<K> implements AutoCloseable {
             computation = new SummaryComputation<>(this.steps, recipes, budget);
             counting = new PlanCountComputation(this.steps);
         }
+    }
+
+    /** A projected word may omit a producer while the real catalog still
+     * needs its startup. Keep that validation domain separate from bindings. */
+    PlanAssembly<K> startupCatalog(Collection<GraphRecipe<K>> available, Set<String> excluded) {
+        if (phase != 0) throw new IllegalStateException("Assembly already started");
+        startupRecipes = available; startupExcluded = excluded;
+        return this;
+    }
+
+    /** A private positive-only scout may refine existing deficits before
+     * testing preservation. Feasible words and published previews still check it. */
+    PlanAssembly<K> deferMissingStartup(boolean defer) {
+        if (phase != 0) throw new IllegalStateException("Assembly already started");
+        deferMissingStartup = defer; return this;
     }
 
     boolean step() {
@@ -154,6 +177,26 @@ final class PlanAssembly<K> implements AutoCloseable {
                 }
             }
             case 6 -> {
+                if (preserve && (!deferMissingStartup || missing.isEmpty())) {
+                    if (startup == null) startup = new SeedStartupGuard<>(startupRecipes, startupExcluded, summary, stock, seeds,
+                            external, target, amount, budget);
+                    if (!startup.step()) return false;
+                    startupLoans = java.util.Collections.unmodifiableMap(startup.lost());
+                    for (var loan : startup.lost().entrySet()) {
+                        budget.check();
+                        seeds.merge(loan.getKey(), loan.getValue(), Math::max);
+                        BigInteger goal = BigInteger.valueOf(seeds.get(loan.getKey()));
+                        if (loan.getKey().equals(target)) goal = goal.add(BigInteger.valueOf(amount));
+                        BigInteger need = summary.required(loan.getKey()).max(goal.subtract(summary.delta(loan.getKey())));
+                        initial.merge(loan.getKey(), need, BigInteger::max);
+                        BigInteger deficit = need.subtract(PlanningInventory.exactAmount(stock, loan.getKey()));
+                        if (!external.contains(loan.getKey()) && deficit.signum() > 0) {
+                            missing.merge(loan.getKey(), deficit, BigInteger::max);
+                            missingSeed = true;
+                        }
+                    }
+                    startup.close(); startup = null;
+                }
                 result = new GraphPlan<>(target, amount, preserve, steps, recipes, initial, seeds, missing,
                         missing.isEmpty() ? GraphPlan.Result.FEASIBLE : missingSeed ? GraphPlan.Result.MISSING_SEED : GraphPlan.Result.MISSING_INPUT,
                         budget.nodes(), System.nanoTime() - started);
@@ -171,8 +214,12 @@ final class PlanAssembly<K> implements AutoCloseable {
         return result;
     }
 
+    Map<K, Long> startupLoans() { return startupLoans; }
+
     @Override
     public void close() {
         computation.close();
+        if (startup != null) startup.close();
+        startup = null;
     }
 }

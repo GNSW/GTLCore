@@ -12,7 +12,8 @@ final class CountDemandSearch<K> implements AutoCloseable {
 
     private final GraphCompiler<K> compiler;
     private final K target;
-    private final long amount, started, allowance;
+    private final long amount, started;
+    private long allowance;
     private final Map<K, Long> stock, seeds;
     private final Set<K> external;
     private final Set<String> excluded;
@@ -28,12 +29,22 @@ final class CountDemandSearch<K> implements AutoCloseable {
     private CountSchedule<K> schedule;
     private AllocationSearch.Candidate<K> candidate;
     private CountDemandAllocation allocation;
+    private CountDemandProjection projection;
+    private CountReverseSchedule<K> reverse;
     private CountScheduleTopology<K> topology;
     private boolean structuredSchedule;
+    private boolean projectedCounts, reverseTried, structuralOnly;
     private GraphPlan<K> result;
     private long work, attemptStarted, memory;
     private int attempt, phase;
     private boolean done;
+    private Map<K, Long> startupSeeds;
+    private final Map<K, BigInteger> oldStartupGoals = new LinkedHashMap<>();
+    private final Map<Integer, ExactLinearProgram.Constraint> oldStartupRows = new LinkedHashMap<>();
+    private long startupMemory;
+    private CountDemandAllocation startupAllocation;
+    private BigInteger[] startupCounts;
+    private boolean startupStructured, startupProjected, startupReverse;
 
     CountDemandSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
             Set<K> external, Map<K, Long> seeds, Set<String> excluded, boolean preserve, boolean force,
@@ -42,6 +53,15 @@ final class CountDemandSearch<K> implements AutoCloseable {
         this.external = external; this.seeds = seeds; this.excluded = excluded;
         this.preserve = preserve; this.force = force; this.budget = budget; this.started = started;
         allowance = Math.min(2_000_000, budget.remainingWork() / 8);
+    }
+
+    /** A separately bounded terminal-boundary proposal, without repeating the
+     * ordinary source portfolio. The caller retains its verified incumbent. */
+    CountDemandSearch<K> structuralOnly(long maximumWork) {
+        if (phase != 0) throw new IllegalStateException("Search already started");
+        structuralOnly = true;
+        allowance = Math.max(0, Math.min(maximumWork, budget.remainingWork()));
+        return this;
     }
 
     boolean step() {
@@ -53,6 +73,7 @@ final class CountDemandSearch<K> implements AutoCloseable {
             if (work >= allowance) return finish();
             if (phase == 0) {
                 if (!prepare()) return finish();
+                if (structuralOnly) { phase = 1; return beginProjection(); }
                 reset(); phase = 1;
                 return false;
             }
@@ -62,13 +83,30 @@ final class CountDemandSearch<K> implements AutoCloseable {
                     result = candidate.plan;
                     return finish();
                 }
+                if (completeStartup()) return false;
                 return nextAttempt();
+            }
+            if (projection != null) {
+                if (!projection.step()) return false;
+                counts = projection.result(); projection.close(); projection = null;
+                if (counts == null) return structuralOnly ? finish() : beginAllocation();
+                projectedCounts = true;
+                scheduleCounts();
+                return false;
+            }
+            if (reverse != null) {
+                if (!reverse.step()) return false;
+                PlanStep word = reverse.witness(); reverse.close(); reverse = null;
+                if (word == null) return nextAttempt();
+                candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
+                        activeSeeds(), external, preserve, force, false, budget, started);
+                return false;
             }
             if (schedule != null) {
                 if (!schedule.step()) return false;
                 if (schedule.witness() == null) return nextAttempt();
                 candidate = new AllocationSearch.Candidate<>(schedule.witness(), recipes, target, amount, stock,
-                        seeds, external, preserve, force, false, budget, started);
+                        activeSeeds(), external, preserve, force, false, budget, started);
                 return false;
             }
             if (topology != null) {
@@ -86,9 +124,12 @@ final class CountDemandSearch<K> implements AutoCloseable {
                 scheduleCounts();
                 return false;
             }
-            // Give both deterministic producer orders room. Existing source
-            // search already tries the preferred order, so scout its opposite first.
-            if (work - attemptStarted >= allowance / 2) return nextAttempt();
+            // Reserve half the shared scout quota for reversible allocation.
+            // Two stalled feedback closures must not consume that strategy's
+            // entire turn. Completed counts still reach physical verification.
+            // Existing source search tries the preferred order, so scout its
+            // opposite first; unused propagation quota remains available later.
+            if (work - attemptStarted >= allowance / 4) return nextAttempt();
             for (int visit = 0; visit < 32; visit++) {
                 budget.check();
                 if (pending.isEmpty()) {
@@ -132,14 +173,16 @@ final class CountDemandSearch<K> implements AutoCloseable {
             if (row.upper().bitLength() > 1024) return false;
         }
         // Includes 1024-bit counts, 2048-bit deficits, incidence and producer indexes.
-        long bytes = 4096L + 640L * terms + 512L * (model.recipes.size() + model.constraints.size());
+        long bytes = 4096L + (structuralOnly ? 0 : 640L * terms) + 512L * (model.recipes.size() + model.constraints.size());
         if (!budget.tryReserve(bytes)) return false;
         memory = bytes;
         var ids = new HashMap<String, Integer>();
         for (int i = 0; i < model.recipes.size(); i++) {
             budget.check(); var recipe = model.recipes.get(i);
-            recipes.put(recipe.id(), recipe); ids.put(recipe.id(), i); columns.add(new ArrayList<>());
+            recipes.put(recipe.id(), recipe);
+            if (!structuralOnly) { ids.put(recipe.id(), i); columns.add(new ArrayList<>()); }
         }
+        if (structuralOnly) return true;
         for (int i = 0; i < model.constraints.size(); i++) {
             var row = model.constraints.get(i); var choices = new LinkedHashSet<Integer>();
             if (i < model.rowKeys.size()) for (var recipe : compiler.producers(model.rowKeys.get(i))) {
@@ -169,21 +212,114 @@ final class CountDemandSearch<K> implements AutoCloseable {
     private boolean nextAttempt() {
         if (candidate != null) candidate.close(); candidate = null;
         if (schedule != null) schedule.close(); schedule = null;
+        restoreStartup();
+        if (projectedCounts && !reverseTried) {
+            reverseTried = true;
+            reverse = new CountReverseSchedule<>(model, counts, budget, Math.min(1_048_576, allowance - work));
+            return false;
+        }
         if (structuredSchedule) {
             structuredSchedule = false;
             schedule = new CountSchedule<>(model, counts, budget, true);
             return false;
         }
+        if (projectedCounts) {
+            projectedCounts = false;
+            return structuralOnly ? finish() : beginAllocation();
+        }
         if (allocation != null) return allocation.reject() ? false : finish();
         if (++attempt == 2) {
-            if (allowance - work < 32768) return finish();
-            allocation = new CountDemandAllocation(model.recipes.size(), model.constraints, producers, budget);
-            return false;
+            return beginAllocation();
         }
         reset(); return false;
     }
 
+    private Map<K, Long> activeSeeds() { return startupSeeds == null ? seeds : startupSeeds; }
+
+    /** A discovered startup loan belongs to this word, not to all source
+     * choices. Tighten only this local proposal and continue its exact count
+     * propagation; a failed repair restores the original model and portfolio. */
+    private boolean completeStartup() {
+        if (structuralOnly || startupSeeds != null || candidate.startupLoans.isEmpty() ||
+                allowance - work < 32768) return false;
+        long bytes = 256L + 16L * counts.length + 192L * (seeds.size() + candidate.startupLoans.size());
+        if (!budget.tryReserve(bytes)) return false;
+        startupMemory = bytes;
+        startupSeeds = new LinkedHashMap<>(seeds);
+        for (var loan : candidate.startupLoans.entrySet()) {
+            budget.check();
+            int row = -1;
+            for (int i = 0; i < model.rowKeys.size(); i++) {
+                budget.check(); if (model.rowKeys.get(i).equals(loan.getKey())) { row = i; break; }
+            }
+            if (row < 0) { restoreStartup(); return false; }
+            long value = Math.max(startupSeeds.getOrDefault(loan.getKey(), 0L), loan.getValue());
+            BigInteger goal = BigInteger.valueOf(value);
+            if (target.equals(loan.getKey())) goal = goal.add(BigInteger.valueOf(amount));
+            BigInteger previous = model.goal(loan.getKey());
+            if (goal.compareTo(previous) <= 0) continue;
+            startupSeeds.put(loan.getKey(), value);
+            oldStartupGoals.put(loan.getKey(), model.goals.get(loan.getKey()));
+            model.goals.put(loan.getKey(), goal);
+            var original = model.constraints.get(row);
+            oldStartupRows.put(row, original);
+            model.constraints.set(row, new ExactLinearProgram.Constraint(original.terms(),
+                    original.upper().subtract(goal.subtract(previous))));
+        }
+        if (oldStartupRows.isEmpty()) { restoreStartup(); return false; }
+        candidate.close(); candidate = null;
+        if (schedule != null) { schedule.close(); schedule = null; }
+        startupAllocation = allocation; allocation = null;
+        startupCounts = counts; counts = counts.clone();
+        startupStructured = structuredSchedule; startupProjected = projectedCounts; startupReverse = reverseTried;
+        structuredSchedule = projectedCounts = reverseTried = false;
+        pending.clear(); queued.clear();
+        for (int i = 0; i < model.constraints.size(); i++) {
+            var row = model.constraints.get(i);
+            BigInteger deficit = row.upper().negate();
+            for (var term : row.terms().entrySet()) {
+                budget.check(); deficit = deficit.add(term.getValue().multiply(counts[term.getKey()]));
+            }
+            deficits[i] = deficit;
+            if (deficit.signum() > 0) { pending.addLast(i); queued.set(i); }
+        }
+        attemptStarted = work;
+        budget.note("count_startup", "complete_existing_counts; loans=" + oldStartupRows.size());
+        return true;
+    }
+
+    private void restoreStartup() {
+        if (startupSeeds == null) return;
+        oldStartupRows.forEach((row, constraint) -> model.constraints.set(row, constraint));
+        oldStartupGoals.forEach((key, goal) -> {
+            if (goal == null) model.goals.remove(key); else model.goals.put(key, goal);
+        });
+        if (startupCounts != null) {
+            counts = startupCounts; startupCounts = null;
+            allocation = startupAllocation; startupAllocation = null;
+            structuredSchedule = startupStructured; projectedCounts = startupProjected; reverseTried = startupReverse;
+        }
+        startupSeeds = null; oldStartupRows.clear(); oldStartupGoals.clear();
+        budget.release(startupMemory); startupMemory = 0;
+    }
+
+    private boolean beginProjection() {
+        if (allowance - work < 32768) return finish();
+        // Keep scheduling/physical verification room; numerical suggestions
+        // cannot publish a count vector as if it were an execution.
+        projection = new CountDemandProjection(model.recipes.size(), model.constraints, budget,
+                Math.max(0, allowance - work) * 3 / 4);
+        return false;
+    }
+
+    private boolean beginAllocation() {
+        if (allowance - work < 32768) return finish();
+        allocation = new CountDemandAllocation(model.recipes.size(), model.constraints, producers, budget);
+        return false;
+    }
+
     private void scheduleCounts() {
+        reverseTried = false;
         // Independently re-evaluate every original row for every strategy.
         for (var row : model.constraints) {
             BigInteger total = BigInteger.ZERO;
@@ -192,7 +328,7 @@ final class CountDemandSearch<K> implements AutoCloseable {
             }
             if (total.compareTo(row.upper()) > 0) throw new IllegalStateException("Invalid deficit closure");
         }
-        if (allocation == null) schedule = new CountSchedule<>(model, counts, budget, true);
+        if (allocation == null && !projectedCounts) schedule = new CountSchedule<>(model, counts, budget, true);
         else topology = new CountScheduleTopology<>(model, counts, budget);
     }
 
@@ -205,9 +341,12 @@ final class CountDemandSearch<K> implements AutoCloseable {
     GraphPlan<K> result() { return result; }
 
     @Override public void close() {
+        restoreStartup();
         if (candidate != null) candidate.close(); candidate = null;
         if (schedule != null) schedule.close(); schedule = null;
         if (allocation != null) allocation.close(); allocation = null;
+        if (projection != null) projection.close(); projection = null;
+        if (reverse != null) reverse.close(); reverse = null;
         if (topology != null) topology.close(); topology = null;
         if (model != null) model.close(); model = null;
         budget.release(memory); memory = 0;

@@ -11,6 +11,8 @@ final class RefillRescheduling<K> implements AutoCloseable {
     private GraphPlan<K> result;
     private final Map<K, Long> stock;
     private final Set<K> external;
+    private final Collection<GraphRecipe<K>> available;
+    private final Set<String> excluded;
     private final boolean force;
     private final PlanningBudget budget;
     private final String failure;
@@ -29,10 +31,17 @@ final class RefillRescheduling<K> implements AutoCloseable {
 
     RefillRescheduling(GraphPlan<K> plan, Map<K, Long> stock, Set<K> external,
                        boolean force, boolean ignoreTargetStock, PlanningBudget budget) {
+        this(plan, stock, external, force, ignoreTargetStock, plan.recipes().values(), Set.of(), budget);
+    }
+
+    RefillRescheduling(GraphPlan<K> plan, Map<K, Long> stock, Set<K> external,
+                       boolean force, boolean ignoreTargetStock, Collection<GraphRecipe<K>> available,
+                       Set<String> excluded, PlanningBudget budget) {
         original = result = plan;
         this.stock = ignoreTargetStock && stock.containsKey(plan.target()) ?
                 PlanningInventory.withAmount(stock, plan.target(), BigInteger.ZERO) : stock;
         this.external = external; this.force = force; this.budget = budget;
+        this.available = available; this.excluded = excluded;
         failure = budget.failureDetail();
         allowance = Math.min(16_384, budget.remainingWork() / 8);
         missing = plan.missingExact().keySet().iterator();
@@ -79,7 +88,8 @@ final class RefillRescheduling<K> implements AutoCloseable {
                 PlanStep word = searching.result(); searching.close(); searching = null;
                 if (word != null)
                     assembling = new AllocationSearch.Candidate<>(word, original.recipes(), original.target(), original.amount(),
-                            stock, original.seeds(), external, original.preserveSeeds(), force, true, budget, System.nanoTime());
+                            stock, original.seeds(), external, original.preserveSeeds(), force, true, budget, System.nanoTime())
+                            .startupCatalog(available, excluded);
                 return false;
             }
             while (missing.hasNext() && attempts < 4) {

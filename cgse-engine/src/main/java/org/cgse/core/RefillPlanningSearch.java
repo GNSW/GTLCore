@@ -41,6 +41,8 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
     private GraphPlanningWork<K> work;
     private GraphSupplyView<K> supplyView;
     private AllocationSearch.Candidate<K> restoring;
+    private SequenceSummary<K> restoredSummary;
+    private SeedStartupGuard<K> startup;
     private GraphPlan<K> result, proposal;
     private Map<K, BigInteger> deficits;
     private Iterator<Map.Entry<K, BigInteger>> funding;
@@ -51,11 +53,24 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
     private int coordinateTrials;
     private boolean coordinateTrial;
     private Map<K, Long> prefixStock;
+    private GraphPlan<K> prefixGoal;
+    private GraphStockViewWork<K> prefixSearch;
+    private GraphSourceRanking<K> prefixRanking;
+    private long prefixStarted, prefixAllowance;
+    private boolean prefixProposal;
+    private RefillTerminalSearch<K> terminalSearch;
+    private RefillFrontier<K> terminalFrontier;
+    private Iterator<GraphPlan<K>> terminalOptions;
+    private boolean terminalTried;
+    private Map<K, Long> requestedSeeds;
+
+    RefillPlanningSearch<K> requestedSeeds(Map<K, Long> seeds) { requestedSeeds = seeds; return this; }
 
     RefillPlanningSearch(GraphCompiler<K> compiler, GraphPlan<K> original, RefillProducerOrder<K> order,
             Map<K, Long> stock, Set<K> external, Set<String> excluded, boolean force, boolean ignoreTargetStock,
             PlanningBudget budget) {
         this.compiler = compiler; this.original = result = original; this.order = order; this.stock = stock;
+        requestedSeeds = original.seeds();
         this.external = external; this.excluded = excluded; this.force = force; this.ignoreTargetStock = ignoreTargetStock;
         this.budget = budget; started = budget.nodes(); failure = budget.failureDetail();
         // This is an optional quality pass over an already verified bill.
@@ -75,6 +90,26 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
         if (done) return true;
         try {
             budget.checkpoint();
+            if (terminalFrontier != null) {
+                if (!terminalFrontier.step()) return false;
+                result = terminalFrontier.result();
+                if (terminalOptions.hasNext()) terminalFrontier.offer(terminalOptions.next().withAlternatives(List.of()));
+                else { terminalFrontier = null; terminalOptions = null; return finish(); }
+                return false;
+            }
+            if (terminalSearch != null) {
+                if (!terminalSearch.step()) return false;
+                var next = terminalSearch.result();
+                if (next == null) { terminalSearch.close(); terminalSearch = null; return finish(); }
+                reserve(512L + 160L * (next.initialExact().size() + next.recipes().size()));
+                terminalSearch.close(); terminalSearch = null;
+                var options = new ArrayList<GraphPlan<K>>();
+                options.add(result); options.addAll(result.alternatives());
+                terminalFrontier = new RefillFrontier<>(next, budget);
+                terminalOptions = options.iterator();
+                terminalFrontier.offer(terminalOptions.next().withAlternatives(List.of()));
+                return false;
+            }
             if (budget.nodes() - started >= allowance) return finish();
             if (canonicalFrontier != null) {
                 if (!canonicalFrontier.step()) return false;
@@ -83,7 +118,8 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                     canonicalFrontier.offer(canonicalOptions.next().withAlternatives(List.of()));
                 } else {
                     canonicalFrontier = null; canonicalOptions = null;
-                    rescheduling = new RefillRescheduling<>(result, stock, external, force, ignoreTargetStock, budget);
+                    rescheduling = new RefillRescheduling<>(result, stock, external, force, ignoreTargetStock,
+                            compiler.catalog(), excluded, budget);
                 }
                 return false;
             }
@@ -118,23 +154,46 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                 canonical.close(); canonical = null; canonicalSelection = null; proposal = null;
                 return false;
             }
+            if (prefixSearch != null) {
+                if (budget.nodes() - trialStarted >= trialAllowance) { endTrial(); return false; }
+                if (budget.nodes() - prefixStarted >= prefixAllowance) {
+                    closePrefix(); beginPrefixFallback(); return false;
+                }
+                if (!prefixSearch.step()) return false;
+                proposal = prefixSearch.result();
+                closePrefix();
+                if (proposal == null || !proposal.feasible()) {
+                    proposal = null; beginPrefixFallback(); return false;
+                }
+                budget.note("refill_prefix", "stock_witness; work=" + (budget.nodes() - prefixStarted));
+                prefixProposal = true;
+                restoreTrial();
+                return false;
+            }
             if (work != null) {
                 if (budget.nodes() - trialStarted >= trialAllowance) { endTrial(); return false; }
                 if (!work.step()) return false;
                 proposal = work.result();
                 if (!proposal.feasible()) { endTrial(); return false; }
                 if (supplyView != null) {
-                    PlanStep word = coordinateTrial ? new PlanStep.Sequence(List.of(proposal.steps(), result.steps())) : proposal.steps();
-                    restoring = new AllocationSearch.Candidate<>(word, supplyView.originals(), original.target(), original.amount(),
-                            trialStock, result.seeds(), supplied, original.preserveSeeds(), force, true, budget, System.nanoTime());
-                    work.close(); work = null;
+                    restoreTrial();
                     return false;
                 }
             }
             if (restoring != null) {
                 if (!restoring.step()) return false;
-                proposal = restoring.plan; restoring.close(); restoring = null;
-                if (proposal == null || !proposal.feasible()) { endTrial(); return false; }
+                proposal = restoring.plan;
+                if (proposal != null && proposal.feasible() && original.preserveSeeds()) {
+                    restoredSummary = restoring.summary;
+                    reserve(128L * (restoredSummary.required().size() + (long) restoredSummary.delta().size() + restoredSummary.peak().size()));
+                }
+                restoring.close(); restoring = null;
+                if (proposal == null || !proposal.feasible()) {
+                    if (prefixProposal) { proposal = null; beginPrefixFallback(); }
+                    else endTrial();
+                    return false;
+                }
+                prefixGoal = null; prefixProposal = false;
             }
             if (proposal != null && phase == 3) {
                 // The solver has checked order, state and forced production.
@@ -203,6 +262,7 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                         } else if (recipes.hasNext()) inputs = recipes.next().inputs().keySet().iterator();
                         else {
                             recipes = null; inputs = null; phase = 2;
+                            refreshBoundaries();
                             // A broad coupled graph may be hard with every
                             // purchase removed at once. Relax one completed
                             // cyclic boundary at a time, retaining the other
@@ -256,9 +316,23 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                                                 (have == null ? BigInteger.ZERO : have).subtract(need.getValue()).max(BigInteger.ZERO));
                                 }
                                 prefixStock = PlanningInventory.exactSnapshot(available);
-                                var goal = new GraphPlan<K>(key, result.initialExact().get(key).longValueExact(), false,
+                                prefixGoal = new GraphPlan<K>(key, result.initialExact().get(key).longValueExact(), false,
                                         new PlanStep.Sequence(List.of()), Map.of(), Map.of(), Map.of(), Map.of(), GraphPlan.Result.UNKNOWN, 0, 0);
-                                work = GraphPlanningWork.refillView(supplyView.compiler(), goal, prefixStock, supplied, excluded, false, budget);
+                                // A verified suffix already fixes the demand. Try a
+                                // small stock-guided prefix before rebuilding its
+                                // entire upstream cycle. Failure keeps the ordinary
+                                // boundary solve. Both consume the unchanged whole
+                                // quality-pass quota; its established main-search
+                                // share is retained if this optional prefix fails.
+                                prefixStarted = budget.nodes();
+                                prefixAllowance = Math.min(131072, trialAllowance / 2);
+                                prefixSearch = new GraphStockViewWork<>(supplyView.compiler(), key, prefixGoal.amount(),
+                                        prefixStock, supplied, Map.of(), excluded, false, false, CatalystPolicy.STOCK,
+                                        budget, System.nanoTime(), 4, () -> {
+                                            prefixRanking = GraphSourceRanking.createLocal(supplyView.compiler(), prefixStock,
+                                                    supplied, key, false, budget, prefixAllowance);
+                                            return prefixRanking;
+                                        });
                             } else work = GraphPlanningWork.refillView(supplyView.compiler(), original, trialStock, supplied, excluded, force, budget);
                             budget.note("refill_boundary_search", "trial=" + trial + "; terminal_keys=" + terminal.size() +
                                     "; cycle_anchors=" + (supplied.size() - external.size() - terminal.size()) + "; allowance=" + trialAllowance +
@@ -296,11 +370,36 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                                         deficits.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : original.result(),
                                         budget.nodes(), original.planningNanos());
                                 proposal = next; preferCandidate = better; compareOption = -1;
-                                comparing = new RefillFrontier.Comparison<>(proposal, result, budget);
-                                phase = 6; return false;
+                                if (proposal.preserveSeeds()) {
+                                    Collection<GraphRecipe<K>> available = compiler.catalog();
+                                    if (!excluded.isEmpty()) {
+                                        reserve(48L * available.size());
+                                        var allowed = new ArrayList<GraphRecipe<K>>();
+                                        for (var recipe : available) { budget.check(); if (!excluded.contains(recipe.id())) allowed.add(recipe); }
+                                        available = allowed;
+                                    }
+                                    startup = new SeedStartupGuard<>(available, restoredSummary, trialStock, proposal.seeds(),
+                                            external, proposal.target(), proposal.amount(), budget);
+                                    phase = 7;
+                                } else {
+                                    comparing = new RefillFrontier.Comparison<>(proposal, result, budget);
+                                    phase = 6;
+                                }
+                                return false;
                             }
                             endTrial();
                         }
+                    }
+                    case 7 -> {
+                        if (!startup.step()) return false;
+                        boolean lost = !startup.lost().isEmpty();
+                        startup.close(); startup = null;
+                        // The trial's supplied cycle ports were infinite only
+                        // while searching. Finite purchases cannot justify
+                        // spending the last actual restart form at publication.
+                        if (lost) { endTrial(); return false; }
+                        comparing = new RefillFrontier.Comparison<>(proposal, result, budget);
+                        phase = 6; return false;
                     }
                     case 6 -> {
                         if (!comparing.step()) return false;
@@ -332,23 +431,90 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
         } catch (PlanningBudget.Exhausted exhausted) { budget.failureDetail(failure); return finish(); }
     }
 
+    private void refreshBoundaries() {
+        // Canonical reconstruction or rescheduling may replace the bill. Old
+        // keys must neither dilute live coordinate quotas nor become anchors.
+        long bytes = 96L * boundaryKeys.size();
+        boundaryKeys.clear(); components.clear();
+        budget.release(bytes); memory -= bytes;
+        for (K key : result.missingExact().keySet()) {
+            budget.check();
+            var node = order == null ? null : order.get(key);
+            if (node != null && node.cycle && !node.sources.isEmpty()) {
+                reserve(96); boundaryKeys.add(key);
+                components.computeIfAbsent(node.componentId, ignored -> new ArrayList<>()).add(key);
+            }
+        }
+    }
+
+    private void closePrefix() {
+        if (prefixSearch != null) { prefixSearch.close(); prefixSearch = null; }
+        if (prefixRanking != null) { prefixRanking.close(); prefixRanking = null; }
+    }
+
+    private void beginPrefixFallback() {
+        prefixProposal = false;
+        trialAllowance = Math.min(trialAllowance + budget.nodes() - prefixStarted,
+                allowance - (trialStarted - started));
+        work = GraphPlanningWork.refillView(supplyView.compiler(), prefixGoal, prefixStock, supplied, excluded, false, budget);
+        prefixGoal = null;
+    }
+
+    private void restoreTrial() {
+        PlanStep word = coordinateTrial ? new PlanStep.Sequence(List.of(proposal.steps(), result.steps())) : proposal.steps();
+        restoring = new AllocationSearch.Candidate<>(word, supplyView.originals(), original.target(), original.amount(),
+                trialStock, result.seeds(), supplied, original.preserveSeeds(), force, true, budget, System.nanoTime())
+                .startupCatalog(compiler.catalog(), excluded);
+        if (work != null) { work.close(); work = null; }
+        if (!prefixProposal) prefixGoal = null;
+    }
+
     private void endTrial() {
+        closePrefix(); prefixGoal = null; prefixProposal = false;
         if (work != null) { work.close(); work = null; }
         if (restoring != null) { restoring.close(); restoring = null; }
+        if (startup != null) { startup.close(); startup = null; }
+        restoredSummary = null;
         if (supplyView != null) { supplyView.close(); supplyView = null; }
         proposal = null; funding = null; deficits = null; supplied = null; comparing = null; prefixStock = null;
         budget.release(memory - trialMemory); memory = trialMemory;
         trial++; phase = 2;
     }
-    private boolean finish() { done = true; if (work != null) { work.close(); work = null; } budget.failureDetail(failure); return true; }
+    private boolean finish() {
+        closePrefix();
+        if (startup != null) { startup.close(); startup = null; }
+        restoredSummary = null;
+        if (work != null) { work.close(); work = null; }
+        if (rescheduling != null) { result = rescheduling.result(); rescheduling.close(); rescheduling = null; }
+        if (canonical != null) { canonical.close(); canonical = null; }
+        canonicalSelection = null; canonicalFrontier = null; canonicalOptions = null;
+        budget.failureDetail(failure);
+        if (!terminalTried && phase >= 2 && compiler.catalog().size() > 512 && !terminal.isEmpty() &&
+                result.missingExact().keySet().stream().anyMatch(key -> !external.contains(key) && !terminal.contains(key)) &&
+                budget.claimTerminalProjection()) {
+            terminalTried = true;
+            if (restoring != null) { restoring.close(); restoring = null; }
+            if (supplyView != null) { supplyView.close(); supplyView = null; }
+            terminalSearch = new RefillTerminalSearch<>(compiler, result, trialStock, external, terminal, excluded, force, budget)
+                    .requestedSeeds(requestedSeeds);
+            return false;
+        }
+        done = true;
+        return true;
+    }
     GraphPlan<K> result() { return rescheduling == null ? result : rescheduling.result(); }
     private void reserve(long bytes) { budget.reserve(bytes); memory += bytes; }
     public void close() {
+        closePrefix(); prefixGoal = null;
         if (work != null) work.close(); work = null;
         if (restoring != null) { restoring.close(); restoring = null; }
+        if (startup != null) { startup.close(); startup = null; }
+        restoredSummary = null;
         if (supplyView != null) { supplyView.close(); supplyView = null; }
         if (canonical != null) canonical.close(); canonical = null; canonicalSelection = null;
         if (rescheduling != null) { rescheduling.close(); rescheduling = null; }
+        if (terminalSearch != null) { terminalSearch.close(); terminalSearch = null; }
+        terminalFrontier = null; terminalOptions = null;
         canonicalFrontier = null; canonicalOptions = null;
         budget.release(memory); memory = 0;
     }

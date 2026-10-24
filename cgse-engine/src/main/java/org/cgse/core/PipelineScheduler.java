@@ -22,9 +22,16 @@ final class PipelineScheduler<K> {
     private final List<Entry> window = new ArrayList<>();
     private final Map<String, Entry> first = new LinkedHashMap<>();
     private int next, active = -1;
+    private final CompilationBudget compilation;
 
     PipelineScheduler(PlanCursor cursor, Map<String, GraphRecipe<K>> recipes, List<PlanStep.Batch> saved) {
+        this(cursor, recipes, saved, new CompilationBudget());
+    }
+
+    PipelineScheduler(PlanCursor cursor, Map<String, GraphRecipe<K>> recipes, List<PlanStep.Batch> saved,
+                      CompilationBudget compilation) {
         this.cursor = cursor;
+        this.compilation = compilation;
         this.recipes = recipes;
         if (saved.size() > WINDOW) throw new IllegalArgumentException("Oversized pipeline window");
         for (var batch : saved) {
@@ -38,6 +45,9 @@ final class PipelineScheduler<K> {
     }
 
     PlanStep.Batch poll(long tick, ToLongFunction<K> forecast) {
+        // Optional compilation is cached, globally bounded, and sliced once per
+        // tick, regardless of the number of provider probes made in that tick.
+        if (forecast != null) compilation.advance(cursor, tick);
         while (window.size() < WINDOW) {
             if (forecast != null) {
                 var group = cursor.takeLoopBatch(recipes, WINDOW - window.size(), () -> suffixStock(forecast));
@@ -194,5 +204,28 @@ final class PipelineScheduler<K> {
             this.recipe = recipe;
             this.remaining = remaining;
         }
+    }
+
+    /** Shared by all dependency lanes; a large ready queue cannot multiply main-thread index work. */
+    static final class CompilationBudget {
+        private final SequenceLoopIndex.Storage storage = new SequenceLoopIndex.Storage();
+        private int remaining = SequenceLoopIndex.MAX_WORK, slice;
+        private long indexedAt;
+        private boolean started;
+
+        void advance(PlanCursor cursor, long tick) {
+            if (remaining == 0) return;
+            if (!started || indexedAt != tick) {
+                indexedAt = tick;
+                started = true;
+                slice = 1024;
+            }
+            if (slice == 0) return;
+            int used = cursor.prepareBatching(Math.min(slice, remaining), storage);
+            remaining -= used;
+            slice -= used;
+        }
+
+        int work() { return SequenceLoopIndex.MAX_WORK - remaining; }
     }
 }

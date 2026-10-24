@@ -47,16 +47,21 @@ final class PlanFlowPruning<K> {
     }
 
     static <K> PlanStep optimize(PlanStep original, Map<String, GraphRecipe<K>> recipes, PlanningBudget budget) {
+        return optimize(original, recipes, budget, null, 0, Map.of(), false);
+    }
+
+    static <K> PlanStep optimize(PlanStep original, Map<String, GraphRecipe<K>> recipes, PlanningBudget budget,
+                                K target, long amount, Map<K, Long> seeds, boolean preserve) {
         if (original instanceof PlanStep.Batch || budget.remainingWork() < 16_384) return original;
         var pruning = new PlanFlowPruning<>(recipes, budget);
+        PlanStep result = original;
         try {
-            if (pruning.oversizedFlat(original)) return original;
-            return pruning.rewrite(original);
-        } catch (Stop limit) {
-            return original;
-        } finally {
+            if (!pruning.oversizedFlat(original)) result = pruning.rewrite(original);
+        } catch (Stop limit) { /* Retain the unmodified word. */ }
+        finally {
             budget.release(pruning.memory);
         }
+        return PlanSourceCycles.optimize(result, recipes, budget, target, amount, seeds, preserve);
     }
 
     /** The only run in a flat word is already outside prune's 256-atom

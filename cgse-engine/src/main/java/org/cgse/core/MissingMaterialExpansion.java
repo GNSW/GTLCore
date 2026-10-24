@@ -33,6 +33,15 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
     private PriorityQueue<K> pending;
     private PlanVerification<K> verification;
     private GraphPlan<K> candidate, result;
+    private SeedStartupGuard<K> startupGuard;
+    private boolean startupChecked, checkOriginal;
+    private Iterator<K> startupKeys;
+    private boolean startupNeeded;
+    private MissingMaterialExpansion<K> startupRepair;
+    private boolean startupRepairAllowed = true, startupRepairPending;
+    private final Set<K> startupRepairKeys = new LinkedHashSet<>();
+    private long startupRepairStart, startupRepairWork;
+    private String startupRepairFailure;
     private Phase phase = Phase.START;
     private Iterator<Map.Entry<K, BigInteger>> entries;
     private Iterator<Map.Entry<String, GraphRecipe<K>>> bindings;
@@ -74,6 +83,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
     private BigInteger targetDelta = BigInteger.ZERO;
     private SequenceSummary<K> originalSummary;
     private long originalSummaryBytes;
+    private Map<K, Long> requestedSeeds;
 
     MissingMaterialExpansion(GraphCompiler<K> compiler, GraphPlan<K> original, Map<K, Long> stock,
                              Set<K> external, Set<String> excluded, boolean forceCraft, boolean ignoreTargetStock, PlanningBudget budget) {
@@ -86,11 +96,14 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         this.excluded = excluded; this.forceCraft = forceCraft; this.ignoreTargetStock = ignoreTargetStock; this.budget = budget;
         this.allowMixed = allowMixed; startedWork = budget.nodes();
         this.targetProduction = targetProduction;
+        requestedSeeds = original.seeds();
         order = completedOrder; borrowedOrder = completedOrder != null;
         if (!allowMixed && !hasProducibleMissing(compiler, original)) {
             // Terminal-only bills already satisfy expansion's boundary contract.
-            // Keep them available even if optional word refinement hits a limit.
-            result = original; phase = Phase.PRUNE;
+            // Their word still needs a startup check in PRESERVE mode: a raw
+            // bill alone does not prove that the final cycle token survives.
+            if (original.preserveSeeds()) checkOriginal = true;
+            else { result = original; phase = Phase.PRUNE; }
         }
     }
     static <K> boolean needed(GraphCompiler<K> compiler, GraphPlan<K> plan) {
@@ -111,6 +124,9 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
     MissingMaterialExpansion<K> refineCycles(boolean enabled) { cycleSearchEnabled = enabled; return this; }
     /** Bootstrap subrequests still owe their owner later search opportunities. */
     MissingMaterialExpansion<K> refineSources(boolean enabled) { sourceSearchEnabled = enabled; return this; }
+    /** A replacement word owes request seeds, not the old word's optional
+     * parallelism reserve. Refinements of that old word still retain its seeds. */
+    MissingMaterialExpansion<K> requestedSeeds(Map<K, Long> seeds) { requestedSeeds = seeds; return this; }
     /** Ordinary fallback expands dependencies up to cycle boundaries. Sharing
      * the constructor must not recursively launch the primary cyclic solver. */
     MissingMaterialExpansion<K> ordinaryFallback() {
@@ -231,7 +247,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
             // This terminal bill was complete before entering this pass. Do
             // not spend a mandatory work unit just to decline optional work.
             pruning = new RefillWordPruning<>(result, stock, external, forceCraft, ignoreTargetStock, budget,
-                    budget.remainingWork() >= 512 ? pruningAllowance() : 0);
+                    budget.remainingWork() >= 512 ? pruningAllowance() : 0).startupCatalog(compiler.catalog(), excluded);
         }
         if (pruning != null) {
             if (!pruning.step()) return false;
@@ -262,6 +278,11 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         }
         if (phase == Phase.VERIFY) {
             if (!verification.step()) return false;
+            if (!verifyStartup()) return false;
+            if (startupRepairPending || startupRepair != null) {
+                repairStartup();
+                return false;
+            }
             result = candidate; phase = Phase.DONE;
             budget.note("missing_expansion", "backward_requirements; prefixes=" + prefix.size() + "; missing_keys=" + result.missingExact().size());
             if (!allowMixed && mixtureOpportunity && !result.feasible() && budget.remainingWork() >= 512) {
@@ -289,9 +310,197 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         }
         return false;
     }
+
+    private boolean verifyStartup() {
+        if (startupChecked || !candidate.preserveSeeds()) return true;
+        if (!startupNeeded) {
+            // The immutable compiler already indexes every available producer,
+            // including unused bindings. A guard can only close a net-consumed
+            // produced input; ordinary terminal consumption needs no catalog
+            // rebuild. An excluded or unchanged-return producer may trigger
+            // the full guard conservatively, never suppress it.
+            var summary = verification.summary();
+            if (startupKeys == null) {
+                // A stock-only delivery has no word inputs, but can still
+                // spend the network's last token of the requested material.
+                K target = candidate.target();
+                if (!summary.required().containsKey(target) &&
+                        SeedStartupGuard.spendsAfterDelivery(summary, target, target, candidate.amount())) {
+                    // Full target production cannot spend an old target token.
+                    // Charge an independent key visit only when delivery can;
+                    // required inputs retain their normal charged scan below.
+                    budget.check();
+                    if (!external.contains(target) && !compiler.producers(target).isEmpty()) {
+                        startupNeeded = true;
+                        return false;
+                    }
+                }
+                startupKeys = summary.required().keySet().iterator();
+            }
+            for (int i = 0; i < 24 && startupKeys.hasNext(); i++) {
+                budget.check(); K key = startupKeys.next();
+                if (SeedStartupGuard.spendsAfterDelivery(summary, key, candidate.target(), candidate.amount()) &&
+                        !external.contains(key) && !compiler.producers(key).isEmpty()) {
+                    startupNeeded = true; startupKeys = null;
+                    // Give the guard its own continuation slice.
+                    return false;
+                }
+            }
+            if (startupKeys.hasNext()) return false;
+            startupKeys = null; startupChecked = true;
+            return true;
+        }
+        if (!startupRepairAllowed && originalSummary != null && preservesStartupBoundary()) {
+            // The exact suffix and all its seed obligations were checked by
+            // our owner. A source prefix that cannot spend any produced key
+            // and cannot reduce its funded final stock preserves that proof.
+            startupChecked = true;
+            return true;
+        }
+        if (startupGuard == null) {
+            Collection<GraphRecipe<K>> available = compiler.catalog();
+            if (!excluded.isEmpty()) {
+                reserve(48L * available.size());
+                var allowed = new ArrayList<GraphRecipe<K>>();
+                for (var recipe : available) { budget.check(); if (!excluded.contains(recipe.id())) allowed.add(recipe); }
+                available = allowed;
+            }
+            startupGuard = new SeedStartupGuard<>(available, verification.summary(), stock, candidate.seeds(), external,
+                    candidate.target(), candidate.amount(), budget);
+        }
+        if (!startupGuard.step()) return false;
+        startupChecked = true;
+        if (startupGuard.lost().isEmpty()) { startupGuard.close(); startupGuard = null; return true; }
+        var summary = verification.summary();
+        reserve(256L + 192L * (candidate.initialExact().size() + (long) candidate.seeds().size() + startupGuard.lost().size()));
+        var seeds = new LinkedHashMap<>(candidate.seeds());
+        var initial = new LinkedHashMap<>(candidate.initialExact());
+        var missing = new LinkedHashMap<>(candidate.missingExact());
+        for (var entry : startupGuard.lost().entrySet()) {
+            budget.check(); K key = entry.getKey(); seeds.merge(key, entry.getValue(), Math::max);
+            BigInteger goal = BigInteger.valueOf(seeds.get(key));
+            if (key.equals(candidate.target())) goal = goal.add(BigInteger.valueOf(candidate.amount()));
+            BigInteger need = summary.required(key).max(goal.subtract(summary.delta(key)));
+            initial.merge(key, need, BigInteger::max);
+            BigInteger gap = missing(key, need);
+            if (!external.contains(key) && gap.signum() > 0) missing.merge(key, gap, BigInteger::max);
+            if (startupRepairAllowed && gap.signum() > 0) {
+                // Only reopen an already selected, directly productive
+                // self-loop. General feedback remains the primary solver's
+                // responsibility; this is one more ordinary source prefix.
+                for (var producer : compiler.producers(key)) {
+                    budget.check();
+                    if (producer.inputs().getOrDefault(key, 0L) > 0 && gain(producer, key).signum() > 0 &&
+                            !producer.batchSensitiveInputs() && !excluded.contains(producer.id()) &&
+                            producer.equals(candidate.recipes().get(producer.id()))) {
+                        reserve(64); startupRepairKeys.add(key); startupRepairPending = true; break;
+                    }
+                }
+            }
+        }
+        startupGuard.close(); startupGuard = null;
+        candidate = new GraphPlan<>(candidate.target(), candidate.amount(), true, candidate.steps(), candidate.recipes(),
+                initial, seeds, missing, missing.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : GraphPlan.Result.MISSING_SEED,
+                budget.nodes(), candidate.planningNanos()).withMissingSourcesFrom(candidate);
+        var funded = new GraphPlan<>(candidate.target(), candidate.amount(), true, candidate.steps(), candidate.recipes(),
+                initial, seeds, Map.of(), GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL, budget.nodes(), candidate.planningNanos());
+        verification.close();
+        // Only the final seed obligation changed; prefix and production
+        // geometry already have an exact fold. Gross output counts are not
+        // consumed by refill publication and can dwarf a deep shared chain.
+        verification = PlanVerification.refillFolded(funded, budget, candidate.steps(), summary);
+        return false;
+    }
+
+    private boolean preservesStartupBoundary() {
+        var summary = verification.summary();
+        // The original word is an immutable suffix: its entire key set also
+        // occurs in this fold, including zero net deltas.
+        for (var entry : summary.delta().entrySet()) {
+            budget.check(); K key = entry.getKey();
+            if (external.contains(key) || compiler.producers(key).isEmpty()) continue;
+            if (entry.getValue().compareTo(originalSummary.delta(key)) < 0) return false;
+            BigInteger have = PlanningInventory.exactAmount(stock, key);
+            BigInteger before = have.max(original.initialExact().getOrDefault(key, BigInteger.ZERO)).add(originalSummary.delta(key));
+            BigInteger after = have.max(candidate.initialExact().getOrDefault(key, BigInteger.ZERO)).add(entry.getValue());
+            if (after.compareTo(before) < 0) return false;
+        }
+        return true;
+    }
+
+    /** Keep the verified seed loan until one bounded ordinary expansion has
+     * actually replaced it. The child may validate more startup obligations,
+     * but cannot recursively create another repair or invoke cyclic search. */
+    private void repairStartup() {
+        if (startupRepairPending) result = candidate;
+        try {
+            budget.checkpoint();
+            if (startupRepairPending) {
+                startupRepairPending = false;
+                startupRepairStart = budget.nodes();
+                startupRepairWork = Math.min(Math.max(0, budget.remainingWork() - 512),
+                        Math.min(65_536, Math.max(8192, 64L * candidate.recipes().size())));
+                startupRepairFailure = budget.failureDetail();
+                if (startupRepairWork < 512) return;
+                startupRepair = new MissingMaterialExpansion<>(compiler, candidate, stock, external, excluded,
+                        forceCraft, ignoreTargetStock, budget, true, order, BigInteger.ZERO);
+                startupRepair.startupRepairAllowed = false;
+                startupRepair.ordinaryFallback().refineSources(false).reuseSuffix(candidate, verification.summary());
+            }
+            if (budget.nodes() - startupRepairStart >= startupRepairWork) { finishStartupRepair(false); return; }
+            if (!startupRepair.step()) return;
+            var repaired = startupRepair.result();
+            boolean improved = false;
+            for (K key : startupRepairKeys) {
+                budget.check();
+                improved |= repaired.missingExact().getOrDefault(key, BigInteger.ZERO)
+                        .compareTo(candidate.missingExact().getOrDefault(key, BigInteger.ZERO)) < 0;
+            }
+            // Trading a newly found seed loan for raw supply is useful. A
+            // different produced-material loan is not a completed repair.
+            for (var entry : repaired.missingExact().entrySet()) {
+                budget.check();
+                if (budget.nodes() - startupRepairStart >= startupRepairWork ||
+                        !compiler.producers(entry.getKey()).isEmpty() && entry.getValue()
+                                .compareTo(candidate.missingExact().getOrDefault(entry.getKey(), BigInteger.ZERO)) > 0) {
+                    improved = false; break;
+                }
+            }
+            finishStartupRepair(improved);
+        } catch (PlanningBudget.Exhausted limit) {
+            // Cancellation has its own exception and must propagate. Optional
+            // quality work cannot discard the already verified safe boundary.
+            startupRepairPending = false;
+            if (startupRepairFailure != null) budget.failureDetail(startupRepairFailure);
+            finishStartupRepair(false);
+        }
+    }
+
+    private void finishStartupRepair(boolean accept) {
+        if (startupRepair == null) return;
+        if (accept) {
+            candidate = startupRepair.result();
+            startupRepair.releaseOriginalSummary();
+            memory += startupRepair.takeResultCharge();
+            verification.close(); verification = startupRepair.verification;
+            startupRepair.verification = null;
+        }
+        startupRepair.close(); startupRepair = null;
+        budget.note("fallback_seed_repair", (accept ? "accepted" : "retained_safe_boundary") +
+                "; work=" + (budget.nodes() - startupRepairStart));
+    }
     private boolean advance() {
         switch (phase) {
             case START -> {
+                if (checkOriginal) {
+                    candidate = original;
+                    var funded = GraphPlan.ownedRefill(original, original.steps(), original.recipes(), original.initialExact(), Map.of(),
+                            GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL, budget.nodes());
+                    verification = originalSummary == null ? PlanVerification.refill(funded, budget) :
+                            PlanVerification.refillFolded(funded, budget, original.steps(), originalSummary);
+                    phase = Phase.VERIFY;
+                    break;
+                }
                 reserve(256L + 128L * original.initialExact().size() + 96L * original.recipes().size());
                 entries = original.initialExact().entrySet().iterator(); phase = Phase.REQUIREMENTS;
             }
@@ -315,7 +524,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
             }
             case SELECT -> {
                 if (pending.isEmpty()) {
-                    if (prefix.isEmpty()) { result = original; return complete(); }
+                    if (prefix.isEmpty() && !original.preserveSeeds()) { result = original; return complete(); }
                     if (forceCraft && targetDelta.signum() < 0) {
                         // A private rank-crossing trial may reach a closed
                         // turnover. Its owner rejects insufficient production;
@@ -467,9 +676,16 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
                 long floor = startedWork > Long.MAX_VALUE - MIX_WORK_LIMIT / 4 ? Long.MAX_VALUE : startedWork + MIX_WORK_LIMIT / 4;
                 // A shorter fold must not shrink the existing word-quality
                 // allowance. Borrow only after preparation itself saturates it.
-                if (budget.nodes() < floor) releaseOriginalSummary();
-                verification = originalSummary == null ? PlanVerification.refillAfterWork(funded, budget, floor) :
-                        PlanVerification.refillAfterWork(funded, budget, floor, original.steps(), originalSummary);
+                if (!startupRepairAllowed && originalSummary != null) {
+                    // This one-shot seed prefix has no optional portfolio to
+                    // size. Keep the known suffix even when the new prefix is
+                    // tiny; unfolding a shared deep chain again is wasteful.
+                    verification = PlanVerification.refillFolded(funded, budget, original.steps(), originalSummary);
+                } else {
+                    if (budget.nodes() < floor) releaseOriginalSummary();
+                    verification = originalSummary == null ? PlanVerification.refillAfterWork(funded, budget, floor) :
+                            PlanVerification.refillAfterWork(funded, budget, floor, original.steps(), originalSummary);
+                }
                 phase = Phase.VERIFY;
             }
             case DONE -> { return true; }
@@ -484,7 +700,8 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
             // Only the exact candidate just verified can lend its fold. This
             // parent keeps its charged verifier alive through the child's work.
             var known = verification != null && candidate == result ? verification.summary() : null;
-            pruning = new RefillWordPruning<>(result, stock, external, forceCraft, ignoreTargetStock, budget, pruningAllowance(), known);
+            pruning = new RefillWordPruning<>(result, stock, external, forceCraft, ignoreTargetStock, budget, pruningAllowance(), known)
+                    .startupCatalog(compiler.catalog(), excluded);
             return false;
         }
         return searchCycles();
@@ -519,7 +736,8 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         if (jointSearch != null && jointSearch.completedOrder() != null) diagnosticOrder = jointSearch.completedOrder();
         if (boundarySearchEnabled && sourceSearchEnabled && boundarySearch == null && budget.remainingWork() >= 4096 && hasProducibleMissing(compiler, result)) {
             boundarySearch = new RefillPlanningSearch<>(compiler, result, diagnosticOrder == null ? order : diagnosticOrder,
-                    stock, external, excluded, forceCraft, ignoreTargetStock, budget).retainTrades(cycleSearchEnabled);
+                    stock, external, excluded, forceCraft, ignoreTargetStock, budget).retainTrades(cycleSearchEnabled)
+                    .requestedSeeds(requestedSeeds);
             return false;
         }
         if (diagnosticOrder != null) {
@@ -781,6 +999,10 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
     }
 
     @Override public void close() {
+        if (startupRepair != null) startupRepair.close();
+        startupRepair = null;
+        if (startupGuard != null) startupGuard.close();
+        startupGuard = null;
         releaseOriginalSummary();
         if (diagnostics != null) { diagnostics.close(); diagnostics = null; }
         if (boundarySearch != null) { boundarySearch.close(); boundarySearch = null; }
@@ -793,7 +1015,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         if (improvement != null) { improvement.close(); improvement = null; }
         if (proposal != null) { proposal.close(); proposal = null; }
         if (selected != null) { selected.close(); selected = null; }
-        keys = null; entries = null; bindings = null; sources = null; source = null;
+        keys = null; entries = null; bindings = null; sources = null; source = null; startupKeys = null;
         if (order != null && !borrowedOrder) order.close();
         if (verification != null) verification.close();
         budget.release(memory); memory = 0;

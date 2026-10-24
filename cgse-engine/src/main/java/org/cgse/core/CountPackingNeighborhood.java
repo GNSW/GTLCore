@@ -9,7 +9,7 @@ import java.util.*;
 /** Search in one proposed Boolean face. Neither its fixed exterior nor its
  * distance row is an original-model fact; local failures and clauses stay here. */
 final class CountPackingNeighborhood implements AutoCloseable {
-    enum Mode { PROPAGATION, LEARNING, EXCHANGE, EXCHANGE_FOUR, EXCHANGE_ASYMMETRIC, RELAXATION }
+    enum Mode { PROPAGATION, LEARNING, EXCHANGE, EXCHANGE_FOUR, EXCHANGE_ASYMMETRIC, EXCHANGE_ROUNDING, EXCHANGE_ROUNDING_TAIL, EXCHANGE_ROUNDING_WIDE, RELAXATION }
 
     private final PlanningBudget budget;
     private final long[][] sourceRows;
@@ -34,6 +34,16 @@ final class CountPackingNeighborhood implements AutoCloseable {
         if (mode == Mode.RELAXATION) {
             relaxation = CountPackingLpSearch.create(coefficients, bounds, budget);
             complete = relaxation == null;
+            return;
+        }
+        if (mode == Mode.EXCHANGE_ROUNDING_WIDE) {
+            exchange = new CountPackingExchange(coefficients, bounds, seed, budget, 2, flexible, 2);
+            return;
+        }
+        if (mode == Mode.EXCHANGE_ROUNDING || mode == Mode.EXCHANGE_ROUNDING_TAIL) {
+            exchange = new CountPackingExchange(coefficients, bounds, seed, budget,
+                    mode == Mode.EXCHANGE_ROUNDING ? 3 : 4, flexible,
+                    mode == Mode.EXCHANGE_ROUNDING ? 3 : 2);
             return;
         }
         if (mode == Mode.EXCHANGE_ASYMMETRIC) {

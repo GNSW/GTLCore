@@ -57,6 +57,7 @@ final class CountSchedule<K> implements AutoCloseable {
     private final BitSet visited = new BitSet();
     private boolean guidedTried, guiding;
     private boolean preferredOnly;
+    private int preferredPassLimit = 8;
 
     private enum WitnessSource {
         RECURRENCE,
@@ -68,6 +69,10 @@ final class CountSchedule<K> implements AutoCloseable {
 
     private WitnessSource witnessSource;
     private boolean rejectedWitness, retainWitness;
+
+    /** Completed physical scans, for an owning portfolio to interleave another
+     * positive candidate without disposing this schedule's continuation. */
+    int completedPasses() { return passes; }
 
     CountSchedule(RecipeCountModel<K> model, BigInteger[] counts, PlanningBudget budget) {
         this(model, counts, budget, false);
@@ -117,6 +122,11 @@ final class CountSchedule<K> implements AutoCloseable {
      * Its owner retains the ordinary schedule continuation separately. */
     static <K> CountSchedule<K> preferred(RecipeCountModel<K> model, BigInteger[] counts,
                                         int[] order, PlanningBudget budget) {
+        return preferred(model, counts, order, budget, false);
+    }
+
+    private static <K> CountSchedule<K> preferred(RecipeCountModel<K> model, BigInteger[] counts,
+                                                 int[] order, PlanningBudget budget, boolean balanced) {
         if (order.length != counts.length) throw new IllegalArgumentException("Incomplete recipe order");
         var seen = new BitSet(order.length);
         for (int index : order) {
@@ -124,7 +134,7 @@ final class CountSchedule<K> implements AutoCloseable {
             if (index < 0 || index >= order.length || seen.get(index)) throw new IllegalArgumentException("Invalid recipe order");
             seen.set(index);
         }
-        var work = new CountSchedule<>(model, counts, budget);
+        var work = new CountSchedule<>(model, counts, budget, balanced);
         work.preferredOnly = true;
         work.startupChecked = true;
         work.repairingOrder = true;
@@ -136,6 +146,26 @@ final class CountSchedule<K> implements AutoCloseable {
      * is an optional ordering of fixed counts, never an execution restriction. */
     static <K> CountSchedule<K> componentOrdered(RecipeCountModel<K> model, BigInteger[] counts,
                                                 int[] components, PlanningBudget budget) {
+        return componentOrdered(model, counts, components, budget, 8);
+    }
+
+    /** An independent bounded candidate can use the ordinary scan's pass limit
+     * while retaining component ordering. The existing short hint is unchanged. */
+    static <K> CountSchedule<K> componentOrdered(RecipeCountModel<K> model, BigInteger[] counts,
+                                                int[] components, PlanningBudget budget, int passLimit) {
+        return componentOrdered(model, counts, components, budget, passLimit, false);
+    }
+
+    /** Independent candidate: share competing cyclic inputs instead of
+     * exporting their entire available batch through the first enabled rule. */
+    static <K> CountSchedule<K> componentBalanced(RecipeCountModel<K> model, BigInteger[] counts,
+                                                 int[] components, PlanningBudget budget, int passLimit) {
+        return componentOrdered(model, counts, components, budget, passLimit, true);
+    }
+
+    private static <K> CountSchedule<K> componentOrdered(RecipeCountModel<K> model, BigInteger[] counts,
+                                                        int[] components, PlanningBudget budget, int passLimit, boolean balanced) {
+        if (passLimit < 1 || passLimit > 512) throw new IllegalArgumentException("Invalid scan limit");
         long bytes = 64L * counts.length;
         if (!budget.tryReserve(bytes)) return new CountSchedule<>(model, counts, budget, true);
         try {
@@ -143,7 +173,8 @@ final class CountSchedule<K> implements AutoCloseable {
             for (int i = 0; i < indices.length; i++) { budget.check(); indices[i] = i; }
             Arrays.sort(indices, (a, b) -> { budget.check(); return Integer.compare(components[a], components[b]); });
             int[] order = Arrays.stream(indices).mapToInt(Integer::intValue).toArray();
-            var work = preferred(model, counts, order, budget);
+            var work = preferred(model, counts, order, budget, balanced);
+            work.preferredPassLimit = passLimit;
             if (work.result == null) {
                 work.componentOrder = components;
                 work.memory += bytes; bytes = 0;
@@ -247,7 +278,7 @@ final class CountSchedule<K> implements AutoCloseable {
                 witnessSource = WitnessSource.GREEDY;
                 return finish(Result.WITNESS);
             }
-            if (++passes >= (repairingOrder || guiding ? 8 : 512)) return nextAttempt();
+            if (++passes >= (repairingOrder || guiding ? preferredPassLimit : 512)) return nextAttempt();
             return false;
         }
         if (cursor < model.recipes.size()) {

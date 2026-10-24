@@ -210,20 +210,12 @@ final class CountEqualitySupport implements AutoCloseable {
         long lastMask = -1L >>> (63 - (rhs & 63));
         long wordWork = 1L + (range >>> 6);
         for (int k = 0; k < n; k++) {
-            for (int v = 0; v <= width[k]; v++) {
-                budget.charge(wordWork);
-                if (masks != null && (allowed[k] & (1 << (negative[k] ? width[k] - v : v))) == 0) continue;
-                left(k * STRIDE, (k + 1) * STRIDE, words, coefficient[k] * v);
-            }
+            spread(k, words, wordWork, masks != null, true);
             prefix[(k + 1) * STRIDE + words - 1] &= lastMask;
         }
         if ((prefix[n * STRIDE + (rhs >>> 6)] & (1L << (rhs & 63))) == 0) return empty(equation);
         for (int k = n - 1; k >= 0; k--) {
-            for (int v = 0; v <= width[k]; v++) {
-                budget.charge(wordWork);
-                if (masks != null && (allowed[k] & (1 << (negative[k] ? width[k] - v : v))) == 0) continue;
-                right((k + 1) * STRIDE, k * STRIDE, words, coefficient[k] * v);
-            }
+            spread(k, words, wordWork, masks != null, false);
         }
         boolean changed = false;
         for (int k = 0; k < n; k++) {
@@ -262,6 +254,55 @@ final class CountEqualitySupport implements AutoCloseable {
         }
         changes++;
         return equation.previousResult = new Result(equation.ids, resultLow, resultHigh, false, resultMasks);
+    }
+
+
+    /** Minkowski sum with a finite value set. A contiguous interval uses a
+     * binary decomposition; sparse holes retain their literal shifted union. */
+    private void spread(int k, int words, long wordWork, boolean masked, boolean forward) {
+        int values = masked ? allowed[k] : (1 << (width[k] + 1)) - 1;
+        if (negative[k]) values = Integer.reverse(values) >>> (31 - width[k]);
+        int from = (forward ? k : k + 1) * STRIDE;
+        int to = (forward ? k + 1 : k) * STRIDE;
+        int first = Integer.numberOfTrailingZeros(values), size = Integer.bitCount(values);
+        if (size >= 4 && (values >>> first) == (1 << size) - 1) {
+            budget.charge(wordWork);
+            if (forward) left(from, to, words, coefficient[k] * first);
+            else right(from, to, words, coefficient[k] * first);
+            int remaining = size - 1;
+            for (int next = 1; remaining > 0; next <<= 1) {
+                int part = Math.min(next, remaining);
+                budget.charge(wordWork);
+                expand(to, words, coefficient[k] * part, forward);
+                remaining -= part;
+            }
+        } else {
+            for (int bits = values; bits != 0; bits &= bits - 1) {
+                budget.charge(wordWork);
+                int shift = coefficient[k] * Integer.numberOfTrailingZeros(bits);
+                if (forward) left(from, to, words, shift);
+                else right(from, to, words, shift);
+            }
+        }
+    }
+
+    /** OR one shifted copy in place. Traverse opposite to the shift so a
+     * newly inserted bit cannot be read again as an unbounded extra copy. */
+    private void expand(int at, int words, int shift, boolean forward) {
+        int whole = shift >>> 6, bits = shift & 63;
+        if (forward) {
+            for (int i = words - 1; i >= whole; i--) {
+                long value = prefix[at + i - whole] << bits;
+                if (bits != 0 && i > whole) value |= prefix[at + i - whole - 1] >>> (64 - bits);
+                prefix[at + i] |= value;
+            }
+        } else {
+            for (int i = 0; i + whole < words; i++) {
+                long value = suffix[at + i + whole] >>> bits;
+                if (bits != 0 && i + whole + 1 < words) value |= suffix[at + i + whole + 1] << (64 - bits);
+                suffix[at + i] |= value;
+            }
+        }
     }
 
     /** OR an unsigned left shift into a different prefix row, truncated to words. */

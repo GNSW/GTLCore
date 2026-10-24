@@ -48,6 +48,7 @@ final class RefillSupplySearch<K> implements AutoCloseable {
     private SummaryComputation<K> summarizing;
     private SequenceSummary<K> summary;
     private PlanVerification<K> verifying;
+    private SeedStartupGuard<K> startup;
     private PlanStep prefix;
     private boolean strict, mergingBindings, accelerated, shortcutsRelevant, resizing;
     private PlanStep retainedWord;
@@ -153,6 +154,19 @@ final class RefillSupplySearch<K> implements AutoCloseable {
             }
             if (phase == Phase.VERIFY) {
                 if (!verifying.step()) return false;
+                if (candidate.preserveSeeds()) {
+                    if (startup == null) startup = new SeedStartupGuard<>(
+                            tradeoffCompiler == null ? bindings.values() : tradeoffCompiler.catalog(),
+                            tradeoffCompiler == null ? Set.of() : tradeoffExcluded, verifying.summary(),
+                            stock, candidate.seeds(), external, candidate.target(), candidate.amount(), budget);
+                    if (!startup.step()) return false;
+                    boolean lost = !startup.lost().isEmpty();
+                    startup.close(); startup = null;
+                    // A funded prefix can consume the network remainder that
+                    // kept the old suffix restartable. Its explicit seed map
+                    // alone cannot protect that implicit startup material.
+                    if (lost) { rejectCandidate(); return false; }
+                }
                 if (trading) {
                     verifying.close(); verifying = null;
                     if (candidate.feasible()) { frontier.offer(candidate); phase = Phase.FRONTIER; }
@@ -398,6 +412,7 @@ final class RefillSupplySearch<K> implements AutoCloseable {
         if (searching != null) { searching.close(); searching = null; }
         if (summarizing != null) { summarizing.close(); summarizing = null; }
         if (verifying != null) { verifying.close(); verifying = null; }
+        if (startup != null) { startup.close(); startup = null; }
         if (refining != null) { refining.close(); refining = null; }
         summary = null; prefix = null; candidate = null; entries = null; bindingEntries = null; ports = null;
         sizing = null; phase = trading ? Phase.OPTIONS : resizing ? Phase.WORDS : Phase.TRIAL;

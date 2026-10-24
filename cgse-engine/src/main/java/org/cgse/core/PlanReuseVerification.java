@@ -27,6 +27,7 @@ final class PlanReuseVerification<K> implements AutoCloseable {
     private Iterator<GraphRecipe<K>> catalog;
     private PlanVerification<K> verification;
     private ForceCraftProof<K> production;
+    private SeedStartupGuard<K> startup;
     private long memory;
     private int phase;
     private boolean complete;
@@ -112,11 +113,16 @@ final class PlanReuseVerification<K> implements AutoCloseable {
                     if (forceCraft && !external.contains(target)) {
                         production = new ForceCraftProof<>(proposed, verification, requiredSeeds, budget);
                         phase = 5;
-                    } else return accept();
+                    } else return checkStartup();
                 }
                 case 5 -> {
                     if (!production.step()) return false;
                     if (!production.proved()) return reject("force_craft_" + production.outcome());
+                    return checkStartup();
+                }
+                case 6 -> {
+                    if (!startup.step()) return false;
+                    if (!startup.lost().isEmpty()) return reject("seed_startup");
                     return accept();
                 }
                 default -> throw new IllegalStateException("Invalid reuse phase");
@@ -138,6 +144,16 @@ final class PlanReuseVerification<K> implements AutoCloseable {
         } finally {
             if (observing != null) observing.step(work, nanos);
         }
+    }
+
+    private boolean checkStartup() {
+        if (!preserve) return accept();
+        // An old PRESERVE flag and an empty seed map are not evidence that
+        // the current inventory can restart the plan's consumed cycles.
+        startup = new SeedStartupGuard<>(compiler.catalog(), verification.summary(), stock, proposed.seeds(),
+                external, target, amount, budget);
+        phase = 6;
+        return false;
     }
 
     private boolean accept() {
@@ -170,6 +186,8 @@ final class PlanReuseVerification<K> implements AutoCloseable {
         verification = null;
         if (production != null) production.close();
         production = null;
+        if (startup != null) startup.close();
+        startup = null;
         matched.clear();
         catalog = null;
         inputs = null;

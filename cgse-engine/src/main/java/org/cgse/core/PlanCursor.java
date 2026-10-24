@@ -24,6 +24,17 @@ public final class PlanCursor {
     private final Map<PlanStep, Map<String, BigInteger>> loopCounts = new IdentityHashMap<>();
     private final List<Frame> stack = new ArrayList<>();
     private boolean mixedLoops;
+    private SequenceLoopIndex sequenceLoops;
+
+    int prepareBatching(int allowance) { return prepareBatching(allowance, null); }
+
+    int prepareBatching(int allowance, SequenceLoopIndex.Storage storage) {
+        if (sequenceLoops == null) sequenceLoops = storage == null ? new SequenceLoopIndex(nodes.get(0)) :
+                new SequenceLoopIndex(nodes.get(0), storage);
+        int before = sequenceLoops.work();
+        sequenceLoops.advance(allowance);
+        return sequenceLoops.work() - before;
+    }
 
     public PlanCursor(PlanStep root) {
         index(root);
@@ -210,6 +221,24 @@ public final class PlanCursor {
                 stack.remove(stack.size() - 1);
             } else if (frame.step instanceof PlanStep.Sequence sequence) {
                 if (homogeneous.containsKey(frame.step)) return null;
+                int offset = sequence.children().size() - Math.toIntExact(frame.remaining);
+                var loop = sequenceLoops == null ? null : sequenceLoops.get(sequence, offset);
+                // The index can finish after execution or restore has entered a
+                // period. Regroup only complete periods at an original boundary.
+                long repetitions = loop == null || (offset - loop.start()) % loop.width() != 0 ? 0 :
+                        (loop.extent() - offset) / loop.width();
+                if (repetitions > 1) {
+                    Function<K, BigInteger> available = stock.get();
+                    var group = available == null ? null : LoopBatching.group(loop.counts(), repetitions, recipes, available);
+                    if (group != null) {
+                        if (loop.counts().size() > room) return List.of();
+                        var batches = new ArrayList<PlanStep.Batch>(loop.counts().size());
+                        group.counts().forEach((recipe, count) -> batches.add(new PlanStep.Batch(recipe,
+                                count.multiply(BigInteger.valueOf(group.iterations())).longValueExact())));
+                        frame.remaining -= group.iterations() * loop.width();
+                        return batches;
+                    }
+                }
                 PlanStep child = sequence.children().get(sequence.children().size() - Math.toIntExact(frame.remaining));
                 frame.remaining--;
                 push(child);

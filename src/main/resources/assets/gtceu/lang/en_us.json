@@ -673,7 +673,7 @@
   "gtceu.machine.available_recipe_map_9.tooltip": "Available Recipe Types: %s, %s, %s, %s, %s, %s, %s, %s, %s",
   "gtceu.machine.bedrock_drilling_rig.tooltip.0": "Requires bedrock below the drill bit",
   "gtceu.machine.bedrock_drilling_rig.tooltip.1": "Each run has a 10% chance to destroy bedrock",
-  "gtceu.machine.blaze_blast_furnace.tooltip.0": "Requires §b10x(Power÷120)^1/2§rmb of §eLiquid Blaze§r per second",
+  "gtceu.machine.blaze_blast_furnace.tooltip.0": "Requires §b10x2^(Recipe Voltage-2)§rmb of §eLiquid Blaze§r per second",
   "gtceu.machine.blaze_blast_furnace.tooltip.1": "Max parallel fixed at 64",
   "gtceu.machine.block_conversion_room.am": "Conversion amount per time: %s",
   "gtceu.machine.block_conversion_room.tooltip.0": "Randomly selects a block position inside the machine to convert per second",

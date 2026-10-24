@@ -10,6 +10,7 @@ import org.gtlcore.gtlcore.common.recipe.PrankFishRecipe;
 import org.gtlcore.gtlcore.integration.jei.grouping.TagGroupOverlay;
 
 import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
+import com.gregtechceu.gtceu.api.data.chemical.ChemicalHelper;
 import com.gregtechceu.gtceu.api.data.tag.TagPrefix;
 import com.gregtechceu.gtceu.api.data.worldgen.GTOreDefinition;
 import com.gregtechceu.gtceu.api.data.worldgen.WorldGenLayers;
@@ -23,10 +24,8 @@ import com.lowdragmc.lowdraglib.LDLib;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Rect2i;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -55,8 +54,6 @@ import java.util.Set;
 
 @JeiPlugin
 public class GTLJEIPlugin implements IModPlugin {
-
-    private static final String ORE_ITEM_SUFFIX = "_ore";
 
     @Override
     public @NotNull ResourceLocation getPluginUid() {
@@ -278,7 +275,7 @@ public class GTLJEIPlugin implements IModPlugin {
         if (stack.is(Tags.Items.ORES)) {
             return true;
         }
-        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        return stack.getItem() instanceof BlockItem && itemId.getPath().endsWith(ORE_ITEM_SUFFIX);
+        TagPrefix prefix = ChemicalHelper.getPrefix(stack.getItem());
+        return prefix != null && TagPrefix.ORES.containsKey(prefix);
     }
 }

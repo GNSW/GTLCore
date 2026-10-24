@@ -21,6 +21,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -30,7 +31,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.client.model.data.ModelData;
 
+import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -40,6 +43,7 @@ import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.*;
@@ -149,6 +153,25 @@ public abstract class WorldSceneRendererMixin implements PreviewRendererAccess {
     @Shadow(remap = false)
     public static void setDefaultRenderLayerState(RenderType layer) {
         throw new AssertionError();
+    }
+
+    @Unique
+    private boolean gTLCore$canRenderModelInLayer(BlockRenderDispatcher dispatcher, BlockState state, BlockPos pos, RenderType layer) {
+        var model = dispatcher.getBlockModel(state);
+        var entity = world.getBlockEntity(pos);
+        var data = model.getModelData(world, pos, state, entity == null ? ModelData.EMPTY : entity.getModelData());
+        var random = RandomSource.create(state.getSeed(pos));
+        // JSON and wrapped models can declare layers absent from the legacy block-layer table.
+        return model.getRenderTypes(state, random, data).contains(layer);
+    }
+
+    @Redirect(method = "renderBlocks",
+              at = @At(value = "INVOKE",
+                       target = "Lcom/lowdragmc/lowdraglib/client/scene/WorldSceneRenderer;canRenderInLayer(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/client/renderer/RenderType;)Z"),
+              remap = false)
+    private boolean gTLCore$immediateModelLayer(BlockState state, RenderType layer, @Local BlockPos pos,
+                                                @Local(argsOnly = true) BlockRenderDispatcher dispatcher) {
+        return gTLCore$canRenderModelInLayer(dispatcher, state, pos, layer);
     }
 
     /**
@@ -317,7 +340,7 @@ public abstract class WorldSceneRendererMixin implements PreviewRendererAccess {
                                     hook.applyVertexConsumerWrapper(world, pos, state, wrapperBuffer, layer, 0);
                                 }
 
-                                if (state.getRenderShape() != RenderShape.INVISIBLE && WorldSceneRenderer.canRenderInLayer(state, layer)) {
+                                if (state.getRenderShape() != RenderShape.INVISIBLE && gTLCore$canRenderModelInLayer(blockRendererDispatcher, state, pos, layer)) {
                                     matrixStack.pushPose();
                                     matrixStack.translate(pos.getX(), pos.getY(), pos.getZ());
                                     if (Platform.isForge()) {

@@ -133,8 +133,11 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
 
     private boolean project() {
         if (allowance - work < 32768) return finish();
+        // Abundant stock leaves optional producers free during propagation.
+        // Use a bounded wider projection here so a smaller order does not lose
+        // this candidate solely because its exact lower bounds fix fewer runs.
         projection = new CountDemandProjection(model.recipes.size(), model.constraints, budget,
-                Math.max(0, allowance - work) * 3 / 4, 512);
+                Math.max(0, allowance - work) * 3 / 4, 512, true);
         return false;
     }
 

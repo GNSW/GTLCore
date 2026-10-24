@@ -20,7 +20,7 @@ final class ConfigCategoryMigration {
             Map.entry("gameplay", "disableDrift travelStaffCD ftbUltimineRange minimumBlockMiningTicks sendUpdateMessages"),
             Map.entry("content", "enableSkyBlokeMode enablePrimitiveVoidOre oreMultiplier durationMultiplier"),
             Map.entry("machines", "cellType spacetimePip exPatternProvider patternBoxPages MEPatternOutputMin MEPatternOutputMax enableUltimateMEStocking filterHatch batchProcessingTimeLimitTicks batchProcessingEnabledByDefault mobList1 mobList2"),
-            Map.entry("ae", "enableAe2ManualCraftingInventoryLock ae2GraphInventoryLockBehavior enableAe2MissingCrafting ae2CalculationMode ae2CraftingEngine ae2GraphSeedPolicy ae2GraphByteCostMode ae2GraphDiscoverByproducts ae2GraphMaxExtraCatalystCopies ae2PatternProviderAutoExpandDefault " + GRAPH_PLANNER_OPTIONS),
+            Map.entry("ae", "enableAe2ManualCraftingInventoryLock ae2GraphInventoryLockBehavior enableAe2MissingCrafting ae2CalculationMode ae2CraftingEngine ae2GraphIntelligentScheduling ae2GraphSeedPolicy ae2GraphByteCostMode ae2GraphDiscoverByproducts ae2GraphMaxExtraCatalystCopies ae2PatternProviderAutoExpandDefault " + GRAPH_PLANNER_OPTIONS),
             Map.entry("performance", "ae2CraftingServiceUpdateInterval ae2StorageServiceUpdateInterval enableMachineStartupTickBudget machineStartupTickBudgetPerLevel machineStartupAeTickBudgetPerLevel machineStartupTickTimeBudgetMillis optimizeGtceuJeiRegistration"),
             Map.entry("graphics", "enableSmoothAnimations multiblockPreview bloom"),
             Map.entry("diagnostics", "debugLogging ae2GraphDiagnosticLogging"),

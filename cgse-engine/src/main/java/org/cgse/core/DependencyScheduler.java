@@ -20,6 +20,10 @@ final class DependencyScheduler<K> {
     private String activeRecipe;
 
     DependencyScheduler(GraphPlan<K> plan, PlanStep remaining) {
+        this(plan, remaining, null);
+    }
+
+    DependencyScheduler(GraphPlan<K> plan, PlanStep remaining, AdaptiveScheduling<K> feedback) {
         recipes = plan.recipes();
         // Always derive dependencies from the original selected witness. Saved
         // lane suffixes are concatenated for storage, not a new serial witness.
@@ -29,7 +33,8 @@ final class DependencyScheduler<K> {
         var compilation = new PipelineScheduler.CompilationBudget();
         for (PlanStep branch : branches) {
             int lane = lanes.size();
-            lanes.add(new PipelineScheduler<>(new PlanCursor(branch), plan.recipes(), List.of(), compilation));
+            lanes.add(new PipelineScheduler<>(new PlanCursor(branch), plan.recipes(), List.of(), compilation,
+                    plan.patternTimesExact(), feedback));
             for (String id : PlanCountComputation.of(branch).keySet()) {
                 GraphRecipe<K> recipe = plan.recipes().get(id);
                 for (K key : recipe.inputs().keySet()) affected.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).add(lane);
@@ -65,6 +70,10 @@ final class DependencyScheduler<K> {
 
     long limit(long requested, ToLongFunction<K> forecast) {
         return active < 0 ? 0 : lanes.get(active).limit(requested, forecast);
+    }
+
+    long growthLimit(long requested, ToLongFunction<K> forecast) {
+        return active < 0 ? requested : lanes.get(active).growthLimit(requested, forecast);
     }
 
     void accepted(long runs) {

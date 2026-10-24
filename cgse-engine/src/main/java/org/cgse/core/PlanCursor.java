@@ -215,6 +215,12 @@ public final class PlanCursor {
     /** Null keeps the original witness; an empty list asks the pipeline to make room. */
     <K> List<PlanStep.Batch> takeLoopBatch(Map<String, GraphRecipe<K>> recipes, int room,
                                            Supplier<Function<K, BigInteger>> stock) {
+        return takeLoopBatch(recipes, room, stock, batches -> true);
+    }
+
+    <K> List<PlanStep.Batch> takeLoopBatch(Map<String, GraphRecipe<K>> recipes, int room,
+                                         Supplier<Function<K, BigInteger>> stock,
+                                         java.util.function.Predicate<List<PlanStep.Batch>> admit) {
         while (!stack.isEmpty()) {
             Frame frame = stack.get(stack.size() - 1);
             if (frame.remaining == 0) {
@@ -235,6 +241,7 @@ public final class PlanCursor {
                         var batches = new ArrayList<PlanStep.Batch>(loop.counts().size());
                         group.counts().forEach((recipe, count) -> batches.add(new PlanStep.Batch(recipe,
                                 count.multiply(BigInteger.valueOf(group.iterations())).longValueExact())));
+                        if (!admit.test(batches)) return null;
                         frame.remaining -= group.iterations() * loop.width();
                         return batches;
                     }
@@ -253,6 +260,7 @@ public final class PlanCursor {
                 var batches = new ArrayList<PlanStep.Batch>(counts.size());
                 group.counts().forEach((recipe, count) -> batches.add(new PlanStep.Batch(recipe,
                         count.multiply(BigInteger.valueOf(group.iterations())).longValueExact())));
+                if (!admit.test(batches)) return null;
                 frame.remaining -= group.iterations();
                 return batches;
             } else return null;

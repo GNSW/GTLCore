@@ -6,6 +6,7 @@ package org.cgse.core;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +17,8 @@ import java.util.Set;
 final class GraphSolve<K> implements AutoCloseable {
 
     private final GraphCompiler.Compiled<K> graph;
+    private Collection<GraphRecipe<K>> startupRecipes;
+    private Set<String> startupExcluded = Set.of();
     private final K target;
     private final long amount, started;
     private final Map<K, Long> stock;
@@ -30,6 +33,7 @@ final class GraphSolve<K> implements AutoCloseable {
     private boolean targetProduced;
     private boolean consumeTargetSeed;
     private boolean regionScout;
+    private boolean deferMissingStartup;
     private int regionIndex;
     private RegionSelection<K> selection;
     private RegionSelection.Choice<K> selected;
@@ -43,12 +47,14 @@ final class GraphSolve<K> implements AutoCloseable {
     private Iterator<K> applying;
     private PlanAssembly<K> assembly;
     private GraphPlan<K> result;
+    private Map<K, Long> startupLoans = Map.of();
     private GraphCompiler.Region<K> unresolvedRegion;
     private final CatalystPolicy catalystPolicy;
 
     GraphSolve(GraphCompiler.Compiled<K> graph, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
                boolean preserve, boolean forceCraft, PlanningBudget budget, long started, CatalystPolicy catalystPolicy, Map<K, Long> catalystStock) {
         this.graph = graph;
+        startupRecipes = graph.recipes().values();
         this.target = target;
         this.amount = amount;
         this.stock = stock;
@@ -66,12 +72,25 @@ final class GraphSolve<K> implements AutoCloseable {
         seeds.putAll(requiredSeeds);
     }
 
+    GraphSolve<K> startupCatalog(Collection<GraphRecipe<K>> available, Set<String> excluded) {
+        if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
+        startupRecipes = available; startupExcluded = excluded;
+        return this;
+    }
+
     /** Optional stock views scout complex regions; the full graph retains its normal quotas. */
     GraphSolve<K> scoutRegions() {
         if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
         regionScout = true;
         return this;
     }
+
+    GraphSolve<K> deferMissingStartup() {
+        if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
+        deferMissingStartup = true; return this;
+    }
+
+    Map<K, Long> startupLoans() { return startupLoans; }
 
     GraphSolve<K> allowTargetSeedConsumption(boolean allow) {
         if (regionIndex != 0) throw new IllegalStateException("Graph solve already started");
@@ -93,6 +112,7 @@ final class GraphSolve<K> implements AutoCloseable {
         if (assembly != null) {
             if (assembly.step()) {
                 result = assembly.result();
+                startupLoans = assembly.startupLoans();
                 assembly.close();
                 assembly = null;
             }
@@ -166,7 +186,8 @@ final class GraphSolve<K> implements AutoCloseable {
         } else {
             Collections.reverse(reversed);
             assembly = new PlanAssembly<>(target, amount, preserve, new PlanStep.Sequence(reversed), graph.recipes(),
-                    seeds, stock, external, graph, budget, started, catalystPolicy);
+                    seeds, stock, external, graph, budget, started, catalystPolicy).startupCatalog(startupRecipes, startupExcluded)
+                    .deferMissingStartup(deferMissingStartup);
         }
         return result != null;
     }

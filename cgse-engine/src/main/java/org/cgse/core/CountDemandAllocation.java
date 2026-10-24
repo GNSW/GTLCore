@@ -9,7 +9,7 @@ import java.util.*;
  * Only proposes counts: neither failed choices nor a cutoff prove infeasibility. */
 final class CountDemandAllocation implements AutoCloseable {
     private record Edge(int row, BigInteger coefficient) {}
-    private record Change(int variable, boolean minimum, BigInteger old) {}
+    private record Change(int variable, boolean minimum, BigInteger old, int previousDepth) {}
     private record Choice(int mark, int variable, BigInteger value) {}
 
     private static final long CHANGE_BYTES = 256;
@@ -22,6 +22,7 @@ final class CountDemandAllocation implements AutoCloseable {
     private final ArrayList<Change> trail = new ArrayList<>();
     private final ArrayDeque<Choice> choices = new ArrayDeque<>();
     private BigInteger[] low, high, deficits, result;
+    private int[] lowDepth, highDepth;
     private long memory, trailMemory;
     private int reversals;
     private boolean done;
@@ -31,11 +32,12 @@ final class CountDemandAllocation implements AutoCloseable {
         this.rows = rows; this.producers = producers; this.budget = budget;
         long terms = 0;
         for (var row : rows) { budget.check(); terms += row.terms().size(); }
-        long bytes = 4096L + 640L * variables + 512L * rows.size() + 64L * terms;
+        long bytes = 4096L + 648L * variables + 512L * rows.size() + 64L * terms;
         if (!budget.tryReserve(bytes)) { done = true; return; }
         memory = bytes;
         try {
             low = new BigInteger[variables]; high = new BigInteger[variables];
+            lowDepth = new int[variables]; highDepth = new int[variables];
             Arrays.fill(low, BigInteger.ZERO);
             deficits = new BigInteger[rows.size()];
             for (int i = 0; i < variables; i++) columns.add(new ArrayList<>());
@@ -136,9 +138,17 @@ final class CountDemandAllocation implements AutoCloseable {
         if (old != null && (minimum ? value.compareTo(old) <= 0 : value.compareTo(old) >= 0)) return true;
         if (value.bitLength() > 1024) { done = true; return false; }
         if (!choices.isEmpty()) {
-            if (trail.size() >= 65536 || !budget.tryReserve(CHANGE_BYTES)) { done = true; return false; }
-            trailMemory += CHANGE_BYTES;
-            trail.add(new Change(variable, minimum, old));
+            int[] depth = minimum ? lowDepth : highDepth;
+            // Undo needs the value at this decision's entry, not every
+            // intermediate bound reached while propagating around feedback.
+            // Restoring the previous depth also permits a sibling decision
+            // at the same depth to record its own first change.
+            if (depth[variable] != choices.size()) {
+                if (trail.size() >= 65536 || !budget.tryReserve(CHANGE_BYTES)) { done = true; return false; }
+                trailMemory += CHANGE_BYTES;
+                trail.add(new Change(variable, minimum, old, depth[variable]));
+                depth[variable] = choices.size();
+            }
         }
         if (minimum) setLow(variable, value);
         else high[variable] = value;
@@ -166,6 +176,7 @@ final class CountDemandAllocation implements AutoCloseable {
         var choice = choices.pop();
         for (int i = trail.size() - 1; i >= choice.mark; i--) {
             budget.check(); var change = trail.remove(i);
+            (change.minimum ? lowDepth : highDepth)[change.variable] = change.previousDepth;
             if (change.minimum) setLow(change.variable, change.old);
             else high[change.variable] = change.old;
             trailMemory -= CHANGE_BYTES; budget.release(CHANGE_BYTES);

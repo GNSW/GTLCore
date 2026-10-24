@@ -114,6 +114,8 @@ public final class GraphFallback {
         private GraphPlan<K> candidate, result;
         private long memory, witnessAllowance;
         private boolean searched, quickProbe;
+        private SeedStartupGuard<K> startup;
+        private boolean startupChecked;
 
         Expansion(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external,
                   Map<K, Long> seeds, boolean preserve, boolean forceCraft, PlanningBudget budget) {
@@ -144,6 +146,16 @@ public final class GraphFallback {
             }
             if (keys == null) {
                 if (!summary.step()) return false;
+                if (preserve && !startupChecked) {
+                    if (startup == null) startup = new SeedStartupGuard<>(compiler.catalog(), summary.result(), stock, seeds,
+                            external, target, amount, budget);
+                    if (!startup.step()) return false;
+                    boolean lost = !startup.lost().isEmpty();
+                    startup.close(); startup = null; startupChecked = true;
+                    // Ordinary fallback never expands a cycle to replace its
+                    // seed. Decline this word and leave graph solving eligible.
+                    if (lost) return true;
+                }
                 var all = new java.util.LinkedHashSet<>(summary.result().keys()); all.add(target); all.addAll(seeds.keySet());
                 keys = all.iterator();
             }
@@ -168,6 +180,7 @@ public final class GraphFallback {
         @Override public void close() {
             if (summary != null) summary.close();
             if (verification != null) verification.close();
+            if (startup != null) startup.close();
             budget.release(memory); memory = 0;
         }
     }

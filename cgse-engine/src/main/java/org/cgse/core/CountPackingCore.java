@@ -36,6 +36,9 @@ final class CountPackingCore implements CountContinuation {
     private long roundingStart, failedRoundingWork, stepStart = -1;
     private boolean scoutAttempted, wideScoutAttempted, wideScout;
     private boolean lpScout;
+    private boolean expandedScout, expandedAttempted, deferredRounding;
+    private int expandedStage;
+    private long expandedStart, expandedServiceAfter;
     private Frontier lpFace;
     private long lpAllowance;
     private long wideScoutAt, wideScoutStart, wideScoutWork, repairLimit;
@@ -102,7 +105,11 @@ final class CountPackingCore implements CountContinuation {
         long before = budget.threadWork();
         stepStart = before;
         try {
-            if (scouting && work >= scoutLimit) endScout();
+            if (scouting && work >= scoutLimit) {
+                boolean expand = !wideScout && !expandedScout;
+                endScout();
+                if (expand) beginExpandedScout();
+            }
             // Other retained arms spend the same request account. Once this
             // enumeration has had half its fixed opportunity, do not wait for
             // its entire local ceiling if that would leave less than the
@@ -159,7 +166,17 @@ final class CountPackingCore implements CountContinuation {
             }
             if (scouting) {
                 rememberLpScout();
-                if (!scheduleFlexibleScout() && !beginAsymmetricScout()) endScout();
+                if (expandedScout) {
+                    if (expandedStage < 2 && measuredWork() < scoutLimit) {
+                        expandedStage++;
+                        coreSize = 40; compiledSize = 0;
+                        beginCore();
+                    } else endScout();
+                } else if (!scheduleFlexibleScout() && !beginAsymmetricScout()) {
+                    boolean expand = !wideScout;
+                    endScout();
+                    if (expand) beginExpandedScout();
+                }
                 return false;
             }
             if (enumerationBase != null) {
@@ -254,6 +271,9 @@ final class CountPackingCore implements CountContinuation {
         // Dividing this sample by the total allowance interrupted easy cores
         // earlier precisely when less work was available to recover them.
         // The normal phase ceiling still ends the sample if it is smaller.
+        // Preserve the first third used by ordinary engines of the request before
+        // preferring this optional completion. Observation cannot renew it.
+        expandedServiceAfter = budget.nodes() + Math.min(12_582_912, budget.remainingWork() / 3);
         scoutAt = work + Math.min(262144, normalWork);
         return coreSize <= 64;
     }
@@ -376,14 +396,50 @@ final class CountPackingCore implements CountContinuation {
         return true;
     }
 
+    /** Enumerate all LP-fractional roundings with bounded ordinary exchanges.
+     * A 64-coordinate face must cover at least half of the active variables.
+     * All three geometries share one captured deadline, and the original
+     * frontier remains parked until the attempt completes or is refused. */
+    private void beginExpandedScout() {
+        if (expandedAttempted || ranked == null || fractional < 6 || fractional > 10 ||
+                columns.length < 64 || columns.length > 128 || normalWork - measuredWork() < 2_097_152 ||
+                budget.remainingWork() < 4_194_304) return;
+        expandedAttempted = true;
+        int leftFree = fractional / 2, rightFree = fractional - leftFree;
+        int legacy = CountPackingExchange.combinations(20, 4, 0, budget);
+        int left = CountPackingExchange.combinations(20, 3, leftFree, budget);
+        int right = CountPackingExchange.combinations(20, 3, rightFree, budget);
+        if (Math.min(left, right) <= legacy || Math.max(left, right) > 65536 ||
+                CountPackingExchange.combinations(32, 2, leftFree, budget) > 65536 ||
+                CountPackingExchange.combinations(32, 2, rightFree, budget) > 65536 ||
+                CountPackingExchange.combinations(20, 4, leftFree, budget) > 65536 ||
+                CountPackingExchange.combinations(20, 2, rightFree, budget) > 65536) return;
+        scoutBase = parkSearch();
+        scouting = flexibleScout = expandedScout = true;
+        expandedStage = 0;
+        coreSize = 64; compiledSize = 0;
+        roundingStart = expandedStart = measuredWork();
+        scoutLimit = Math.min(normalWork, measuredWork() + Math.min(8_388_608, budget.remainingWork() / 2));
+        deferredRounding = flexiblePending; flexiblePending = false;
+        beginCore();
+        budget.note("count_packing_roundings", "expanded; left=" + left + "; right=" + right + "; deadline=" + scoutLimit);
+    }
+
     private void endScout() {
         // A restricted miss is feedback about this attempt, never a proof.
         // Include the final atomic step, even when the frontier moved workers.
+        if (expandedScout) {
+            long spent = Math.max(0, measuredWork() - expandedStart);
+            asymmetricWork += spent;
+            flexiblePending = deferredRounding;
+            if (deferredRounding) flexibleAt += spent;
+            deferredRounding = false;
+        }
         if (asymmetricScout) asymmetricWork += Math.max(0, measuredWork() - asymmetricStart);
         if (flexibleScout) failedRoundingWork += Math.max(0, measuredWork() - roundingStart);
         if (search != null) search.close();
         if (wideScout) wideScoutWork += work - wideScoutStart;
-        lpScout = scouting = wideScout = flexibleScout = asymmetricScout = rotateAsymmetric = false;
+        lpScout = scouting = wideScout = flexibleScout = asymmetricScout = rotateAsymmetric = expandedScout = false;
         restoreSearch(scoutBase); scoutBase = null;
         budget.note("count_packing_core", "resume_original; free=" + coreSize + "; work=" + work);
     }
@@ -409,7 +465,11 @@ final class CountPackingCore implements CountContinuation {
         // The parent reserves the bounded 35-by-64 coefficients, threshold
         // masks, suffix maxima and retained activity stack together. PB owns
         // its separate, optional reconstruction and conflict-learning storage.
-        var mode = lpScout ? CountPackingNeighborhood.Mode.RELAXATION :
+        var mode = expandedScout ? switch (expandedStage) {
+            case 0 -> CountPackingNeighborhood.Mode.EXCHANGE_ROUNDING_WIDE;
+            case 1 -> CountPackingNeighborhood.Mode.EXCHANGE_ROUNDING;
+            default -> CountPackingNeighborhood.Mode.EXCHANGE_ROUNDING_TAIL;
+        } : lpScout ? CountPackingNeighborhood.Mode.RELAXATION :
                 asymmetricScout ? CountPackingNeighborhood.Mode.EXCHANGE_ASYMMETRIC : wideScout ? CountPackingNeighborhood.Mode.EXCHANGE_FOUR :
                 scouting ? CountPackingNeighborhood.Mode.EXCHANGE :
                 phase == Phase.CONFLICT_REPAIR ? CountPackingNeighborhood.Mode.LEARNING : CountPackingNeighborhood.Mode.PROPAGATION;
@@ -495,14 +555,26 @@ final class CountPackingCore implements CountContinuation {
     List<CountLpLearning.Cut> sharedRows() { return explanation == null ? List.of() : List.of(explanation); }
     @Override public long work() { return work; }
     Phase phase() { return phase; }
-    /** The first exchange owns the early companion service. A new rounding
-     * domain uses the ordinary retained portfolio; it cannot renew the first
-     * domain's extra service or postpone the original branch's other tools. */
-    boolean initialOpportunity() { return phase == Phase.ENUMERATION && (!scoutAttempted || scouting && !flexibleScout); }
+    /** Existing early service is unchanged; a larger finite attempt can earn
+     * completion only after the ordinary engines' captured initial window. */
+    boolean initialOpportunity() {
+        return phase == Phase.ENUMERATION && (!scoutAttempted || scouting && !flexibleScout ||
+                expandedServiceReady() && (!expandedAttempted || expandedScout));
+    }
     // One completed, owned scout; neither resuming nor observing adds work.
     long restoredScoutWork() { return wideScoutWork; }
-    int completionEpoch() { return (phase == Phase.RESUMED_ENUMERATION ? 2 : phase.ordinal()) + (wideScoutWork > 0 ? 1 : 0); }
+    int completionEpoch() { return (phase == Phase.RESUMED_ENUMERATION ? 2 : phase.ordinal()) + (wideScoutWork > 0 ? 1 : 0) + (expandedAttempted && budget.nodes() >= expandedServiceAfter ? 4 : 0); }
     long remainingAllowance() { return Math.max(0, maximumWork - work); }
+    private boolean expandedServiceReady() {
+        return fractional >= 6 && fractional <= 10 && columns.length >= 64 && columns.length <= 128 &&
+                budget.nodes() >= expandedServiceAfter && (expandedScout || !expandedAttempted &&
+                normalWork - measuredWork() >= 2_097_152 && budget.remainingWork() >= 4_194_304);
+    }
+    long roundingContinuationWork() {
+        if (!expandedServiceReady()) return 0;
+        if (expandedScout) return Math.max(0, scoutLimit - measuredWork());
+        return scouting && !wideScout ? Math.max(0, flexibleLimit - measuredWork()) : 0;
+    }
     long failedRoundingWork() { return failedRoundingWork; }
     private long measuredWork() { return work + (stepStart < 0 ? 0 : budget.threadWork() - stepStart); }
     // Completed numerical pivots/bound flips are retained progress too. Waiting

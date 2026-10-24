@@ -16,7 +16,8 @@ final class GraphStockViewWork<K> implements AutoCloseable {
     private final GraphCompiler<K> compiler;
     private final K target;
     private final long amount, started;
-    private final Map<K, Long> stock, seeds;
+    private final Map<K, Long> stock;
+    private Map<K, Long> seeds;
     private final Set<K> external;
     private final Set<String> baseExcluded, excluded = new LinkedHashSet<>();
     private final Set<K> leaves = new HashSet<>();
@@ -32,6 +33,8 @@ final class GraphStockViewWork<K> implements AutoCloseable {
     private GraphSolve<K> solving;
     private GraphPlan<K> result;
     private GraphPlan<K> repairCandidate;
+    private Map<K, Long> startupLoans = Map.of();
+    private long startupLoanMemory;
     private GraphSeedEntries<K> entryRepair;
     private GraphStockViewWork<K> fork;
     private boolean forkTried;
@@ -108,7 +111,8 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             if (!initialized) {
                 // Admission precedes copying inventory boundaries or exclusions.
                 // All of these sets are private to this positive proposal.
-                reserve(1024L + 96L * stock.size() + 128L * baseExcluded.size());
+                reserve(1024L + 96L * (stock.size() + (long) seeds.size()) + 128L * baseExcluded.size());
+                seeds = new LinkedHashMap<>(seeds);
                 for (String id : baseExcluded) {
                     check();
                     excluded.add(id);
@@ -139,6 +143,7 @@ final class GraphStockViewWork<K> implements AutoCloseable {
     private boolean advance() {
         if (validationRejected) {
             validationRejected = false;
+            clearStartupLoans();
             // A final-validator rejection belongs to this witness. Keep the
             // compiled graph for a different execution policy before changing
             // its sources; identical counts do not imply identical execution.
@@ -148,7 +153,8 @@ final class GraphStockViewWork<K> implements AutoCloseable {
                 triedTargetSeedConsumption = true;
                 solving = new GraphSolve<>(graph, target, amount, stock, external, seeds, preserve, force,
                         budget, started, policy, stock).program(compiler.demandProgram(graph, budget))
-                        .scoutRegions().allowTargetSeedConsumption(true);
+                        .startupCatalog(compiler.catalog(), baseExcluded)
+                        .scoutRegions().deferMissingStartup().allowTargetSeedConsumption(true);
                 budget.note("stock_view", "retry_rejected_witness; same_sources; variant=" + variant);
                 return false;
             }
@@ -171,7 +177,8 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             graphMemory = bytes;
             triedTargetSeedConsumption = false;
             solving = new GraphSolve<>(graph, target, amount, stock, external, seeds, preserve, force,
-                    budget, started, policy, stock).program(compiler.demandProgram(graph, budget)).scoutRegions();
+                    budget, started, policy, stock).program(compiler.demandProgram(graph, budget))
+                    .startupCatalog(compiler.catalog(), baseExcluded).scoutRegions().deferMissingStartup();
             return false;
         }
         GraphCompiler.Region<K> unresolved = null;
@@ -208,6 +215,9 @@ final class GraphStockViewWork<K> implements AutoCloseable {
         if (solving != null) {
             if (!solving.step()) return false;
             candidate = solving.result();
+            startupLoans = solving.startupLoans();
+            startupLoanMemory = 96L * startupLoans.size();
+            reserve(startupLoanMemory);
             unresolved = solving.unresolvedRegion();
             solving.close();
             solving = null;
@@ -243,7 +253,19 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             boolean refined = entryRefined || unresolved != null && changeRegionSource(unresolved);
             for (K key : candidate.missingExact().keySet()) {
                 check();
-                if (!compiler.producers(key).isEmpty()) refined |= leaves.remove(key);
+                if (!compiler.producers(key).isEmpty() && leaves.remove(key)) {
+                    refined = true;
+                    // A stock cut may have hidden the producer of the last
+                    // startup token. Expand its leaf and carry the newly
+                    // verified reserve into this view's demand, rather than
+                    // repeatedly proposing the same exhausting word.
+                    // Region working catalysts belong to the discarded word;
+                    // they must not become obligations for its replacement.
+                    if (preserve && startupLoans.containsKey(key)) {
+                        if (!seeds.containsKey(key)) reserve(96);
+                        seeds.merge(key, startupLoans.get(key), Math::max);
+                    }
+                }
             }
             if (!refined && (candidate.result() == GraphPlan.Result.MISSING_INPUT ||
                     candidate.result() == GraphPlan.Result.MISSING_SEED) && (variant < 6 || variant >= 8)) {
@@ -296,6 +318,7 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             budget.release(graphMemory);
             graphMemory = 0;
             graph = null;
+            clearStartupLoans();
             if (!refined || rounds >= 64) {
                 done = true;
                 return true;
@@ -322,8 +345,12 @@ final class GraphStockViewWork<K> implements AutoCloseable {
         var branch = new GraphStockViewWork<>(compiler, target, amount, stock, external, seeds, baseExcluded,
                 preserve, force, policy, budget, started, variant == 2 ? 6 : 7, rankingFactory).neighborhood(neighborhood);
         try {
-            branch.reserve(1024L + 96L * stock.size() + 128L * excluded.size());
-            long copiedEntries = (long) leaves.size() + excluded.size();
+            branch.reserve(1024L + 96L * (stock.size() + (long) seeds.size()) + 128L * excluded.size());
+            branch.seeds = new LinkedHashMap<>(seeds);
+            branch.startupLoans = startupLoans;
+            branch.startupLoanMemory = startupLoanMemory;
+            branch.reserve(startupLoanMemory);
+            long copiedEntries = (long) leaves.size() + excluded.size() + seeds.size();
             branch.leaves.addAll(leaves);
             branch.excluded.addAll(excluded);
             branch.reserve(160L * sourceHints.size());
@@ -365,6 +392,11 @@ final class GraphStockViewWork<K> implements AutoCloseable {
         var next = fork;
         fork = null;
         return next;
+    }
+
+    private void clearStartupLoans() {
+        budget.release(startupLoanMemory); memory -= startupLoanMemory;
+        startupLoanMemory = 0; startupLoans = Map.of();
     }
 
     private boolean changeMissingSources(GraphPlan<K> candidate) {
@@ -574,6 +606,7 @@ final class GraphStockViewWork<K> implements AutoCloseable {
         ranking = null;
         budget.release(graphMemory + memory + compileMemory + choiceMemory);
         graphMemory = memory = compileMemory = choiceMemory = 0;
+        startupLoanMemory = 0; startupLoans = Map.of();
         graph = null;
         if (solving != null) solving.close();
         solving = null;

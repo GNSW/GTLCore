@@ -706,6 +706,10 @@ public final class GraphJobRuntime<K> {
         if (!replanCurrent(epoch)) return false;
         if (!replacement.target().equals(plan.target()) || replacement.amount() != remainingDelivery)
             throw new IllegalArgumentException("Replan changed the order target");
+        // The order's policy also covers startup materials inferred by planning,
+        // even when no explicit recovery seed was needed in its original word.
+        if (plan.preserveSeeds() && !replacement.preserveSeeds())
+            throw new IllegalArgumentException("Replan dropped seed preservation");
         for (var seed : plan.seeds().entrySet())
             if (replacement.seeds().getOrDefault(seed.getKey(), 0L) < seed.getValue()) throw new IllegalArgumentException("Replan dropped recovery ownership");
         PlanVerifier.verifyRuntimeInventory(replacement);

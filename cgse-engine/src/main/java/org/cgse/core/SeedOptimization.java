@@ -129,12 +129,12 @@ final class SeedOptimization<K> implements AutoCloseable {
                 // Net consumables retain their inventory/funded-preview limits.
                 // Every other produced startup input is a loan: selected or
                 // not, it may not be silently relabelled as a spent raw material.
-                for (K key : produced) if (!external.contains(key) && summary.delta(key).signum() >= 0 && !mandatory.containsKey(key))
+                for (K key : produced) if (!external.contains(key) && (summary.delta(key).signum() >= 0 || original.seeds().containsKey(key)) && !mandatory.containsKey(key))
                     if (!original.feasible() || stock.getOrDefault(key, 0L) > 0) choices.add(key);
                 choices.sort(Comparator.comparing(key -> summary.required(key).signum() == 0));
                 stock.forEach((key, value) -> raw.put(key, PlanningInventory.exactAmount(stock, key)));
                 original.missingExact().forEach((key, value) -> raw.merge(key, value, BigInteger::add));
-                for (K key : produced) if (summary.delta(key).signum() >= 0) raw.remove(key);
+                for (K key : produced) if (summary.delta(key).signum() >= 0 || original.seeds().containsKey(key)) raw.remove(key);
                 mandatory.keySet().forEach(raw::remove);
                 var base = new LinkedHashMap<>(raw);
                 mandatory.forEach((key, value) -> base.put(key, BigInteger.valueOf(value).max(PlanningInventory.exactAmount(stock, key))));
@@ -451,6 +451,11 @@ final class SeedOptimization<K> implements AutoCloseable {
                 // returned catalyst. Count it; never call that a zero-seed plan.
                 if (raw.containsKey(key) && !mandatory.containsKey(key)) return null;
             }
+        }
+        try (var startup = new SeedStartupGuard<>(recipes.values(), value, stock, seeds, external,
+                original.target(), original.amount(), budget)) {
+            while (!startup.step()) {}
+            startup.lost().forEach((key, amount) -> seeds.merge(key, amount, Math::max));
         }
         if (quantityKeys != null && !best.seeds().keySet().containsAll(seeds.keySet())) return null;
         Map<K, BigInteger> initial = new LinkedHashMap<>(), missing = new LinkedHashMap<>();

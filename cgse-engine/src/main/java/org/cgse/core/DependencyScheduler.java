@@ -26,9 +26,10 @@ final class DependencyScheduler<K> {
         List<PlanStep> branches = plan.executionDependencies().partition(remaining);
         queued = new boolean[branches.size()];
         done = new boolean[branches.size()];
+        var compilation = new PipelineScheduler.CompilationBudget();
         for (PlanStep branch : branches) {
             int lane = lanes.size();
-            lanes.add(new PipelineScheduler<>(new PlanCursor(branch), plan.recipes(), List.of()));
+            lanes.add(new PipelineScheduler<>(new PlanCursor(branch), plan.recipes(), List.of(), compilation));
             for (String id : PlanCountComputation.of(branch).keySet()) {
                 GraphRecipe<K> recipe = plan.recipes().get(id);
                 for (K key : recipe.inputs().keySet()) affected.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).add(lane);

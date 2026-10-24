@@ -66,7 +66,8 @@ final class SeedPortfolio<K> implements AutoCloseable {
             rescheduling.close(); rescheduling = null;
             if (word != null)
                 assembling = new AllocationSearch.Candidate<>(word, best.recipes(), best.target(), best.amount(), stock,
-                        mandatory, external, best.preserveSeeds(), force, true, budget, System.nanoTime());
+                        mandatory, external, best.preserveSeeds(), force, true, budget, System.nanoTime())
+                        .startupCatalog(compiler.catalog(), excluded);
             else if (!probeTried && !multipleTerminals && terminalProbe != null &&
                     !best.missingExact().containsKey(terminalProbe) && rescheduleWork < rescheduleAllowance) {
                 // A finite one-unit terminal hypothesis retains the old nested

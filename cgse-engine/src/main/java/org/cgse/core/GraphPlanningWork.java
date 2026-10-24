@@ -98,7 +98,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private int phase;
     private int sourceAttempts, allocationAfterSources = 8;
     private CountDemandSearch<K> countDemand;
-    private boolean countDemandTried;
+    private CountCyclicStockSearch<K> cyclicStockCounts;
+    private boolean countDemandTried, cyclicStockPending;
     private long allocationTurnStarted, allocationTurnAllowance;
     private CatalystPolicy catalystPolicy = CatalystPolicy.STOCK;
     private PlanReuseVerification<K> reuseVerification;
@@ -436,6 +437,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     sourceAttempts++;
                     triedTargetSeedConsumption = false;
                     solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                            .startupCatalog(compiler.catalog(), excluded)
                             .program(compiler.demandProgram(graph, budget));
                     budget.note("compile", "choice=" + seen.size() + "; recipes=" + graph.recipes().size() + "; regions=" + graph.regions().size() +
                             "; cyclic=" + graph.regions().stream().filter(GraphCompiler.Region::cyclic).count());
@@ -777,6 +779,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 }
                 case 22 -> selectMissingPreview();
                 case 23 -> stepCountDemand();
+                case 24 -> stepCyclicStockCounts();
                 default -> {
                     return true;
                 }
@@ -1187,6 +1190,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         triedTargetSeedConsumption = true;
         budget.note("region_solve", "retry_with_target_seed; same_sources");
         solving = new GraphSolve<>(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                .startupCatalog(compiler.catalog(), excluded)
                 .program(compiler.demandProgram(graph, budget))
                 .allowTargetSeedConsumption(true);
         phase = 2;
@@ -1206,6 +1210,18 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
             quantities = new QuantityAnalysis<>(compiler, target, amount, stock, external, requiredSeeds, excluded, budget, forceCraft);
             phase = 12;
             return;
+        }
+        if (cyclicStockPending) {
+            cyclicStockPending = false;
+            // Let the existing cheap supply bounds reject genuinely unfunded
+            // requests before projecting another cyclic candidate. An
+            // inconclusive/deferred analysis still leaves this proposal a turn.
+            if (!candidate.feasible() && !Boolean.TRUE.equals(quantityBlocked) && !Boolean.TRUE.equals(stockBlocked)) {
+                cyclicStockCounts = new CountCyclicStockSearch<>(compiler, target, amount, stock, external,
+                        requiredSeeds, excluded, preserve, forceCraft, budget, started);
+                phase = 24;
+                return;
+            }
         }
         if (!candidate.feasible() && !candidate.missing().isEmpty()) {
             if (Boolean.TRUE.equals(quantityBlocked)) {
@@ -1257,6 +1273,20 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         if (!countDemand.step()) return;
         GraphPlan<K> proposal = countDemand.result();
         countDemand.close(); countDemand = null;
+        if (proposal != null) {
+            candidate = proposal;
+            beginVerification(PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
+            phase = 4;
+        } else {
+            cyclicStockPending = preserve && !stock.isEmpty();
+            afterSolve();
+        }
+    }
+
+    private void stepCyclicStockCounts() {
+        if (!cyclicStockCounts.step()) return;
+        GraphPlan<K> proposal = cyclicStockCounts.result();
+        cyclicStockCounts.close(); cyclicStockCounts = null;
         if (proposal != null) {
             candidate = proposal;
             beginVerification(PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
@@ -1352,7 +1382,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         if (!missingPreview || !MissingMaterialExpansion.needed(compiler, plan, nesting == 0)) return false;
         if (verifying != null) { verifying.close(); verifying = null; }
         missingExpansion = new MissingMaterialExpansion<>(compiler, plan, stock, external, excluded, forceCraft, false, budget)
-                .refineCycles(nesting == 0).refineSources(nesting == 0);
+                .refineCycles(nesting == 0).refineSources(nesting == 0).requestedSeeds(requiredSeeds);
         budget.note("missing_expansion", "start; verified_program_retained; initial_keys=" + plan.missingExact().size());
         phase = 21;
         return true;
@@ -1442,6 +1472,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     public void close() {
         if (countDemand != null) countDemand.close();
         countDemand = null;
+        if (cyclicStockCounts != null) cyclicStockCounts.close();
+        cyclicStockCounts = null;
         try (var costs = budget.trace(nesting == 0 ? PlanningCostTrace.Origin.COORDINATOR : null, PlanningCostTrace.Stage.CLEANUP)) {
             closeMeasured();
         }
@@ -1562,7 +1594,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 recipes.putAll(tail.recipes());
                 prefix.add(tail.steps());
                 assembly = new PlanAssembly<>(target, amount, preserve, new PlanStep.Sequence(prefix), recipes,
-                        tail.seeds(), stock, external, graph, budget, started, catalystPolicy);
+                        tail.seeds(), stock, external, graph, budget, started, catalystPolicy).startupCatalog(compiler.catalog(), excluded);
                 return false;
             }
             if (summary != null) {
@@ -1622,6 +1654,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 // Bootstrapping material is newly manufactured, not new stock that
                 // grants another allowance of extra catalysts during the tail solve.
                 restarted = new GraphSolve<>(graph, target, amount, PlanningInventory.exactSnapshot(available), external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, stock)
+                        .startupCatalog(compiler.catalog(), excluded)
                         .program(compiler.demandProgram(graph, budget))
                         .allowTargetSeedConsumption(triedTargetSeedConsumption);
                 return false;

@@ -166,6 +166,7 @@ final class AllocationSearch<K> {
         if (checking != null) {
             if (!checking.step()) return false;
             result = checking.plan;
+            checking.close();
             checking = null;
             if (expansion != null) {
                 expansion.close();
@@ -530,6 +531,11 @@ final class AllocationSearch<K> {
         GraphPlan<K> proposed;
         PlanVerification<K> verifying;
         ForceCraftProof<K> productionProof;
+        SeedStartupGuard<K> startupGuard;
+        Collection<GraphRecipe<K>> startupRecipes;
+        Set<String> startupExcluded = Set.of();
+        Map<K, Long> startupLoans = Map.of();
+        long startupBytes;
 
         @Override
         public void close() {
@@ -538,14 +544,19 @@ final class AllocationSearch<K> {
             verifying = null;
             if (productionProof != null) productionProof.close();
             productionProof = null;
+            if (startupGuard != null) startupGuard.close();
+            startupGuard = null;
+            budget.release(startupBytes); startupBytes = 0;
         }
 
         Candidate(PlanStep witness, Map<String, GraphRecipe<K>> relevant, K target, long amount, Map<K, Long> stock,
                   Map<K, Long> requiredSeeds, Set<K> external, boolean preserve, boolean force, boolean preview,
                   PlanningBudget budget, long started) {
             try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
-                this.witness = PlanFlowPruning.optimize(PlanEGraph.optimize(witness, budget), relevant, budget);
+                this.witness = PlanFlowPruning.optimize(PlanEGraph.optimize(witness, budget), relevant, budget,
+                        target, amount, requiredSeeds, preserve);
                 this.relevant = relevant;
+                startupRecipes = relevant.values();
                 this.target = target;
                 this.amount = amount;
                 this.stock = stock;
@@ -565,6 +576,12 @@ final class AllocationSearch<K> {
             try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
                 return stepMeasured();
             }
+        }
+
+        Candidate<K> startupCatalog(Collection<GraphRecipe<K>> available, Set<String> excluded) {
+            if (stage != 0) throw new IllegalStateException("Candidate assembly already started");
+            startupRecipes = available; startupExcluded = excluded;
+            return this;
         }
 
         private boolean stepMeasured() {
@@ -647,7 +664,10 @@ final class AllocationSearch<K> {
                         todo.add(key);
                         walked.clear();
                     }
-                } else stage = 3;
+                } else {
+                    startupGuard = new SeedStartupGuard<>(startupRecipes, startupExcluded, summary, stock, seeds, external, target, amount, budget);
+                    stage = 7;
+                }
             } else if (stage == 3) {
                 var all = summary.keys();
                 all.add(target);
@@ -687,6 +707,15 @@ final class AllocationSearch<K> {
                 return true;
             } else if (stage == 6) {
                 return true;
+            } else if (stage == 7) {
+                if (!startupGuard.step()) return false;
+                long bytes = 96L * startupGuard.lost().size();
+                budget.reserve(bytes); startupBytes = bytes;
+                startupLoans = new LinkedHashMap<>(startupGuard.lost());
+                startupGuard.lost().forEach((key, value) -> seeds.merge(key, value, Math::max));
+                startupGuard.close();
+                startupGuard = null;
+                stage = 3;
             }
             return false;
         }

@@ -17,7 +17,7 @@ import java.util.IdentityHashMap;
 /** Immutable catalog index. Inventory changes do not invalidate the compiled structure. */
 public final class GraphCompiler<K> {
 
-    private final List<GraphRecipe<K>> catalog;
+    private final GraphRecipeCatalog<K> catalog;
     private final Map<K, List<GraphRecipe<K>>> producers;
     private final Map<CacheKey<K>, Compiled<K>> cache = new LinkedHashMap<>(16, 0.75f, true);
     private final Map<CountKey<K>, CountCatalog<K>> countCatalogs = new LinkedHashMap<>(16, 0.75f, true);
@@ -107,6 +107,7 @@ public final class GraphCompiler<K> {
         long packedBytes = catalogIndex == null ? 0 : catalogIndex.estimatedBytes();
         values.put("catalog_index", entry("catalog_index", catalogIndex == null ? 0 : 1,
                 catalogIndex == null ? 0 : catalogIndex.resourceCount(), packedBytes));
+        values.put("startup_index", catalog.startupMetrics());
         long demandWeight = 0, demandBytes = 0;
         for (var demand : demandPrograms) {
             demandWeight += demand.recipes + (demand.program == null ? 0 : demand.program.weight);
@@ -218,7 +219,7 @@ public final class GraphCompiler<K> {
     }
 
     public GraphCompiler(List<GraphRecipe<K>> catalog) {
-        this.catalog = List.copyOf(catalog);
+        this.catalog = new GraphRecipeCatalog<>(catalog);
         this.producers = new LinkedHashMap<>();
         Set<String> ids = new HashSet<>();
         for (GraphRecipe<K> recipe : this.catalog) {
@@ -229,7 +230,7 @@ public final class GraphCompiler<K> {
     }
 
     GraphCompiler(List<GraphRecipe<K>> catalog, Map<K, List<GraphRecipe<K>>> producers) {
-        this.catalog = catalog;
+        this.catalog = new GraphRecipeCatalog<>(catalog);
         this.producers = producers;
     }
 

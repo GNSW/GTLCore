@@ -277,6 +277,7 @@ final class CountViewSearch implements AutoCloseable {
                 // portfolio batch and the candidate's original local ceiling.
                 long quantum = Math.max(policy.quantum(search.scheduling, budget.remainingWork()),
                         Math.min(CountPortfolioPolicy.MAX_QUANTUM, completedCompetingWork));
+                quantum = Math.max(quantum, Math.min(1_048_576, packing.roundingContinuationWork()));
                 return Math.min(quantum, Math.min(packing.remainingAllowance(), budget.remainingWork()));
             }
         }
@@ -307,6 +308,15 @@ final class CountViewSearch implements AutoCloseable {
         // service: running their repair alone can delay useful competing cuts.
         for (Search search : searches) if (pendingAllocationCompletion(search))
             return Math.min(262144, Math.min(search.continuationLimit - search.work, budget.remainingWork()));
+        return 0;
+    }
+
+    /** Honor only the fixed, owned completion window after initial service.
+     * No new frontier, memory reservation or grant is created by observation. */
+    long roundingCompletionQuantum() {
+        for (Search search : searches) if (!search.done && search.scheduling.eligible &&
+                search.specialist instanceof CountPackingCore packing && packing.roundingContinuationWork() > 0)
+            return Math.min(262144, Math.min(packing.roundingContinuationWork(), budget.remainingWork()));
         return 0;
     }
 
@@ -760,6 +770,8 @@ final class CountViewSearch implements AutoCloseable {
         // turns a witness task into a proof task or disables other engines.
         boolean sampled = searches.stream().noneMatch(search -> !search.done && search.scheduling.eligible &&
                 policy.selections(search.scheduling) == 0);
+        if (sampled) for (Search search : searches) if (!search.done && search.scheduling.eligible &&
+                search.specialist instanceof CountPackingCore packing && packing.roundingContinuationWork() > 0) return search;
         if (sampled) for (Search search : searches) {
             if (search.done || !search.scheduling.eligible ||
                     !(search.specialist instanceof CountGroupedPartition || search.specialist instanceof CountVectorPartition ||
@@ -780,8 +792,9 @@ final class CountViewSearch implements AutoCloseable {
                 // every operation, including the scout itself.
                 long interrupted = packing.phase() == CountPackingCore.Phase.DISTANCE_REPAIR ||
                         packing.phase() == CountPackingCore.Phase.RESUMED_ENUMERATION ? packing.restoredScoutWork() : 0;
-                search.continuationLimit = Math.max(search.continuationLimit, saturatedAdd(search.work,
-                        Math.min(packing.remainingAllowance(), saturatedAdd(budget.remainingWork() / 3, interrupted))));
+                long opportunity = packing.roundingContinuationWork() > 0 ? packing.roundingContinuationWork() :
+                        Math.min(packing.remainingAllowance(), saturatedAdd(budget.remainingWork() / 3, interrupted));
+                search.continuationLimit = Math.max(search.continuationLimit, saturatedAdd(search.work, opportunity));
             }
             if (search.continuationLimit == 0) {
                 long opportunity = search.specialist instanceof CountPackingCore packing ?

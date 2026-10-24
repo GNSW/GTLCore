@@ -20,8 +20,26 @@ final class CountScheduleTopology<K> implements AutoCloseable {
     private boolean done;
 
     CountScheduleTopology(RecipeCountModel<K> model, BigInteger[] counts, PlanningBudget budget) {
+        this(model, counts, budget, false);
+    }
+
+    CountScheduleTopology(RecipeCountModel<K> model, BigInteger[] counts, PlanningBudget budget,
+                          boolean allowExternalConfiguration) {
         this.model = model; this.counts = counts; this.budget = budget;
-        if (model.recipes.stream().anyMatch(GraphRecipe::batchSensitiveInputs)) { done = true; return; }
+        if (!allowExternalConfiguration) {
+            if (model.recipes.stream().anyMatch(GraphRecipe::batchSensitiveInputs)) { done = true; return; }
+        } else {
+            // Unused recipes and unlimited configuration supplies introduce no
+            // finite per-push resource constraint in this proposed multiset.
+            for (int i = 0; i < counts.length; i++) if (counts[i].signum() > 0) {
+                for (var slot : model.recipes.get(i).slots()) {
+                    budget.check();
+                    if (slot.configuration() && !slot.reusable() && !model.external.contains(slot.key())) {
+                        done = true; return;
+                    }
+                }
+            }
+        }
         // Include coproduct keys outside the backward constrained closure.
         long ports = 0;
         for (int i = 0; i < counts.length; i++) {
@@ -85,6 +103,11 @@ final class CountScheduleTopology<K> implements AutoCloseable {
     private void visit(int id) { seen[id] = 2; component[id] = nextComponent; edge[id] = 0; stack[depth++] = id; }
 
     int[] result() { return component == null ? null : Arrays.copyOf(component, counts.length); }
+
+    int component(K key) {
+        Integer node = keys.get(key);
+        return component == null || node == null ? -1 : component[node];
+    }
 
     @Override public void close() { budget.release(memory); memory = 0; }
 }

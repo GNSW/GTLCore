@@ -205,6 +205,13 @@ public final class CapturedCatalog<K> {
         private CapturedStatePlanning<K> statePlanning;
         private CapturedRefillRecovery<K> refillRecovery;
         private GraphPlan<K> refillCandidate;
+        private CapturedStartupVerification<K> startupVerification;
+        private GraphPlan<K> startupPlan;
+        private GraphPlan.Result startupReason;
+        private final List<GraphPlan<K>> startupAlternatives = new ArrayList<>();
+        private int startupAlternative = -1;
+        private boolean limitedHandoff;
+        private boolean startupPrimaryVerified;
         private CapturedStateSupport<K> stateSupport;
         private CapturedStockProjection<K> stateStock;
         private List<Entry<K>> stateSources;
@@ -292,6 +299,10 @@ public final class CapturedCatalog<K> {
             if (result != null) return true;
             if (closed) throw new IllegalStateException("Closed captured planning work");
             budget.checkpoint();
+            if (startupVerification != null) {
+                verifyStartup();
+                return result != null;
+            }
             if (phase != 3) budget.phase(PlanningBudget.Phase.BUILD);
             if (stateHintTrial && (phase == 8 || phase == 9) && budget.nodes() - hintTrialStarted >= hintTrialAllowance) {
                 if (stateSupport != null) stateSupport.close();
@@ -791,6 +802,58 @@ public final class CapturedCatalog<K> {
         }
 
         private void finish(GraphPlan<K> plan, GraphPlan.Result reason) {
+            boolean conditional = conditionalPreviews && reason == GraphPlan.Result.INCOMPLETE_MODEL && !plan.missingExact().isEmpty();
+            if (preserve && (plan.feasible() || conditional || coverage.complete() && !plan.missingExact().isEmpty()) &&
+                    (allocationView || !coverage.complete())) {
+                if (limitedHandoff) {
+                    finishUnchecked(new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()), Map.of(), Map.of(),
+                            Map.of(), Map.of(), GraphPlan.Result.UNKNOWN, budget.nodes(), System.nanoTime() - started), GraphPlan.Result.UNKNOWN);
+                } else {
+                    startupPlan = plan; startupReason = reason; startupAlternative = -1; startupAlternatives.clear(); startupPrimaryVerified = false;
+                    startupVerification = new CapturedStartupVerification<>(entries, producers, plan, stock, external, budget, stateFamilies);
+                }
+                return;
+            }
+            finishUnchecked(plan, reason);
+        }
+
+        private void verifyStartup() {
+            if (!startupVerification.step()) return;
+            boolean accepted = startupVerification.accepted(); String why = startupVerification.reason();
+            startupVerification.close(); startupVerification = null;
+            if (!accepted && startupAlternative < 0) {
+                budget.note("candidate_startup", "proposal_declined; reason=" + why + "; negative_proof=false");
+                startupPlan = null; startupAlternatives.clear();
+                if (phase == 6 || phase == 3 && allocationView) { allocationView = false; phase = 2; }
+                else if (phase == 7) {
+                    if (reachable != null) reachable.close(); reachable = null;
+                    reachablePlan = null; reachableVariants = List.of(); reachableVariant = 0;
+                    beginInputAllocation();
+                } else if (phase == 8) {
+                    if (!beginStateRecovery()) {
+                        if (!fullStateTried) beginStatePlanning(entries);
+                        else phase = 1;
+                    }
+                } else if (phase == 3 && remaining) beginInputAllocation();
+                else {
+                    finishUnchecked(new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()), Map.of(), Map.of(),
+                            Map.of(), Map.of(), GraphPlan.Result.UNKNOWN, budget.nodes(), System.nanoTime() - started), GraphPlan.Result.UNKNOWN);
+                }
+                return;
+            }
+            if (accepted && startupAlternative >= 0) startupAlternatives.add(startupPlan.alternatives().get(startupAlternative).withAlternatives(List.of()));
+            if (accepted && startupAlternative < 0) startupPrimaryVerified = true;
+            if (++startupAlternative < startupPlan.alternatives().size()) {
+                startupVerification = new CapturedStartupVerification<>(entries, producers,
+                        startupPlan.alternatives().get(startupAlternative), stock, external, budget, stateFamilies);
+            } else {
+                var checked = startupPlan.withAlternatives(startupAlternatives);
+                startupPlan = null; startupAlternatives.clear();
+                finishUnchecked(checked, startupReason);
+            }
+        }
+
+        private void finishUnchecked(GraphPlan<K> plan, GraphPlan.Result reason) {
             if ((!coverage.complete() || allocationView) && budget.failureDetail().startsWith("PROVEN_INFEASIBLE:"))
                 budget.failureDetail("RESTRICTED_PROOF_NOT_TRANSFERRED: result=" + reason);
             // A funded refill witness is useful even when omitted candidates
@@ -828,6 +891,11 @@ public final class CapturedCatalog<K> {
         public Result<K> limited(PlanningBudget.Exhausted limit) {
             if (result != null) return result;
             checkHandoffCancellation();
+            limitedHandoff = true;
+            if (startupPlan != null && startupPrimaryVerified) {
+                finishUnchecked(startupPlan.withAlternatives(startupAlternatives), startupReason);
+                return result;
+            }
             if (refillCandidate != null) {
                 // This prefix was verified before the optional tool-refill
                 // improvement began. An interrupted retry cannot erase it.
@@ -901,6 +969,8 @@ public final class CapturedCatalog<K> {
             statePlanning = null;
             if (refillRecovery != null) refillRecovery.close();
             refillRecovery = null; refillCandidate = null;
+            if (startupVerification != null) startupVerification.close();
+            startupVerification = null; startupPlan = null; startupAlternatives.clear();
             if (stateSupport != null) stateSupport.close();
             stateSupport = null;
             closeStateStock(); stateSources = null;

@@ -496,14 +496,14 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 proofContradiction = current.isEmpty();
                 state = State.DEAD;
             } else {
-                long completion = continuation == 2 ? viewSearch.allocationCompletionQuantum() : 0;
+                long completion = viewSearch.roundingCompletionQuantum();
+                if (completion == 0 && continuation == 2) completion = viewSearch.allocationCompletionQuantum();
                 if (completion > 0) {
-                    // Compilation exposed an owned grouped allocation search.
-                    // Honor its existing completion ceiling before unrelated
-                    // whole-model scouts spend this optional graph view's budget.
-                    // Neither this handoff nor progress renews that ceiling.
+                    // Finish the owned allocation or rounding window, then
+                    // return to the same parked continuation. All work still
+                    // spends its captured local and shared request ceilings.
                     viewSearch.resume(completion);
-                    viewStage = 2;
+                    viewStage = continuation;
                 } else afterViewSearch(continuation);
             }
             return;

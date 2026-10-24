@@ -21,6 +21,8 @@ final class RefillWordPruning<K> implements AutoCloseable {
     private final Set<K> external;
     private final boolean forceCraft, ignoreTargetStock;
     private final PlanningBudget budget;
+    private Collection<GraphRecipe<K>> startupRecipes;
+    private Set<String> startupExcluded = Set.of();
     private final long started, allowance;
     private final String retainedFailure;
     private final Map<K, BigInteger> inventory = new LinkedHashMap<>(), required = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
@@ -36,6 +38,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
     private GraphRecipe<K> unitRecipe;
     private boolean unitOutputs;
     private PlanVerification<K> verification;
+    private SeedStartupGuard<K> startup;
     private SummaryComputation<K> computation;
     private RefillWordBlocks blocks;
     private RefillShortBlockHint shortHint;
@@ -85,6 +88,13 @@ final class RefillWordPruning<K> implements AutoCloseable {
         compactCursors = allowance >= 8192;
         summary = verified; verifiedOriginal = verified;
         recipes = original.recipes().values().iterator();
+        startupRecipes = original.recipes().values();
+    }
+
+    RefillWordPruning<K> startupCatalog(Collection<GraphRecipe<K>> available, Set<String> excluded) {
+        if (allocated || phase != Phase.RECIPES) throw new IllegalStateException("Refill pruning already started");
+        startupRecipes = available; startupExcluded = excluded;
+        return this;
     }
 
     boolean step() {
@@ -117,8 +127,19 @@ final class RefillWordPruning<K> implements AutoCloseable {
                 startUnit(); return false;
             }
             if (phase == Phase.VERIFY) {
-                if (!verification.step()) return false;
+                if (startup == null && !verification.step()) return false;
                 if (forceCraft && verification.summary().delta(original.target()).compareTo(targetCredit) < 0) return finish();
+                if (candidate.preserveSeeds()) {
+                    if (startup == null) startup = new SeedStartupGuard<>(startupRecipes, startupExcluded, verification.summary(),
+                            stock, candidate.seeds(), external, candidate.target(), candidate.amount(), budget);
+                    if (!startup.step()) return false;
+                    boolean lost = !startup.lost().isEmpty();
+                    startup.close(); startup = null;
+                    // A redundant delivery coproduct can still be the last
+                    // restart token. Keep the verified original word when a
+                    // count reduction would erase that startup capability.
+                    if (lost) return finish();
+                }
                 return complete(true);
             }
             if (phase == Phase.BLOCKS) {
@@ -190,7 +211,8 @@ final class RefillWordPruning<K> implements AutoCloseable {
                 // checked fold is valid under this exact supply/binding tuple.
                 factored = GraphPlan.ownedRefill(result, periods.result(), result.recipes(), result.initialExact(), result.missingExact(), result.result(), budget.nodes());
                 periodPruning = new RefillWordPruning<>(factored, stock, external, forceCraft, ignoreTargetStock, budget,
-                        allowance - (budget.nodes() - started), blockPruning.verification.summary());
+                        allowance - (budget.nodes() - started), blockPruning.verification.summary())
+                        .startupCatalog(startupRecipes, startupExcluded);
                 periodPruning.allowBlocks = false; periodPruning.inheritedStructure = true;
                 periodPruning.compactCursors = true; periodPruning.reuseUnit = true;
                 phase = Phase.PERIOD_PRUNE; return false;
@@ -290,6 +312,10 @@ final class RefillWordPruning<K> implements AutoCloseable {
                 } else if (stack.peek().index == 0) { stack.pop(); release(64); }
                 else {
                     atom = stack.peek().previous();
+                    // Reading the final child also closes this cursor. This
+                    // does not skip any hierarchy or recipe visit; it only
+                    // avoids a separate charged visit to an exhausted cursor.
+                    if (compactCursors && stack.peek().index == 0) { stack.pop(); release(64); }
                     if (atom instanceof PlanStep.Sequence sequence) push(sequence.children());
                     else if (compactCursors && atom instanceof PlanStep.Batch batch) {
                         if (batch.runs() == 0) break;
@@ -340,7 +366,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
                 if (runs.signum() == 0 || !visitUnit(true)) {
                     if (compactCursors) emit();
                     else { entries = null; ports = null; phase = Phase.EMIT; }
-                }
+                } else if (compactCursors && unitKeysFinished()) emit();
             }
             case EMIT -> emit();
             case STEPS -> {
@@ -392,6 +418,13 @@ final class RefillWordPruning<K> implements AutoCloseable {
     private void unitKeys() {
         if (unitRecipe == null) entries = unitSummary.delta().entrySet().iterator();
         else { ports = unitRecipe.inputs().keySet().iterator(); unitOutputs = false; }
+    }
+    private boolean unitKeysFinished() {
+        if (unitRecipe == null) return !entries.hasNext();
+        if (!ports.hasNext() && !unitOutputs) {
+            ports = unitRecipe.outputs().keySet().iterator(); unitOutputs = true;
+        }
+        return unitOutputs && !ports.hasNext();
     }
     private BigInteger unitDelta(K key) {
         // Both ports are nonnegative longs, so their difference fits in long.
@@ -561,7 +594,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
         boolean scheduledFloor = budget.nodes() - started >= 2048;
         if (known == null && result == original) known = verifiedOriginal;
         blockPruning = new RefillWordPruning<>(regrouped, stock, external, forceCraft, ignoreTargetStock, budget,
-                allowance - (budget.nodes() - started), known);
+                allowance - (budget.nodes() - started), known).startupCatalog(startupRecipes, startupExcluded);
         // This is the same quality pass, not a fresh work-scaled preview. The
         // parent's reached floor permits its child to omit empty handoffs too.
         blockPruning.compactCursors = compactCursors || scheduledFloor;
@@ -597,6 +630,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
     }
     private void release(long bytes) { budget.release(bytes); memory -= bytes; }
     @Override public void close() {
+        if (startup != null) { startup.close(); startup = null; }
         if (periodPruning != null) { periodPruning.close(); periodPruning = null; }
         if (periods != null) { periods.close(); periods = null; }
         if (blockPruning != null) { blockPruning.close(); blockPruning = null; }

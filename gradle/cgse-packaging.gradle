@@ -4,6 +4,27 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 
 def engine = project(':cgse-engine')
+// Bind the host's bootstrap requirement to the same build configuration as
+// Jar-in-Jar selection. Do not derive it from the engine selected at runtime.
+def integrationApi = tasks.register('generateCgseIntegrationApi') {
+    inputs.property('compatibility', engine.cgseCompatibility)
+    def output = layout.buildDirectory.dir('generated/sources/cgseIntegration/java')
+    outputs.dir(output)
+    doLast {
+        def target = output.get().file('org/gtlcore/gtlcore/CgseIntegrationApi.java').asFile
+        target.parentFile.mkdirs()
+        target.setText("""package org.gtlcore.gtlcore;
+
+// Generated from the engine API used to compile this host.
+final class CgseIntegrationApi {
+    static final String REQUIRED = "${engine.cgseCompatibility}";
+    private CgseIntegrationApi() {}
+}
+""", 'UTF-8')
+    }
+}
+sourceSets.main.java.srcDir(integrationApi)
+
 tasks.withType(Jar).matching { it.name == 'sourcesJar' }.configureEach {
     from engine.sourceSets.main.allSource
 }

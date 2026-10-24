@@ -130,12 +130,12 @@ final class QuestTranslationStructureScreen extends Screen {
     private void add(List<String> value) {
         try {
             int index = insertionIndex();
-            draft.insert(index, value);
+            draft.insert(index, QuestTranslationRichText.normalize(value));
             selected = index + value.size() - 1;
             page = selected / rows;
             newText = "";
             message = "";
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             message = e.getMessage();
         }
         rebuild();
@@ -157,17 +157,18 @@ final class QuestTranslationStructureScreen extends Screen {
         Component heading = error.isEmpty() ? Component.translatable("gtlcore.quest_i18n.source_editor", sourceLanguage) :
                 Component.literal(error);
         if (!QuestTranslationRichEditor.open(this, heading, text, replacement -> {
-            if (index < 0) {
-                newText = String.join("\n", replacement);
-                rebuild();
-                return;
-            }
             try {
-                draft.replace(index, replacement);
+                List<String> normalized = QuestTranslationRichText.normalize(replacement);
+                if (index < 0) {
+                    newText = String.join("\n", normalized);
+                    rebuild();
+                    return;
+                }
+                draft.replace(index, normalized);
                 selected = Math.min(index, Math.max(0, lines().size() - 1));
                 message = "";
                 rebuild();
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 openRich(index, String.join("\n", replacement), e.getMessage());
             }
         })) {
@@ -180,7 +181,7 @@ final class QuestTranslationStructureScreen extends Screen {
         try {
             var submitted = draft.copy();
             // Include pending input; retain the live draft until the server acknowledges it.
-            if (!newText.isEmpty()) submitted.insert(insertionIndex(), inputLines());
+            if (!newText.isEmpty()) submitted.insert(insertionIndex(), QuestTranslationRichText.normalize(inputLines()));
             request = UUID.randomUUID();
             pendingTicks = 0;
             QuestTranslationNetwork.saveDescription(new QuestTranslationNetwork.DescriptionEdit(
@@ -188,7 +189,7 @@ final class QuestTranslationStructureScreen extends Screen {
                     List.copyOf(submitted.lines()), submitted.changes()));
             message = QuestTranslationScreen.label("saving").getString();
             rebuild();
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             request = null;
             message = e.getMessage();
             rebuild();

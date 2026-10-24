@@ -146,47 +146,57 @@ public final class PreviewMesh implements AutoCloseable {
                     for (int index = from; index < to; index++) {
                         if (task.cancelled()) return;
                         var pos = snapshot.positions.get(index);
-                        var state = snapshot.getBlockState(pos);
-                        var fluid = state.getFluidState();
-                        boolean blockLayer = state.getRenderShape() != RenderShape.INVISIBLE && WorldSceneRenderer.canRenderInLayer(state, layer);
-                        boolean fluidLayer = !fluid.isEmpty() && ItemBlockRenderTypes.getRenderLayer(fluid) == layer;
-                        progress.incrementAndGet();
-                        if (!blockLayer && !fluidLayer) continue;
-                        if (builder == null) {
-                            builder = PreviewBuffers.acquire(task);
-                            if (builder == null) return;
-                            builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
-                        }
-                        var wrapper = new WorldSceneRenderer.VertexConsumerWrapper(builder);
-                        if (blockLayer) {
-                            pose.pushPose();
-                            pose.translate(pos.getX(), pos.getY(), pos.getZ());
-                            if (ghost) {
-                                pose.translate(0.5, 0.5, 0.5);
-                                pose.scale(0.8f, 0.8f, 0.8f);
-                                pose.translate(-0.5, -0.5, -0.5);
-                                snapshot.isolate(pos);
+                        if (ghost) snapshot.isolate(pos);
+                        try {
+                            var state = snapshot.getBlockState(pos);
+                            var fluid = state.getFluidState();
+                            var modelData = snapshot.modelData(pos);
+                            boolean blockLayer = state.getRenderShape() != RenderShape.INVISIBLE;
+                            if (blockLayer) {
+                                var model = dispatcher.getBlockModel(state);
+                                modelData = model.getModelData(snapshot, pos, state, modelData);
+                                random.setSeed(state.getSeed(pos));
+                                // Use the same model data for layer selection and quad generation.
+                                blockLayer = model.getRenderTypes(state, random, modelData).contains(layer);
                             }
-                            try {
-                                var modelData = dispatcher.getBlockModel(state).getModelData(snapshot, pos, state,
-                                        snapshot.modelData(pos));
-                                // A sliced snapshot exposes cut faces; ghosts must retain all faces around their gaps.
-                                dispatcher.renderBatched(state, pos, snapshot, pose, wrapper, !ghost, random, modelData, layer);
-                            } finally {
-                                snapshot.isolate(null);
-                                pose.popPose();
+                            boolean fluidLayer = !fluid.isEmpty() && ItemBlockRenderTypes.getRenderLayer(fluid) == layer;
+                            progress.incrementAndGet();
+                            if (!blockLayer && !fluidLayer) continue;
+                            if (builder == null) {
+                                builder = PreviewBuffers.acquire(task);
+                                if (builder == null) return;
+                                builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
                             }
-                        }
-                        if (fluidLayer) {
-                            wrapper.addOffset(pos.getX() - (pos.getX() & 15),
-                                    pos.getY() - (pos.getY() & 15), pos.getZ() - (pos.getZ() & 15));
-                            dispatcher.renderLiquid(pos, snapshot, wrapper, state, fluid);
-                        }
-                        if (++count >= BLOCKS_PER_BUFFER) {
-                            var owned = builder;
-                            builder = null;
-                            if (!publish(layerIndex * partitions + partition, owned)) return;
-                            count = 0;
+                            var wrapper = new WorldSceneRenderer.VertexConsumerWrapper(builder);
+                            if (blockLayer) {
+                                pose.pushPose();
+                                pose.translate(pos.getX(), pos.getY(), pos.getZ());
+                                if (ghost) {
+                                    pose.translate(0.5, 0.5, 0.5);
+                                    pose.scale(0.8f, 0.8f, 0.8f);
+                                    pose.translate(-0.5, -0.5, -0.5);
+                                }
+                                try {
+                                    // A sliced snapshot exposes cut faces; ghosts must retain all faces around their
+                                    // gaps.
+                                    dispatcher.renderBatched(state, pos, snapshot, pose, wrapper, !ghost, random, modelData, layer);
+                                } finally {
+                                    pose.popPose();
+                                }
+                            }
+                            if (fluidLayer) {
+                                wrapper.addOffset(pos.getX() - (pos.getX() & 15),
+                                        pos.getY() - (pos.getY() & 15), pos.getZ() - (pos.getZ() & 15));
+                                dispatcher.renderLiquid(pos, snapshot, wrapper, state, fluid);
+                            }
+                            if (++count >= BLOCKS_PER_BUFFER) {
+                                var owned = builder;
+                                builder = null;
+                                if (!publish(layerIndex * partitions + partition, owned)) return;
+                                count = 0;
+                            }
+                        } finally {
+                            snapshot.isolate(null);
                         }
                     }
                     if (builder != null) {

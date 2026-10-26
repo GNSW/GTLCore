@@ -10,6 +10,15 @@ public interface GraphDispatchPreflight {
 
     boolean gtlcore$canProduceGraphPattern(IPatternDetails pattern);
 
+    /**
+     * Confirmation checks only shared equipment, not current dispatch readiness.
+     * Providers without shared-tool requirements must not refresh recipes or
+     * scan their processing buffers merely to show a crafting preview.
+     */
+    default @org.jetbrains.annotations.Nullable net.minecraft.network.chat.Component gtlcore$graphSharedToolProblem(IPatternDetails pattern) {
+        return null;
+    }
+
     /** A failed machine preflight is not necessarily a missing shared tool. */
     default String gtlcore$graphBlockReason(IPatternDetails pattern) {
         return "PROVIDER_REJECTED";

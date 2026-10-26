@@ -252,8 +252,18 @@ public class MEMolecularAssemblerIOPartMachine extends MEIOPartMachine implement
 
     @Override
     public Component gtlcore$graphBlockMessage(IPatternDetails pattern) {
+        return gtlcore$graphToolMessage(gtlcore$missingGraphTools(pattern));
+    }
+
+    @Override
+    public @Nullable Component gtlcore$graphSharedToolProblem(IPatternDetails pattern) {
+        var missing = gtlcore$missingGraphTools(pattern);
+        return missing.isEmpty() ? null : gtlcore$graphToolMessage(missing);
+    }
+
+    private Component gtlcore$graphToolMessage(Set<Item> missing) {
         var names = Component.empty();
-        for (var item : gtlcore$missingGraphTools(pattern)) {
+        for (var item : missing) {
             if (!names.getSiblings().isEmpty()) names.append(", ");
             names.append(item.getDescription());
         }

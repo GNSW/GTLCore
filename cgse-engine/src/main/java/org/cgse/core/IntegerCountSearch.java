@@ -60,6 +60,11 @@ final class IntegerCountSearch<K> implements AutoCloseable {
     private boolean reachabilityProofGranted;
     private long work, improvementUntil = Long.MAX_VALUE, firstWitnessWork = -1, firstWitnessNanos;
     private long frontierWork, continuationWork;
+    private IntegerCountBranch<K> packingCompletionBranch;
+    private CountPackingCore packingCompletionOwner;
+    private long packingCompletionUntil;
+    private long packingCompletionProbeAfter;
+    private IntegerCountBranch<K> packingCompletionObserved, packingCompletionDispatched;
     private int branches, rounds, suspensions, boundPrunes, choicePrunes, peakWidth;
 
     private record Incumbent<K>(GraphPlan<K> plan, PlanPreference<K> cost, long memory) {}
@@ -365,6 +370,70 @@ final class IntegerCountSearch<K> implements AutoCloseable {
         return pending.peekFirst().scaling != null;
     }
 
+    private IntegerCountBranch<K> uniquePackingCompletionBranch() {
+        if (complete || stopped.get() || released.get() || running != null) return null;
+        IntegerCountBranch<K> found = null;
+        for (var branch : pending) if (branch.state == IntegerCountBranch.State.OPEN && !branch.proofTask && branch.viewSearch != null &&
+                branch.viewSearch.activePackingCompletion() != null) {
+            if (found != null) return null;
+            found = branch;
+        }
+        for (var branch : deferred) if (branch.state == IntegerCountBranch.State.OPEN && !branch.proofTask && branch.viewSearch != null &&
+                branch.viewSearch.activePackingCompletion() != null) {
+            if (found != null) return null;
+            found = branch;
+        }
+        return found;
+    }
+
+    CountPackingCore activePackingCompletion() {
+        if (complete || stopped.get() || released.get() || running != null) return null;
+        if (packingCompletionBranch != null) {
+            var branch = packingCompletionBranch;
+            return branch.state == IntegerCountBranch.State.OPEN && !branch.proofTask && branch.viewSearch != null &&
+                    branch.viewSearch.activePackingCompletion() == packingCompletionOwner ? packingCompletionOwner : null;
+        }
+        if (budget.nodes() < packingCompletionProbeAfter) return null;
+        long probeStarted = budget.nodes();
+        packingCompletionProbeAfter = probeStarted + Math.min(65_536, Long.MAX_VALUE - probeStarted);
+        budget.charge((long) pending.size() + deferred.size());
+        // Inspecting a large frontier must not itself make the next inspection
+        // immediately due. Preserve the ordinary deadline for small queues.
+        long probeFinished = budget.nodes();
+        if (probeFinished >= packingCompletionProbeAfter)
+            packingCompletionProbeAfter = probeFinished + Math.min(65_536, Long.MAX_VALUE - probeFinished);
+        packingCompletionObserved = uniquePackingCompletionBranch();
+        return packingCompletionObserved == null ? null : packingCompletionObserved.viewSearch.activePackingCompletion();
+    }
+
+    boolean preferPackingCompletion(CountPackingCore owner, long until) {
+        var branch = packingCompletionObserved;
+        packingCompletionObserved = null;
+        if (complete || stopped.get() || released.get() || running != null || branch == null ||
+                packingCompletionBranch != null || !(pending.contains(branch) || deferred.contains(branch)) ||
+                branch.proofTask || branch.state != IntegerCountBranch.State.OPEN || branch.viewSearch == null ||
+                branch.viewSearch.activePackingCompletion() != owner || until <= budget.nodes()) return false;
+        packingCompletionBranch = branch;
+        packingCompletionOwner = owner;
+        packingCompletionUntil = until;
+        return true;
+    }
+
+    boolean ownsPackingCompletion(CountPackingCore owner) {
+        return !complete && !stopped.get() && !released.get() && packingCompletionBranch != null &&
+                packingCompletionOwner == owner && budget.nodes() < packingCompletionUntil &&
+                packingCompletionBranch.state == IntegerCountBranch.State.OPEN &&
+                !packingCompletionBranch.proofTask && packingCompletionBranch.viewSearch != null &&
+                packingCompletionBranch.viewSearch.activePackingCompletion() == owner;
+    }
+
+    void clearPackingCompletion() {
+        packingCompletionObserved = null;
+        packingCompletionBranch = null;
+        packingCompletionOwner = null;
+        packingCompletionUntil = 0;
+    }
+
     boolean hasRetainedViews() {
         if (running != null) return false;
         return hasSpecializedWork() || pending.stream().anyMatch(branch -> branch.viewSearch != null && branch.viewSearch.retained()) ||
@@ -419,6 +488,18 @@ final class IntegerCountSearch<K> implements AutoCloseable {
 
     private List<IntegerCountBranch<K>> take(int width, int residentLimit) {
         List<IntegerCountBranch<K>> selected = new ArrayList<>();
+        if (packingCompletionBranch != null) {
+            var owner = packingCompletionBranch;
+            if (budget.nodes() < packingCompletionUntil && owner.state == IntegerCountBranch.State.OPEN &&
+                    owner.viewSearch != null && owner.viewSearch.activePackingCompletion() == packingCompletionOwner &&
+                    (pending.remove(owner) || deferred.remove(owner))) {
+                selected.add(owner);
+                packingCompletionDispatched = owner;
+                releasePropagationCache(owner);
+                return selected;
+            }
+            clearPackingCompletion();
+        }
         long resident = pending.stream().filter(branch -> branch.initialized).count() +
                 deferred.stream().filter(branch -> branch.initialized).count();
         // Reserve a quarter of completed effort for continuations. Atomic LP
@@ -475,7 +556,10 @@ final class IntegerCountSearch<K> implements AutoCloseable {
                 }
         for (var branch : wave) {
             work += branch.work;
-            if (branch.deferredVisit) continuationWork += Math.min(branch.work, Long.MAX_VALUE - continuationWork);
+            // Captured extra service is charged to raw work and request budget,
+            // but creates no debt in the ordinary continuation/frontier ratio.
+            if (branch == packingCompletionDispatched) packingCompletionDispatched = null;
+            else if (branch.deferredVisit) continuationWork += Math.min(branch.work, Long.MAX_VALUE - continuationWork);
             else frontierWork += Math.min(branch.work, Long.MAX_VALUE - frontierWork);
             branch.work = 0;
             if (branch.choicePruned) choicePrunes++;
@@ -963,6 +1047,8 @@ final class IntegerCountSearch<K> implements AutoCloseable {
 
     private void release() {
         if (!released.compareAndSet(false, true)) return;
+        clearPackingCompletion();
+        packingCompletionDispatched = null;
         closeShell();
         closeReachability();
         budget.release(CACHE_ENTRY_BYTES * propagationCaches.size());

@@ -29,7 +29,7 @@ final class CountViewSearch implements AutoCloseable {
     private boolean groupedPartitionAttempted;
     private boolean relaxationNeighborhoodAttempted;
     private boolean packingCoreAttempted;
-    private boolean equalitySupportAttempted, equalityDomainsAttempted;
+    private boolean equalitySupportAttempted, equalityDomainsAttempted, equalityMessageAttempted;
     private final Set<CountModelViews.View> partitionViews = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CountModelViews.View> wideAllocationViews = Collections.newSetFromMap(new IdentityHashMap<>());
     private long commonWork, reportedCommonWork, restorationWork;
@@ -207,6 +207,7 @@ final class CountViewSearch implements AutoCloseable {
         PACKING_CORE,
         EQUALITY_SUPPORT,
         EQUALITY_DOMAINS,
+        EQUALITY_MESSAGE,
         DOMAIN,
         DIAGRAM,
         BOOLEAN,
@@ -317,6 +318,19 @@ final class CountViewSearch implements AutoCloseable {
         for (Search search : searches) if (!search.done && search.scheduling.eligible &&
                 search.specialist instanceof CountPackingCore packing && packing.roundingContinuationWork() > 0)
             return Math.min(262144, Math.min(packing.roundingContinuationWork(), budget.remainingWork()));
+        return 0;
+    }
+
+    CountPackingCore activePackingCompletion() {
+        for (Search search : searches) if (!search.done && search.scheduling.eligible &&
+                search.specialist instanceof CountPackingCore packing && packing.expandedCompletionWork() > 0) return packing;
+        return null;
+    }
+
+    /** A single captured opportunity for a narrow equality candidate, never a renewed grant. */
+    long messageCompletionQuantum() {
+        for (Search search : searches) if (pendingMessageCompletion(search))
+            return Math.min(262144, Math.min(search.continuationLimit - search.work, budget.remainingWork()));
         return 0;
     }
 
@@ -635,6 +649,7 @@ final class CountViewSearch implements AutoCloseable {
                     if (!added) added = addPackingCore();
                     if (!added) added = addEqualitySupport(false);
                     if (!added) added = addEqualitySupport(true);
+                    if (!added) added = addEqualityMessage();
                 }
                 finally {
                     integerScoutWork = budget.threadWork() - scoutStarted;
@@ -649,6 +664,7 @@ final class CountViewSearch implements AutoCloseable {
             // as surrendering that already bounded opportunity. Keep ordinary
             // owner deadlines: another resume cannot renew its work ceiling.
             if (stalled && searches.stream().anyMatch(this::pendingAllocationCompletion)) stalled = false;
+            if (stalled && searches.stream().anyMatch(this::pendingMessageCompletion)) stalled = false;
             return counts != null || infeasible || stalled;
         } finally {
             long spent = budget.threadWork() - before;
@@ -702,6 +718,32 @@ final class CountViewSearch implements AutoCloseable {
             Engine engine = discrete ? Engine.EQUALITY_DOMAINS : Engine.EQUALITY_SUPPORT;
             Search arm = new Search(view, policy.add(view.shape().cost(), engine), engine);
             arm.scope = domains; arm.specialist = search; searches.add(arm);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean addEqualityMessage() {
+        if (equalityMessageAttempted || !models.compiledAlternatives() || budget.nodes() < 16_777_216 ||
+                policy.mode() == CountPortfolioPolicy.Mode.PROOF || budget.proofJournal() != null) return false;
+        equalityMessageAttempted = true;
+        // Preserve the cheap exact and supported paths before trying a different
+        // value ordering. Declared bounds keep this private candidate independent
+        // of arrival timing of shared facts; every result still passes restoration.
+        for (var view : models.available()) {
+            if (view.shape().variables() <= 128 || view.shape().variables() > 512 ||
+                    view.shape().terms() > 12L * view.shape().variables() || view.shape().vectorAllocation()) continue;
+            var candidate = CountMessageSearch.create(view.rows(), view.lower(), view.upper(), budget,
+                    CountPortfolioPolicy.MIN_QUANTUM);
+            if (candidate == null) continue;
+            Search arm = new Search(view, policy.add(view.shape().cost(), Engine.EQUALITY_MESSAGE), Engine.EQUALITY_MESSAGE);
+            arm.scope = new CountModelViews.Domains(view.lower(), view.upper(), 0);
+            arm.specialist = candidate;
+            long remaining = budget.remainingWork();
+            arm.continuationLimit = Math.min(33_554_432, remaining - remaining / 8);
+            searches.add(arm);
+            budget.note("count_message_completion", "view=" + view.name() + "; allowance=" + arm.continuationLimit +
+                    "; candidate_only; retained_exact_frontiers");
             return true;
         }
         return false;
@@ -770,6 +812,7 @@ final class CountViewSearch implements AutoCloseable {
         // turns a witness task into a proof task or disables other engines.
         boolean sampled = searches.stream().noneMatch(search -> !search.done && search.scheduling.eligible &&
                 policy.selections(search.scheduling) == 0);
+        if (sampled) for (Search search : searches) if (pendingMessageCompletion(search)) return search;
         if (sampled) for (Search search : searches) if (!search.done && search.scheduling.eligible &&
                 search.specialist instanceof CountPackingCore packing && packing.roundingContinuationWork() > 0) return search;
         if (sampled) for (Search search : searches) {
@@ -826,6 +869,11 @@ final class CountViewSearch implements AutoCloseable {
         }
         var chosen = policy.select();
         return searches.stream().filter(search -> search.scheduling == chosen).findFirst().orElse(null);
+    }
+
+    private boolean pendingMessageCompletion(Search search) {
+        return !search.done && search.scheduling.eligible && search.engine == Engine.EQUALITY_MESSAGE &&
+                search.work < search.continuationLimit;
     }
 
     private boolean pendingAllocationCompletion(Search search) {

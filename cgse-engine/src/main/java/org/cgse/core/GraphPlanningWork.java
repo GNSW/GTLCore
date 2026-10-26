@@ -60,6 +60,9 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
     private AllocationSearch<K> allocating;
     private IntegerCountSearch<K> countSearch;
     private IntegerCountSearch<K> parkedCounts;
+    private boolean packingCompletionAttempted;
+    private CountPackingCore packingCompletionOwner;
+    private long packingCompletionUntil;
     private long countPausedAt;
     private long stockCountWork, stockCountStarted;
     private boolean stockCountTurn;
@@ -231,6 +234,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     return true;
                 }
             }
+            updatePackingCompletion();
             // A cheap ordinary alternative gets a bounded turn, not ownership
             // of the remaining order budget. Keep its partial compile/solve
             // alive while stock views run, then resume the same state.
@@ -665,6 +669,11 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                 }
                 case 14 -> {
                     if (!countSearch.step(slice)) return false;
+                    if (countSearch.paused() && budget.nodes() < packingCompletionUntil &&
+                            countSearch.activePackingCompletion() == packingCompletionOwner) {
+                        countSearch.resumeBounded(packingCompletionUntil - budget.nodes());
+                        return false;
+                    }
                     if (stockCountTurn) {
                         stockCountWork += budget.searchWork() - stockCountStarted;
                         stockCountTurn = false;
@@ -879,6 +888,46 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         allocationTurnStarted = allocating.searchWork();
         allocationTurnAllowance = Math.min(1_048_576, budget.remainingWork() / 8);
         phase = 6;
+    }
+
+    /** Keep this rare handoff out of the coordinator's hot bytecode body. */
+    private void updatePackingCompletion() {
+        if (packingCompletionOwner != null && (budget.nodes() >= packingCompletionUntil ||
+                packingCompletionOwner.expandedCompletionWork() == 0 ||
+                (countSearch == null || !countSearch.ownsPackingCompletion(packingCompletionOwner)) &&
+                (parkedCounts == null || !parkedCounts.ownsPackingCompletion(packingCompletionOwner)))) {
+            if (countSearch != null) countSearch.clearPackingCompletion();
+            if (parkedCounts != null) parkedCounts.clearPackingCompletion();
+            packingCompletionOwner = null;
+            packingCompletionUntil = 0;
+        }
+        if (!packingCompletionAttempted && budget.nodes() >= 16_777_216 &&
+                (phase == 14 || parkedCounts != null && (phase == 0 || phase == 5 || phase == 6 || phase == 9 || phase == 19))) {
+            var retained = phase == 14 ? countSearch : parkedCounts;
+            var owner = retained.activePackingCompletion();
+            if (owner != null) {
+                packingCompletionAttempted = true;
+                long remaining = budget.remainingWork();
+                long grant = Math.min(owner.expandedCompletionWork(), Math.min(8_388_608, remaining - remaining / 8));
+                long until = budget.nodes() + grant;
+                if (grant > 0 && retained.preferPackingCompletion(owner, until)) {
+                    packingCompletionOwner = owner;
+                    packingCompletionUntil = until;
+                    if (stockCountTurn) {
+                        stockCountWork += budget.searchWork() - stockCountStarted;
+                        stockCountTurn = false;
+                    }
+                    budget.note("packing_outer_completion", "grant=" + grant + "; until=" + packingCompletionUntil);
+                    if (phase != 14) {
+                        countResumePhase = phase;
+                        countSearch = parkedCounts;
+                        parkedCounts = null;
+                        countSearch.resumeBounded(grant);
+                        phase = 14;
+                    }
+                }
+            }
+        }
     }
 
     private boolean compilationActive() {
@@ -1470,6 +1519,8 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
 
     @Override
     public void close() {
+        packingCompletionOwner = null;
+        packingCompletionUntil = 0;
         if (countDemand != null) countDemand.close();
         countDemand = null;
         if (cyclicStockCounts != null) cyclicStockCounts.close();

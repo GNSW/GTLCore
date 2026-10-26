@@ -65,6 +65,8 @@
   "gtlcore.ae.ring.rings": "依赖与循环",
   "gtlcore.ae.ring.recipes": "配方",
   "gtlcore.ae.ring.cycle_source": "循环来源配方（未执行）",
+  "gtlcore.ae.ring.source_badge": "参",
+  "gtlcore.ae.ring.source_cycle_index": "缺料来源环 %s / %s · 参＝未执行",
   "gtlcore.ae.ring.steps": "执行步骤",
   "gtlcore.ae.ring.arranging": "正在整理视图…",
   "gtlcore.ae.ring.drawing": "正在绘制视图：%s%%",

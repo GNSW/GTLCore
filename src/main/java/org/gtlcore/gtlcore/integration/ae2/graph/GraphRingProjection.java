@@ -2,12 +2,15 @@ package org.gtlcore.gtlcore.integration.ae2.graph;
 
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
+import org.cgse.core.PlanTopology;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Display-only grouping. Packet rows and the executable program keep their exact identities. */
 public final class GraphRingProjection {
@@ -17,6 +20,18 @@ public final class GraphRingProjection {
     public record View(List<GraphRingView.Row> rows, Map<String, String> aliases) {}
 
     private record Shape(Map<AEKey, BigInteger> inputs, Map<AEKey, BigInteger> outputs) {}
+
+    /** A source edge can close a topology cycle without being in the execution program. */
+    public static Set<Integer> sourceCycleGroups(PlanTopology<AEKey> topology, Map<String, GraphRingView.Row> recipes) {
+        Set<Integer> groups = new HashSet<>();
+        for (var node : topology.nodes()) {
+            if (node.recipe() == null) continue;
+            var row = recipes.get(node.recipe());
+            int group = topology.groupOf(node.id());
+            if (row != null && row.count().signum() == 0 && topology.groups().get(group).cyclic()) groups.add(group);
+        }
+        return Set.copyOf(groups);
+    }
 
     public static View of(List<GraphRingView.Row> rows, AEKey target) {
         Map<AEKey, AEKey> representatives = new LinkedHashMap<>();

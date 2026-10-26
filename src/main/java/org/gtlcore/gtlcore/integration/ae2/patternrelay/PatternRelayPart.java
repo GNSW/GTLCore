@@ -350,6 +350,14 @@ public final class PatternRelayPart extends AEBasePart implements ICraftingProvi
     }
 
     @Override
+    public @Nullable Component gtlcore$graphSharedToolProblem(IPatternDetails pattern) {
+        var providers = routeSnapshot.routes().get(pattern);
+        // Route snapshots contain direct providers only, never another relay.
+        return mode != Mode.ACCESS || providers == null ? null :
+                org.gtlcore.gtlcore.integration.ae2.graph.GraphProviderRequirements.missing(pattern, providers);
+    }
+
+    @Override
     public long gtlcore$graphCapacity(IPatternDetails pattern, Map<AEKey, Long> inputPerRun, long requested) {
         if (!gtlcore$canProduceGraphPattern(pattern)) return 0;
         for (GenericStack output : pattern.getOutputs()) {

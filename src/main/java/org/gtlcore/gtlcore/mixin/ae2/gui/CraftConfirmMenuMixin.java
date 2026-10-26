@@ -275,6 +275,9 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     private boolean gtlcore$resumingSubmit;
 
     @Unique
+    private @Nullable ICraftingPlan gtlcore$providerSubmitPlan;
+
+    @Unique
     private boolean gtlcore$refreshAfterSubmit;
 
     @Unique
@@ -413,6 +416,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         var previous = submissionRefresh && this.result instanceof AeGraphPlan graph ? graph : null;
         this.gtlcore$releaseInventoryReservation();
         this.gtlcore$submitting = false;
+        this.gtlcore$providerSubmitPlan = null;
         this.gtlcore$refreshAfterSubmit = false;
         this.gtlcore$calculationStrategy = strategy;
         if (this.job != null) {
@@ -530,6 +534,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
                                         CallbackInfoReturnable<Boolean> cir) {
         this.gtlcore$releaseInventoryReservation();
         this.gtlcore$submitting = false;
+        this.gtlcore$providerSubmitPlan = null;
         this.gtlcore$refreshAfterSubmit = false;
         this.plan = null;
         this.gtlcore$calculationStrategy = strategy;
@@ -537,16 +542,27 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
 
     @Inject(method = "startJob", at = @At("HEAD"), cancellable = true, remap = false)
     private void gtlcore$guardPendingSubmission(CallbackInfo ci) {
-        if (!isClientSide()) {
-            gtlcore$checkProviders();
-        }
-        if (!gtlcore$providerWarning.isEmpty() || gtlcore$providerCheck != null) {
+        // Duplicate clicks belong to the pending confirmation, including a
+        // provider check. They must not reset its inventory refresh allowance.
+        if (gtlcore$closed || gtlcore$submitting) {
             ci.cancel();
             return;
         }
-        // An extra click while refreshing belongs to the same confirmation. It
-        // must neither reset its retry allowance nor submit the old preview.
-        if (gtlcore$closed || gtlcore$submitting) {
+        if (!isClientSide()) {
+            gtlcore$checkProviders();
+        }
+        if (gtlcore$providerCheck != null) {
+            // Remember a real click that arrived during a periodic check too.
+            // Completion will resume this same confirmation exactly once.
+            if (!isClientSide()) {
+                gtlcore$submitting = true;
+                gtlcore$providerSubmitPlan = result;
+                if (!gtlcore$resumingSubmit) gtlcore$submitRefreshes = 0;
+            }
+            ci.cancel();
+            return;
+        }
+        if (!gtlcore$providerWarning.isEmpty()) {
             ci.cancel();
             return;
         }
@@ -629,10 +645,26 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     @Inject(method = "broadcastChanges", at = @At("RETURN"))
     private void gtlcore$resumeConfirmedSubmission(CallbackInfo ci) {
         if (isClientSide() || gtlcore$closed || !gtlcore$submitting || job != null) return;
-        gtlcore$submitting = false;
         // Native broadcastChanges has consumed the future and published its
-        // summary. An incomplete plan stays visible for explicit confirmation.
-        if (result == null || result.simulation()) return;
+        // summary. A newly incomplete plan needs explicit confirmation. Retain
+        // a manual missing-craft click only for the exact plan that was clicked.
+        if (result == null || result.simulation() && result != gtlcore$providerSubmitPlan) {
+            gtlcore$submitting = false;
+            gtlcore$providerSubmitPlan = null;
+            return;
+        }
+        // The HEAD callback still saw the previous result. Start the new plan's
+        // check here, and retain the confirmed submit while it spans tick slices.
+        // Otherwise startJob's guard cancels the only automatic submit attempt.
+        if (result != gtlcore$checkedProvidersPlan) gtlcore$checkProviders();
+        if (gtlcore$providerCheck != null) return;
+        if (!gtlcore$providerWarning.isEmpty()) {
+            gtlcore$submitting = false;
+            gtlcore$providerSubmitPlan = null;
+            return;
+        }
+        gtlcore$submitting = false;
+        gtlcore$providerSubmitPlan = null;
         gtlcore$resumingSubmit = true;
         try {
             ((CraftConfirmMenu) (Object) this).startJob();
@@ -686,6 +718,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     private void gtlcore$releaseInventoryOnClose(net.minecraft.world.entity.player.Player player, CallbackInfo ci) {
         gtlcore$closed = true;
         gtlcore$submitting = false;
+        gtlcore$providerSubmitPlan = null;
         gtlcore$refreshAfterSubmit = false;
         this.gtlcore$releaseInventoryReservation();
     }

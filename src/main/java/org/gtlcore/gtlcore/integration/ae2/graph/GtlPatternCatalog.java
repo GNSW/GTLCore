@@ -340,7 +340,7 @@ public final class GtlPatternCatalog {
                             includeFuzzyKeys(fuzzy, available, template);
                             includeFuzzyKeys(fuzzy, additionalDiscovery, template);
                         }
-                    } else if (hit && !fuzzy.equals(structure.fuzzyKeys())) resetBuild();
+                    } else if (hit && !structure.coversFuzzyKeys(fuzzy)) resetBuild();
                     else {
                         if (!hit) {
                             // Ownership transfers here. This Capture never mutates
@@ -856,7 +856,17 @@ public final class GtlPatternCatalog {
 
     public record Structure(CapturedPatternCatalog catalog, Set<AEKey> resources,
                             Set<AEKey> inputTemplates, Set<AEKey> fuzzyKeys, boolean boundedAlternatives,
-                            Map<AEKey, List<Signature>> dependencies, long providerRevision) {}
+                            Map<AEKey, List<Signature>> dependencies, long providerRevision) {
+
+        boolean coversFuzzyKeys(Set<AEKey> current) {
+            // These keys describe captured input alternatives, not current
+            // quantities. A vanished alternative remains a valid recipe with
+            // zero stock; retaining it also covers its later return. Never
+            // shrink this coverage on a cache hit. A genuinely new key must
+            // still recapture its validity, remainder and producer dependencies.
+            return fuzzyKeys.containsAll(current);
+        }
+    }
 
     public record Snapshot(Structure structure, Map<AEKey, Long> stock, Set<AEKey> emitable, long epoch, boolean cacheHit,
                            Set<AEKey> impreciseStock) {

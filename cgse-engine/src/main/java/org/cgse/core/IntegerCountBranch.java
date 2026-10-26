@@ -498,8 +498,9 @@ final class IntegerCountBranch<K> implements AutoCloseable {
             } else {
                 long completion = viewSearch.roundingCompletionQuantum();
                 if (completion == 0 && continuation == 2) completion = viewSearch.allocationCompletionQuantum();
+                if (completion == 0) completion = viewSearch.messageCompletionQuantum();
                 if (completion > 0) {
-                    // Finish the owned allocation or rounding window, then
+                    // Finish the owned candidate completion window, then
                     // return to the same parked continuation. All work still
                     // spends its captured local and shared request ceilings.
                     viewSearch.resume(completion);

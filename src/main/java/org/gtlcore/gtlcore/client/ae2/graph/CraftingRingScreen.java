@@ -32,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
 /** Read-only plan browser. Navigation changes the projection, never the execution plan. */
 public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, CraftConfirmScreen> {
 
-    private static final int INK = 0xFF40404C, MUTED = 0xFF707078, ACCENT = 0xFF786296, SEED = 0xFF168F99, INITIAL = 0xFFAD6518;
+    private static final int INK = 0xFF40404C, MUTED = 0xFF707078, ACCENT = 0xFF786296, SEED = 0xFF168F99, INITIAL = 0xFFAD6518, SOURCE = 0xFF8C8991;
     private static final int VIEW_X = 10, VIEW_Y = 48;
     private static final int MAX_LIVE_NODES = 256, RESUME_LIVE_NODES = 192;
     private static Cache cached;
@@ -90,7 +90,7 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
                          Map<String, GraphRingView.Row> byRecipe, Map<AEKey, GraphRingView.Row> byResource,
                          PlanDependencyLayout<AEKey> dependencies, int root,
                          Map<AEKey, BigInteger> crafted, Map<AEKey, BigInteger> used, Set<AEKey> initialInputs,
-                         int[][] incidentLinks) {}
+                         int[][] incidentLinks, Set<Integer> sourceCycles) {}
 
     private static final class ToolButton extends IconButton {
 
@@ -389,7 +389,8 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
         }
         return new Model(topology, topology.groups().stream().filter(PlanTopology.Group::cyclic).toList(),
                 List.copyOf(resources), List.copyOf(recipes), Map.copyOf(byRecipe), Map.copyOf(byResource), new PlanDependencyLayout<>(topology), root,
-                Map.copyOf(crafted), Map.copyOf(used), Set.copyOf(initialInputs), incident);
+                Map.copyOf(crafted), Map.copyOf(used), Set.copyOf(initialInputs), incident,
+                GraphRingProjection.sourceCycleGroups(topology, byRecipe));
     }
 
     @Override
@@ -426,7 +427,8 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
                 case 2 -> drawRecipe(graphics);
                 default -> drawSteps(graphics);
             }
-            Component footer = mode == 1 ? text(page == 0 ? "tree_view" : page == 1 ? "all_graph" : "cycle_index", page - 1, model.rings().size()) :
+            String cycleCaption = page >= 2 && page - 2 < model.rings().size() && model.sourceCycles().contains(model.rings().get(page - 2).id()) ? "source_cycle_index" : "cycle_index";
+            Component footer = mode == 1 ? text(page == 0 ? "tree_view" : page == 1 ? "all_graph" : cycleCaption, page - 1, model.rings().size()) :
                     text("page", page + 1, pageCount());
             String caption = font.plainSubstrByWidth(footer.getString(), imageWidth - 72);
             centered(graphics, Component.literal(caption), imageHeight - 18, INK);
@@ -793,7 +795,10 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
 
     private void drawLink(GuiGraphics graphics, int id, PlanGraphLayout.Box viewport, boolean selected, double scale, double half) {
         var link = fullLayout.links().get(id);
-        int color = selected ? 0xFF237E92 : link.cyclic() ? ACCENT : 0xFF909096;
+        var from = model.topology().nodes().get(link.edge().from());
+        var to = model.topology().nodes().get(link.edge().to());
+        var recipe = model.byRecipe().get(from.recipe() != null ? from.recipe() : to.recipe());
+        int color = selected ? 0xFF237E92 : recipe != null && recipe.count().signum() == 0 ? SOURCE : link.cyclic() ? ACCENT : 0xFF909096;
         var points = link.path();
         for (int i = 1; i < points.size(); i++) stroke(graphics, points.get(i - 1).x(), points.get(i - 1).y(), points.get(i).x(), points.get(i).y(), color, viewport, half);
         if (scale >= 0.5 || selected) {
@@ -818,14 +823,15 @@ public final class CraftingRingScreen extends AESubScreen<CraftConfirmMenu, Craf
         var resource = node.resource() == null ? null : model.byResource().get(node.resource());
         boolean seed = resource != null && resource.seed() > 0;
         boolean initial = node.resource() != null && model.initialInputs().contains(node.resource());
+        boolean source = node.recipe() != null && model.byRecipe().get(node.recipe()).count().signum() == 0;
         graphics.fill(x - 3, y - 3, x + 19, y + 19, hovered ? 0xFFF3EEF9 : resource != null && resource.missing().signum() > 0 ? 0xFFE7C4C4 : 0xFFBDBCC6);
         graphics.renderOutline(x - 3, y - 3, 22, 22, seed ? SEED : initial ? INITIAL : hovered ? ACCENT : 0xFF777580);
         // Spatial culling limits work. A zoom threshold must not turn materials into empty boxes.
         if (node.resource() != null) AEKeyRendering.drawInGui(minecraft, graphics, x, y, node.resource());
         else Icon.CRAFT_HAMMER.getBlitter().dest(x, y).blit(graphics);
-        if (seed || initial) {
-            graphics.fill(x - 4, y - 5, x + 8, y + 4, seed ? SEED : INITIAL);
-            if (scale >= 0.5) graphics.drawString(font, text(seed ? "seed_badge" : "initial_badge"), x - 3, y - 5, 0xFFFFFFFF, false);
+        if (seed || initial || source) {
+            graphics.fill(x - 4, y - 5, x + 8, y + 4, seed ? SEED : source ? SOURCE : INITIAL);
+            if (scale >= 0.5) graphics.drawString(font, text(seed ? "seed_badge" : source ? "source_badge" : "initial_badge"), x - 3, y - 5, 0xFFFFFFFF, false);
         }
     }
 

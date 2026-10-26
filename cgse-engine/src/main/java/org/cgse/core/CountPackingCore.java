@@ -575,6 +575,7 @@ final class CountPackingCore implements CountContinuation {
         if (expandedScout) return Math.max(0, scoutLimit - measuredWork());
         return scouting && !wideScout ? Math.max(0, flexibleLimit - measuredWork()) : 0;
     }
+    long expandedCompletionWork() { return memory != 0 && !complete && search != null && expandedScout ? roundingContinuationWork() : 0; }
     long failedRoundingWork() { return failedRoundingWork; }
     private long measuredWork() { return work + (stepStart < 0 ? 0 : budget.threadWork() - stepStart); }
     // Completed numerical pivots/bound flips are retained progress too. Waiting

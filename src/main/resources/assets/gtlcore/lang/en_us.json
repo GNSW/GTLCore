@@ -62,6 +62,8 @@
   "gtlcore.ae.ring.rings": "Dependencies",
   "gtlcore.ae.ring.recipes": "Recipes",
   "gtlcore.ae.ring.cycle_source": "Cycle source recipe (not executed)",
+  "gtlcore.ae.ring.source_badge": "R",
+  "gtlcore.ae.ring.source_cycle_index": "Refill source cycle %s / %s · R: not executed",
   "gtlcore.ae.ring.steps": "Steps",
   "gtlcore.ae.ring.arranging": "Arranging view…",
   "gtlcore.ae.ring.drawing": "Drawing view: %s%%",

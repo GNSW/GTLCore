@@ -26,8 +26,30 @@ public final class ManualCraftingInventoryLock {
     private ManualCraftingInventoryLock() {}
 
     public static @Nullable Reservation tryAcquire(MEStorage storage, KeyCounter requested, IActionSource source) {
+        var owned = new KeyCounter();
+        for (var entry : requested) {
+            if (entry.getLongValue() > 0) owned.add(entry.getKey(), entry.getLongValue());
+        }
+        var probes = new KeyCounter();
+        synchronized (RESERVED) {
+            var reserved = RESERVED.get(storage);
+            for (var entry : owned) {
+                long alreadyReserved = reserved == null ? 0 : reserved.get(entry.getKey());
+                long amount = entry.getLongValue();
+                probes.add(entry.getKey(), amount > Long.MAX_VALUE - alreadyReserved ? Long.MAX_VALUE : amount + alreadyReserved);
+            }
+        }
         var available = new KeyCounter();
-        storage.getAvailableStacks(available);
+        // Advertised keys are a display view: providers can accept aliases that
+        // they do not list, and visible amounts can be stale or inaccessible.
+        // Probe only the requested keys through the same extraction path as
+        // submission. Bound each query by this claim plus existing reservations.
+        // World callbacks run outside the reservation monitor; recheck all
+        // current claims below before atomically publishing the new owner.
+        for (var entry : probes) {
+            long count = simulatePhysical(storage, entry.getKey(), entry.getLongValue(), source);
+            if (count > 0) available.add(entry.getKey(), Math.min(count, entry.getLongValue()));
+        }
 
         Reservation reservation = null;
         AEKey conflictKey = null;
@@ -36,7 +58,7 @@ public final class ManualCraftingInventoryLock {
         long conflictReserved = 0;
         synchronized (RESERVED) {
             var reserved = RESERVED.get(storage);
-            for (var entry : requested) {
+            for (var entry : owned) {
                 long alreadyReserved = reserved == null ? 0 : reserved.get(entry.getKey());
                 long availableToReserve = subtractClamped(available.get(entry.getKey()), alreadyReserved);
                 if (entry.getLongValue() > availableToReserve) {
@@ -49,8 +71,6 @@ public final class ManualCraftingInventoryLock {
             }
 
             if (conflictKey == null) {
-                var owned = new KeyCounter();
-                owned.addAll(requested);
                 if (!owned.isEmpty()) {
                     if (reserved == null) {
                         reserved = new KeyCounter();
@@ -146,6 +166,10 @@ public final class ManualCraftingInventoryLock {
 
     /** Read through security and extraction filters, without subtracting this root's reservation twice. */
     public static long simulatePhysical(MEStorage storage, AEKey what, IActionSource source) {
+        return simulatePhysical(storage, what, Long.MAX_VALUE, source);
+    }
+
+    private static long simulatePhysical(MEStorage storage, AEKey what, long amount, IActionSource source) {
         var queries = AVAILABILITY_QUERIES.get();
         if (queries == null) {
             queries = new IdentityHashMap<>();
@@ -153,7 +177,7 @@ public final class ManualCraftingInventoryLock {
         }
         Boolean previous = queries.put(storage, Boolean.TRUE);
         try {
-            return storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source);
+            return storage.extract(what, amount, Actionable.SIMULATE, source);
         } finally {
             if (previous == null) queries.remove(storage);
             else queries.put(storage, previous);
@@ -172,9 +196,7 @@ public final class ManualCraftingInventoryLock {
             if (storage instanceof AvailabilityView view) {
                 return view.gtlcore$getAvailableAmount(what, source);
             }
-            var available = new KeyCounter();
-            storage.getAvailableStacks(available);
-            return available.get(what);
+            return storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source);
         } finally {
             availabilityQueries.remove(storage);
             if (availabilityQueries.isEmpty()) {

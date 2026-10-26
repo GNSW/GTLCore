@@ -87,12 +87,13 @@ final class ExactInventoryRead implements AutoCloseable {
                 storage.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, source);
         if (accessible <= 0) return false;
         String typeName = storage.getClass().getName();
-        // These cells generate the selected resource without decrementing stock.
+        // These providers generate the selected resource without decrementing stock.
         // They are external supply, not a finite pile of Long.MAX_VALUE items.
         // Admit only the known implementation, after the actual extraction check.
         if (accessible == Long.MAX_VALUE &&
                 (typeName.equals("com.glodblock.github.extendedae.common.inventory.InfinityCellInventory") ||
-                        typeName.equals("org.gtlcore.gtlcore.integration.ae2.storage.CircuitInfinityCellInventory"))) {
+                        typeName.equals("org.gtlcore.gtlcore.integration.ae2.storage.CircuitInfinityCellInventory") ||
+                        typeName.equals("org.gtlcore.gtlcore.common.machine.VirtualIngredientSupplyMachine"))) {
             frame.unlimited = true;
             frame.amount = frame.amount.add(BigInteger.valueOf(accessible));
             exact = false;

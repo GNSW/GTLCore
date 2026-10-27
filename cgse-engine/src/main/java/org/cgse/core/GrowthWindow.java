@@ -12,10 +12,15 @@ final class GrowthWindow<K> {
     private final Map<String, GraphRecipe<K>> recipes;
     private final Map<String, BigInteger> planned;
     private final AdaptiveScheduling<K> feedback;
+    // The live window is a moving suffix, not the identity of a cycle. Retain
+    // bounded, already observed recipe membership when one stage is in flight.
     private Set<String> indexed = Set.of();
     private long generation = -1;
     private final Map<String, Set<String>> groups = new HashMap<>();
     private final Map<K, Set<String>> protectedKeys = new HashMap<>();
+    private final Set<String> loanSuppliers = new HashSet<>();
+
+    void accepted(String id) { loanSuppliers.removeAll(groups.getOrDefault(id, Set.of())); }
 
     GrowthWindow(Map<String, GraphRecipe<K>> recipes, Map<String, BigInteger> planned, AdaptiveScheduling<K> feedback) {
         this.recipes = recipes; this.planned = planned; this.feedback = feedback;
@@ -28,18 +33,34 @@ final class GrowthWindow<K> {
         return feedback.enabled() && group != null && group.stream().allMatch(feedback::growing);
     }
 
+    private boolean sharing(String id) {
+        Set<String> group = groups.get(id);
+        return group != null && group.stream().anyMatch(feedback::congested);
+    }
+
     boolean extend() { return groups.keySet().stream().anyMatch(this::preferred) && feedback.spend(256); }
 
     private void index(List<PlanStep.Batch> window) {
-        Set<String> selected = new LinkedHashSet<>();
-        for (var batch : window) selected.add(batch.recipe());
+        if (generation != feedback.generation()) loanSuppliers.clear();
+        Set<String> visible = new LinkedHashSet<>();
+        for (var batch : window) visible.add(batch.recipe());
+        Set<String> selected = new LinkedHashSet<>(visible);
+        for (String id : visible) selected.addAll(groups.getOrDefault(id, Set.of()));
+        // Historical acyclic stages and groups with no remaining visible work
+        // must not fill the bounded index and hide a later, unrelated cycle.
+        // If retaining partial groups would exceed the limit, preserve the
+        // original coverage of the complete current window instead.
+        if (selected.size() > PipelineScheduler.WINDOW) selected = visible;
         if (selected.equals(indexed) && generation == feedback.generation()) return;
+        // This local index deliberately uses one long bitset and bounded work;
+        // do not alias recipe bits if the caller supplies an oversized window.
+        if (selected.size() > PipelineScheduler.WINDOW) return;
         int n = selected.size(), incidences = 0;
         for (String id : selected) {
             GraphRecipe<K> recipe = recipes.get(id);
             incidences += recipe.inputs().size() + recipe.outputs().size();
             if (!LoopBatching.fixedPerRun(recipe) || incidences > 256) {
-                groups.clear(); protectedKeys.clear(); indexed = selected; generation = feedback.generation(); return;
+                return;
             }
         }
         if (!feedback.spend(n * n + incidences * 4)) return;
@@ -95,10 +116,25 @@ final class GrowthWindow<K> {
             }
             for (K key : internal) protectedKeys.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).addAll(group);
         }
+        // Completed or replaced groups must not retain historical loan hints.
+        loanSuppliers.retainAll(groups.keySet());
     }
 
     List<PlanStep.Batch> regroup(List<PlanStep.Batch> window, ToLongFunction<K> forecast) {
+        return regroup(window, forecast, forecast);
+    }
+
+    List<PlanStep.Batch> regroup(List<PlanStep.Batch> window, ToLongFunction<K> forecast, ToLongFunction<K> available) {
         if (!feedback.enabled()) return null;
+        // A retained cycle index does not make non-linear recipe inputs safe
+        // for the fixed-per-run proof below, nor permit an unbounded stock scan.
+        Set<String> checked = new HashSet<>();
+        long incidences = 0;
+        for (var batch : window) if (checked.add(batch.recipe())) {
+            var recipe = recipes.get(batch.recipe());
+            incidences += (long) recipe.inputs().size() + recipe.outputs().size();
+            if (incidences > 256 || !LoopBatching.fixedPerRun(recipe)) return null;
+        }
         index(window);
         if (groups.isEmpty() || window.stream().allMatch(batch -> groups.containsKey(batch.recipe()))) return null;
         Map<String, BigInteger> remaining = new LinkedHashMap<>();
@@ -109,37 +145,98 @@ final class GrowthWindow<K> {
             for (K key : recipe.inputs().keySet()) stock.computeIfAbsent(key, k -> BigInteger.valueOf(forecast.applyAsLong(k)));
             for (K key : recipe.outputs().keySet()) stock.computeIfAbsent(key, k -> BigInteger.valueOf(forecast.applyAsLong(k)));
         }
+        // Relinquishing the soft reservation is ineffective if a previously
+        // grouped growth prefix still reserves the entire next batch. Propose
+        // one funded consumer loan, then rebuild all remaining exact work.
+        String consumer = null;
+        long loan = 0;
+        for (String id : remaining.keySet()) {
+            if (groups.containsKey(id)) continue;
+            var recipe = recipes.get(id);
+            if (!feedback.spend(1 + recipe.inputs().size() * (1 + remaining.size()) + recipe.outputs().size())) break;
+            long count = funded(id, remaining, stock);
+            for (var input : recipe.inputs().entrySet()) count = Math.min(count, available.applyAsLong(input.getKey()) / input.getValue());
+            boolean released = false;
+            for (var input : recipe.inputs().entrySet()) {
+                long loss = input.getValue() - recipe.outputs().getOrDefault(input.getKey(), 0L);
+                Set<String> suppliers = protectedKeys.get(input.getKey());
+                if (loss <= 0 || suppliers == null) continue;
+                if (suppliers.stream().anyMatch(loanSuppliers::contains)) { count = 0; break; }
+                long reserve = 0;
+                boolean capacityKnown = false;
+                for (String supplier : suppliers) if (remaining.containsKey(supplier)) {
+                    // Missing timing coverage is not evidence of saturation.
+                    if (!sharing(supplier)) { count = 0; break; }
+                    released = true;
+                    long perRun = recipes.get(supplier).inputs().getOrDefault(input.getKey(), 0L);
+                    long known = feedback.capacityReserve(supplier);
+                    capacityKnown |= perRun > 0 && known > 0;
+                    reserve = Math.max(reserve, ExactAmounts.capped(BigInteger.valueOf(perRun).multiply(BigInteger.valueOf(Math.max(1, known)))));
+                }
+                BigInteger physical = BigInteger.valueOf(available.applyAsLong(input.getKey()));
+                if (!capacityKnown) reserve = Math.max(reserve, physical.add(BigInteger.ONE).divide(BigInteger.TWO).longValueExact());
+                count = Math.min(count, ExactAmounts.capped(physical.subtract(BigInteger.valueOf(reserve))
+                        .max(BigInteger.ZERO).divide(BigInteger.valueOf(loss))));
+            }
+            if (released && count > 0) { consumer = id; loan = count; break; }
+        }
+        for (int attempt = 0; consumer != null && loan > 0 && attempt < 3; attempt++, loan /= 2) {
+            var result = order(remaining, stock, consumer, loan);
+            if (result != null) {
+                for (K key : recipes.get(consumer).inputs().keySet()) loanSuppliers.addAll(protectedKeys.getOrDefault(key, Set.of()));
+                return result.equals(window) ? null : result;
+            }
+        }
+        var result = order(remaining, stock, null, 0);
+        return result == null || result.equals(window) ? null : result;
+    }
+
+    private List<PlanStep.Batch> order(Map<String, BigInteger> counts, Map<K, BigInteger> initial, String loan, long loanCount) {
+        var remaining = new LinkedHashMap<>(counts);
+        var stock = new HashMap<>(initial);
         List<PlanStep.Batch> result = new ArrayList<>();
+        if (loan != null) execute(loan, loanCount, remaining, stock, result);
         while (!remaining.isEmpty() && result.size() < PipelineScheduler.WINDOW) {
             boolean moved = false;
             for (int pass = 0; pass < 2 && !moved; pass++) for (String id : new ArrayList<>(remaining.keySet())) {
                 if (preferred(id) != (pass == 0)) continue;
                 var recipe = recipes.get(id);
                 if (!feedback.spend(1 + recipe.inputs().size() + recipe.outputs().size())) return null;
-                long count = ExactAmounts.capped(remaining.get(id));
-                for (var input : recipe.inputs().entrySet()) count = Math.min(count,
-                        stock.get(input.getKey()).divide(BigInteger.valueOf(input.getValue())).longValueExact());
-                for (var output : recipe.outputs().entrySet()) {
-                    count = Math.min(count, Long.MAX_VALUE / output.getValue());
-                    long net = output.getValue() - recipe.inputs().getOrDefault(output.getKey(), 0L);
-                    if (net > 0) count = Math.min(count, ExactAmounts.capped(ExactAmounts.LONG_MAX.subtract(stock.get(output.getKey()))
-                            .divide(BigInteger.valueOf(net))));
-                }
+                long count = funded(id, remaining, stock);
                 if (count == 0) continue;
-                BigInteger runs = BigInteger.valueOf(count);
-                recipe.inputs().forEach((key, amount) -> stock.put(key, stock.get(key).subtract(runs.multiply(BigInteger.valueOf(amount)))));
-                recipe.outputs().forEach((key, amount) -> stock.put(key, stock.get(key).add(runs.multiply(BigInteger.valueOf(amount)))));
-                result.add(new PlanStep.Batch(id, count));
-                BigInteger left = remaining.get(id).subtract(runs);
-                if (left.signum() == 0) remaining.remove(id); else remaining.put(id, left);
+                execute(id, count, remaining, stock, result);
                 moved = true;
                 break;
             }
             if (!moved) return null;
         }
-        // Every proposed physical batch was funded and its long headroom checked.
-        // Equal counts leave the untouched suffix exactly the same inventory delta.
-        return remaining.isEmpty() && !result.equals(window) ? result : null;
+        // The loan is only a heuristic. The complete unchanged multiset must
+        // have funded prefixes and long headroom before replacing the window.
+        return remaining.isEmpty() ? result : null;
+    }
+
+    private long funded(String id, Map<String, BigInteger> remaining, Map<K, BigInteger> stock) {
+        var recipe = recipes.get(id);
+        long count = ExactAmounts.capped(remaining.get(id));
+        for (var input : recipe.inputs().entrySet()) count = Math.min(count,
+                stock.get(input.getKey()).divide(BigInteger.valueOf(input.getValue())).longValueExact());
+        for (var output : recipe.outputs().entrySet()) {
+            count = Math.min(count, Long.MAX_VALUE / output.getValue());
+            long net = output.getValue() - recipe.inputs().getOrDefault(output.getKey(), 0L);
+            if (net > 0) count = Math.min(count, ExactAmounts.capped(ExactAmounts.LONG_MAX.subtract(stock.get(output.getKey()))
+                    .divide(BigInteger.valueOf(net))));
+        }
+        return count;
+    }
+
+    private void execute(String id, long count, Map<String, BigInteger> remaining, Map<K, BigInteger> stock, List<PlanStep.Batch> result) {
+        var recipe = recipes.get(id);
+        BigInteger runs = BigInteger.valueOf(count);
+        recipe.inputs().forEach((key, amount) -> stock.put(key, stock.get(key).subtract(runs.multiply(BigInteger.valueOf(amount)))));
+        recipe.outputs().forEach((key, amount) -> stock.put(key, stock.get(key).add(runs.multiply(BigInteger.valueOf(amount)))));
+        result.add(new PlanStep.Batch(id, count));
+        BigInteger left = remaining.get(id).subtract(runs);
+        if (left.signum() == 0) remaining.remove(id); else remaining.put(id, left);
     }
 
     long limit(String id, long requested, List<PlanStep.Batch> window, ToLongFunction<K> forecast) {

@@ -25,6 +25,7 @@ final class PipelineScheduler<K> {
     private final CompilationBudget compilation;
     private final GrowthWindow<K> growth;
     private boolean regrouped;
+    private boolean growthChanged;
     private long regroupedAt;
 
     PipelineScheduler(PlanCursor cursor, Map<String, GraphRecipe<K>> recipes, List<PlanStep.Batch> saved) {
@@ -54,15 +55,20 @@ final class PipelineScheduler<K> {
     }
 
     PlanStep.Batch poll(long tick, ToLongFunction<K> forecast) {
+        return poll(tick, forecast, forecast);
+    }
+
+    PlanStep.Batch poll(long tick, ToLongFunction<K> forecast, ToLongFunction<K> available) {
         // Optional compilation is cached, globally bounded, and sliced once per
         // tick, regardless of the number of provider probes made in that tick.
         if (forecast != null) compilation.advance(cursor, tick);
         boolean intelligent = growth != null && growth.enabled();
-        boolean refreshGrowth = intelligent && forecast != null && (!regrouped || regroupedAt != tick);
+        boolean refreshGrowth = intelligent && forecast != null && (!regrouped || regroupedAt != tick || growthChanged);
         if (refreshGrowth) {
             regrouped = true;
             regroupedAt = tick;
-            replaceWindow(growth.regroup(snapshot(), forecast));
+            growthChanged = false;
+            replaceWindow(growth.regroup(snapshot(), forecast, available));
         }
         boolean extended = false;
         while (window.size() < WINDOW) {
@@ -74,7 +80,7 @@ final class PipelineScheduler<K> {
                             () -> key -> BigInteger.valueOf(forecast.applyAsLong(key)), batches -> {
                                 var combined = new ArrayList<>(snapshot());
                                 combined.addAll(batches);
-                                var reordered = growth.regroup(combined, forecast);
+                                var reordered = growth.regroup(combined, forecast, available);
                                 if (reordered == null) return false;
                                 approved.add(reordered);
                                 return true;
@@ -96,7 +102,7 @@ final class PipelineScheduler<K> {
             append(batch);
             cursor.dispatched(batch.runs());
         }
-        if (refreshGrowth) replaceWindow(growth.regroup(snapshot(), forecast));
+        if (refreshGrowth) replaceWindow(growth.regroup(snapshot(), forecast, available));
         for (int pass = 0; pass < (intelligent ? 2 : 1); pass++) for (int i = 0; i < window.size(); i++) {
             int index = (next + i) % window.size();
             Entry entry = window.get(index);
@@ -191,6 +197,8 @@ final class PipelineScheduler<K> {
     void accepted(long runs) {
         if (active < 0 || runs <= 0 || runs > window.get(active).remaining) throw new IllegalArgumentException("Invalid pipeline acceptance");
         Entry entry = window.get(active);
+        if (growth != null) growth.accepted(entry.recipe);
+        growthChanged = true;
         entry.remaining -= runs;
         if (entry.remaining == 0) {
             window.remove(active);
@@ -214,6 +222,7 @@ final class PipelineScheduler<K> {
     }
 
     void resourceChanged(K key) {
+        growthChanged = true;
         for (Entry entry : window) {
             GraphRecipe<K> recipe = recipes.get(entry.recipe);
             if (recipe.inputs().containsKey(key) || recipe.outputs().containsKey(key)) entry.readyAt = 0;

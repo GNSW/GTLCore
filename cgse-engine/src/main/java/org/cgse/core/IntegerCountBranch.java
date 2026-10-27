@@ -342,7 +342,7 @@ final class IntegerCountBranch<K> implements AutoCloseable {
                 unresolved();
                 return;
             }
-            verifying = new PlanVerification<>(plan, budget);
+            verifying = new PlanVerification<>(plan, budget, assembling);
             return;
         }
         if (program != null) {

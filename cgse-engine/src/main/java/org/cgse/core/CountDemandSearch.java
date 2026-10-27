@@ -99,14 +99,14 @@ final class CountDemandSearch<K> implements AutoCloseable {
                 PlanStep word = reverse.witness(); reverse.close(); reverse = null;
                 if (word == null) return nextAttempt();
                 candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
-                        activeSeeds(), external, preserve, force, false, budget, started);
+                        activeSeeds(), external, preserve, force, false, budget, started).productionContract(seeds);
                 return false;
             }
             if (schedule != null) {
                 if (!schedule.step()) return false;
                 if (schedule.witness() == null) return nextAttempt();
                 candidate = new AllocationSearch.Candidate<>(schedule.witness(), recipes, target, amount, stock,
-                        activeSeeds(), external, preserve, force, false, budget, started);
+                        activeSeeds(), external, preserve, force, false, budget, started).productionContract(seeds);
                 return false;
             }
             if (topology != null) {

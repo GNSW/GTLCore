@@ -231,7 +231,7 @@ public final class GraphJobRuntime<K> {
             if (work > 0 && clock.getAsLong() - deadline >= 0) break;
             checks++;
             PlanStep.Batch step = dag == null ? pipeline.poll(tick,
-                    key -> CheckedAmounts.add(owned.get(key), expected.getOrDefault(key, 0L))) : dag.poll(tick);
+                    key -> CheckedAmounts.add(owned.get(key), expected.getOrDefault(key, 0L)), owned::get) : dag.poll(tick);
             if (step == null) {
                 if (expected.isEmpty() && deferredExternal.isEmpty() && (dag == null ? pipeline.finished() : dag.finished())) {
                     if (!seedsHeld()) {
@@ -297,6 +297,7 @@ public final class GraphJobRuntime<K> {
                     continue;
                 }
             }
+            long requestedCapacity = batch;
             try {
                 batch = Math.min(batch, Math.max(0, adapter.capacity(recipe, batch)));
             } catch (RuntimeException e) {
@@ -393,7 +394,7 @@ public final class GraphJobRuntime<K> {
             preparingOwner = obligations.dispatch(recipe.id(), batch, outputs, true, returns);
             // Variable state returns trigger replanning; do not train an ordinary
             // cycle timer on a prediction whose actual material can differ.
-            if (returns.isEmpty()) adaptive.begin(preparingOwner, recipe.id(), batch, outputs);
+            if (returns.isEmpty()) adaptive.begin(preparingOwner, recipe.id(), batch, outputs, batch < requestedCapacity);
             preparingReturned = false;
             Outcome outcome;
             try {

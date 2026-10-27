@@ -4,6 +4,7 @@ import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.config.AECraftingEngine;
 import org.gtlcore.gtlcore.config.AEGraphSeedPolicy;
 import org.gtlcore.gtlcore.config.ConfigHolder;
+import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 
 import net.minecraft.world.level.Level;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -127,8 +128,27 @@ public final class CraftingEngineRouter {
                                               Level level, ICraftingSimulationRequester requester,
                                               AEKey target, long amount, CalculationStrategy strategy) {
         return begin(catalog, grid, service, level, requester.getActionSource(), target, amount, strategy, null,
-                ConfigHolder.INSTANCE.ae.ae2GraphSeedPolicy == AEGraphSeedPolicy.PRESERVE, requester instanceof SubmissionRefresh,
-                requester instanceof SubmissionRefresh refresh ? refresh.candidate() : null);
+                ConfigHolder.INSTANCE.ae.ae2GraphSeedPolicy == AEGraphSeedPolicy.PRESERVE,
+                requester instanceof SubmissionRefresh || requester instanceof ReservedCalculation,
+                requester instanceof SubmissionRefresh refresh ? refresh.candidate() : null,
+                requester instanceof SubmissionRefresh refresh ? refresh.inventoryContext() :
+                        requester instanceof ReservedCalculation reserved ? reserved.inventoryContext() :
+                                ManualCraftingInventoryLock.captureAvailabilityContext());
+    }
+
+    /** An ORIGINAL-mode order owns its stock from snapshot collection onward. */
+    public static ICraftingSimulationRequester reservedCalculation(IActionSource source,
+                                                                   ManualCraftingInventoryLock.AvailabilityContext inventoryContext) {
+        return new ReservedCalculation(source, java.util.Objects.requireNonNull(inventoryContext));
+    }
+
+    private record ReservedCalculation(IActionSource source, ManualCraftingInventoryLock.AvailabilityContext inventoryContext)
+            implements ICraftingSimulationRequester {
+
+        @Override
+        public IActionSource getActionSource() {
+            return source;
+        }
     }
 
     /** A submitted preview lost stock; recheck extractable inventory instead of AE's delayed cache. */
@@ -137,11 +157,19 @@ public final class CraftingEngineRouter {
     }
 
     public static ICraftingSimulationRequester submissionRefresh(IActionSource source, AeGraphPlan previous) {
-        return new SubmissionRefresh(source, previous == null ? null : previous.reuseCandidate());
+        return submissionRefresh(source, previous,
+                ManualCraftingInventoryLock.captureAvailabilityContext());
+    }
+
+    public static ICraftingSimulationRequester submissionRefresh(IActionSource source, AeGraphPlan previous,
+                                                                 ManualCraftingInventoryLock.AvailabilityContext inventoryContext) {
+        return new SubmissionRefresh(source, previous == null ? null : previous.reuseCandidate(),
+                inventoryContext == null ? ManualCraftingInventoryLock.captureAvailabilityContext() : inventoryContext);
     }
 
     private record SubmissionRefresh(IActionSource source,
-                                     RequestPlanningWork.ReuseCandidate<AEKey> candidate)
+                                     RequestPlanningWork.ReuseCandidate<AEKey> candidate,
+                                     ManualCraftingInventoryLock.AvailabilityContext inventoryContext)
             implements ICraftingSimulationRequester {
 
         @Override
@@ -153,13 +181,15 @@ public final class CraftingEngineRouter {
     public static GraphPlanningRequest replan(GtlPatternCatalog catalog, GraphCpuHost host, CraftingService service,
                                               GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve) {
         return begin(catalog, host.grid(), service, host.level(), host.source(), checkpoint.target(), checkpoint.remaining(),
-                CalculationStrategy.REPORT_MISSING_ITEMS, checkpoint, preserve, false, null);
+                CalculationStrategy.REPORT_MISSING_ITEMS, checkpoint, preserve, false, null,
+                ManualCraftingInventoryLock.captureAvailabilityContext());
     }
 
     private static GraphPlanningRequest begin(GtlPatternCatalog catalog, IGrid grid, CraftingService service,
                                               Level level, IActionSource source, AEKey target, long amount, CalculationStrategy strategy,
                                               GraphJobRuntime.ReplanCheckpoint<AEKey> checkpoint, boolean preserve, boolean refreshInventory,
-                                              RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate) {
+                                              RequestPlanningWork.ReuseCandidate<AEKey> reuseCandidate,
+                                              ManualCraftingInventoryLock.AvailabilityContext inventoryContext) {
         if (amount <= 0) throw new IllegalArgumentException("Non-positive crafting request");
         PlanningScheduler planner = scheduler();
         PlanningBudget budget = planningBudget(planner.parallelism());
@@ -189,9 +219,11 @@ public final class CraftingEngineRouter {
                         parallelism = (int) Math.max(parallelism, Math.min(4096L, (long) cpu.getCoProcessors() + 1));
                     // Published by completion of the snapshot future; workers never inspect CPUs.
                     work.catalysts = new CatalystPolicy(parallelism, ConfigHolder.INSTANCE.ae.ae2GraphMaxExtraCatalystCopies);
-                    task = catalog.begin(grid, service, level, source, target,
+                    // The owner belongs to the confirmed request, not the server
+                    // thread. Capture it before subsequent tick slices resume.
+                    task = inventoryContext.callWithOwner(() -> catalog.begin(grid, service, level, source, target,
                             checkpoint == null ? Set.of() : checkpoint.recoverySeeds().keySet(), budget, refreshInventory,
-                            checkpoint == null ? Set.of() : checkpoint.forecast().keySet());
+                            checkpoint == null ? Set.of() : checkpoint.forecast().keySet()));
                 }
                 long preparationNanos = System.nanoTime() - captureStarted;
                 GraphSnapshots.enqueue(task, budget, snapshot, timing -> {

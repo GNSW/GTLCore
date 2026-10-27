@@ -121,6 +121,7 @@ public final class GtlPatternCatalog {
         private final IActionSource source;
         private final Roots roots;
         private final PlanningBudget budget;
+        private final ManualCraftingInventoryLock.AvailabilityContext inventoryContext;
         private KeyCounter available;
         private final InventorySnapshot discoveryInventory;
         private final KeyCounter additionalDiscovery = new KeyCounter();
@@ -186,6 +187,7 @@ public final class GtlPatternCatalog {
             this.source = source;
             this.roots = roots;
             this.budget = budget;
+            this.inventoryContext = ManualCraftingInventoryLock.captureAvailabilityContext();
             this.refreshInventory = refreshInventory;
             if (discoveryOnly.size() > MAX_CAPTURE_STATES)
                 throw new PlanningBudget.Exhausted(PlanningBudget.Limit.GRAPH_LIMIT, "job_discovery_keys");
@@ -224,6 +226,10 @@ public final class GtlPatternCatalog {
         }
 
         public boolean step(long deadline) {
+            return inventoryContext.callWithOwner(() -> stepWithInventoryOwner(deadline));
+        }
+
+        private boolean stepWithInventoryOwner(long deadline) {
             if (!level.getServer().isSameThread()) throw new IllegalStateException("Graph snapshot escaped server thread");
             budget.compilationCheck();
             budget.phase(PlanningBudget.Phase.SNAPSHOT);
@@ -363,8 +369,11 @@ public final class GtlPatternCatalog {
                         try {
                             if (!exactInventory.step()) return false;
                             stock.put(exactInventoryKey, exactInventory.amount());
-                            if (exactInventory.unlimited()) emitted.add(exactInventoryKey);
-                            else if (!exactInventory.exact()) impreciseStock.add(exactInventoryKey);
+                            if (exactInventory.unlimited()) {
+                                emitted.add(exactInventoryKey);
+                                // A generator has no finite stock to protect.
+                                inventoryContext.reserveAvailable(storage.getInventory(), exactInventoryKey, 0, source);
+                            } else if (!exactInventory.exact()) impreciseStock.add(exactInventoryKey);
                         } catch (RuntimeException | Error failure) {
                             exactInventory.close();
                             exactInventory = null;
@@ -392,6 +401,10 @@ public final class GtlPatternCatalog {
                             // diagnosing absence; this never transfers material.
                             if (simulate || count == 0) count = storage.getInventory().extract(resource,
                                     refreshInventory || count == 0 ? Long.MAX_VALUE : count, Actionable.SIMULATE, source);
+                            // ORIGINAL orders publish ownership in the same
+                            // server slice as the read. No captured finite stock
+                            // can be consumed while the solver is using it.
+                            count = inventoryContext.reserveAvailable(storage.getInventory(), resource, Math.max(0, count), source);
                             if (count > 0) stock.put(resource, count);
                             if (saturated || count == Long.MAX_VALUE) {
                                 exactInventoryKey = resource;

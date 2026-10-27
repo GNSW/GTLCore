@@ -49,6 +49,10 @@ final class DependencyScheduler<K> {
     }
 
     PlanStep.Batch poll(long tick, ToLongFunction<K> forecast) {
+        return poll(tick, forecast, forecast);
+    }
+
+    PlanStep.Batch poll(long tick, ToLongFunction<K> forecast, ToLongFunction<K> available) {
         while (!retries.isEmpty() && retries.peek().tick <= tick) enqueue(retries.remove().lane);
         active = -1;
         // Yield even if a very large job initially has thousands of sleeping
@@ -57,7 +61,7 @@ final class DependencyScheduler<K> {
             int lane = ready.removeFirst();
             queued[lane] = false;
             if (done[lane]) continue;
-            PlanStep.Batch batch = lanes.get(lane).poll(tick, forecast);
+            PlanStep.Batch batch = lanes.get(lane).poll(tick, forecast, available);
             if (batch != null) {
                 active = lane;
                 activeRecipe = batch.recipe();

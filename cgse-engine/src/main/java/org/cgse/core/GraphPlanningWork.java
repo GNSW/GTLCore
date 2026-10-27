@@ -593,8 +593,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     allocating = null;
                     if (allocated != null) {
                         budget.note("allocation", "witness_found");
-                        candidate = allocated;
-                        beginVerification(PlanningBudget.CandidateOrigin.ALLOCATION);
+                        beginVerifiedProposal(allocated, PlanningBudget.CandidateOrigin.ALLOCATION);
                         phase = 4;
                     } else {
                         budget.note("allocation", "no_witness; continuing alternatives");
@@ -689,8 +688,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     if (counted != null) {
                         if (allocating != null) allocating.discard();
                         allocating = null;
-                        candidate = counted;
-                        beginVerification(PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
+                        beginVerifiedProposal(counted, PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
                         phase = 4;
                     } else if (proved) {
                         // This proof concerns every allowed source and the
@@ -737,8 +735,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                         allocating = null;
                         if (allocated != null) {
                             budget.note("allocation_scout", "witness; work=" + (frontierWork() - allocationScoutStarted));
-                            candidate = allocated;
-                            beginVerification(PlanningBudget.CandidateOrigin.ALLOCATION);
+                            beginVerifiedProposal(allocated, PlanningBudget.CandidateOrigin.ALLOCATION);
                             phase = 4;
                             return false;
                         }
@@ -773,8 +770,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
                     outputView.close();
                     outputView = null;
                     if (proposal != null) {
-                        candidate = proposal;
-                        beginVerification(PlanningBudget.CandidateOrigin.SOURCE_GRAPH);
+                        beginVerifiedProposal(proposal, PlanningBudget.CandidateOrigin.SOURCE_GRAPH);
                         phase = 4;
                     } else afterSolve();
                 }
@@ -851,6 +847,17 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         } finally {
             if (candidateObservation != null) candidateObservation.step(work, nanos);
         }
+    }
+
+    /** These internal producers already checked the original request's funded
+     * word, seed obligations and forced production. Retain their incumbent
+     * before releasing the producer's slot: a deadline during the coordinator's
+     * repeated verification cannot erase it. Ordinary source/stock-view
+     * proposals still require that verification before becoming incumbents. */
+    private void beginVerifiedProposal(GraphPlan<K> proposal, PlanningBudget.CandidateOrigin origin) {
+        candidate = proposal;
+        if (proposal.feasible() && proposal.missingExact().isEmpty()) verified = proposal;
+        beginVerification(origin);
     }
 
     private PlanningCostTrace.Origin costOrigin() {
@@ -1200,8 +1207,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         }
         budget.note("source_witness", "stock_cost; verified=" + (proposal != null) + "; original_frontier_retained");
         if (proposal == null) return false;
-        candidate = proposal;
-        beginVerification(PlanningBudget.CandidateOrigin.STOCK_WITNESS);
+        beginVerifiedProposal(proposal, PlanningBudget.CandidateOrigin.STOCK_WITNESS);
         return true;
     }
 
@@ -1323,11 +1329,12 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         GraphPlan<K> proposal = countDemand.result();
         countDemand.close(); countDemand = null;
         if (proposal != null) {
-            candidate = proposal;
-            beginVerification(PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
+            beginVerifiedProposal(proposal, PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
             phase = 4;
         } else {
-            cyclicStockPending = preserve && !stock.isEmpty();
+            // Preservation changes the accepted seed contract, not which
+            // funded count strategies an ordinary crafting request can use.
+            cyclicStockPending = !stock.isEmpty();
             afterSolve();
         }
     }
@@ -1337,8 +1344,7 @@ public final class GraphPlanningWork<K> implements PlanningScheduler.Work<GraphP
         GraphPlan<K> proposal = cyclicStockCounts.result();
         cyclicStockCounts.close(); cyclicStockCounts = null;
         if (proposal != null) {
-            candidate = proposal;
-            beginVerification(PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
+            beginVerifiedProposal(proposal, PlanningBudget.CandidateOrigin.INTEGER_COUNTS);
             phase = 4;
         } else afterSolve();
     }

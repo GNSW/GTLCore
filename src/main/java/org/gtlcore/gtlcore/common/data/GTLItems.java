@@ -52,6 +52,11 @@ public class GTLItems {
         REGISTRATE.creativeModeTab(() -> GTLCreativeModeTabs.GTL_CORE);
     }
 
+    public static final ItemEntry<MatterManipulatorBehavior> MATTER_MANIPULATOR = REGISTRATE
+            .item("matter_manipulator", MatterManipulatorBehavior::new)
+            .model(NonNullBiConsumer.noop())
+            .register();
+
     private static ItemEntry<StorageComponentItem> registerStorageComponentItem(int tier) {
         return REGISTRATE
                 .item("cell_component_" + tier + "m", p -> new StorageComponentItem(p, 1048576 * tier))

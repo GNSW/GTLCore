@@ -173,6 +173,51 @@ public class WirelessAeSavedData extends SavedData {
         }
     }
 
+    /** A scoped, stable snapshot for manipulator undo; revision counters are derived state. */
+    public CompoundTag captureNetwork(UUID frequency) {
+        CompoundTag tag = new CompoundTag();
+        NetworkRecord record = networks.get(frequency);
+        if (record == null) return tag;
+        tag.putBoolean("Present", true);
+        if (record.core != null) tag.put(TAG_CORE, writeGlobalPos(record.core));
+        if (record.owner != null) tag.putUUID(TAG_OWNER, record.owner);
+        tag.putString(TAG_NAME, record.name);
+        ListTag members = new ListTag();
+        record.members.stream().map(WirelessAeSavedData::writeMemberKey)
+                .sorted(Comparator.comparing(CompoundTag::toString)).forEach(members::add);
+        tag.put(TAG_MEMBERS, members);
+        tag.putBoolean("LegacyFavorite", frequency.equals(legacyFavoriteNetwork));
+        return tag;
+    }
+
+    /** Refuse to reclaim members that another network acquired after a core was removed. */
+    public boolean canRestoreNetwork(UUID frequency, CompoundTag before, CompoundTag expected) {
+        Set<MemberKey> expectedMembers = new HashSet<>();
+        for (Tag value : expected.getList(TAG_MEMBERS, Tag.TAG_COMPOUND)) expectedMembers.add(readMemberKey((CompoundTag) value));
+        for (Tag value : before.getList(TAG_MEMBERS, Tag.TAG_COMPOUND)) {
+            MemberKey member = readMemberKey((CompoundTag) value);
+            UUID current = getExactMemberNetwork(member);
+            if (!java.util.Objects.equals(current, expectedMembers.contains(member) ? frequency : null)) return false;
+        }
+        return true;
+    }
+
+    public void restoreNetwork(UUID frequency, CompoundTag tag) {
+        removeNetwork(frequency);
+        if (tag.getBoolean("Present")) {
+            NetworkRecord record = network(frequency);
+            record.core = readGlobalPos(tag.getCompound(TAG_CORE));
+            record.owner = tag.hasUUID(TAG_OWNER) ? tag.getUUID(TAG_OWNER) : null;
+            record.name = tag.getString(TAG_NAME);
+            for (Tag value : tag.getList(TAG_MEMBERS, Tag.TAG_COMPOUND)) addMember(frequency, readMemberKey((CompoundTag) value));
+            if (tag.getBoolean("LegacyFavorite")) legacyFavoriteNetwork = frequency;
+        }
+        memberRevision++;
+        setDirty();
+        WirelessAeNetworkRuntime.disconnectFrequency(frequency);
+        WirelessAeNetworkRuntime.requestReconnect(frequency);
+    }
+
     public GlobalPos getCore(UUID frequency) {
         NetworkRecord record = this.networks.get(frequency);
         return record == null ? null : record.core;

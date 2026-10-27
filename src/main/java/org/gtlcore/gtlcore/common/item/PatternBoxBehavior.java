@@ -136,6 +136,7 @@ public class PatternBoxBehavior implements IItemUIFactory {
                 int index = col + (row + 1) * COLS;
                 group.addWidget(new SlotWidget(playerInv, index,
                         LEFT + col * SLOT_SIZE, INV_TOP + row * SLOT_SIZE, true, true)
+                        .setLocationInfo(true, false)
                         .setBackgroundTexture(GuiTextures.SLOT));
             }
         }
@@ -145,6 +146,7 @@ public class PatternBoxBehavior implements IItemUIFactory {
             boolean locked = col == heldSlot;
             group.addWidget(new SlotWidget(playerInv, col,
                     LEFT + col * SLOT_SIZE, hotbarY, !locked, !locked)
+                    .setLocationInfo(true, true)
                     .setBackgroundTexture(GuiTextures.SLOT));
         }
 

@@ -335,7 +335,7 @@ public class MEDualHatchStockPartMachine extends MEBusPartMachine implements IDa
         setAutoPullMode(Math.max(AUTO_PULL_OFF, Math.min(AUTO_PULL_FLUID, autoPullMode)));
     }
 
-    protected CompoundTag writeConfigToTag() {
+    public CompoundTag writeConfigToTag() {
         CompoundTag tag = new CompoundTag();
         tag.putInt("AutoPullMode", autoPullMode);
         CompoundTag configStacks = new CompoundTag();
@@ -360,7 +360,7 @@ public class MEDualHatchStockPartMachine extends MEBusPartMachine implements IDa
         return tag;
     }
 
-    protected void readConfigFromTag(CompoundTag tag) {
+    public void readConfigFromTag(CompoundTag tag) {
         if (tag.contains("AutoPullMode")) {
             var autoPullMode = tag.getInt("AutoPullMode");
             this.setAutoPullMode(autoPullMode);

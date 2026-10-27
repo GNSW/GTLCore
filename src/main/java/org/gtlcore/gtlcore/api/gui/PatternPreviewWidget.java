@@ -41,6 +41,7 @@ import com.lowdragmc.lowdraglib.utils.*;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -61,8 +62,13 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import it.unimi.dsi.fastutil.Pair;
 import it.unimi.dsi.fastutil.longs.*;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -75,6 +81,7 @@ import org.joml.Vector3f;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 部分代码参考自GTM
@@ -87,6 +94,7 @@ public class PatternPreviewWidget extends WidgetGroup {
     private static TrackedDummyWorld LEVEL;
     private static final int REGION_SIZE = 512;
     private static final float HIGHLIGHT_SCALE = 1.03f;
+    private static final float HIGHLIGHT_INTENSITY = 0.6f;
     // Frame the controller at a quarter of the shorter viewport dimension.
     private static final float CONTROLLER_VIEW_FRACTION = 0.25f;
     private static int LAST_OFFSET_INDEX = 0;
@@ -104,6 +112,8 @@ public class PatternPreviewWidget extends WidgetGroup {
     private final Map<BlockState, BlockInfo> plainBlocks = new IdentityHashMap<>();
     private final Map<BlockPos, AEItemKey> materialReplacements = new HashMap<>();
     private BlockPos selectedMaterialPos;
+    private List<BlockPos> replaceablePositions = List.of();
+    private boolean replaceablePositionsDirty = true;
 
     protected PatternPreviewWidget(MultiblockMachineDefinition controllerDefinition) {
         super(0, 0, 160, 160);
@@ -174,8 +184,11 @@ public class PatternPreviewWidget extends WidgetGroup {
                     }
                     var materialPos = selectedMaterialPos != null ? selectedMaterialPos :
                             selectedPosFace == null ? null : selectedPosFace.pos;
+                    if (previewControls != null && previewControls.highlightingReplaceable()) {
+                        renderReplaceableHighlights(poseStack, renderSelect ? materialPos : null);
+                    }
                     if (materialPos != null && renderSelect) {
-                        RenderUtils.renderBlockOverLay(poseStack, materialPos, 0.6f, 0, 0, HIGHLIGHT_SCALE);
+                        RenderUtils.renderBlockOverLay(poseStack, materialPos, HIGHLIGHT_INTENSITY, 0, 0, HIGHLIGHT_SCALE);
                     }
 
                     if (this.afterWorldRender != null) {
@@ -234,6 +247,54 @@ public class PatternPreviewWidget extends WidgetGroup {
 
     public PreviewControls getPreviewControls() {
         return previewControls;
+    }
+
+    private void renderReplaceableHighlights(PoseStack poseStack, @Nullable BlockPos selectedPos) {
+        if (index < 0 || index >= patterns.length) return;
+        if (replaceablePositionsDirty) {
+            var pattern = patterns[index];
+            var candidatesByPredicate = new IdentityHashMap<TraceabilityPredicate, Set<AEItemKey>>();
+            replaceablePositions = sceneWidget.getCore().stream().filter(pos -> {
+                var predicate = pattern.predicateMap.get(pos);
+                if (predicate == null) return false;
+                var material = patternMaterial(pos);
+                // Module-only positions are absent from the host material bill.
+                if (material == null) {
+                    var state = LEVEL.getBlockState(pos);
+                    material = AEItemKey.of(state.getBlock().getCloneItemStack(LEVEL, pos, state));
+                }
+                if (material == null) return false;
+                var alternatives = candidatesByPredicate.computeIfAbsent(predicate, key -> Stream.concat(key.common.stream(), key.limited.stream())
+                        .filter(simple -> simple != null && simple.candidates != null)
+                        .flatMap(simple -> simple.getCandidates().stream())
+                        .filter(stack -> !stack.isEmpty())
+                        .map(AEItemKey::of)
+                        .collect(Collectors.toSet()));
+                return !alternatives.isEmpty() && (alternatives.size() > 1 || !alternatives.contains(material));
+            }).toList();
+            replaceablePositionsDirty = false;
+        }
+        if (replaceablePositions.isEmpty()) return;
+
+        // Submit all green overlays together instead of issuing one draw call per block.
+        RenderSystem.enableBlend();
+        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        var tessellator = Tesselator.getInstance();
+        BufferBuilder buffer = tessellator.getBuilder();
+        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        for (var pos : replaceablePositions) {
+            if (pos.equals(selectedPos)) continue;
+            poseStack.pushPose();
+            poseStack.translate(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+            poseStack.scale(HIGHLIGHT_SCALE, HIGHLIGHT_SCALE, HIGHLIGHT_SCALE);
+            RenderUtils.renderCubeFace(poseStack, buffer, -0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f,
+                    0, HIGHLIGHT_INTENSITY, 0, 1);
+            poseStack.popPose();
+        }
+        tessellator.end();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1, 1, 1, 1);
     }
 
     private IGuiTexture controlTexture(Supplier<String> label) {
@@ -314,6 +375,7 @@ public class PatternPreviewWidget extends WidgetGroup {
         var key = AEItemKey.of(replacement);
         if (selectedMaterialPos == null || key == null) return;
         materialReplacements.put(selectedMaterialPos, key);
+        replaceablePositionsDirty = true;
         refreshMaterialSlots();
         previewControls.refreshPatternInputs();
         previewControls.selectPatternMaterial(key);
@@ -378,6 +440,7 @@ public class PatternPreviewWidget extends WidgetGroup {
             }
         }
         sceneWidget.setRenderedCore(stream.toList(), null);
+        replaceablePositionsDirty = true;
         if (previewControls != null) previewControls.sceneChanged();
     }
 

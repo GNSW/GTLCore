@@ -53,7 +53,35 @@ import java.util.Set;
  * @author EasterFG on 2024/10/13
  */
 @Mixin(PatternProviderLogic.class)
-public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, IPatternProviderAutoExpand {
+public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, IPatternProviderAutoExpand,
+                                                org.gtlcore.gtlcore.integration.ae2.manipulator.SharedManipulatorPatterns {
+
+    @Shadow(remap = false)
+    @Final
+    private List<IPatternDetails> patterns;
+    @Unique
+    private net.minecraft.core.BlockPos gtlcore$manipulatorSource;
+    @Unique
+    private Direction gtlcore$manipulatorSourceSide;
+
+    @Override
+    public net.minecraft.core.BlockPos gtlcore$manipulatorSource() {
+        return gtlcore$manipulatorSource;
+    }
+
+    @Override
+    public Direction gtlcore$manipulatorSourceSide() {
+        return gtlcore$manipulatorSourceSide;
+    }
+
+    @Override
+    public void gtlcore$setManipulatorSource(net.minecraft.core.BlockPos pos, Direction side) {
+        gtlcore$manipulatorSource = pos;
+        gtlcore$manipulatorSourceSide = side;
+        org.gtlcore.gtlcore.integration.ae2.manipulator.ManipulatorPatternSharing.track((PatternProviderLogic) (Object) this);
+        ((PatternProviderLogic) (Object) this).updatePatterns();
+        saveChanges();
+    }
 
     private static final String AUTO_EXPAND_KEY = "gtlcore:auto_expand";
 
@@ -99,10 +127,17 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
     @Inject(method = "writeToNBT", at = @At("TAIL"), remap = false)
     private void gtlcore$writeAutoExpand(CompoundTag tag, CallbackInfo ci) {
         tag.putBoolean(AUTO_EXPAND_KEY, gtlcore$autoExpand);
+        if (gtlcore$manipulatorSource != null) {
+            tag.putLong("gtlcore:manipulator_source", gtlcore$manipulatorSource.asLong());
+            if (gtlcore$manipulatorSourceSide != null) tag.putInt("gtlcore:manipulator_side", gtlcore$manipulatorSourceSide.ordinal());
+        }
     }
 
     @Inject(method = "readFromNBT", at = @At("TAIL"), remap = false)
     private void gtlcore$readAutoExpand(CompoundTag tag, CallbackInfo ci) {
+        gtlcore$manipulatorSource = tag.contains("gtlcore:manipulator_source") ? net.minecraft.core.BlockPos.of(tag.getLong("gtlcore:manipulator_source")) : null;
+        gtlcore$manipulatorSourceSide = tag.contains("gtlcore:manipulator_side") ? Direction.values()[tag.getInt("gtlcore:manipulator_side")] : null;
+        if (gtlcore$manipulatorSource != null) org.gtlcore.gtlcore.integration.ae2.manipulator.ManipulatorPatternSharing.track((PatternProviderLogic) (Object) this);
         if (tag.contains(AUTO_EXPAND_KEY)) {
             gtlcore$autoExpand = tag.getBoolean(AUTO_EXPAND_KEY);
         } else {
@@ -145,6 +180,12 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
 
     @Inject(method = "updatePatterns", at = @At("TAIL"), remap = false)
     public void updatePatternsHook(CallbackInfo ci) {
+        if (gtlcore$manipulatorSource != null) {
+            patterns.clear();
+            patterns.addAll(org.gtlcore.gtlcore.integration.ae2.manipulator.ManipulatorPatternSharing.patterns(host, this));
+            patternInputs.clear();
+            for (var pattern : patterns) for (var input : pattern.getInputs()) for (var stack : input.getPossibleInputs()) patternInputs.add(stack.what());
+        }
         patternInputs.remove(AEItemKey.of(GTItems.INTEGRATED_CIRCUIT.get()));
     }
 

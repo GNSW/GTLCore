@@ -6,6 +6,7 @@ import com.gregtechceu.gtceu.api.gui.GuiTextures;
 import com.gregtechceu.gtceu.api.machine.MultiblockMachineDefinition;
 
 import com.lowdragmc.lowdraglib.gui.editor.ColorPattern;
+import com.lowdragmc.lowdraglib.gui.editor.Icons;
 import com.lowdragmc.lowdraglib.gui.texture.GuiTextureGroup;
 import com.lowdragmc.lowdraglib.gui.texture.ItemStackTexture;
 import com.lowdragmc.lowdraglib.gui.texture.TextTexture;
@@ -65,6 +66,7 @@ public final class PreviewControls {
     private final PreviewPatternPanel patternPanel;
     private final ButtonWidget patternToggle;
     private final ButtonWidget originToggle;
+    private final ButtonWidget replaceableToggle;
     private final Supplier<List<List<GenericStack>>> patternInputs;
     private final ImageWidget info;
     private final Component title;
@@ -78,6 +80,7 @@ public final class PreviewControls {
     private boolean showCandidates = true;
     private boolean showPattern;
     private boolean showRotationOrigin = true;
+    private boolean highlightReplaceable;
     private int width;
     private int screenHeight;
     private int toolbarLeft;
@@ -140,6 +143,21 @@ public final class PreviewControls {
         updateOriginButton();
         originToggle.setVisible(false);
         originToggle.setActive(false);
+        replaceableToggle = new ButtonWidget(0, 0, BUTTON_SIZE, BUTTON_SIZE,
+                new GuiTextureGroup(GuiTextures.BUTTON, Icons.EDIT_OFF),
+                click -> {
+                    highlightReplaceable = !highlightReplaceable;
+                    updateReplaceableButton();
+                });
+        updateReplaceableButton();
+        replaceableToggle.setVisible(false);
+        replaceableToggle.setActive(false);
+    }
+
+    private void updateReplaceableButton() {
+        replaceableToggle.setButtonTexture(GuiTextures.BUTTON, highlightReplaceable ? Icons.EDIT_ON : Icons.EDIT_OFF);
+        replaceableToggle.setHoverTooltips(Component.translatable(highlightReplaceable ?
+                "gui.gtlcore.preview.hide_replaceable" : "gui.gtlcore.preview.highlight_replaceable"));
     }
 
     private void updateOriginButton() {
@@ -171,6 +189,10 @@ public final class PreviewControls {
 
     public boolean fullscreen() {
         return fullscreen;
+    }
+
+    public boolean highlightingReplaceable() {
+        return fullscreen && highlightReplaceable;
     }
 
     public void setCandidates(List<PreviewCandidatePanel.Group> groups) {
@@ -229,6 +251,7 @@ public final class PreviewControls {
             widget.addWidget(patternPanel);
             widget.addWidget(patternToggle);
             widget.addWidget(originToggle);
+            widget.addWidget(replaceableToggle);
             resetInteraction();
             expand.setButtonTexture(GuiTextures.BUTTON, GuiTextures.CLOSE_ICON);
             expand.setHoverTooltips(Component.translatable("gui.gtlcore.preview.restore"));
@@ -286,10 +309,13 @@ public final class PreviewControls {
         originToggle.setSelfPosition(buttonX - BUTTON_SPACING * 5, TOOLBAR_TOP);
         originToggle.setVisible(true);
         originToggle.setActive(true);
+        replaceableToggle.setSelfPosition(buttonX - BUTTON_SPACING * 6, TOOLBAR_TOP);
+        replaceableToggle.setVisible(true);
+        replaceableToggle.setActive(true);
         long controlCount = widget.widgets.stream()
                 .filter(child -> child instanceof ButtonWidget && child != expand && !fullscreenOnly(child) && original.get(child).visible)
                 .count();
-        toolbarLeft = originToggle.getPositionX() - (int) controlCount * (CONTROL_WIDTH + CONTROL_GAP);
+        toolbarLeft = replaceableToggle.getPositionX() - (int) controlCount * (CONTROL_WIDTH + CONTROL_GAP);
         int controlX = toolbarLeft;
         for (var child : widget.widgets) {
             if (fullscreenOnly(child)) continue;
@@ -316,7 +342,7 @@ public final class PreviewControls {
 
     private boolean fullscreenOnly(Widget child) {
         return child == candidatePanel || child == candidateToggle || child == info || child == locateController ||
-                child == patternPanel || child == patternToggle || child == originToggle;
+                child == patternPanel || child == patternToggle || child == originToggle || child == replaceableToggle;
     }
 
     public void exit() {
@@ -326,6 +352,8 @@ public final class PreviewControls {
         candidatePanel.close();
         patternPanel.close();
         showPattern = false;
+        highlightReplaceable = false;
+        updateReplaceableButton();
         widget.removeWidget(candidatePanel);
         widget.removeWidget(candidateToggle);
         widget.removeWidget(info);
@@ -333,6 +361,7 @@ public final class PreviewControls {
         widget.removeWidget(patternPanel);
         widget.removeWidget(patternToggle);
         widget.removeWidget(originToggle);
+        widget.removeWidget(replaceableToggle);
         rootGeometry.restore(widget);
         widget.setParentPosition(parentPosition);
         for (var child : widget.widgets) {
@@ -349,6 +378,8 @@ public final class PreviewControls {
         patternToggle.setActive(false);
         originToggle.setVisible(false);
         originToggle.setActive(false);
+        replaceableToggle.setVisible(false);
+        replaceableToggle.setActive(false);
         original.clear();
         camera.restore(scene);
         scene.setDraggable(sceneDraggable);

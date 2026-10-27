@@ -26,30 +26,23 @@ public final class ManualCraftingInventoryLock {
     private ManualCraftingInventoryLock() {}
 
     public static @Nullable Reservation tryAcquire(MEStorage storage, KeyCounter requested, IActionSource source) {
+        return acquire(storage, requested, source, false);
+    }
+
+    /**
+     * Protect the still available part of a preview while its missing remainder
+     * is recalculated. This never extracts stock and may return an empty owner.
+     */
+    public static Reservation reserveAvailable(MEStorage storage, KeyCounter requested, IActionSource source) {
+        return acquire(storage, requested, source, true);
+    }
+
+    private static Reservation acquire(MEStorage storage, KeyCounter requested, IActionSource source, boolean partial) {
         var owned = new KeyCounter();
         for (var entry : requested) {
             if (entry.getLongValue() > 0) owned.add(entry.getKey(), entry.getLongValue());
         }
-        var probes = new KeyCounter();
-        synchronized (RESERVED) {
-            var reserved = RESERVED.get(storage);
-            for (var entry : owned) {
-                long alreadyReserved = reserved == null ? 0 : reserved.get(entry.getKey());
-                long amount = entry.getLongValue();
-                probes.add(entry.getKey(), amount > Long.MAX_VALUE - alreadyReserved ? Long.MAX_VALUE : amount + alreadyReserved);
-            }
-        }
-        var available = new KeyCounter();
-        // Advertised keys are a display view: providers can accept aliases that
-        // they do not list, and visible amounts can be stale or inaccessible.
-        // Probe only the requested keys through the same extraction path as
-        // submission. Bound each query by this claim plus existing reservations.
-        // World callbacks run outside the reservation monitor; recheck all
-        // current claims below before atomically publishing the new owner.
-        for (var entry : probes) {
-            long count = simulatePhysical(storage, entry.getKey(), entry.getLongValue(), source);
-            if (count > 0) available.add(entry.getKey(), Math.min(count, entry.getLongValue()));
-        }
+        var available = availableForClaim(storage, owned, null, source);
 
         Reservation reservation = null;
         AEKey conflictKey = null;
@@ -62,15 +55,26 @@ public final class ManualCraftingInventoryLock {
                 long alreadyReserved = reserved == null ? 0 : reserved.get(entry.getKey());
                 long availableToReserve = subtractClamped(available.get(entry.getKey()), alreadyReserved);
                 if (entry.getLongValue() > availableToReserve) {
-                    conflictKey = entry.getKey();
-                    conflictRequested = entry.getLongValue();
-                    conflictAvailable = availableToReserve;
-                    conflictReserved = alreadyReserved;
-                    break;
+                    if (conflictKey == null) {
+                        conflictKey = entry.getKey();
+                        conflictRequested = entry.getLongValue();
+                        conflictAvailable = availableToReserve;
+                        conflictReserved = alreadyReserved;
+                    }
+                    if (!partial) break;
                 }
             }
 
-            if (conflictKey == null) {
+            if (conflictKey == null || partial) {
+                if (conflictKey != null) {
+                    var funded = new KeyCounter();
+                    for (var entry : owned) {
+                        long alreadyReserved = reserved == null ? 0 : reserved.get(entry.getKey());
+                        long amount = Math.min(entry.getLongValue(), subtractClamped(available.get(entry.getKey()), alreadyReserved));
+                        if (amount > 0) funded.add(entry.getKey(), amount);
+                    }
+                    owned = funded;
+                }
                 if (!owned.isEmpty()) {
                     if (reserved == null) {
                         reserved = new KeyCounter();
@@ -89,6 +93,31 @@ public final class ManualCraftingInventoryLock {
             ManualCraftingInventoryLockLogger.acquired(reservation.id, storage, reservation.amounts, source);
         }
         return reservation;
+    }
+
+    private static KeyCounter availableForClaim(MEStorage storage, KeyCounter requested,
+                                                @Nullable Reservation owner, IActionSource source) {
+        var probes = new KeyCounter();
+        synchronized (RESERVED) {
+            var reserved = RESERVED.get(storage);
+            for (var entry : requested) {
+                long total = reserved == null ? 0 : reserved.get(entry.getKey());
+                long owned = owner != null && owner.isActiveFor(storage) ? owner.amounts.get(entry.getKey()) : 0;
+                long others = subtractClamped(total, owned);
+                long amount = entry.getLongValue();
+                probes.add(entry.getKey(), amount > Long.MAX_VALUE - others ? Long.MAX_VALUE : amount + others);
+            }
+        }
+        var available = new KeyCounter();
+        // Advertised keys are a display view: providers can accept aliases that
+        // they do not list, and visible amounts can be stale or inaccessible.
+        // Probe only requested keys through the actual extraction path. World
+        // callbacks stay outside the monitor; publish against current claims.
+        for (var entry : probes) {
+            long count = simulatePhysical(storage, entry.getKey(), entry.getLongValue(), source);
+            if (count > 0) available.add(entry.getKey(), Math.min(count, entry.getLongValue()));
+        }
+        return available;
     }
 
     public static boolean hasReservations(MEStorage storage) {
@@ -111,13 +140,36 @@ public final class ManualCraftingInventoryLock {
             this.owner = owner;
         }
 
+        /**
+         * Bind one planning snapshot key to its request owner on the server
+         * thread. Ordinary reads without that owner keep their existing policy.
+         */
+        public long reserveAvailable(MEStorage storage, AEKey key, long requested, IActionSource source) {
+            synchronized (RESERVED) {
+                if (owner == null || !owner.isActiveFor(storage)) return requested;
+            }
+            return owner.reserveAvailable(key, requested, source);
+        }
+
         public long call(java.util.function.LongSupplier query) {
+            var previous = ACTIVE_SUBMISSION.get();
+            if (owner == null) ACTIVE_SUBMISSION.remove();
+            else ACTIVE_SUBMISSION.set(owner);
+            try {
+                return query.getAsLong();
+            } finally {
+                if (previous == null) ACTIVE_SUBMISSION.remove();
+                else ACTIVE_SUBMISSION.set(previous);
+            }
+        }
+
+        public <T> T callWithOwner(Supplier<T> query) {
             var previous = ACTIVE_SUBMISSION.get();
             // limitExtraction also checks that the captured owner is still active.
             if (owner == null) ACTIVE_SUBMISSION.remove();
             else ACTIVE_SUBMISSION.set(owner);
             try {
-                return query.getAsLong();
+                return query.get();
             } finally {
                 if (previous == null) ACTIVE_SUBMISSION.remove();
                 else ACTIVE_SUBMISSION.set(previous);
@@ -225,6 +277,106 @@ public final class ManualCraftingInventoryLock {
             this.id = id;
             this.storage = storage;
             this.amounts = amounts;
+        }
+
+        public AvailabilityContext availabilityContext() {
+            return new AvailabilityContext(this);
+        }
+
+        /**
+         * Server-thread snapshot capture: replace only this key's claim with its
+         * still extractable quantity. Other keys remain protected throughout;
+         * no stock is transferred and no existing-key collection is scanned.
+         * A nonpositive request releases this key without querying the world.
+         */
+        public long reserveAvailable(AEKey key, long requested, IActionSource source) {
+            requested = Math.max(0, requested);
+            long probe;
+            synchronized (RESERVED) {
+                if (!active) return 0;
+                var reserved = RESERVED.get(storage);
+                long total = reserved == null ? 0 : reserved.get(key);
+                long others = subtractClamped(total, amounts.get(key));
+                if (requested == 0) {
+                    replaceKeyClaim(reserved, key, others, 0);
+                    return 0;
+                }
+                probe = requested > Long.MAX_VALUE - others ? Long.MAX_VALUE : requested + others;
+            }
+            long available = Math.max(0, Math.min(probe, simulatePhysical(storage, key, probe, source)));
+            synchronized (RESERVED) {
+                if (!active) return 0;
+                var reserved = RESERVED.get(storage);
+                long total = reserved == null ? 0 : reserved.get(key);
+                long others = subtractClamped(total, amounts.get(key));
+                long retained = Math.min(requested, subtractClamped(available, others));
+                replaceKeyClaim(reserved, key, others, retained);
+                return retained;
+            }
+        }
+
+        /** Called only under RESERVED; the validated total never exceeds long. */
+        private void replaceKeyClaim(@Nullable KeyCounter reserved, AEKey key, long others, long retained) {
+            long total = others + retained;
+            if (total > 0) {
+                if (reserved == null) {
+                    reserved = new KeyCounter();
+                    RESERVED.put(storage, reserved);
+                }
+                reserved.set(key, total);
+            } else if (reserved != null) {
+                reserved.remove(key);
+                if (reserved.isEmpty()) RESERVED.remove(storage);
+            }
+            if (retained > 0) amounts.set(key, retained);
+            else amounts.remove(key);
+        }
+
+        /** Inspect the published claim without querying or extracting world stock. */
+        public boolean covers(KeyCounter requested) {
+            synchronized (RESERVED) {
+                if (!active) return false;
+                for (var entry : requested) {
+                    if (entry.getLongValue() > amounts.get(entry.getKey())) return false;
+                }
+                return true;
+            }
+        }
+
+        /** Replace a claim in place; a failed replacement preserves every old claim. */
+        public boolean tryReplace(KeyCounter requested, IActionSource source) {
+            var replacement = new KeyCounter();
+            for (var entry : requested) {
+                if (entry.getLongValue() > 0) replacement.add(entry.getKey(), entry.getLongValue());
+            }
+            synchronized (RESERVED) {
+                if (!active) return false;
+            }
+            var available = availableForClaim(storage, replacement, this, source);
+            synchronized (RESERVED) {
+                if (!active) return false;
+                var reserved = RESERVED.get(storage);
+                for (var entry : replacement) {
+                    long total = reserved == null ? 0 : reserved.get(entry.getKey());
+                    long others = subtractClamped(total, amounts.get(entry.getKey()));
+                    if (entry.getLongValue() > subtractClamped(available.get(entry.getKey()), others)) return false;
+                }
+                if (reserved != null) reserved.removeAll(amounts);
+                if (!replacement.isEmpty()) {
+                    if (reserved == null) {
+                        reserved = new KeyCounter();
+                        RESERVED.put(storage, reserved);
+                    }
+                    reserved.addAll(replacement);
+                }
+                if (reserved != null) {
+                    reserved.removeZeros();
+                    if (reserved.isEmpty()) RESERVED.remove(storage);
+                }
+                amounts.clear();
+                amounts.addAll(replacement);
+                return true;
+            }
         }
 
         public ICraftingSubmitResult submit(Supplier<ICraftingSubmitResult> action) {

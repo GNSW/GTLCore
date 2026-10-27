@@ -81,7 +81,7 @@ final class CapturedFlowWitness<K> implements AutoCloseable {
         } else if (assembly != null) {
             if (!assembly.step()) return false;
             if (assembly.plan == null) rejectOrder();
-            else verification = new PlanVerification<>(assembly.plan, budget);
+            else verification = new PlanVerification<>(assembly.plan, budget, assembly);
         } else if (schedule.step()) {
             if (schedule.witness() == null) done = true;
             else {

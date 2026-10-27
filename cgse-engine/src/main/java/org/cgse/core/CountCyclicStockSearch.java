@@ -31,8 +31,11 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     private int[] originalComponents;
     private GraphPlan<K> result;
     private long work, memory;
+    private Map<K, Long> startupLoans = Map.of();
+    private Map<K, Long> startupSeeds;
+    private long startupMemory;
     private int row, phase, retainedGoals;
-    private boolean tightened, originalTried, reverseTried, reverseCandidate, done;
+    private boolean tightened, originalTried, reverseTried, reverseCandidate, startupTried, done;
 
     CountCyclicStockSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
                            Set<K> external, Map<K, Long> seeds, Set<String> excluded,
@@ -104,6 +107,7 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
                     result = candidate.plan;
                     return finish();
                 }
+                rememberStartup();
                 candidate.close(); candidate = null;
                 if (reverseCandidate) return afterReverse();
                 return tryReverse();
@@ -118,14 +122,22 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
                 if (word == null) return tryReverse();
                 // The optional terminal stock was a proposal aid, not an
                 // extra caller seed contract or a synthetic inventory credit.
-                candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
-                        seeds, external, preserve, force, false, budget, started);
                 reverseCandidate = false;
+                candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
+                        activeSeeds(), external, preserve, force, false, budget, started).productionContract(seeds);
                 return false;
             }
             return finish();
         } catch (PlanningBudget.Exhausted limit) {
             if (limit.limit() != PlanningBudget.Limit.MEMORY_LIMIT) throw limit;
+            if (reverseCandidate && schedule != null) {
+                // Assembly and seed/production checking belong to the optional
+                // reverse attempt too. Its workspace must not discard the
+                // suspended forward scan after the reverse scheduler exits.
+                if (candidate != null) candidate.close(); candidate = null;
+                budget.failureDetail(detail);
+                return afterReverse();
+            }
             close(); budget.failureDetail(detail);
             return finish();
         } finally { work += budget.threadWork() - before; }
@@ -165,7 +177,8 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     }
 
     private boolean tryOriginal() {
-        if (originalTried || originalCounts == null || originalComponents == null) return finish();
+        if (originalTried) return completeStartup();
+        if (originalCounts == null || originalComponents == null) return finish();
         originalTried = true;
         reverseTried = false;
         restore();
@@ -174,6 +187,50 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
         schedule = CountSchedule.componentBalanced(model, counts, originalComponents, budget, 512);
         return false;
     }
+
+    private void rememberStartup() {
+        if (startupTried || candidate.startupLoans.isEmpty()) return;
+        long bytes = 256L + 384L * candidate.startupLoans.size() + 192L * seeds.size();
+        if (!budget.tryReserve(bytes)) return;
+        budget.release(startupMemory); startupMemory = bytes;
+        startupLoans = new LinkedHashMap<>(candidate.startupLoans);
+    }
+
+    private boolean completeStartup() {
+        // Full-stock retention is optional. If it fails, the original word
+        // can still reveal a much smaller startup obligation. Try completing
+        // that obligation only after both original orderings have had their
+        // turn; do not replace a suspended physical scan with this proposal.
+        if (startupTried || startupLoans.isEmpty() || allowance - work < 32768) return finish();
+        startupTried = true;
+        restore();
+        startupSeeds = new LinkedHashMap<>(seeds);
+        for (var loan : startupLoans.entrySet()) {
+            int index = -1;
+            for (int i = 0; i < model.rowKeys.size(); i++) {
+                budget.check();
+                if (model.rowKeys.get(i).equals(loan.getKey())) { index = i; break; }
+            }
+            if (index < 0) return finish();
+            BigInteger goal = BigInteger.valueOf(loan.getValue());
+            if (target.equals(loan.getKey())) goal = goal.add(BigInteger.valueOf(amount));
+            BigInteger previous = model.goal(loan.getKey());
+            if (goal.compareTo(previous) <= 0) continue;
+            startupSeeds.merge(loan.getKey(), loan.getValue(), Math::max);
+            var constraint = model.constraints.get(index);
+            originalRows.put(index, constraint);
+            originalGoals.put(loan.getKey(), model.goals.get(loan.getKey()));
+            model.goals.put(loan.getKey(), goal);
+            model.constraints.set(index, new ExactLinearProgram.Constraint(constraint.terms(),
+                    constraint.upper().subtract(goal.subtract(previous))));
+        }
+        if (originalRows.isEmpty()) return finish();
+        phase = 1; reverseTried = false;
+        budget.note("count_cyclic_startup", "complete_minimum_loans; keys=" + originalRows.size());
+        return project();
+    }
+
+    private Map<K, Long> activeSeeds() { return startupSeeds == null ? seeds : startupSeeds; }
 
     private boolean tryReverse() {
         if (reverseTried) return afterReverse();
@@ -203,13 +260,14 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
         }
         reverse.close(); reverse = null;
         if (word == null) return afterReverse();
-        candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
-                seeds, external, preserve, force, false, budget, started);
         reverseCandidate = true;
+        candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
+                activeSeeds(), external, preserve, force, false, budget, started).productionContract(seeds);
         return false;
     }
 
     private boolean afterReverse() {
+        reverseCandidate = false;
         return schedule != null ? false : tryOriginal();
     }
 
@@ -225,7 +283,8 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     private boolean finish() {
         done = true;
         budget.note("count_cyclic_stock", "witness=" + (result != null) + "; goals=" + retainedGoals +
-                "; tightened=" + tightened + "; original_retry=" + originalTried + "; work=" + work);
+                "; tightened=" + tightened + "; original_retry=" + originalTried +
+                "; startup_retry=" + startupTried + "; work=" + work);
         return true;
     }
 
@@ -239,6 +298,8 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
         if (topology != null) topology.close(); topology = null;
         restore();
         if (model != null) model.close(); model = null;
-        budget.release(memory); memory = 0;
+        budget.release(memory + startupMemory); memory = startupMemory = 0;
+        startupLoans = Map.of();
+        startupSeeds = null;
     }
 }

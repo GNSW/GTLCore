@@ -88,6 +88,7 @@ final class CountDemandAllocation implements AutoCloseable {
             else minimum = minimum.add(term.getValue().multiply(bound));
         }
         if (infinite == 0 && minimum.compareTo(row.upper()) > 0) return false;
+        BigInteger slack = row.upper().subtract(minimum);
         // Snapshot row minima before tightening. New bounds wake their sparse
         // incidences; using an old minimum below is weaker, never stronger.
         for (var term : row.terms().entrySet()) {
@@ -95,12 +96,18 @@ final class CountDemandAllocation implements AutoCloseable {
             int variable = term.getKey(); BigInteger coefficient = term.getValue();
             BigInteger old = coefficient.signum() > 0 ? low[variable] : high[variable];
             if (infinite - (old == null ? 1 : 0) != 0) continue;
-            BigInteger residual = row.upper().subtract(minimum);
+            BigInteger residual = slack;
             if (old != null) residual = residual.add(coefficient.multiply(old));
             if (coefficient.signum() > 0) {
-                if (residual.signum() < 0 || !tighten(variable, false, residual.divide(coefficient))) return false;
-            } else if (residual.signum() < 0 &&
-                    !tighten(variable, true, CheckedAmounts.ceilDiv(residual.negate(), coefficient.negate()))) return false;
+                if (residual.signum() < 0) return false;
+                // Keep the same bound and work checks when division could only
+                // rediscover a capacity that is already at least this tight.
+                if (high[variable] != null && residual.compareTo(coefficient.multiply(high[variable])) >= 0) continue;
+                if (!tighten(variable, false, residual.divide(coefficient))) return false;
+            } else if (residual.signum() < 0) {
+                if (residual.compareTo(coefficient.multiply(low[variable])) >= 0) continue;
+                if (!tighten(variable, true, CheckedAmounts.ceilDiv(residual.negate(), coefficient.negate()))) return false;
+            }
         }
         return true;
     }

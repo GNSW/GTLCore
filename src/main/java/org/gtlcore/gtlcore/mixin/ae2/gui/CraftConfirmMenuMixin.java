@@ -22,6 +22,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.MenuType;
 
+import appeng.api.config.Actionable;
 import appeng.api.config.SortDir;
 import appeng.api.config.SortOrder;
 import appeng.api.config.TypeFilter;
@@ -36,12 +37,14 @@ import appeng.api.networking.crafting.ICraftingService;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.ISubMenuHost;
 import appeng.api.storage.MEStorage;
 import appeng.client.gui.me.common.Repo;
 import appeng.client.gui.widgets.ISortSource;
 import appeng.core.sync.packets.MEInventoryUpdatePacket;
+import appeng.crafting.execution.CraftingSubmitResult;
 import appeng.helpers.IMenuCraftingPacket;
 import appeng.menu.AEBaseMenu;
 import appeng.menu.ISubMenu;
@@ -161,6 +164,9 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         if (!isClientSide()) gtlcore$checkProviders();
         if (!isClientSide()) gtlcore$validateInventoryReservation();
         if (!isClientSide() && job instanceof GraphPlanningRequest request && request.isCompletedExceptionally() && !request.isCancelled()) {
+            // Unknown planner failures may be handled by AE's native error
+            // path; they must not keep a provisional refresh claim alive.
+            gtlcore$releaseInventoryReservation();
             try {
                 request.join();
             } catch (java.util.concurrent.CompletionException error) {
@@ -260,6 +266,13 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
 
     @Unique
     private @Nullable ICraftingPlan gtlcore$reservationAttemptedPlan;
+
+    @Unique
+    private boolean gtlcore$reservationComplete;
+
+    @Unique
+    // Owns both the initial calculation and a later confirmed refresh.
+    private @Nullable Future<ICraftingPlan> gtlcore$reservationRefreshJob;
 
     @Unique
     private boolean gtlcore$closed;
@@ -413,8 +426,13 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     @Unique
     private boolean gtlcore$planLongAmountJob(AEKey whatToCraft, long amount, CalculationStrategy strategy,
                                               boolean submissionRefresh) {
+        if (gtlcore$closed) return false;
+        gtlcore$validateInventoryReservation();
         var previous = submissionRefresh && this.result instanceof AeGraphPlan graph ? graph : null;
-        this.gtlcore$releaseInventoryReservation();
+        boolean keepReservation = previous != null && gtlcore$inventoryReservation != null &&
+                ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL;
+        if (!keepReservation) this.gtlcore$releaseInventoryReservation();
+        this.gtlcore$reservationRefreshJob = null;
         this.gtlcore$submitting = false;
         this.gtlcore$providerSubmitPlan = null;
         this.gtlcore$refreshAfterSubmit = false;
@@ -431,13 +449,37 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
 
         var grid = this.getGrid();
         if (grid == null) {
+            this.gtlcore$releaseInventoryReservation();
             return false;
         }
 
+        var source = getActionSource();
+        if (gtlcore$inventoryReservation == null && CraftingEngineRouter.useGraph() &&
+                ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL) {
+            // The request owns its dependency stock from the snapshot read,
+            // before asynchronous planning can race other network consumers.
+            gtlcore$reservedGrid = grid;
+            gtlcore$reservedStorage = grid.getStorageService().getInventory();
+            gtlcore$reservationSource = source;
+            gtlcore$inventoryReservation = ManualCraftingInventoryLock.reserveAvailable(
+                    gtlcore$reservedStorage, new KeyCounter(), source);
+        }
+        var availability = gtlcore$inventoryReservation == null ? null : gtlcore$inventoryReservation.availabilityContext();
         var player = this.getPlayer();
-        this.job = grid.getCraftingService().beginCraftingCalculation(
-                player.level(), submissionRefresh ? CraftingEngineRouter.submissionRefresh(getActionSource(), previous) : this::getActionSource,
-                whatToCraft, amount, strategy);
+        try {
+            if (submissionRefresh && ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+                    "[Graph Crafting] submission refresh plan={} attempt={} reservation={} complete={}",
+                    previous == null ? null : previous.id(), gtlcore$submitRefreshes,
+                    keepReservation ? "retained" : "none", keepReservation && gtlcore$reservationComplete);
+            this.job = grid.getCraftingService().beginCraftingCalculation(
+                    player.level(), submissionRefresh ? CraftingEngineRouter.submissionRefresh(source, previous, availability) :
+                            availability != null ? CraftingEngineRouter.reservedCalculation(source, availability) : this::getActionSource,
+                    whatToCraft, amount, strategy);
+            if (gtlcore$inventoryReservation != null) this.gtlcore$reservationRefreshJob = this.job;
+        } catch (RuntimeException | Error failure) {
+            this.gtlcore$releaseInventoryReservation();
+            throw failure;
+        }
         return true;
     }
 
@@ -529,9 +571,14 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         return relevantStored;
     }
 
-    @Inject(method = "planJob", at = @At("HEAD"), remap = false)
+    @Inject(method = "planJob", at = @At("HEAD"), cancellable = true, remap = false)
     private void gtlcore$prepareForPlan(AEKey whatToCraft, int amount, CalculationStrategy strategy,
                                         CallbackInfoReturnable<Boolean> cir) {
+        if (!isClientSide() && CraftingEngineRouter.useGraph() &&
+                ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL) {
+            cir.setReturnValue(gtlcore$planLongAmountJob(whatToCraft, amount, strategy));
+            return;
+        }
         this.gtlcore$releaseInventoryReservation();
         this.gtlcore$submitting = false;
         this.gtlcore$providerSubmitPlan = null;
@@ -600,7 +647,11 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         ICraftingSubmitResult submitResult;
         boolean returned = false;
         try {
-            submitResult = reservation == null ?
+            // A partial claim protects what remains during a bounded refresh;
+            // it is not permission to start taking an unfunded plan's stock.
+            submitResult = keepPreviewReservation && reservation != null && !gtlcore$reservationComplete ?
+                    reservation.availabilityContext().callWithOwner(() -> gtlcore$checkReservedIngredients(plan, source)) : null;
+            if (submitResult == null) submitResult = reservation == null ?
                     craftingService.submitJob(submittedPlan, requester, submittedTarget, prioritizePower, source) :
                     reservation.submit(() -> craftingService.submitJob(
                             submittedPlan, requester, submittedTarget, prioritizePower, source));
@@ -616,7 +667,7 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         } else if (plan instanceof AeGraphPlan graph) {
             if (submitResult.errorCode() == CraftingSubmitErrorCode.MISSING_INGREDIENT ||
                     submitResult.errorCode() == CraftingSubmitErrorCode.INCOMPLETE_PLAN) {
-                gtlcore$releaseInventoryReservation();
+                if (!keepPreviewReservation || !gtlcore$refreshAfterSubmit) gtlcore$releaseInventoryReservation();
                 // The rejected preview must not immediately reacquire on the
                 // next broadcast. A new plan or explicit submit can try again.
                 gtlcore$reservationAttemptedPlan = plan;
@@ -627,6 +678,18 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
                     submittedTarget == null ? "auto" : submittedTarget.getClass().getName(), submitResult.errorCode(), submitResult.errorDetail());
         }
         return submitResult;
+    }
+
+    @Unique
+    private @Nullable ICraftingSubmitResult gtlcore$checkReservedIngredients(ICraftingPlan craftingPlan, IActionSource source) {
+        var storage = gtlcore$reservedStorage;
+        if (storage == null) return CraftingSubmitResult.INCOMPLETE_PLAN;
+        for (var entry : craftingPlan.usedItems()) {
+            long available = storage.extract(entry.getKey(), entry.getLongValue(), Actionable.SIMULATE, source);
+            if (available < entry.getLongValue()) return CraftingSubmitResult.missingIngredient(
+                    new GenericStack(entry.getKey(), entry.getLongValue() - Math.max(0, available)));
+        }
+        return null;
     }
 
     @Inject(method = "startJob", at = @At("RETURN"), remap = false)
@@ -727,17 +790,34 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
     private boolean gtlcore$tryReserveInventory(ICraftingPlan craftingPlan) {
         var grid = this.getGrid();
         var source = this.getActionSource();
-        if (gtlcore$inventoryReservation != null && craftingPlan == gtlcore$reservedPlan &&
+        boolean sameOwner = gtlcore$inventoryReservation != null &&
                 grid == gtlcore$reservedGrid && source == gtlcore$reservationSource &&
-                grid != null && grid.getStorageService().getInventory() == gtlcore$reservedStorage)
-            return true;
+                grid != null && grid.getStorageService().getInventory() == gtlcore$reservedStorage;
+        if (sameOwner && craftingPlan == gtlcore$reservedPlan && gtlcore$reservationComplete) return true;
+        boolean originalGraph = craftingPlan instanceof AeGraphPlan && !craftingPlan.simulation() &&
+                ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL;
+        if (sameOwner && originalGraph) {
+            // Keep the owner's old claim if replacement cannot yet be funded.
+            // A refresh can then use these ingredients without racing other jobs.
+            gtlcore$reservationComplete = gtlcore$inventoryReservation.tryReplace(craftingPlan.usedItems(), source);
+            gtlcore$reservedPlan = craftingPlan;
+            gtlcore$reservationRefreshJob = null;
+            if (ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging) GTLCore.LOGGER.info(
+                    "[Graph Crafting] preview reservation replacement plan={} complete={} refreshes={}",
+                    ((AeGraphPlan) craftingPlan).id(), gtlcore$reservationComplete, gtlcore$submitRefreshes);
+            return gtlcore$reservationComplete;
+        }
         this.gtlcore$releaseInventoryReservation();
         if (grid == null) {
             return false;
         }
 
-        var reservation = ManualCraftingInventoryLock.tryAcquire(
-                grid.getStorageService().getInventory(), craftingPlan.usedItems(), source);
+        var requested = craftingPlan.usedItems();
+        var reservation = originalGraph ? ManualCraftingInventoryLock.reserveAvailable(
+                grid.getStorageService().getInventory(), requested, source) :
+                ManualCraftingInventoryLock.tryAcquire(
+                        grid.getStorageService().getInventory(), requested, source);
+        gtlcore$reservationComplete = reservation != null && reservation.covers(requested);
         if (reservation == null) {
             return false;
         }
@@ -746,17 +826,23 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         this.gtlcore$reservedGrid = grid;
         this.gtlcore$reservedStorage = grid.getStorageService().getInventory();
         this.gtlcore$reservationSource = source;
-        return true;
+        if (originalGraph && !gtlcore$reservationComplete && ConfigHolder.INSTANCE.diagnostics.ae2GraphDiagnosticLogging)
+            GTLCore.LOGGER.info("[Graph Crafting] preview reservation partial plan={} keys={} refreshes={}",
+                    ((AeGraphPlan) craftingPlan).id(), requested.size(), gtlcore$submitRefreshes);
+        return gtlcore$reservationComplete;
     }
 
     @Unique
     private void gtlcore$validateInventoryReservation() {
         if (gtlcore$inventoryReservation == null) return;
         var grid = getGrid();
-        boolean enabled = gtlcore$reservedPlan instanceof AeGraphPlan ?
+        boolean enabled = gtlcore$reservedPlan instanceof AeGraphPlan || gtlcore$reservationRefreshJob != null ?
                 ConfigHolder.INSTANCE.ae.ae2GraphInventoryLockBehavior == AEGraphInventoryLockBehavior.ORIGINAL :
                 ConfigHolder.INSTANCE.ae.enableAe2ManualCraftingInventoryLock;
-        if (gtlcore$closed || !enabled || result != gtlcore$reservedPlan || plan == null ||
+        boolean refreshing = gtlcore$reservationRefreshJob != null && !gtlcore$reservationRefreshJob.isCancelled() &&
+                (job == gtlcore$reservationRefreshJob && result == null ||
+                        job == null && gtlcore$reservationRefreshJob.isDone() && result instanceof AeGraphPlan && !result.simulation());
+        if (gtlcore$closed || !enabled || (!refreshing && (result != gtlcore$reservedPlan || plan == null)) ||
                 grid == null || grid != gtlcore$reservedGrid || getActionSource() != gtlcore$reservationSource ||
                 grid.getStorageService().getInventory() != gtlcore$reservedStorage)
             gtlcore$releaseInventoryReservation();
@@ -786,6 +872,8 @@ public abstract class CraftConfirmMenuMixin extends AEBaseMenu implements IConfi
         this.gtlcore$reservedStorage = null;
         this.gtlcore$reservationSource = null;
         this.gtlcore$reservationAttemptedPlan = null;
+        this.gtlcore$reservationComplete = false;
+        this.gtlcore$reservationRefreshJob = null;
     }
 
     @Inject(method = "goBack", at = @At("HEAD"), cancellable = true, remap = false)

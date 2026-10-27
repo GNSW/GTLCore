@@ -17,6 +17,8 @@ final class CountDemandProjection implements AutoCloseable {
     private final int freeVariableLimit;
     private final boolean repairPivots;
     private final List<ExactLinearProgram.Constraint> original;
+    private List<ExactLinearProgram.Constraint> proposal;
+    private final boolean roundingGuard;
     private final PlanningBudget budget;
     private final long allowance;
     private long memory, work, projectionBase;
@@ -33,6 +35,10 @@ final class CountDemandProjection implements AutoCloseable {
     private List<ExactLinearProgram.Constraint> reduced;
     private BigInteger[] costs;
     private final CountNumericRelaxation.Session numeric;
+    private CountDemandProjection roundingRetry;
+    private CountDemandResidual residual;
+    private BigInteger[] roundedCounts, roundingSeed;
+    private long roundingSeedMemory;
     private int phase, block, cursor, updates, validation;
     private long visitStart;
     private boolean done;
@@ -51,12 +57,19 @@ final class CountDemandProjection implements AutoCloseable {
 
     CountDemandProjection(int variables, List<ExactLinearProgram.Constraint> rows,
                           PlanningBudget budget, long allowance, int expressionLimit, boolean wideProjection) {
+        this(variables, rows, budget, allowance, expressionLimit, wideProjection, null);
+    }
+
+    private CountDemandProjection(int variables, List<ExactLinearProgram.Constraint> rows,
+                                  PlanningBudget budget, long allowance, int expressionLimit,
+                                  boolean wideProjection, BitSet active) {
         if (expressionLimit < 1 || expressionLimit > 512) throw new IllegalArgumentException("Invalid expression limit");
         this.expressionLimit = expressionLimit;
         freeVariableLimit = wideProjection ? 1024 : 512;
         repairPivots = wideProjection;
         numeric = new CountNumericRelaxation.Session(true, wideProjection);
-        this.variables = variables; original = rows; this.budget = budget; this.allowance = Math.max(0, allowance);
+        this.variables = variables; original = proposal = rows; roundingGuard = active != null;
+        this.budget = budget; this.allowance = Math.max(0, allowance);
         if (variables <= 0 || variables > MAX_VARIABLES || rows.size() > 8192 || allowance <= 0) { done = true; return; }
         visitStart = budget.threadWork();
         try {
@@ -66,6 +79,26 @@ final class CountDemandProjection implements AutoCloseable {
                 if (terms > MAX_TERMS) throw new Limit();
             }
             reserve(4096L + 512L * variables + 256L * rows.size() + 128L * terms);
+            if (roundingGuard) {
+                // This is a stricter proposal, never a new caller obligation.
+                // Ceil restoration can add less than one run per active
+                // consumer. Leave a few such runs of slack throughout the
+                // chain, not just at the first exhausted raw input.
+                reserve(256L * rows.size() + 128L * terms);
+                var guarded = new ArrayList<ExactLinearProgram.Constraint>();
+                for (var row : rows) {
+                    BigInteger margin = BigInteger.ZERO;
+                    for (var term : row.terms().entrySet()) {
+                        hit();
+                        if (term.getValue().signum() > 0 && active.get(term.getKey()))
+                            margin = margin.add(term.getValue());
+                    }
+                    BigInteger upper = row.upper().subtract(margin.multiply(BigInteger.valueOf(4)));
+                    bounded(upper);
+                    guarded.add(new ExactLinearProgram.Constraint(row.terms(), upper));
+                }
+                rows = proposal = guarded;
+            }
             low = new BigInteger[variables]; high = new BigInteger[variables]; Arrays.fill(low, BigInteger.ZERO);
             for (int i = 0; i < variables; i++) columns.add(new ArrayList<>());
             for (int r = 0; r < rows.size(); r++) {
@@ -85,6 +118,21 @@ final class CountDemandProjection implements AutoCloseable {
         if (done) return true;
         visitStart = budget.threadWork(); String detail = budget.failureDetail();
         try {
+            if (roundingRetry != null) {
+                if (roundingRetry.step()) {
+                    result = roundingRetry.result(); roundingRetry.close(); roundingRetry = null;
+                    if (result != null || roundingSeed == null) done = true;
+                    else {
+                        residual = new CountDemandResidual(original, roundingSeed, budget, remaining());
+                        budget.release(roundingSeedMemory); roundingSeedMemory = 0; roundingSeed = null;
+                    }
+                }
+                return done;
+            }
+            if (residual != null) {
+                if (residual.step()) { result = residual.result(); done = true; }
+                return done;
+            }
             hit();
             switch (phase) {
                 case 0 -> {
@@ -140,34 +188,40 @@ final class CountDemandProjection implements AutoCloseable {
                 default -> throw new IllegalStateException("projection phase");
             }
         } catch (Limit | ExactRational.PrecisionLimit ignored) {
-            budget.failureDetail(detail); done = true;
+            budget.failureDetail(detail);
+            if (!retryRounding()) done = true;
         } finally { work += budget.threadWork() - visitStart; }
         return done;
     }
 
     private void propagate(int id) {
-        var row = original.get(id); BigInteger minimum = BigInteger.ZERO; int unbounded = 0;
+        var row = proposal.get(id); BigInteger minimum = BigInteger.ZERO; int unbounded = 0;
         for (var t : row.terms().entrySet()) {
             hit(); BigInteger value = t.getValue().signum() > 0 ? low[t.getKey()] : high[t.getKey()];
             if (value == null) unbounded++; else minimum = minimum.add(t.getValue().multiply(value));
         }
         if (unbounded == 0 && minimum.compareTo(row.upper()) > 0) throw new Limit();
+        BigInteger slack = row.upper().subtract(minimum);
         for (var t : row.terms().entrySet()) {
             hit(); int v = t.getKey(); BigInteger a = t.getValue();
             BigInteger old = a.signum() > 0 ? low[v] : high[v];
             if (unbounded - (old == null ? 1 : 0) != 0 || a.signum() == 0) continue;
-            BigInteger rhs = row.upper().subtract(minimum);
+            BigInteger rhs = slack;
             if (old != null) rhs = rhs.add(a.multiply(old));
             BigInteger next;
             if (a.signum() > 0) {
                 if (rhs.signum() < 0) throw new Limit();
+                // Test the existing integer bound before allocating a quotient.
+                // floor(rhs / a) >= high is exactly rhs >= a * high.
+                if (high[v] != null && rhs.compareTo(a.multiply(high[v])) >= 0) continue;
                 next = rhs.divide(a);
-                if (high[v] != null && next.compareTo(high[v]) >= 0) continue;
                 high[v] = next;
             } else {
                 if (rhs.signum() >= 0) continue;
+                // With a negative coefficient, ceil(rhs / a) <= low is
+                // equivalent to rhs >= a * low, including equality.
+                if (rhs.compareTo(a.multiply(low[v])) >= 0) continue;
                 next = CheckedAmounts.ceilDiv(rhs.negate(), a.negate());
-                if (next.compareTo(low[v]) <= 0) continue;
                 low[v] = next;
             }
             bounded(next);
@@ -187,7 +241,7 @@ final class CountDemandProjection implements AutoCloseable {
         for (int v = 0; v < variables; v++) { hit(); groupedLow[canonical[v]] = groupedLow[canonical[v]].add(low[v]); }
         var produced = new int[variables];
         var distinct = new LinkedHashMap<Map<Integer, BigInteger>, BigInteger>();
-        for (var row : original) {
+        for (var row : proposal) {
             var terms = new LinkedHashMap<Integer, BigInteger>();
             for (var t : row.terms().entrySet()) { hit(); terms.put(canonical[t.getKey()], t.getValue()); }
             // Forced gross production can repeat the target material row.
@@ -335,7 +389,8 @@ final class CountDemandProjection implements AutoCloseable {
         var integers = new LinkedHashMap<Integer, BigInteger>(); BigInteger common = BigInteger.ZERO;
         for (var t : terms.entrySet()) {
             hit(); BigInteger a = t.getValue().numerator().multiply(denominator.divide(t.getValue().denominator())); bounded(a);
-            integers.put(freeIndex[t.getKey()], a); common = common.gcd(a.abs());
+            integers.put(freeIndex[t.getKey()], a);
+            if (!common.equals(BigInteger.ONE)) common = common.gcd(a.abs());
         }
         BigInteger b = bound.numerator().multiply(denominator.divide(bound.denominator()));
         if (common.signum() == 0) throw new Limit();
@@ -390,6 +445,7 @@ final class CountDemandProjection implements AutoCloseable {
             if (high[v] != null) proposed = proposed.min(high[v]);
             counts[v] = proposed; bounded(counts[v]);
         }
+        if (!roundingGuard && variables <= 128) roundedCounts = counts.clone();
         debts = new BigInteger[original.size()]; queue.clear(); queued.clear();
         for (int r = 0; r < original.size(); r++) {
             var row = original.get(r); BigInteger value = row.upper().negate();
@@ -441,7 +497,10 @@ final class CountDemandProjection implements AutoCloseable {
         var parts = value.divideAndRemainder(positive);
         return value.signum() < 0 && parts[1].signum() != 0 ? parts[0].subtract(BigInteger.ONE) : parts[0];
     }
-    private static BigInteger lcm(BigInteger a, BigInteger b) { BigInteger next = a.divide(a.gcd(b)).multiply(b); bounded(next); return next; }
+    private static BigInteger lcm(BigInteger a, BigInteger b) {
+        BigInteger next = a.equals(b) || b.equals(BigInteger.ONE) ? a : a.equals(BigInteger.ONE) ? b : a.divide(a.gcd(b)).multiply(b);
+        bounded(next); return next;
+    }
     private static void bounded(BigInteger value) { if (value.bitLength() > 1024) throw new Limit(); }
     private void enqueue(int row) { if (!queued.get(row)) { queued.set(row); queue.addLast(row); } }
     private int pop() { int row = queue.removeFirst(); queued.clear(row); return row; }
@@ -450,10 +509,43 @@ final class CountDemandProjection implements AutoCloseable {
     private void reserve(long bytes) { if (!budget.tryReserve(bytes)) throw new Limit(); memory += bytes; }
     BigInteger[] result() { return result; }
     long work() { return work; }
-    @Override public void close() {
+
+    private boolean retryRounding() {
+        // Keep every previously successful candidate unchanged. Only a failed
+        // integer restoration may try this interior point, once, with the
+        // same account. Failure of the stricter rows proves nothing about the
+        // original model; both repair and final validation still use original.
+        if (roundingGuard || roundingRetry != null || counts == null || phase < 5 || remaining() < 32768) return false;
+        try {
+            var active = new BitSet(variables);
+            long seedBytes = 128L + 16L * variables;
+            for (int v = 0; v < variables; v++) {
+                hit(); if (counts[v].signum() > 0) active.set(v);
+                if (roundedCounts != null) seedBytes += 64L + (roundedCounts[v].bitLength() + 7L) / 8;
+            }
+            if (active.isEmpty() || remaining() < 32768) return false;
+            if (roundedCounts != null && original.size() <= 1024) {
+                if (budget.tryReserve(seedBytes)) { roundingSeedMemory = seedBytes; roundingSeed = roundedCounts; }
+            }
+            clearWorkspace();
+            budget.note("count_demand_rounding", "retry_with_consumer_slack; active=" + active.cardinality());
+            roundingRetry = new CountDemandProjection(variables, original, budget, remaining(),
+                    expressionLimit, repairPivots, active);
+            return true;
+        } catch (Limit | ExactRational.PrecisionLimit ignored) { return false; }
+    }
+
+    private void clearWorkspace() {
         numeric.close(); budget.release(memory); memory = 0;
         columns.clear(); rows.clear(); blocks.clear(); queue.clear(); expressions.clear(); projected.clear();
         free.clear(); reduced = null; costs = null; canonical = pivot = freeIndex = null;
-        low = high = debts = null; done = true;
+        low = high = debts = counts = roundedCounts = null; proposal = original;
+    }
+
+    @Override public void close() {
+        if (roundingRetry != null) roundingRetry.close(); roundingRetry = null;
+        if (residual != null) residual.close(); residual = null;
+        budget.release(roundingSeedMemory); roundingSeedMemory = 0; roundingSeed = null;
+        clearWorkspace(); done = true;
     }
 }

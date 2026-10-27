@@ -85,7 +85,7 @@ final class CapturedReachableWitness<K> implements AutoCloseable {
             else if (assembly != null) {
                 if (assembly.step()) {
                     if (assembly.plan == null) return stop("assembly_declined");
-                    verification = new PlanVerification<>(assembly.plan, budget);
+                    verification = new PlanVerification<>(assembly.plan, budget, assembly);
                 }
             } else if (goalsReached()) {
                 observation = budget.observeCandidate(PlanningBudget.CandidateOrigin.ALLOCATION);

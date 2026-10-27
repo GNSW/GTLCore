@@ -507,6 +507,7 @@ final class AllocationSearch<K> {
         final long amount, started;
         final Map<K, Long> stock;
         final Map<K, Long> requiredSeeds;
+        Map<K, Long> productionSeeds;
         final Set<K> external;
         final boolean preserve, force, preview;
         final PlanningBudget budget;
@@ -561,6 +562,7 @@ final class AllocationSearch<K> {
                 this.amount = amount;
                 this.stock = stock;
                 this.requiredSeeds = Map.copyOf(requiredSeeds);
+                productionSeeds = this.requiredSeeds;
                 this.external = external;
                 this.preserve = preserve;
                 this.force = force;
@@ -581,6 +583,14 @@ final class AllocationSearch<K> {
         Candidate<K> startupCatalog(Collection<GraphRecipe<K>> available, Set<String> excluded) {
             if (stage != 0) throw new IllegalStateException("Candidate assembly already started");
             startupRecipes = available; startupExcluded = excluded;
+            return this;
+        }
+
+        /** Extra retention goals may help construct a word, but must not make
+         * otherwise unnecessary target turnover a forced-production proof. */
+        Candidate<K> productionContract(Map<K, Long> originalSeeds) {
+            if (stage != 0) throw new IllegalStateException("Candidate assembly already started");
+            productionSeeds = Map.copyOf(originalSeeds);
             return this;
         }
 
@@ -690,7 +700,7 @@ final class AllocationSearch<K> {
                             missing.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : GraphPlan.Result.MISSING_INPUT,
                             budget.nodes(), System.nanoTime() - started);
                     if (force && !external.contains(target) && summary.delta(target).compareTo(BigInteger.valueOf(amount)) < 0) {
-                        verifying = new PlanVerification<>(proposed, budget);
+                        verifying = new PlanVerification<>(proposed, budget, this);
                         stage = 5;
                         return false;
                     }
@@ -699,7 +709,7 @@ final class AllocationSearch<K> {
                 }
             } else if (stage == 5) {
                 if (!verifying.step()) return false;
-                if (productionProof == null) productionProof = new ForceCraftProof<>(proposed, verifying, requiredSeeds, budget);
+                if (productionProof == null) productionProof = new ForceCraftProof<>(proposed, verifying, productionSeeds, budget);
                 if (!productionProof.step()) return false;
                 if (productionProof.proved()) plan = proposed;
                 close();

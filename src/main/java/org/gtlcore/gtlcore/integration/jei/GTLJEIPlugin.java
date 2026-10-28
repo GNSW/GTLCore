@@ -72,6 +72,8 @@ public class GTLJEIPlugin implements IModPlugin {
         if (LDLib.isReiLoaded() || LDLib.isEmiLoaded()) return;
         registration.useNbtForSubtypes(GTItems.TURBINE_ROTOR.asItem());
         registration.useNbtForSubtypes(GTItems.INTEGRATED_CIRCUIT.asItem());
+        GTBlocks.LAMPS.values().forEach(entry -> registration.useNbtForSubtypes(entry.get().asItem()));
+        GTBlocks.BORDERLESS_LAMPS.values().forEach(entry -> registration.useNbtForSubtypes(entry.get().asItem()));
     }
 
     @Override

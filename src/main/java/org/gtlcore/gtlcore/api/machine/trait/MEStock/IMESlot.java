@@ -5,6 +5,11 @@ import org.jetbrains.annotations.Nullable;
 
 public interface IMESlot {
 
+    /** These stocking/configuration slots expose simulated ME stock rather than a paid local inventory. */
+    default boolean isVirtualStock() {
+        return true;
+    }
+
     void setOnConfigChanged(Runnable onConfigChanged);
 
     Runnable getOnConfigChanged();

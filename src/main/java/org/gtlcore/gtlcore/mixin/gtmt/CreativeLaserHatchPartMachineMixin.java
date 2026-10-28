@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.mixin.gtmt;
 
+import org.gtlcore.gtlcore.integration.gtmt.ConfigurableEnergyHatch;
 import org.gtlcore.gtlcore.integration.gtmt.InfinityLaserContainer;
 import org.gtlcore.gtlcore.integration.gtmt.NewGTValues;
 import org.gtlcore.gtlcore.utils.NumberUtils;
@@ -40,7 +41,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import java.util.Arrays;
 
 @Mixin(CreativeLaserHatchPartMachine.class)
-public abstract class CreativeLaserHatchPartMachineMixin extends TieredIOPartMachine {
+public abstract class CreativeLaserHatchPartMachineMixin extends TieredIOPartMachine implements ConfigurableEnergyHatch {
 
     @Shadow(remap = false)
     private NotifiableLaserContainer buffer;
@@ -121,6 +122,26 @@ public abstract class CreativeLaserHatchPartMachineMixin extends TieredIOPartMac
     public void loadCustomPersistedData(@NotNull CompoundTag tag) {
         super.loadCustomPersistedData(tag);
         gTLCore$updateEnergyContainer();
+    }
+
+    @Override
+    @Unique
+    public CompoundTag gtlcore$getEnergySettings() {
+        CompoundTag settings = new CompoundTag();
+        settings.putLong("voltage", voltage);
+        settings.putInt("amps", amps);
+        settings.putInt("setTier", setTier);
+        return settings;
+    }
+
+    @Override
+    @Unique
+    public void gtlcore$applyEnergySettings(CompoundTag settings) {
+        voltage = settings.getLong("voltage");
+        amps = settings.getInt("amps");
+        setTier = settings.getInt("setTier");
+        maxEnergy = NumberUtils.saturatedMultiply(voltage, amps);
+        gTLCore$updateMachine();
     }
 
     @Unique

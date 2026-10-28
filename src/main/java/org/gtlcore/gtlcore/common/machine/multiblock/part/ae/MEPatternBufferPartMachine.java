@@ -494,6 +494,97 @@ public class MEPatternBufferPartMachine extends MEPatternBufferPartMachineBase {
         }
     }
 
+    public CompoundTag manipulatorSettings() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", customName);
+        tag.putByteArray("CacheCounts", cacheRecipeCount.clone());
+        tag.putBoolean("Hidden", isHiddenTerminal);
+        tag.putBoolean("KeepByProduct", keepByProduct);
+        tag.putInt("EmbeddedCircuit", embeddedCircuitConfig);
+        tag.putBoolean("SkipExisting", skipExistingCircuitPatterns);
+        tag.putInt("SharedCircuit", IntCircuitBehaviour.getCircuitConfiguration(sharedCircuitInventory.getStackInSlot(0)));
+        return tag;
+    }
+
+    public void applyManipulatorSettings(CompoundTag tag) {
+        setCustomName(tag.getString("Name"));
+        byte[] counts = tag.getByteArray("CacheCounts");
+        System.arraycopy(counts, 0, cacheRecipeCount, 0, Math.min(counts.length, cacheRecipeCount.length));
+        isHiddenTerminal = tag.getBoolean("Hidden");
+        keepByProduct = tag.getBoolean("KeepByProduct");
+        embeddedCircuitConfig = tag.getInt("EmbeddedCircuit");
+        skipExistingCircuitPatterns = tag.getBoolean("SkipExisting");
+        int circuit = tag.getInt("SharedCircuit");
+        sharedCircuitInventory.setStackInSlot(0, circuit > 0 ? IntCircuitBehaviour.stack(circuit) : ItemStack.EMPTY);
+        onChanged();
+    }
+
+    /** Captures paid contents without copying active supply caches or in-flight recipe identities. */
+    public CompoundTag captureManipulatorContents(java.util.Map<AEKey, Long> cost) {
+        CompoundTag tag = new CompoundTag();
+        ListTag slots = new ListTag();
+        for (int slot = 0; slot < internalInventory.length; slot++) {
+            CompoundTag entry = internalInventory[slot].serializeNBT();
+            entry.remove("virtualItemSupply");
+            entry.remove("virtualFluidSupply");
+            entry.remove("virtualCircuit");
+            entry.remove("catalystInventory");
+            entry.remove("catalystFluidInventory");
+            for (Tag t : entry.getList("inventory", Tag.TAG_COMPOUND)) {
+                CompoundTag resource = (CompoundTag) t;
+                org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.add(cost, AEItemKey.fromTag(resource), resource.getLong("real"));
+            }
+            for (Tag t : entry.getList("fluidInventory", Tag.TAG_COMPOUND)) {
+                CompoundTag resource = (CompoundTag) t;
+                org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.add(cost, AEFluidKey.fromTag(resource), resource.getLong("real"));
+            }
+            ListTag items = new ListTag();
+            for (int i = 0; i < catalystItems[slot].getSlots(); i++) {
+                ItemStack stack = catalystItems[slot].getStackInSlot(i);
+                CompoundTag resource = stack.save(new CompoundTag());
+                resource.putInt("Slot", i);
+                items.add(resource);
+                org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.add(cost, stack);
+            }
+            ListTag fluids = new ListTag();
+            for (int i = 0; i < catalystFluids[slot].getTanks(); i++) {
+                var fluid = catalystFluids[slot].getFluidInTank(i);
+                CompoundTag resource = fluid.saveToTag(new CompoundTag());
+                resource.putInt("Slot", i);
+                fluids.add(resource);
+                org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.add(cost, AEFluidKey.of(fluid.getFluid(), fluid.getTag()), fluid.getAmount());
+            }
+            entry.put("CatalystItems", items);
+            entry.put("CatalystFluids", fluids);
+            slots.add(entry);
+        }
+        tag.put("Slots", slots);
+        tag.put("OutputBuffer", org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.save(buffer));
+        buffer.forEach((key, amount) -> org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.add(cost, key, amount));
+        return tag;
+    }
+
+    public void restoreManipulatorContents(CompoundTag tag) {
+        ListTag slots = tag.getList("Slots", Tag.TAG_COMPOUND);
+        for (int slot = 0; slot < slots.size(); slot++) {
+            CompoundTag entry = slots.getCompound(slot);
+            internalInventory[slot].deserializeNBT(entry);
+            for (Tag t : entry.getList("CatalystItems", Tag.TAG_COMPOUND)) {
+                CompoundTag resource = (CompoundTag) t;
+                catalystItems[slot].setStackInSlot(resource.getInt("Slot"), ItemStack.of(resource));
+            }
+            for (Tag t : entry.getList("CatalystFluids", Tag.TAG_COMPOUND)) {
+                CompoundTag resource = (CompoundTag) t;
+                catalystFluids[slot].setFluidInTank(resource.getInt("Slot"), FluidStack.loadFromTag(resource));
+            }
+            reCalculateCatalystItemMap(slot);
+            reCalculateCatalystFluidMap(slot);
+        }
+        buffer.clear();
+        buffer.putAll(org.gtlcore.gtlcore.common.item.manipulator.ManipulatorResources.read(tag.getList("OutputBuffer", Tag.TAG_COMPOUND)));
+        onChanged();
+    }
+
     public CompoundTag copyToTag(CompoundTag tags) {
         var tag = new CompoundTag();
         tag.putString("name", customName);

@@ -6,6 +6,7 @@
   "refmap": "gtlcore-refmap.json",
   "plugin": "org.gtlcore.gtlcore.client.bloom.BridgeMixinPlugin",
   "client": [
+    "mc.client.KeyMappingLookupMixin",
     "toolbelt.BeltScreenMixin",
     "toolbelt.RadialMenuScreenMixin",
     "toolbelt.GenericRadialMenuMixin",

@@ -18,17 +18,18 @@ public final class NoClipClient {
 
     private static final String KEY_NAME = "key.gtlcore.toggle_no_clip";
     private static final String KEY_CATEGORY = "key.categories.gtlcore";
-    private static final KeyMapping TOGGLE_KEY = new KeyMapping(
-            KEY_NAME,
-            KeyConflictContext.IN_GAME,
-            InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_SEMICOLON,
-            KEY_CATEGORY);
+    private static KeyMapping toggleKey;
 
     private NoClipClient() {}
 
     public static void registerKeyMapping(RegisterKeyMappingsEvent event) {
-        event.register(TOGGLE_KEY);
+        toggleKey = new KeyMapping(
+                KEY_NAME,
+                KeyConflictContext.IN_GAME,
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_SEMICOLON,
+                KEY_CATEGORY);
+        event.register(toggleKey);
     }
 
     public static void clientTick() {
@@ -38,7 +39,7 @@ public final class NoClipClient {
             return;
         }
 
-        while (TOGGLE_KEY.consumeClick()) {
+        while (toggleKey.consumeClick()) {
             if (minecraft.screen != null) {
                 continue;
             }

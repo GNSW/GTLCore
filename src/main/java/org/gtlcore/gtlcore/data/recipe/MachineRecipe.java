@@ -260,6 +260,12 @@ public class MachineRecipe {
                 'C', new UnificationEntry(TagPrefix.plate, GTMaterials.Silicon),
                 'D', CustomItems.ADVANCED_TERMINAL.asStack(),
                 'E', CustomTags.MV_CIRCUITS);
+        // One ZPM-tier tool: two robot arms, two emitters, a sensor, two circuits and an AE core.
+        VanillaRecipeHelper.addShapedRecipe(provider, true, GTLCore.id("matter_manipulator"),
+                GTLItems.MATTER_MANIPULATOR.asStack(), "RER", "CSC", "EWE",
+                'R', GTItems.ROBOT_ARM_ZPM, 'E', GTItems.EMITTER_ZPM,
+                'C', CustomTags.ZPM_CIRCUITS, 'S', GTItems.SENSOR_ZPM,
+                'W', appeng.core.definitions.AEItems.WIRELESS_RECEIVER);
         registerMachineRecipe(provider, ArrayUtils.subarray(GTMachines.TRANSFORMER, GTValues.UHV, GTValues.MAX),
                 "WCC",
                 "TH ", "WCC", 'W', POWER_COMPONENT, 'C', CABLE, 'T', CABLE_TIER_UP, 'H', HULL);

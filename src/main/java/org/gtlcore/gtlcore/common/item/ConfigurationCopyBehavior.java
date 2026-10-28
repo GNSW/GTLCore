@@ -1,24 +1,32 @@
 package org.gtlcore.gtlcore.common.item;
 
+import org.gtlcore.gtlcore.common.item.manipulator.ManipulatorMEState;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IAutoConfiguratioGravityPart;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IAutoConfigurationMaintenanceHatch;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IGravityPartMachine;
+import org.gtlcore.gtlcore.integration.gtmt.ConfigurableEnergyHatch;
 
 import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
+import com.gregtechceu.gtceu.api.capability.IEnergyContainer;
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.item.component.ICustomDescriptionId;
 import com.gregtechceu.gtceu.api.item.component.IInteractionItem;
 import com.gregtechceu.gtceu.api.item.tool.behavior.IToolBehavior;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.api.machine.SimpleTieredMachine;
+import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMaintenanceMachine;
+import com.gregtechceu.gtceu.api.machine.multiblock.part.TieredIOPartMachine;
 import com.gregtechceu.gtceu.api.machine.trait.NotifiableItemStackHandler;
 import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
 import com.gregtechceu.gtceu.common.machine.multiblock.part.FluidHatchPartMachine;
 import com.gregtechceu.gtceu.common.machine.multiblock.part.ItemBusPartMachine;
+import com.gregtechceu.gtceu.common.machine.multiblock.part.MaintenanceHatchPartMachine;
+import com.gregtechceu.gtceu.common.machine.multiblock.part.ParallelHatchPartMachine;
 import com.gregtechceu.gtceu.common.machine.storage.QuantumChestMachine;
 import com.gregtechceu.gtceu.common.machine.storage.QuantumTankMachine;
 
 import com.lowdragmc.lowdraglib.side.fluid.FluidStack;
+import com.lowdragmc.lowdraglib.syncdata.accessor.IManagedAccessor;
 
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -27,6 +35,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 
+import com.hepdd.gtmthings.api.capability.IBindable;
+
 import java.util.Objects;
 
 import static com.gregtechceu.gtceu.api.item.tool.ToolHelper.getBehaviorsTag;
@@ -34,6 +44,63 @@ import static com.gregtechceu.gtceu.api.item.tool.ToolHelper.getBehaviorsTag;
 public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionItem, ICustomDescriptionId {
 
     public static final ConfigurationCopyBehavior INSTANCE = new ConfigurationCopyBehavior();
+
+    /** Configuration only: never includes physical inventories, stored energy or running recipes. */
+    public CompoundTag captureConfiguration(MetaMachine machine) {
+        CompoundTag tag = new CompoundTag();
+        if (machine instanceof SimpleTieredMachine m) getSTMCfg(tag, m);
+        else if (machine instanceof QuantumChestMachine m) tag.put(QUANTUM_CHEST_CONFIGURATION, getQuantumChestCfg(m));
+        else if (machine instanceof QuantumTankMachine m) tag.put(QUANTUM_TANK_CONFIGURATION, getQuantumTankCfg(m));
+        else if (machine instanceof FluidHatchPartMachine m) tag.put(FLUID_OUTPUT_HATCH_CONFIGURATION, getFluidOutputHatchCfg(m));
+        else if (machine instanceof ItemBusPartMachine m) getBusCfg(tag, m);
+        else if (machine instanceof IMaintenanceMachine m) {
+            tag.putFloat("durationMultiplier", m.getDurationMultiplier());
+            if (machine instanceof IGravityPartMachine gravity) tag.putInt("currentGravity", gravity.getCurrentGravity());
+        } else if (machine instanceof ParallelHatchPartMachine m) {
+            tag.putInt("currentParallel", m.getCurrentParallel());
+        } else if (machine instanceof TieredIOPartMachine m && m.getTraits().stream().anyMatch(IEnergyContainer.class::isInstance)) {
+            tag.putBoolean("isWorkingEnabled", m.isWorkingEnabled());
+            if (m instanceof ConfigurableEnergyHatch configurable) tag.put("EnergyConfiguration", configurable.gtlcore$getEnergySettings());
+            if (m instanceof IBindable bindable) {
+                CompoundTag binding = new CompoundTag();
+                var owner = bindable.getUUID();
+                if (owner != null) binding.putUUID("Owner", owner);
+                tag.put("EnergyBinding", binding);
+            }
+        }
+        if (ManipulatorMEState.supports(machine)) tag.put("MEConfiguration", ManipulatorMEState.settings(machine));
+        return tag;
+    }
+
+    public void applyConfiguration(CompoundTag tag, MetaMachine machine) {
+        if (machine instanceof SimpleTieredMachine m) setSTMCfg(tag, m);
+        else if (machine instanceof QuantumChestMachine m) setQuantumChestCfg(tag.getCompound(QUANTUM_CHEST_CONFIGURATION), m);
+        else if (machine instanceof QuantumTankMachine m) setQuantumTankCfg(tag.getCompound(QUANTUM_TANK_CONFIGURATION), m);
+        else if (machine instanceof FluidHatchPartMachine m) setFluidOutputHatchCfg(tag.getCompound(FLUID_OUTPUT_HATCH_CONFIGURATION), m);
+        else if (machine instanceof ItemBusPartMachine m) setBusCfg(tag, m);
+        else if (machine instanceof IMaintenanceMachine) {
+            if (tag.contains("durationMultiplier")) {
+                if (machine instanceof IAutoConfigurationMaintenanceHatch m) m.setDurationMultiplier(tag.getFloat("durationMultiplier"));
+                else if (machine instanceof MaintenanceHatchPartMachine m && m.isConfigurable()) {
+                    // GT exposes no setter here; restore only this verified @Persisted setting.
+                    CompoundTag duration = new CompoundTag();
+                    duration.putFloat("durationMultiplier", tag.getFloat("durationMultiplier"));
+                    IManagedAccessor.writePersistedFields(duration, m.getSyncStorage().getPersistedFields());
+                }
+            }
+            if (machine instanceof IGravityPartMachine m && tag.contains("currentGravity")) m.setCurrentGravity(tag.getInt("currentGravity"));
+        } else if (machine instanceof ParallelHatchPartMachine m && tag.contains("currentParallel")) {
+            m.setCurrentParallel(tag.getInt("currentParallel"));
+        } else if (machine instanceof TieredIOPartMachine m && m.getTraits().stream().anyMatch(IEnergyContainer.class::isInstance)) {
+            if (m instanceof ConfigurableEnergyHatch configurable && tag.contains("EnergyConfiguration")) configurable.gtlcore$applyEnergySettings(tag.getCompound("EnergyConfiguration"));
+            if (m instanceof IBindable bindable && tag.contains("EnergyBinding")) {
+                CompoundTag binding = tag.getCompound("EnergyBinding");
+                bindable.setUUID(binding.hasUUID("Owner") ? binding.getUUID("Owner") : null);
+            }
+            if (tag.contains("isWorkingEnabled")) m.setWorkingEnabled(tag.getBoolean("isWorkingEnabled"));
+        }
+        if (tag.contains("MEConfiguration") && ManipulatorMEState.supports(machine)) ManipulatorMEState.applySettings(machine, tag.getCompound("MEConfiguration"));
+    }
 
     private static final String QUANTUM_CHEST_CONFIGURATION = "QuantumChestConfiguration";
     private static final String QUANTUM_TANK_CONFIGURATION = "QuantumTankConfiguration";

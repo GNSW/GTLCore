@@ -60,6 +60,7 @@ public class AEDualConfigSlotWidget extends Widget implements IGhostItemTarget, 
     protected final static int REMOVE_ID = 1000;
     protected final static int ITEM_UPDATE_ID = 1001;
     protected final static int FLUID_UPDATE_ID = 1002;
+    protected final static int AMOUNT_SCROLL_ID = 1003;
 
     @Setter
     protected boolean select = false;
@@ -255,6 +256,23 @@ public class AEDualConfigSlotWidget extends Widget implements IGhostItemTarget, 
         return false;
     }
 
+    @OnlyIn(Dist.CLIENT)
+    @Override
+    public boolean mouseWheelMove(double mouseX, double mouseY, double wheelDelta) {
+        if (!parentWidget.isAmountEditingEnabled() || parentWidget.isAutoPull() ||
+                wheelDelta == 0 || !mouseOverConfig(mouseX, mouseY) ||
+                parentWidget.getDisplay(getIndex()).getConfig() == null) {
+            return false;
+        }
+
+        boolean control = isCtrlDown();
+        writeClientAction(AMOUNT_SCROLL_ID, buffer -> {
+            buffer.writeBoolean(wheelDelta > 0);
+            buffer.writeBoolean(control);
+        });
+        return true;
+    }
+
     // handler network
 
     @Override
@@ -285,6 +303,26 @@ public class AEDualConfigSlotWidget extends Widget implements IGhostItemTarget, 
             this.parentWidget.setFluidConfig(index, stack);
             if (fluid != FluidStack.empty()) {
                 writeUpdateInfo(FLUID_UPDATE_ID, fluid::writeToBuf);
+            }
+        }
+
+        if (id == AMOUNT_SCROLL_ID && parentWidget.isAmountEditingEnabled() && !parentWidget.isAutoPull()) {
+            GenericStack config = slot.getConfig();
+            if (config == null) return;
+
+            boolean increase = buffer.readBoolean();
+            boolean control = buffer.readBoolean();
+            long amount = config.amount();
+            long newAmount;
+            if (control) {
+                if (increase && amount > Long.MAX_VALUE / 2) return;
+                newAmount = increase ? amount * 2 : amount / 2;
+            } else {
+                if (increase && amount == Long.MAX_VALUE) return;
+                newAmount = amount + (increase ? 1 : -1);
+            }
+            if (newAmount > 0) {
+                slot.setConfig(new GenericStack(config.what(), newAmount));
             }
         }
     }

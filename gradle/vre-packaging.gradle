@@ -1,0 +1,196 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.nio.file.FileSystems
+import java.nio.file.Files
+
+// Vendored sources make the host build independent of sibling checkouts and prebuilt test mods.
+def engine = project(':vre-engine')
+def adapterConfigs = ['voxelregion-forge.mixins.json', 'voxelregion-receipts.mixins.json']
+// Applied scripts do not inherit the root plugins{} compile classpath.
+def loomLoader = plugins.getPlugin('dev.architectury.loom').class.classLoader
+def remapJarType = loomLoader.loadClass('net.fabricmc.loom.task.RemapJarTask')
+def nestedFileType = loomLoader.loadClass('net.fabricmc.loom.build.nesting.IncludedJarFactory$NestedFile')
+def nestedMetadataType = loomLoader.loadClass('net.fabricmc.loom.build.nesting.IncludedJarFactory$Metadata')
+sourceSets.main.java.srcDir('vre-forge/src/main/java')
+sourceSets.main.resources.srcDir('vre-forge/src/main/resources')
+dependencies {
+    implementation project(':vre-engine')
+    forgeRuntimeLibrary project(':vre-engine')
+    include project(':vre-engine')
+}
+loom.forge {
+    adapterConfigs.each { mixinConfig it }
+}
+if (project.hasProperty('vreVerification')) {
+    sourceSets.main.java.srcDir('src/verification/java')
+    sourceSets.main.resources.srcDir('src/verification/resources')
+    // Optional local runtime-only dependencies (for example the host's required
+    // MAE2) are remapped by Loom; no player installation path enters the build.
+    if (project.hasProperty('vreVerificationRuntimeDir')) {
+        dependencies {
+            modRuntimeOnly fileTree(project.property('vreVerificationRuntimeDir')) { include '*.jar' }
+        }
+    }
+    loom.runs {
+        vreGameTest {
+            server()
+            // Loom 1.6 prefixes the project directory even when passed an absolute
+            // path, so normalize explicit local run paths to project-relative form.
+            runDir(project.relativePath(project.file(project.findProperty('vreVerificationRunDirectory') ?: 'run-vre-gametest')))
+            property 'forge.gameTestServer', 'true'
+            property 'forge.enabledGameTestNamespaces', 'gtlcore'
+            vmArg '-XX:ActiveProcessorCount=1'
+        }
+    }
+    tasks.matching { it.name == 'runVreGameTest' }.configureEach {
+        doFirst { workingDir.mkdirs() }
+    }
+}
+
+// Compile the host and version-specific adapter against the same Minecraft mappings,
+// then isolate the adapter classes in their own remapped Forge library.
+def adapterRefmap = tasks.register('generateVreAdapterRefmap') {
+    dependsOn tasks.named('compileJava')
+    def original = layout.buildDirectory.file('classes/java/main/gtlcore-refmap.json')
+    def output = layout.buildDirectory.dir('generated/vre-adapter-resources')
+    inputs.file(original)
+    outputs.dir(output)
+    doLast {
+        def source = new JsonSlurper().parse(original.get().asFile, 'UTF-8')
+        def filterClasses = { entries -> (entries ?: [:]).findAll { key, value -> key.startsWith('org/voxelregion/') } }
+        def result = [mappings: filterClasses(source.mappings)]
+        if (source.data) result.data = source.data.collectEntries { namespace, entries -> [(namespace): filterClasses(entries)] }
+        if (result.mappings.isEmpty()) throw new GradleException('VRE Mixin reference mappings were not generated')
+        def target = output.get().file('voxelregion-forge.refmap.json').asFile
+        target.parentFile.mkdirs()
+        target.setText(JsonOutput.prettyPrint(JsonOutput.toJson(result)) + '\n', 'UTF-8')
+    }
+}
+
+def adapterDevelopmentJar = tasks.register('vreAdapterDevelopmentJar', Jar) {
+    dependsOn tasks.named('classes'), adapterRefmap
+    archiveBaseName = 'voxel-region-forge-adapter-1.20.1'
+    archiveVersion = engine.version.toString()
+    archiveClassifier = 'dev'
+    from(sourceSets.main.output) {
+        include 'org/voxelregion/forge/**'
+        include adapterConfigs
+        exclude '**/*GameTests*', '**/ProbeBlocks*'
+    }
+    from(adapterRefmap)
+    from('vre-forge/LICENSE') { into 'META-INF'; rename { 'LICENSE-voxel-region-engine' } }
+    from('vre-forge/NOTICE') { into 'META-INF' }
+    manifest.attributes('FMLModType': 'GAMELIBRARY', 'Automatic-Module-Name': 'org.voxelregion.forge',
+            'Implementation-Version': engine.version.toString(), 'MixinConfigs': adapterConfigs.join(','),
+            'Bundle-License': 'https://mozilla.org/MPL/2.0/')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+def adapter = tasks.register('vreAdapterJar', remapJarType) {
+    dependsOn adapterDevelopmentJar
+    inputFile = adapterDevelopmentJar.flatMap { it.archiveFile }
+    archiveBaseName = 'voxel-region-forge-adapter-1.20.1'
+    archiveVersion = engine.version.toString()
+    archiveClassifier = ''
+    sourceNamespace = 'named'
+    targetNamespace = 'srg'
+    addNestedDependencies = false
+}
+tasks.named('jar') {
+    exclude 'org/voxelregion/**'
+    exclude adapterConfigs
+    exclude 'voxelregion-forge.refmap.json'
+    exclude '**/*GameTests*', 'data/gtlcore/structures/vre_empty.nbt'
+    exclude 'org/gtlcore/voxelregion/verification/**'
+    manifest.attributes('MixinConfigs': (['gtlcore.mixin.json'] + adapterConfigs).join(','))
+}
+if (project.hasProperty('vreVerification')) {
+    def verificationDev = tasks.register('vreVerificationDevelopmentJar', Jar) {
+        dependsOn tasks.named('classes')
+        archiveBaseName = 'gtlcore-vre-verification'
+        archiveVersion = '0.1.0'
+        archiveClassifier = 'dev'
+        from(sourceSets.main.output) {
+            include 'org/gtlcore/voxelregion/verification/**'
+            include 'data/gtlcore/structures/vre_empty.nbt'
+        }
+        from('src/verification/packaging')
+    }
+    tasks.register('vreVerificationJar', remapJarType) {
+        dependsOn verificationDev
+        inputFile = verificationDev.flatMap { it.archiveFile }
+        archiveBaseName = 'gtlcore-vre-verification'
+        archiveVersion = '0.1.0'
+        archiveClassifier = ''
+        sourceNamespace = 'named'
+        targetNamespace = 'srg'
+        addNestedDependencies = false
+    }
+}
+tasks.withType(Jar).matching { it.name == 'sourcesJar' }.configureEach {
+    from engine.sourceSets.main.allSource
+}
+tasks.named('remapJar', remapJarType) {
+    dependsOn adapter
+    forgeNestedJars.add(adapter.flatMap { it.archiveFile }.map { file ->
+        def metadata = nestedMetadataType.getConstructor(String, String, String, String).newInstance(
+                'org.voxelregion', 'voxel-region-forge-adapter-1.20.1', engine.version.toString(), null)
+        nestedFileType.getConstructor(nestedMetadataType, File).newInstance(metadata, file.asFile)
+    })
+    nestedJars.from(adapter.flatMap { it.archiveFile })
+    doLast {
+        workerExecutor.await()
+        FileSystems.newFileSystem(archiveFile.get().asFile.toPath(), (ClassLoader) null).withCloseable { zip ->
+            def path = zip.getPath('/META-INF/jarjar/metadata.json')
+            def metadata = new JsonSlurper().parseText(Files.readString(path))
+            def entries = metadata.jars.findAll { it.identifier.group == 'org.voxelregion' }
+            if (entries.size() != 2) throw new GradleException('Expected exactly one VRE engine and one Forge adapter')
+            entries.each {
+                it.version.range = "[${engine.version},0.2.0)"
+                if (it.identifier.artifact == 'vre-engine') it.identifier.artifact = 'voxel-region-engine'
+            }
+            Files.writeString(path, JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n')
+            if (Files.exists(zip.getPath('/org/voxelregion/forge/ForgeRegionEngine.class'))
+                    || Files.exists(zip.getPath('/org/voxelregion/geometry/Volume.class')))
+                throw new GradleException('VRE classes must exist only inside their nested libraries')
+        }
+    }
+}
+
+tasks.register('verifyPackagedVre') {
+    group = 'verification'
+    description = 'Checks embedded VRE adapter/core isolation, native hooks, and absence of test-mod content.'
+    dependsOn tasks.named('remapJar')
+    inputs.file(adapter.flatMap { it.archiveFile })
+    doLast {
+        new java.util.zip.ZipFile(tasks.named('remapJar').get().archiveFile.get().asFile).withCloseable { zip ->
+            zip.entries().each { entry ->
+                if (entry.name.contains('GameTests') || entry.name.startsWith('org/gtlcore/voxelregion/verification/')
+                        || entry.name == 'data/gtlcore/structures/vre_empty.nbt')
+                    throw new GradleException("Verification content in the normal Core artifact: ${entry.name}")
+            }
+        }
+        new java.util.zip.ZipFile(adapter.get().archiveFile.get().asFile).withCloseable { zip ->
+            if (zip.getEntry('org/voxelregion/forge/ForgeRegionEngine.class') == null)
+                throw new GradleException('Missing public VRE Forge API')
+            adapterConfigs.each { name ->
+                def entry = zip.getEntry(name)
+                if (entry == null) throw new GradleException("Missing VRE Mixin configuration: $name")
+                def config = zip.getInputStream(entry).withCloseable { new JsonSlurper().parse(it, 'UTF-8') }
+                if (config.refmap != 'voxelregion-forge.refmap.json' || zip.getEntry(config.refmap) == null)
+                    throw new GradleException("Missing independent VRE refmap: $name")
+            }
+            def mappings = zip.getInputStream(zip.getEntry('voxelregion-forge.refmap.json')).withCloseable {
+                new JsonSlurper().parse(it, 'UTF-8')
+            }
+            if (!mappings.mappings || mappings.mappings.keySet().any { !it.startsWith('org/voxelregion/') })
+                throw new GradleException('Adapter refmap must contain VRE mappings only')
+            zip.entries().each { entry ->
+                if (entry.name.contains('GameTests') || entry.name.contains('ProbeBlocks')
+                        || entry.name.startsWith('org/voxelregion/testmod/') || entry.name == 'META-INF/mods.toml')
+                    throw new GradleException("Test-mod content in VRE library: ${entry.name}")
+            }
+        }
+    }
+}
+tasks.named('build') { dependsOn tasks.named('verifyPackagedVre') }

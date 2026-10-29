@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore;
 
 import org.gtlcore.gtlcore.client.ClientProxy;
 import org.gtlcore.gtlcore.common.CommonProxy;
+import org.gtlcore.gtlcore.integration.voxelregion.GtlRegionExplosions;
 import org.gtlcore.gtlcore.utils.StorageManager;
 
 import net.minecraft.resources.ResourceLocation;
@@ -9,6 +10,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -29,6 +31,7 @@ public class GTLCore {
     }
 
     public GTLCore() {
+        GtlRegionExplosions.install(FMLJavaModLoadingContext.get().getModEventBus());
         EngineInfo.requireCompatibility(CgseIntegrationApi.REQUIRED);
         LOGGER.info("CGSE engine {} (API {}, revision {})", EngineInfo.version(),
                 EngineInfo.compatibility(), EngineInfo.revision());

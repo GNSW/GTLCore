@@ -10,3 +10,4 @@ pluginManagement {
 }
 
 include 'cgse-engine'
+include 'vre-engine'

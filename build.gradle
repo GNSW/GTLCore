@@ -20,6 +20,7 @@ java {
 // Compile CGSE exactly once, as a separately selectable Forge Jar-in-Jar library.
 evaluationDependsOn(':cgse-engine')
 apply from: 'gradle/cgse-packaging.gradle'
+evaluationDependsOn(':vre-engine')
 
 def mixinConfigNames = [
         "gtlcore.mixin.json"
@@ -42,6 +43,8 @@ loom {
         programArg("--existing=" + file("src/main/resources").absolutePath)
     }
 }
+
+apply from: 'gradle/vre-packaging.gradle'
 
 repositories {
     mavenLocal()
@@ -141,7 +144,11 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
 
     modImplementation('curse.maven:applied-energistics-2-223794:7148487')
-    modImplementation("curse.maven:applied-energistics-2-wireless-terminals-459929:5162352") { transitive = false }
+    if (project.hasProperty('vreVerification') && project.hasProperty('vreVerificationWirelessJar')) {
+        modImplementation(files(project.property('vreVerificationWirelessJar')))
+    } else {
+        modImplementation("curse.maven:applied-energistics-2-wireless-terminals-459929:5162352") { transitive = false }
+    }
 
     modImplementation("dev.architectury:architectury-forge:${project.architectury_version}")
 

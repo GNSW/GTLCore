@@ -1,8 +1,10 @@
 package org.gtlcore.gtlcore.common.machine.multiblock.electric;
 
+import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.api.pattern.util.IValueContainer;
 import org.gtlcore.gtlcore.common.data.GTLBlocks;
 import org.gtlcore.gtlcore.common.data.GTLMaterials;
+import org.gtlcore.gtlcore.integration.voxelregion.GtlRegionExplosions;
 import org.gtlcore.gtlcore.utils.MachineIO;
 import org.gtlcore.gtlcore.utils.MachineUtil;
 
@@ -23,6 +25,7 @@ import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
@@ -30,6 +33,7 @@ import com.mojang.datafixers.util.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.util.List;
 
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -145,6 +149,18 @@ public class FissionReactorMachine extends WorkableElectricMultiblockMachine imp
     public void doExplosion(BlockPos pos, float explosionPower) {
         var machine = this.self();
         var level = machine.getLevel();
+        if (level instanceof ServerLevel serverLevel && GtlRegionExplosions.handlesFissionPower(explosionPower)) {
+            try {
+                var operation = GtlRegionExplosions.submitFission(serverLevel, pos, explosionPower);
+                // Accept the durable region intent before removing its source machine.
+                level.removeBlock(machine.getPos(), false);
+                GTLCore.LOGGER.info("Fission reactor accepted region operation {} at {} (region radius {}, not vanilla-equivalent strength)",
+                        operation.id(), pos, (int) Math.ceil(explosionPower));
+            } catch (IOException | RuntimeException failure) {
+                GTLCore.LOGGER.error("Fission region request at {} was not accepted; synchronous large-explosion fallback is disabled", pos, failure);
+            }
+            return;
+        }
         if (level != null) {
             level.removeBlock(machine.getPos(), false);
             level.explode(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,

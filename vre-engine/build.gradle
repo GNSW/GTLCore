@@ -1,0 +1,23 @@
+plugins { id 'java-library' }
+
+group = 'org.voxelregion'
+version = '0.1.0'
+base { archivesName = 'voxel-region-engine' }
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+tasks.named('jar') {
+    from(files('LICENSE', 'NOTICE')) { into 'META-INF' }
+    manifest.attributes('Automatic-Module-Name': 'org.voxelregion.engine',
+            'FMLModType': 'GAMELIBRARY', 'Implementation-Version': project.version,
+            'Implementation-Title': 'VoxelRegionEngine', 'Bundle-License': 'https://mozilla.org/MPL/2.0/')
+}

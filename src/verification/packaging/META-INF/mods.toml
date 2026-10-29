@@ -1,0 +1,14 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="LGPL-3.0"
+[[mods]]
+modId="gtlcore_vre_verification"
+version="0.1.0"
+displayName="GTLCore Voxel Region Native Verification"
+description="Isolated native host integration fixtures; never install into player worlds."
+[[dependencies.gtlcore_vre_verification]]
+modId="gtlcore"
+mandatory=true
+versionRange="[1.2.3.3,)"
+ordering="AFTER"
+side="SERVER"

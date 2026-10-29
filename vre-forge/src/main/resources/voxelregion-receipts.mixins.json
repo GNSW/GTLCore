@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.voxelregion.forge.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "voxelregion-forge.refmap.json",
+  "mixins": [
+    "ChunkMutationMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,12 @@
+VoxelRegionEngine
+Copyright 2026 VoxelRegionEngine contributors
+
+Original engine and integration source files are licensed under the Mozilla
+Public License, version 2.0. See LICENSE and SPDX file headers.
+
+The Gradle wrapper is distributed by Gradle under Apache License 2.0.
+Minecraft, Forge and optional integration dependencies are not part of the
+portable library. Their licenses remain applicable to their own components.
+
+The supplied DESIGN-v0.1.md is a design proposal; the implemented capabilities
+and current limitations are documented in README.md and docs/.

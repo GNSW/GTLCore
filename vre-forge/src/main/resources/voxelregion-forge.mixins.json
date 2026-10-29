@@ -1,0 +1,43 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.voxelregion.forge.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "voxelregion-forge.refmap.json",
+  "mixins": [
+    "MinecraftServerTickMixin",
+    "ServerEntityManagerMixin",
+    "EntitySectionManagerMixin",
+    "ChunkMapAccessMixin",
+    "NativeStoreMixin",
+    "PendingStoreMixin",
+    "PreparedRegionFileMixin",
+    "PreparedRegionStorageMixin",
+    "LightFenceMixin",
+    "RegionLightBroadcastMixin",
+    "VisibleLightEngineMixin",
+    "VisibleLightStorageMixin",
+    "LevelTicksMixin",
+    "SectionStatsMixin",
+    "UniformPalettePackMixin",
+    "SectionEncodingMixin",
+    "SkySourcesAccessMixin",
+    "ColumnSkySourcesMixin",
+    "DropSuppressionMixin",
+    "FluidRefillMixin",
+    "RandomizableLootSuppressionMixin",
+    "GenerationChunkMapMixin",
+    "ClearedTerrainAccessMixin",
+    "ClearedTerrainStorageMixin",
+    "ClearedTerrainPromotionMixin",
+    "ClearedTerrainDecorationMixin",
+    "NoiseSamplesMixin",
+    "NoiseHashMemoMixin",
+    "ClimateParametersMixin",
+    "NoiseFluidsMixin",
+    "FlatGenerationMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

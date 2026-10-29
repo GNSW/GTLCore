@@ -149,13 +149,13 @@ public class FissionReactorMachine extends WorkableElectricMultiblockMachine imp
     public void doExplosion(BlockPos pos, float explosionPower) {
         var machine = this.self();
         var level = machine.getLevel();
-        if (level instanceof ServerLevel serverLevel && GtlRegionExplosions.handlesFissionPower(explosionPower)) {
+        if (level instanceof ServerLevel serverLevel) {
             try {
                 var operation = GtlRegionExplosions.submitFission(serverLevel, pos, explosionPower);
                 // Accept the durable region intent before removing its source machine.
                 level.removeBlock(machine.getPos(), false);
                 GTLCore.LOGGER.info("Fission reactor accepted region operation {} at {} (region radius {}, not vanilla-equivalent strength)",
-                        operation.id(), pos, (int) Math.ceil(explosionPower));
+                        operation.id(), pos, Math.max(4, Math.round(explosionPower * 0.125f)));
             } catch (IOException | RuntimeException failure) {
                 GTLCore.LOGGER.error("Fission region request at {} was not accepted; synchronous large-explosion fallback is disabled", pos, failure);
             }

@@ -76,6 +76,8 @@ public final class GtlRegionExplosions {
             return type != null && !type.isSand();
         });
         MinecraftForge.EVENT_BUS.addListener(GtlRegionCommands::register);
+        MinecraftForge.EVENT_BUS.addListener(GtlStarExplosions::onRightClickBlock);
+        MinecraftForge.EVENT_BUS.addListener(GtlStarExplosions::onItemTooltip);
         GtlRegionProgress.install();
         RegionGeneration.install();
         installed = true;
@@ -123,14 +125,26 @@ public final class GtlRegionExplosions {
     }
 
     public static ForgeRegionEngine.Handle submitFission(ServerLevel level, BlockPos center, float power) throws IOException {
-        if (!Float.isFinite(power) || power < 1 || power > ForgeRegionEngine.maximumRadius())
+        if (!Float.isFinite(power)) throw new IllegalArgumentException("Invalid fission explosion power");
+        int radius = Math.max(4, Math.round(power * 0.125f));
+        if (radius > ForgeRegionEngine.maximumRadius())
             throw new IllegalArgumentException("Fission region radius exceeds configured limits");
-        return submitSphere(level, MACHINE_ACTOR, center, (int) Math.ceil(power), ForgeRegionEngine.Options.DEFAULT);
+        return submitSphere(level, MACHINE_ACTOR, center, radius, ForgeRegionEngine.Options.DEFAULT);
     }
 
     public static ForgeRegionEngine.Handle submitSphere(ServerLevel level, UUID actor, BlockPos center, int radius,
                                                         ForgeRegionEngine.Options options) throws IOException {
         return ForgeRegionEngine.submitSphere(level, actor, center, radius, options);
+    }
+
+    public static boolean submitSphereDefault(ServerLevel level, UUID actor, BlockPos center, int radius) {
+        try {
+            submitSphere(level, actor, center, radius, ForgeRegionEngine.Options.DEFAULT);
+            return true;
+        } catch (IOException e) {
+            GTLCore.LOGGER.error("Failed to submit region explosion at {} radius {}", center, radius, e);
+            return false;
+        }
     }
 
     public static ForgeRegionEngine.Handle submit(ServerLevel level, UUID actor, RegionGeometry geometry,

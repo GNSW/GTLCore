@@ -6,6 +6,7 @@ import org.gtlcore.gtlcore.common.item.ConfigurationCopyBehavior;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachineBase;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferProxyPartMachine;
+import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IAutoConfigurationMaintenanceHatch;
 
 import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
 import com.gregtechceu.gtceu.api.blockentity.PipeBlockEntity;
@@ -393,6 +394,10 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
                 for (Tag t : data.getList("Fluids", Tag.TAG_COMPOUND)) {
                     CompoundTag entry = (CompoundTag) t;
                     ((NotifiableFluidTank) machine.getTraits().get(entry.getInt("Trait"))).setFluidInTank(entry.getInt("Slot"), com.lowdragmc.lowdraglib.side.fluid.FluidStack.loadFromTag(entry));
+                }
+                if (machine instanceof IAutoConfigurationMaintenanceHatch maintenance &&
+                        configuration.contains("durationMultiplier")) {
+                    maintenance.setDurationMultiplier(configuration.getFloat("durationMultiplier"));
                 }
                 if (machine instanceof MEPatternBufferPartMachine buffer) {
                     restoreInventory(buffer.getTerminalPatternInventory(), data.getList("Patterns", Tag.TAG_COMPOUND));

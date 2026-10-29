@@ -63,7 +63,7 @@ final class AdapterConfig {
         OCCLUSION_CELL = b.comment("Macro blocker cell size: 4, 8 or 16; other values are rejected before accepting an operation.")
                 .defineInRange("occlusion_cell_size", 4, 4, 16);
         RESISTANCE_LIMIT = b.comment("Keep blocks with context-sensitive explosion resistance at or above this value; unbreakable blocks and the protected tag are always kept.")
-                .defineInRange("protected_resistance", 6000.0, 0.0, 3.4e38);
+                .defineInRange("protected_resistance", 3_600_000.0, 0.0, 3.4e38);
         ENTITY_DAMAGE = b.comment("0 disables entity damage. Positive values apply linear spherical damage once, to currently loaded entities only. Protected claims are always excluded; no claim bypass.")
                 .defineInRange("entity_damage_at_center", 0.0, 0.0, 2048.0);
         PROTECT_ALL_CLAIMS = b.comment("Otherwise follow FTB Chunks canExplosionsDamageTerrain(). Claims never block propagation in this baseline.")

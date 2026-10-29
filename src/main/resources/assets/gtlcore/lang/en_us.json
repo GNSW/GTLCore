@@ -1562,5 +1562,9 @@
   "gtlcore.quest_i18n.copy_key": "Click to copy the full key",
   "gtlcore.quest_i18n.unreferenced": "No reference found in this quest book",
   "gtlcore.quest_i18n.unsaved": "Unsaved changes",
-  "gtlcore.quest_i18n.no_matches": "No matching keys. Change the search or filter."
+  "gtlcore.quest_i18n.no_matches": "No matching keys. Change the search or filter.",
+  "tooltip.gtlcore.item.explosion.0": "Consumes one Quantum Star; right-click to detonate; explosion radius: 125 blocks",
+  "tooltip.gtlcore.item.explosion.1": "Consumes one Gravi Star; right-click to detonate; explosion radius: 250 blocks",
+  "tooltip.gtlcore.item.explosion.2": "Consumes one Unstable Star; right-click to detonate; explosion radius: 500 blocks",
+  "gui.gtlcore.modify": "Modified by GTLCore"
 }

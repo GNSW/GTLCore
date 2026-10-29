@@ -72,6 +72,7 @@ def adapterDevelopmentJar = tasks.register('vreAdapterDevelopmentJar', Jar) {
     archiveBaseName = 'voxel-region-forge-adapter-1.20.1'
     archiveVersion = engine.version.toString()
     archiveClassifier = 'dev'
+    destinationDirectory.set(layout.buildDirectory.dir('vre-adapter'))
     from(sourceSets.main.output) {
         include 'org/voxelregion/forge/**'
         include adapterConfigs
@@ -92,6 +93,7 @@ def adapter = tasks.register('vreAdapterJar', remapJarType) {
     archiveBaseName = 'voxel-region-forge-adapter-1.20.1'
     archiveVersion = engine.version.toString()
     archiveClassifier = ''
+    destinationDirectory.set(layout.buildDirectory.dir('vre-adapter'))
     sourceNamespace = 'named'
     targetNamespace = 'srg'
     addNestedDependencies = false

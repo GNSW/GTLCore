@@ -1562,5 +1562,9 @@
   "gtlcore.quest_i18n.copy_key": "点击复制完整 key",
   "gtlcore.quest_i18n.unreferenced": "任务书中未找到引用",
   "gtlcore.quest_i18n.unsaved": "有尚未保存的修改",
-  "gtlcore.quest_i18n.no_matches": "没有匹配的 key，请调整搜索或筛选。"
+  "gtlcore.quest_i18n.no_matches": "没有匹配的 key，请调整搜索或筛选。",
+  "tooltip.gtlcore.item.explosion.0": "消耗一个量子之星右键引爆，爆炸半径125格",
+  "tooltip.gtlcore.item.explosion.1": "消耗一个重力之星右键引爆，爆炸半径250格",
+  "tooltip.gtlcore.item.explosion.2": "消耗一个易变之星右键引爆，爆炸半径500格",
+  "gui.gtlcore.modify": "由GTLCore修改"
 }

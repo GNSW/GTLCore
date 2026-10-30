@@ -1587,5 +1587,7 @@
   "item.gtlcore.infinite_spray_can.mode.14": "红色",
   "item.gtlcore.infinite_spray_can.mode.15": "黑色",
   "item.gtlcore.infinite_spray_can.mode.16": "溶剂",
-  "item.gtlcore.infinite_spray_can.menu": "选择喷漆颜色"
+  "item.gtlcore.infinite_spray_can.menu": "选择喷漆颜色",
+  "tooltip.gtlcore.socket_preview.available": "青色描边：可放置手中部件",
+  "tooltip.gtlcore.socket_preview.occupied": "橙色描边：已占用或被阻挡"
 }

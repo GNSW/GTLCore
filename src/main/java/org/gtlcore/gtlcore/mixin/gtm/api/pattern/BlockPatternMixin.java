@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.gtm.api.pattern;
 
 import org.gtlcore.gtlcore.api.pattern.AdvancedBlockPattern;
+import org.gtlcore.gtlcore.api.pattern.BlockPatternAccessor;
 import org.gtlcore.gtlcore.api.pattern.FixedPatternLayout;
 import org.gtlcore.gtlcore.api.pattern.PatternLayoutSearch;
 import org.gtlcore.gtlcore.api.pattern.PreviewMatcherTiming;
@@ -41,7 +42,7 @@ import java.util.function.Consumer;
  */
 
 @Mixin(BlockPattern.class)
-public abstract class BlockPatternMixin {
+public abstract class BlockPatternMixin implements BlockPatternAccessor {
 
     @Shadow(remap = false)
     @Final
@@ -64,6 +65,22 @@ public abstract class BlockPatternMixin {
 
     @Shadow(remap = false)
     protected abstract BlockPos setActualRelativeOffset(int x, int y, int z, Direction facing, Direction upwardsFacing, boolean isFlipped);
+
+    @Override
+    public TraceabilityPredicate[][][] gtlcore$blockMatches() {
+        return this.blockMatches;
+    }
+
+    @Override
+    public int[] gtlcore$centerOffset() {
+        return this.centerOffset;
+    }
+
+    @Override
+    public BlockPos gtlcore$setActualRelativeOffset(int x, int y, int z, Direction facing,
+                                                    Direction upwardsFacing, boolean isFlipped) {
+        return setActualRelativeOffset(x, y, z, facing, upwardsFacing, isFlipped);
+    }
 
     @Shadow(remap = false)
     protected abstract void resetFacing(BlockPos pos, BlockState blockState, Direction facing, BiFunction<BlockPos, Direction, Boolean> checker, Consumer<BlockState> consumer);

@@ -1,0 +1,4 @@
+{
+  "tooltip.gtmbsockets.placement": "拿在主手或副手：青色描边标出可放置的仓室/总线位置",
+  "tooltip.gtmbsockets.occupied": "橙色描边表示该位置已被占用或被其他方块挡住"
+}

@@ -1,102 +1,48 @@
 modLoader = "javafml"
 loaderVersion = "[47,)"
-license = "${mod_license}"
+license = "MIT"
 
 [[mods]]
-modId = "${mod_id}"
-version = "${version}"
-displayName = "${mod_name}"
-displayURL = "${mod_url}"
-authors="${mod_author}"
-description = "GregTech Leisure Core Mods. Core itself is LGPL-3.0 (see LICENSE / META-INF/licenses/LGPL-3.0.txt); includes GPL-3.0 derived portions from More AE2 Additions (mae2a) by EasterFG (see META-INF/licenses/LICENSE-GPL-3.0.txt)."
+modId = "gtmbsockets"
+version = "1.0.2"
+displayName = "GT Multiblock Sockets"
+displayTest = "IGNORE_ALL_VERSION"
+authors = "wcwen"
+description = '''
+Client-side socket preview for GregTech CEu / GTLCore multiblocks.
 
-[[dependencies.${mod_id}]]
+Hold a hatch, bus, maintenance hatch or muffler in either hand and every structure cell that
+accepts that part is outlined in the world: cyan for a free socket, orange for an occupied or
+blocked socket.  Works on formed and unformed controllers, and reads structure patterns from
+GTCEu and every addon that uses the standard GT pattern API (including GTLCore).
+
+This is a standalone patch.  It does not modify any GregTech, GTLCore or addon jar.
+'''
+
+[[dependencies.gtmbsockets]]
 modId = "forge"
 mandatory = true
-versionRange = "[${forge_version},)"
+versionRange = "[47,)"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.${mod_id}]]
+[[dependencies.gtmbsockets]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[${minecraft_version},)"
+versionRange = "[1.20.1,1.21)"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.${mod_id}]]
+[[dependencies.gtmbsockets]]
 modId = "gtceu"
 mandatory = true
-versionRange = "[${gtceu_version},1.4.5)"
+versionRange = "[1.4.4,)"
 ordering = "AFTER"
 side = "BOTH"
 
-[[dependencies.${mod_id}]]
-modId = "ae2"
-mandatory = true
-versionRange = "[15.4.10,)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "ae2wtlib"
-mandatory = true
-versionRange = "[15.3.3,16)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "ad_astra"
-mandatory = true
-versionRange = "[${ad_astra_version},)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "gtmthings"
-mandatory = true
-versionRange = "[1.3.5,1.3.6)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "kubejs"
+[[dependencies.gtmbsockets]]
+modId = "gtlcore"
 mandatory = false
-versionRange = "[${kubejs_version},)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "jei"
-mandatory = false
-versionRange = "[${jei_version},15.49.0.200]"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "extendedae"
-mandatory = false
-versionRange = "[1.4.8,)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "ldlib"
-mandatory = false
-versionRange = "[1.0.29.b,1.0.34)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "wildcard_pattern"
-mandatory = false
-versionRange = "[0.1.2,)"
-ordering = "AFTER"
-side = "BOTH"
-
-[[dependencies.${mod_id}]]
-modId = "mae2"
-mandatory = true
-versionRange = "[1.6.1,)"
+versionRange = "[1.2.0,)"
 ordering = "AFTER"
 side = "BOTH"

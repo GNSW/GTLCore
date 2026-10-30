@@ -1,0 +1,4 @@
+{
+  "tooltip.gtmbsockets.placement": "Hold in either hand: cyan outlines mark valid hatch/bus sockets",
+  "tooltip.gtmbsockets.occupied": "Orange outlines mark sockets that are occupied or blocked"
+}

@@ -57,6 +57,13 @@ public class GTLItems {
             .model(NonNullBiConsumer.noop())
             .register();
 
+    public static final ItemEntry<InfiniteSprayCanItem> INFINITE_SPRAY_CAN = REGISTRATE
+            .item("infinite_spray_can", InfiniteSprayCanItem::new)
+            .properties(p -> p.stacksTo(1))
+            .lang("Infinite Spray Can")
+            .model(NonNullBiConsumer.noop())
+            .register();
+
     private static ItemEntry<StorageComponentItem> registerStorageComponentItem(int tier) {
         return REGISTRATE
                 .item("cell_component_" + tier + "m", p -> new StorageComponentItem(p, 1048576 * tier))

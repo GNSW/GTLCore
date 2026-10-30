@@ -1,0 +1,110 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "gtceu:item/white_dye_spray_can"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 0
+      },
+      "model": "gtceu:item/white_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 1
+      },
+      "model": "gtceu:item/orange_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 2
+      },
+      "model": "gtceu:item/magenta_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 3
+      },
+      "model": "gtceu:item/light_blue_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 4
+      },
+      "model": "gtceu:item/yellow_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 5
+      },
+      "model": "gtceu:item/lime_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 6
+      },
+      "model": "gtceu:item/pink_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7
+      },
+      "model": "gtceu:item/gray_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 8
+      },
+      "model": "gtceu:item/light_gray_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 9
+      },
+      "model": "gtceu:item/cyan_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 10
+      },
+      "model": "gtceu:item/purple_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 11
+      },
+      "model": "gtceu:item/blue_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 12
+      },
+      "model": "gtceu:item/brown_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 13
+      },
+      "model": "gtceu:item/green_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 14
+      },
+      "model": "gtceu:item/red_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 15
+      },
+      "model": "gtceu:item/black_dye_spray_can"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 16
+      },
+      "model": "gtceu:item/solvent_spray_can"
+    }
+  ]
+}

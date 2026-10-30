@@ -122,6 +122,7 @@
     "gtm.StableBlockCandidatesMixin",
     "gtm.worldgen.SurfaceIndicatorGeneratorMixin",
     "gtm.worldgen.VeinedVeinGeneratorMixin",
+    "gtm.worldgen.VeinedFunctionContextMixin",
     "gtm.worldgen.WorldGeneratorUtilsMixin",
     "gtmt.TerminalPatternAccessor",
     "gtmt.TerminalPatternPerformanceMixin",

@@ -4,6 +4,7 @@
   "package": "org.voxelregion.forge.mixin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "voxelregion-forge.refmap.json",
+  "plugin": "org.voxelregion.forge.bootstrap.LightingMixinPlugin",
   "mixins": [
     "MinecraftServerTickMixin",
     "ServerEntityManagerMixin",

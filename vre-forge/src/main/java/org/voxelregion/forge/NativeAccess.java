@@ -74,13 +74,65 @@ public final class NativeAccess {
         }
         @Override public java.util.BitSet cells() { return (java.util.BitSet) cells.clone(); }
     }
+    /** Immutable full-height column cropped from a larger independently solved terrain region. */
+    public record SolvedLightColumn(ChunkPos position, int minSectionY,
+            org.voxelregion.lighting.ClearedChunkLighting.Result solved) {
+        public SolvedLightColumn {
+            java.util.Objects.requireNonNull(position, "position");
+            java.util.Objects.requireNonNull(solved, "solved");
+        }
+    }
+    public record SolvedRegionStatistics(long requested, long installed, long cutRejected,
+            long staleBefore, long staleAfter, long failed, long cutComparedCells, long cutMismatchedCells,
+            long cutDifferentNonReject) { }
     public interface LightFence {
+        /** Provider can rebuild a complete changed column without per-voxel native checks. */
+        default boolean vre$rebuildsWholeChunks() { return false; }
         CompletableFuture<Void> vre$changedChecks(ChunkPos position, java.util.List<LightChanges> changes);
         CompletableFuture<Boolean> vre$clearAirRegion(java.util.List<OpenColumn> positions, int minSectionY,
                 int sectionCount, boolean hasSky, BooleanSupplier stillValid);
         CompletableFuture<Void> vre$afterChunkWork(ChunkPos position);
         CompletableFuture<Void> vre$batchChecks(ChunkPos position, int[] sectionYs);
         CompletableFuture<Void> vre$batchChecks(ChunkPos position, int[] sectionYs, boolean replaySkySources);
+        /** Same exact native checks with one completion fence; older providers retain their two existing submissions. */
+        default CompletableFuture<Void> vre$combinedChecks(ChunkPos position, java.util.List<LightChanges> changes,
+                int[] boundarySectionYs, boolean replaySkySources) {
+            var changedWork = changes.isEmpty() ? CompletableFuture.<Void>completedFuture(null)
+                    : vre$changedChecks(position, changes);
+            var boundaryWork = boundarySectionYs.length == 0 ? vre$afterChunkWork(position)
+                    : vre$batchChecks(position, boundarySectionYs, replaySkySources);
+            return CompletableFuture.allOf(changedWork, boundaryWork);
+        }
+        /**
+         * Publishes a rectangular full-height image only when its horizontal cut equals the native field.
+         * Participants include the calculation halo; each native sorter lane must arrive before publication.
+         * The host validates the identity and mutation revision of the entire snapshot before and after
+         * installation. False requires retry/expansion; it never acknowledges successful lighting.
+         */
+        default CompletableFuture<Boolean> vre$installSolvedRegion(java.util.List<SolvedLightColumn> installation,
+                java.util.List<ChunkPos> participants, BooleanSupplier stillValid) {
+            return CompletableFuture.completedFuture(false);
+        }
+        /**
+         * Publishes the exact affected halo of a fully completed terrain mutation. Inclusive dirty bounds
+         * must have one complete chunk of repair halo inside installation, and installation must have one
+         * complete chunk of calculation halo inside participants. The caller must register only AFTER all
+         * owner-thread mutation and native remainder callbacks for the dirty footprint have finished.
+         * stillValid must cover every participant's identity/revision, cancellation and pending mutation
+         * ownership. A later mutation invalidates that proof synchronously. Under this contract an old
+         * cut may differ because another nearby mutation has not published yet; overlap is an assignment
+         * of the same exact field, so cut differences are diagnostic rather than a mutual-wait condition.
+         */
+        default CompletableFuture<Boolean> vre$installSolvedMutationRegion(
+                java.util.List<SolvedLightColumn> installation, java.util.List<ChunkPos> participants,
+                int minDirtyChunkX, int minDirtyChunkZ, int maxDirtyChunkX, int maxDirtyChunkZ,
+                BooleanSupplier stillValid) {
+            return CompletableFuture.completedFuture(false);
+        }
+        default boolean vre$supportsSolvedMutationRegion() { return false; }
+        default SolvedRegionStatistics vre$solvedRegionStatistics() {
+            return new SolvedRegionStatistics(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         CompletableFuture<Boolean> vre$solveAndInstall(ChunkPos position, int minSectionY,
                 Supplier<org.voxelregion.lighting.ClearedChunkLighting.Snapshot> input,
                 BooleanSupplier stillValid, Runnable releaseInput);

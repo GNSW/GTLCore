@@ -5,10 +5,12 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 import net.minecraft.core.IdMap;
 import net.minecraft.util.BitStorage;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.Palette;
 import net.minecraft.world.level.chunk.PalettedContainer;
@@ -42,12 +44,42 @@ public final class NativePaletteImage {
         } finally { container.release(); }
     }
 
-    @SuppressWarnings("unchecked")
     public PalettedContainer<BlockState> remap(List<BlockState> replacement) {
         if (replacement.size() != states.size()) throw new IllegalArgumentException("Palette indices must stay stable");
+        return construct(indices.copy(), replacement);
+    }
+
+    /**
+     * Changes only selected packed indices. The original palette/configuration remains valid:
+     * AIR must already have an ID or fit in the existing storage width. A full palette or
+     * single-value non-air storage falls back rather than inventing a wider configuration.
+     */
+    public PalettedContainer<BlockState> clear(BitSet changed) {
+        if (changed.length() > 4096) throw new IllegalArgumentException("Selection exceeds section");
+        if (changed.isEmpty()) return remap(states);
+        BlockState air = Blocks.AIR.defaultBlockState();
+        int airId = states.indexOf(air);
+        List<BlockState> replacement = states;
+        if (airId < 0) {
+            if (states.size() >= (1 << indices.getBits())) return null;
+            var extended = new ArrayList<>(states);
+            airId = extended.size(); extended.add(air);
+            replacement = extended;
+        }
+        BitStorage cleared = indices.copy();
+        for (int index = changed.nextSetBit(0); index >= 0; index = changed.nextSetBit(index + 1))
+            cleared.set(index, airId);
+        return construct(cleared, replacement);
+    }
+
+    /** Native packed words, excluding the independent palette and caller's selection masks. */
+    public int storageWords() { return indices.getRaw().length; }
+
+    @SuppressWarnings("unchecked")
+    private PalettedContainer<BlockState> construct(BitStorage storage, List<BlockState> replacement) {
         try {
             return (PalettedContainer<BlockState>) ACCESS.constructor.invoke(Block.BLOCK_STATE_REGISTRY,
-                    PalettedContainer.Strategy.SECTION_STATES, configuration, indices.copy(), replacement);
+                    PalettedContainer.Strategy.SECTION_STATES, configuration, storage, replacement);
         } catch (Throwable failure) {
             if (failure instanceof VirtualMachineError error) throw error;
             return null;

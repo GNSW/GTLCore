@@ -20,15 +20,21 @@ import org.voxelregion.spatial.ChunkCursor;
 import org.voxelregion.spatial.CenterOutChunkCursor;
 
 final class OperationData extends SavedData {
+    private static final String DATA_NAME = "voxelregion_test_operations";
     enum State { FUSE, RUNNING, SETTLING, RECOVERING, PAUSED, PAUSED_UNLOADED, PAUSED_PROTECTION, PAUSED_RECOVERY, FAILED, CANCELLED, WRITTEN }
     final List<Task> tasks = new ArrayList<>();
     private transient boolean reconciled;
 
     static OperationData get(ServerLevel level) {
-        OperationData data = level.getDataStorage().computeIfAbsent(OperationData::load, OperationData::new, "voxelregion_test_operations");
+        OperationData data = level.getDataStorage().computeIfAbsent(OperationData::load, OperationData::new, DATA_NAME);
         if (!data.reconciled) { IntentJournal.reconcile(level, data); data.reconciled = true; }
         for (Task task : data.tasks) task.owner = level;
         return data;
+    }
+
+    /** Reads existing metadata only: no creation, journal reconciliation, dirty flag or task execution. */
+    static OperationData forInspection(ServerLevel level) {
+        return level.getDataStorage().get(OperationData::load, DATA_NAME);
     }
 
     static OperationData load(CompoundTag tag) {
@@ -247,7 +253,9 @@ final class OperationData extends SavedData {
                 throw new IllegalArgumentException("Invalid persisted wave cursor");
             job.resumeRequiresValidation = t.getBoolean("resumeRequiresValidation");
             job.unconfirmedFences = t.getInt("unconfirmedFences");
-            if (job.unconfirmedFences < 0 || job.unconfirmedFences > 512)
+            // Match the maximum native save/packet window, not the current configured
+            // admission limit: a server may lower its budget before loading this evidence.
+            if (job.unconfirmedFences < 0 || job.unconfirmedFences > 4096)
                 throw new IllegalArgumentException("Invalid in-flight chunk evidence count");
             job.chunkSelected = t.getBoolean("chunkSelected"); job.recovering = t.getBoolean("recovering");
             if (t.contains("chunkCursor", Tag.TAG_COMPOUND)) {

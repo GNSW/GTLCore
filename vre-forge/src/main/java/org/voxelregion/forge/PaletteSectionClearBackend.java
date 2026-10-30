@@ -7,10 +7,13 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -31,7 +34,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 /**
  * Palette-proven replacement of audited terrain; protected/native-only cells can remain in place.
  * Whole-section proof costs O(palette), final validation O(sections), light checks O(exterior surface).
- * Selective/retained palettes use a detached O(4096) encoding and complete native light checks.
+ * Selective/retained palettes use detached packed indices when their layout permits it;
+ * other selections retain the per-voxel encoding fallback and complete native light checks.
  * Batches containing AIR or water additionally invalidate native sky-source/shadow interfaces.
  * A batch rebuilds chunk heightmaps and sky-source columns once and requests one chunk packet.
  * The caller owns geometric coverage, claim checks, budget reservation, receipts and chunk tickets.
@@ -45,6 +49,29 @@ public final class PaletteSectionClearBackend {
     private static final Set<Heightmap.Types> HEIGHTMAPS = Collections.unmodifiableSet(EnumSet.of(
             Heightmap.Types.WORLD_SURFACE, Heightmap.Types.OCEAN_FLOOR,
             Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES));
+
+    public enum PreparationPath { WHOLE_PALETTE, RETAINED_PALETTE, PACKED_REMAP, PACKED_SELECTION, VOXEL }
+    private static final AtomicLongArray preparationCounts = new AtomicLongArray(PreparationPath.values().length);
+    private static final AtomicLongArray preparationUnits = new AtomicLongArray(PreparationPath.values().length);
+    private static final AtomicLongArray preparationRemainders = new AtomicLongArray(PreparationPath.values().length);
+
+    /** Successful preparation attempts, including later invalidated/retried plans; never committed terrain counts. */
+    public static Map<String, Long> preparationStatistics() {
+        Map<String, Long> result = new LinkedHashMap<>();
+        for (var path : PreparationPath.values()) {
+            result.put(path.name() + ".attemptedSections", preparationCounts.get(path.ordinal()));
+            result.put(path.name() + ".planningUnits", preparationUnits.get(path.ordinal()));
+            result.put(path.name() + ".nativeRemainderCells", preparationRemainders.get(path.ordinal()));
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    private static void recordPreparation(Prepared prepared) {
+        int path = prepared.preparationPath.ordinal();
+        preparationCounts.incrementAndGet(path);
+        preparationUnits.addAndGet(path, prepared.planningWork);
+        preparationRemainders.addAndGet(path, prepared.nativeRemainder.cardinality());
+    }
 
     /** Full mutation tracking and aggregate observer support are required, not inferred from mod IDs. */
     public interface HostHooks {
@@ -109,6 +136,8 @@ public final class PaletteSectionClearBackend {
         private final boolean replaySkySources;
         private final Predicate<BlockState> mayClear;
         private final HostHooks hooks;
+        private final PreparationPath preparationPath;
+        private final int planningWork;
         private PostProcessingClearance postProcessing;
         private boolean consumed;
         private boolean observerActive;
@@ -136,12 +165,15 @@ public final class PaletteSectionClearBackend {
             this.replaySkySources = changedBlocks != 4096 || palette.stream().anyMatch(state -> state.is(Blocks.WATER));
             this.mayClear = mayClear;
             this.hooks = hooks;
+            this.preparationPath = PreparationPath.WHOLE_PALETTE;
+            this.planningWork = Math.max(1, palette.size());
+            recordPreparation(this);
         }
 
         private Prepared(ServerLevel level, LevelChunk chunk, int sectionIndex, long revision,
                          Set<BlockState> palette, Set<BlockState> retainedPolicyStates, BitSet changed,
                          BitSet nativeRemainder, int keptBlocks, LevelChunkSection replacement,
-                         Predicate<BlockState> mayClear, HostHooks hooks) {
+                         Predicate<BlockState> mayClear, HostHooks hooks, PreparationPath preparationPath, int planningWork) {
             this.level = level; this.chunk = chunk; this.sectionIndex = sectionIndex;
             this.sectionY = chunk.getSectionYFromSectionIndex(sectionIndex);
             this.original = chunk.getSection(sectionIndex); this.revision = revision;
@@ -155,6 +187,8 @@ public final class PaletteSectionClearBackend {
             // They still use one section storage replacement, with no terrain setBlock callbacks.
             this.fullLightChecks = true; this.replaySkySources = true;
             this.mayClear = mayClear; this.hooks = hooks;
+            this.preparationPath = preparationPath; this.planningWork = Math.max(1, planningWork);
+            recordPreparation(this);
         }
 
         public int sectionIndex() { return sectionIndex; }
@@ -162,9 +196,9 @@ public final class PaletteSectionClearBackend {
         public int changedBlocks() { return changedBlocks; }
         /** Selected non-air states retained by the static protection policy; native remainders are excluded. */
         public int keptBlocks() { return keptBlocks; }
-        /** Conservative preparation units: palette proof for a whole clear, voxel scan for a mixed selection. */
-        public int planningWork() { return changed == null || replacement == original
-                ? Math.max(1, palette.size() + retainedPolicyStates.size()) : 4096; }
+        public PreparationPath preparationPath() { return preparationPath; }
+        /** Bulk work units: palette entries + packed/mask words, or 4096 for per-voxel encoding. */
+        public int planningWork() { return planningWork; }
         public long revision() { return revision; }
         public Set<BlockState> palette() { return palette; }
         /** Selected unknown states retain native callbacks; callers process these after the safe batch. */
@@ -283,6 +317,7 @@ public final class PaletteSectionClearBackend {
         Objects.requireNonNull(mayClear); Objects.requireNonNull(hooks);
         if (selected != null && selected.length() > 4096) throw new IllegalArgumentException("Selection exceeds section");
         BitSet selection = selected == null ? null : (BitSet) selected.clone();
+        if (selection != null && selection.cardinality() == 4096) selection = null;
         if (!level.getServer().isSameThread()) return rejected(Rejection.WRONG_THREAD);
         if (!currentChunk(level, chunk)) return rejected(Rejection.WRONG_CHUNK);
         if (sectionIndex < 0 || sectionIndex >= chunk.getSections().length) return rejected(Rejection.INVALID_SECTION);
@@ -300,7 +335,7 @@ public final class PaletteSectionClearBackend {
         if (originalCount < 0 || originalCount > 4096) return rejected(Rejection.TRACKING_UNAVAILABLE);
         // Preserve the O(palette) all-clear path. An unused old unsupported palette entry merely
         // sends this attempt to actual-state planning; it no longer blocks the whole section.
-        if (selection == null || selection.cardinality() == 4096) {
+        if (selection == null) {
             var whole = prepare(level, chunk, sectionIndex, mayClear, hooks, postProcessing);
             if (whole.accepted()) return whole;
             if (hooks.mutationRevision(chunk) != revision || chunk.getSection(sectionIndex) != original)
@@ -322,12 +357,15 @@ public final class PaletteSectionClearBackend {
             });
             if (!actionable && hooks.mutationRevision(chunk) == revision && chunk.getSection(sectionIndex) == original)
                 return new Preparation(new Prepared(level, chunk, sectionIndex, revision, removable, retained,
-                        new BitSet(), new BitSet(), originalCount, original, mayClear, hooks), Rejection.NONE);
+                        new BitSet(), new BitSet(), originalCount, original, mayClear, hooks,
+                        PreparationPath.RETAINED_PALETTE, retained.size()), Rejection.NONE);
             retained.clear();
         }
-        // getAll enumerates only currently used palette entries, unlike maybeHas.
-        if (selection == null && chunk.getBlockEntitiesPos().stream().noneMatch(pos -> (pos.getY() >> 4) == chunk.getSectionYFromSectionIndex(sectionIndex))) {
-            var remapped = preparePaletteRemap(level, chunk, sectionIndex, revision, original, originalCount, minimum, mayClear, hooks);
+        // Packed planning preserves all unselected values and unknown native-only states.
+        // Block entities retain the position-aware ordinary fallback.
+        if (chunk.getBlockEntitiesPos().stream().noneMatch(pos -> (pos.getY() >> 4) == chunk.getSectionYFromSectionIndex(sectionIndex))) {
+            var remapped = preparePaletteRemap(level, chunk, sectionIndex, revision, original, originalCount,
+                    minimum, selection, mayClear, hooks);
             if (remapped != null) return remapped;
         }
         original.getStates().getAll(state -> {
@@ -360,11 +398,13 @@ public final class PaletteSectionClearBackend {
         if (hooks.mutationRevision(chunk) != revision || chunk.getSection(sectionIndex) != original
                 || stats.vre$accurateNonAirCount() != originalCount) return rejected(Rejection.STALE);
         return new Preparation(new Prepared(level, chunk, sectionIndex, revision, removable, retained,
-                changed, nativeRemainder, keptBlocks, replacement, mayClear, hooks), Rejection.NONE);
+                changed, nativeRemainder, keptBlocks, replacement, mayClear, hooks,
+                PreparationPath.VOXEL, 4096), Rejection.NONE);
     }
 
     private static Preparation preparePaletteRemap(ServerLevel level, LevelChunk chunk, int sectionIndex, long revision,
-            LevelChunkSection original, int originalCount, BlockPos minimum, Predicate<BlockState> mayClear, HostHooks hooks) {
+            LevelChunkSection original, int originalCount, BlockPos minimum, BitSet selection,
+            Predicate<BlockState> mayClear, HostHooks hooks) {
         var image = NativePaletteImage.capture(original.getStates());
         if (image == null) return null;
         byte[] actions = new byte[image.states.size()];
@@ -379,12 +419,14 @@ public final class PaletteSectionClearBackend {
         BitSet changed = new BitSet(4096), nativeRemainder = new BitSet(4096), used = new BitSet(actions.length);
         int[] cursorAndKept = new int[2];
         image.indices.getAll(id -> {
-            int index = cursorAndKept[0]++; used.set(id);
+            int index = cursorAndKept[0]++;
+            if (selection != null && !selection.get(index)) return;
+            used.set(id);
             if (actions[id] == 1) changed.set(index);
             else if (actions[id] == 2) nativeRemainder.set(index);
             else if (actions[id] == 3) cursorAndKept[1]++;
         });
-        var replacementStates = image.remap(replacementPalette);
+        var replacementStates = selection == null ? image.remap(replacementPalette) : image.clear(changed);
         if (replacementStates == null) return null;
         Set<BlockState> removable = Collections.newSetFromMap(new IdentityHashMap<>());
         Set<BlockState> retained = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -396,7 +438,10 @@ public final class PaletteSectionClearBackend {
         if (hooks.mutationRevision(chunk) != revision || chunk.getSection(sectionIndex) != original
                 || ((NativeAccess.SectionStats)original).vre$accurateNonAirCount() != originalCount) return rejected(Rejection.STALE);
         return new Preparation(new Prepared(level, chunk, sectionIndex, revision, removable, retained,
-                changed, nativeRemainder, cursorAndKept[1], replacement, mayClear, hooks), Rejection.NONE);
+                changed, nativeRemainder, cursorAndKept[1], replacement, mayClear, hooks,
+                selection == null ? PreparationPath.PACKED_REMAP : PreparationPath.PACKED_SELECTION,
+                image.states.size() + image.storageWords() + 2 * 64 + ((image.states.size() + 63) / 64)
+                        + (selection == null ? 0 : 64)), Rejection.NONE);
     }
 
     /** Cheap read-only guard for a caller assembling one chunk across several ticks; commit still rechecks. */
@@ -539,11 +584,8 @@ public final class PaletteSectionClearBackend {
         int[] boundarySections = plans.stream().filter(plan -> plan.changedBlocks > 0 && !plan.fullLightChecks)
                 .mapToInt(Prepared::sectionY).toArray();
         var fence = (NativeAccess.LightFence) lighting;
-        var changedWork = changes.isEmpty() ? CompletableFuture.<Void>completedFuture(null)
-                : fence.vre$changedChecks(chunk.getPos(), changes);
-        var boundaryWork = boundarySections.length == 0 ? fence.vre$afterChunkWork(chunk.getPos())
-                : fence.vre$batchChecks(chunk.getPos(), boundarySections, plans.stream().anyMatch(plan -> plan.replaySkySources));
-        return CompletableFuture.allOf(changedWork, boundaryWork);
+        return fence.vre$combinedChecks(chunk.getPos(), changes, boundarySections,
+                plans.stream().anyMatch(plan -> plan.replaySkySources));
     }
 
     /** Aggregate native navigation checks; mixed cubes may conservatively recompute extra paths once. */

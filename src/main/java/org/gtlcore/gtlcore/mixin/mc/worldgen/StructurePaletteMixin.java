@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import java.util.List;
 
 /** Shared templates cache block-filtered lists even when their placements use separate regions. */
-@Mixin(targets = "net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate$Palette")
+@Mixin(StructureTemplate.Palette.class)
 public abstract class StructurePaletteMixin {
 
     @WrapMethod(method = "blocks(Lnet/minecraft/world/level/block/Block;)Ljava/util/List;")

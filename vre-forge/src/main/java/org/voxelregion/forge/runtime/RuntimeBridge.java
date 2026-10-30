@@ -50,6 +50,9 @@ public final class RuntimeBridge {
         MinecraftForge.EVENT_BUS.addGenericListener(LevelChunk.class, ChunkReceipts::attach);
         MinecraftForge.EVENT_BUS.addListener(RuntimeBridge::tick);
         MinecraftForge.EVENT_BUS.addListener(RuntimeBridge::stop);
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.level.LevelEvent.Unload event) -> {
+            if (event.getLevel() instanceof ServerLevel level) org.voxelregion.forge.TerrainLightBatch.stop(level);
+        });
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerAboutToStartEvent event) -> org.voxelregion.forge.ServerTickTimings.reset());
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TagsUpdatedEvent event) -> OperationOcclusion.rulesChanged());
         installed = true;
@@ -68,6 +71,7 @@ public final class RuntimeBridge {
         EntityOperationRunner.tick(server, deadline);
         ForgeOperationRunner.tick(server, deadline);
         org.voxelregion.forge.AirRegionLightBatch.flush(server);
+        org.voxelregion.forge.TerrainLightBatch.flush(server);
     }
     static long sharedDeadline() {
         // Use this frame's actual remaining time. Including our previous work in an EMA
@@ -79,6 +83,7 @@ public final class RuntimeBridge {
         for (var level : event.getServer().getAllLevels()) org.voxelregion.forge.GenerationGate.stop(level);
         org.voxelregion.forge.ClearedChunkLightBatch.stop(event.getServer());
         org.voxelregion.forge.DetachedLightTasks.stop();
+        org.voxelregion.forge.TerrainLightBatch.stop(event.getServer());
         org.voxelregion.forge.AirRegionLightBatch.stop();
         org.voxelregion.forge.ClearedInitialLighting.stop();
         org.voxelregion.forge.UniformSectionEncoding.clear();
@@ -162,6 +167,94 @@ public final class RuntimeBridge {
     public static List<ForgeRegionEngine.Status> statuses(ServerLevel level) {
         checkThread(level);
         return OperationData.get(level).tasks.stream().map(task -> snapshot(level, task)).toList();
+    }
+    /** Human-readable observations only; never use these lines as recovery or replay authority. */
+    public static List<String> inspectChunk(ServerLevel level, BlockPos position) {
+        checkThread(level);
+        int chunkX = position.getX() >> 4, chunkZ = position.getZ() >> 4;
+        var chunk = level.getChunkSource().getChunkNow(chunkX, chunkZ);
+        var lines = new java.util.ArrayList<String>();
+        lines.add("dimension=" + level.dimension().location() + " block=" + position.toShortString()
+                + " chunk=" + chunkX + "," + chunkZ + " pointSample=BLOCK_CENTER");
+        ChunkReceipts receipts = chunk == null ? null : chunk.getCapability(ChunkReceipts.CAPABILITY).resolve().orElse(null);
+        List<UUID> receiptIds = receipts == null ? List.of() : receipts.operationIds();
+        if (chunk == null) {
+            lines.add("loadedFull=false nativeStatus=UNAVAILABLE fastClearMarker=UNKNOWN mutationRevision=UNKNOWN"
+                    + " receiptSource=UNAVAILABLE_UNLOADED; inspect did not load this chunk.");
+        } else {
+            lines.add("loadedFull=true nativeStatus=" + chunk.getStatus() + " fullStatus=" + chunk.getFullStatus()
+                    + " lightCorrect=" + chunk.isLightCorrect() + " mutationRevision=" + ChunkMutationTracking.revision(chunk)
+                    + " receiptCapability=" + (receipts == null ? "UNAVAILABLE" : "PRESENT")
+                    + " trackingValid=" + (receipts == null ? "UNKNOWN" : receipts.trackingValid())
+                    + " receiptRecords=" + receiptIds.size());
+            boolean cleared = org.voxelregion.forge.ClearedGeneration.isCleared(chunk);
+            String markerText = "fastClearMarker=" + cleared;
+            if (cleared && chunk instanceof NativeAccess.ClearedTerrain marker) {
+                var image = marker.vre$clearedTerrain();
+                markerText += " operation=" + image.getUUID("operation") + " algorithm=" + image.getString("algorithm")
+                        + " destroyBedrock=" + image.getBoolean("destroyBedrock");
+            }
+            lines.add(markerText + "; a fast-clear marker is not a completion receipt.");
+        }
+        var bounds = new org.voxelregion.spatial.ChunkKey(chunkX, chunkZ)
+                .bounds(level.getMinBuildHeight(), level.getMaxBuildHeight());
+        long chunkKey = net.minecraft.world.level.ChunkPos.asLong(chunkX, chunkZ);
+        var retainedIds = new java.util.HashSet<UUID>();
+        int matching = 0;
+        var data = OperationData.forInspection(level);
+        lines.add("operationMetadata=" + (data == null ? "NOT_PRESENT" : "PRESENT")
+                + "; inspection does not create operations or reconcile intent journals.");
+        List<OperationData.Task> tasks = data == null ? List.of() : data.tasks;
+        for (var task : tasks) {
+            retainedIds.add(task.id);
+            var coverage = task.volume.classify(bounds);
+            byte state = receipts == null ? 0 : receipts.state(task.id);
+            if (coverage == org.voxelregion.geometry.Coverage.OUTSIDE && state == 0) continue;
+            if (matching++ >= 16) continue;
+            lines.add("operation=" + task.id + " task=" + task.state
+                    + " containsPoint=" + task.volume.contains(position.getX(), position.getY(), position.getZ())
+                    + " chunkCoverage=" + coverage
+                    + " exclusionRecord=" + (task.excludedChunks.contains(chunkKey)
+                            ? "RETAINED_EXCLUSION_REASON_UNKNOWN" : "NO_RETAINED_EXCLUSION_RECORD")
+                    + " globalCompletedChunkPhases=" + task.finishedChunks
+                    + " globalDenied=" + task.skippedChunks + " globalUnloaded=" + task.skippedUnloaded
+                    + " " + inspectReceipt(receipts, task.id));
+        }
+        for (UUID id : receiptIds) {
+            if (retainedIds.contains(id)) continue;
+            if (matching++ >= 16) continue;
+            lines.add("operation=" + id + " task=NOT_RETAINED containsPoint=UNKNOWN chunkCoverage=UNKNOWN"
+                    + " exclusionRecord=UNKNOWN globalDenied=UNKNOWN globalUnloaded=UNKNOWN " + inspectReceipt(receipts, id));
+        }
+        lines.add("matchingRecords=" + matching + " shown=" + Math.min(16, matching)
+                + (matching > 16 ? " TRUNCATED; only 16 intersecting-task/receipt records are shown." : ""));
+        lines.add("NO_RECEIPT/UNAVAILABLE/NO_RETAINED_EXCLUSION_RECORD does not prove a skip or an omission."
+                + " COMPLETE is chunk progress; task WRITTEN includes required light/save acknowledgements."
+                + " Revision differences report later changes only, not their cause; geometry ignores protection/occlusion.");
+        return List.copyOf(lines);
+    }
+    private static String inspectReceipt(ChunkReceipts receipts, UUID operation) {
+        if (receipts == null) return "receiptState=UNAVAILABLE";
+        byte state = receipts.state(operation);
+        String name = switch (state) {
+            case 0 -> "NO_RECEIPT";
+            case ChunkReceipts.STARTED -> "STARTED";
+            case ChunkReceipts.COMPLETE -> "COMPLETE";
+            case ChunkReceipts.SKIPPED_PERMISSION -> "SKIPPED_PERMISSION";
+            case ChunkReceipts.CANCELLED -> "CANCELLED";
+            default -> "UNKNOWN_" + state;
+        };
+        var checkpoint = receipts.checkpoint(operation);
+        if (checkpoint == null) return "receiptState=" + name + " checkpoint="
+                + (state == 0 ? "NO_RECEIPT" : "NO_DETAILED_CHECKPOINT")
+                + " pendingWrite=UNKNOWN expectedRevision=UNKNOWN completedPhase=UNKNOWN";
+        String revisionMatches = receipts.trackingValid()
+                ? Boolean.toString(checkpoint.expectedMutationRevision() == receipts.mutationRevision()) : "UNKNOWN";
+        return "receiptState=" + name + " pendingWrite=" + checkpoint.pendingWrite()
+                + " expectedRevision=" + checkpoint.expectedMutationRevision() + " revisionMatches=" + revisionMatches
+                + " completedPhase=" + checkpoint.completedThroughPhase() + " workingPhase=" + checkpoint.workingPhase()
+                + " cursor=" + (checkpoint.cursor() == null ? "NONE"
+                        : checkpoint.cursor().sectionY() + ":" + checkpoint.cursor().voxel());
     }
     public static ForgeRegionEngine.ControlResult control(ServerLevel level, UUID id, ForgeRegionEngine.Control action) {
         checkThread(level);

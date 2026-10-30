@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -23,6 +24,7 @@ public final class OrderedGenerationSchedulerVerification {
     private static int checks;
 
     public static void main(String[] arguments) throws Exception {
+        workerCountBoundsAreEnforced();
         passiveWorkKeepsItsNativeBehavior();
         preexistingAsyncAndFollowingNativeWorkAreFenced();
         disjointWorkAndWorldIdentitiesRunIndependently();
@@ -31,12 +33,30 @@ public final class OrderedGenerationSchedulerVerification {
         failuresReleaseOnlyTheirOwnResult();
         closingDrainsWaitingWorkOnNativeExecutor();
         overflowKeepsOrdering();
+        blockedFeaturesLeaveCapacityForReadyWork();
+        readyOverflowUsesOriginalExecutorAndKeepsFence();
+        failedWorkerSubmissionCannotRaceNativeFallback();
         rejectedAndUnusualExecutorsCannotLeakLeases();
         resultCallbacksCanSubmitInlineWork();
         frontierRetainsIndependentPredecessors();
         inlineCompletionChainsDoNotRecurse();
         concurrentSubmittersKeepOverlappingAsyncWorkExclusive();
         System.out.println("OrderedGenerationScheduler verification PASS: " + checks + " checks");
+    }
+
+    private static void workerCountBoundsAreEnforced() {
+        for (int workers : new int[] { 1, 2, 3, 8 }) {
+            try (var scheduler = new OrderedGenerationScheduler(workers, 1)) {
+                check(scheduler.statistics().reservedOffloads() == 0, "empty scheduler reserved capacity");
+            }
+        }
+        for (int workers : new int[] { 0, 9 }) {
+            try (var ignored = new OrderedGenerationScheduler(workers, 1)) {
+                throw new AssertionError("invalid worker count accepted: " + workers);
+            } catch (IllegalArgumentException expected) {
+                checks++;
+            }
+        }
     }
 
     private static void passiveWorkKeepsItsNativeBehavior() throws Exception {
@@ -218,14 +238,138 @@ public final class OrderedGenerationSchedulerVerification {
                     return CompletableFuture.completedFuture(value);
                 }));
             }
-            check(scheduler.statistics().reservedOffloads() == 2, "offload reservation was not bounded");
-            check(scheduler.statistics().nativeFallbacks() == 4, "overflow fallback count incorrect");
+            check(scheduler.statistics().reservedOffloads() == 0, "dependency waiters reserved worker capacity");
+            check(scheduler.statistics().nativeFallbacks() == 0, "dependency waiters fell back before dispatch");
             old.complete(-1);
             check(await(a) == -1, "overflow predecessor value changed");
             for (int i = 0; i < results.size(); i++) check(await(results.get(i)) == i, "overflow result changed");
             check(order.equals(List.of(0, 1, 2, 3, 4, 5)), "overflow reordered overlapping features");
             drained(scheduler, 7);
         }
+    }
+
+    private static void blockedFeaturesLeaveCapacityForReadyWork() throws Exception {
+        try (var scheduler = new OrderedGenerationScheduler(1, 1)) {
+            Object world = new Object();
+            var predecessor = new CompletableFuture<Integer>();
+            var old = scheduler.submit(world, AREA, INLINE, false, () -> predecessor);
+            var blocked = new ArrayList<CompletableFuture<Integer>>();
+            for (int i = 0; i < 8; i++) {
+                int value = i;
+                blocked.add(scheduler.submit(world, AREA, INLINE, true,
+                        () -> CompletableFuture.completedFuture(value)));
+            }
+            check(scheduler.statistics().reservedOffloads() == 0, "blocked wave consumed offload slots");
+            Thread caller = Thread.currentThread();
+            var actualThread = new AtomicReference<Thread>();
+            var independent = scheduler.submit(world, new ChunkArea(32, 32, 32, 32), failExecutor(), true, () -> {
+                actualThread.set(Thread.currentThread());
+                return CompletableFuture.completedFuture(9);
+            });
+            check(await(independent) == 9 && actualThread.get() != caller,
+                    "ready disjoint feature failed to use idle worker behind blocked wave");
+            check(!old.isDone() && blocked.stream().noneMatch(CompletableFuture::isDone),
+                    "ready work released an unrelated dependency fence");
+            predecessor.complete(-1);
+            check(await(old) == -1, "blocked predecessor changed");
+            for (int i = 0; i < blocked.size(); i++) check(await(blocked.get(i)) == i, "blocked result changed");
+            drained(scheduler, 10);
+        }
+    }
+
+    private static void readyOverflowUsesOriginalExecutorAndKeepsFence() throws Exception {
+        try (var scheduler = new OrderedGenerationScheduler(1, 1)) {
+            Object world = new Object();
+            var firstNative = new CompletableFuture<Integer>();
+            var secondNative = new CompletableFuture<Integer>();
+            CountDownLatch started = new CountDownLatch(2);
+            var first = scheduler.submit(world, AREA, INLINE, true, () -> {
+                started.countDown();
+                return firstNative;
+            });
+            var second = scheduler.submit(world, new ChunkArea(32, 32, 32, 32), INLINE, true, () -> {
+                started.countDown();
+                return secondNative;
+            });
+            await(started);
+            check(scheduler.statistics().reservedOffloads() == 2, "ready offload reservations not bounded");
+            var owner = new ManualExecutor();
+            var real = new CompletableFuture<Integer>();
+            var calls = new AtomicInteger();
+            ChunkArea overflowArea = new ChunkArea(64, 64, 64, 64);
+            var overflow = scheduler.submit(world, overflowArea, owner, true, () -> {
+                calls.incrementAndGet();
+                return real;
+            });
+            var following = scheduler.submit(world, overflowArea, owner, false,
+                    () -> CompletableFuture.completedFuture(4));
+            check(calls.get() == 0 && owner.queue.size() == 1, "ready overflow bypassed original owner executor");
+            check(scheduler.statistics().nativeFallbacks() == 1, "ready overflow fallback count incorrect");
+            check(!overflow.cancel(true), "overflow cancellation released pending native work");
+            owner.runAll();
+            check(calls.get() == 1 && !overflow.isDone() && !following.isDone(),
+                    "overflow completed or released its fence before its native future");
+            real.complete(3);
+            check(await(overflow) == 3 && !following.isDone(), "dependent overflow bypassed owner executor");
+            owner.runAll();
+            check(await(following) == 4, "overflow follower changed");
+            check(scheduler.statistics().reservedOffloads() == 2, "native fallback released another job's permit");
+            firstNative.complete(1);
+            secondNative.complete(2);
+            check(await(first) == 1 && await(second) == 2, "reserved native results changed");
+            drained(scheduler, 4);
+        }
+    }
+
+    private static void failedWorkerSubmissionCannotRaceNativeFallback() throws Exception {
+        try (var scheduler = new OrderedGenerationScheduler(1, 1)) {
+            ThreadPoolExecutor pool = workerPool(scheduler);
+            AtomicInteger factories = new AtomicInteger();
+            pool.setThreadFactory(action -> {
+                // First addWorker fails without starting. execute then queues the action and
+                // retries worker creation; that failure leaves a queued but unclaimed action.
+                if (factories.incrementAndGet() == 1) return null;
+                throw new IllegalStateException("thread factory failed after enqueue");
+            });
+            var owner = new ManualExecutor();
+            var real = new CompletableFuture<Integer>();
+            var calls = new AtomicInteger();
+            Object world = new Object();
+            var result = scheduler.submit(world, AREA, owner, true, () -> {
+                calls.incrementAndGet();
+                return real;
+            });
+            check(scheduler.statistics().reservedOffloads() == 0 && owner.queue.size() == 1,
+                    "failed worker submission retained permit or lost native fallback");
+            Runnable staleWorker = pool.getQueue().poll();
+            check(staleWorker != null, "failed factory fixture did not leave its queued action");
+            staleWorker.run();
+            check(calls.get() == 0, "withdrawn worker action stole native fallback after permit release");
+            owner.runAll();
+            check(calls.get() == 1 && !result.isDone(), "native fallback ran twice or completed early");
+            var following = scheduler.submit(world, AREA, owner, false,
+                    () -> CompletableFuture.completedFuture(2));
+            check(!result.cancel(true) && !following.isDone(), "failed dispatch lost native completion fence");
+            real.complete(1);
+            owner.runAll();
+            check(await(result) == 1 && await(following) == 2, "failed-dispatch native values changed");
+            drained(scheduler, 2);
+        }
+        try (var scheduler = new OrderedGenerationScheduler(1, 1)) {
+            // Exercise the shutdown/execute race without also marking the scheduler closed.
+            workerPool(scheduler).shutdown();
+            var result = scheduler.submit(new Object(), AREA, failExecutor(), true,
+                    () -> CompletableFuture.completedFuture(1));
+            expectFailure(result);
+            check(scheduler.statistics().nativeFallbacks() == 1, "rejected worker did not try native executor once");
+            drained(scheduler, 1);
+        }
+    }
+
+    private static ThreadPoolExecutor workerPool(OrderedGenerationScheduler scheduler) throws Exception {
+        var field = OrderedGenerationScheduler.class.getDeclaredField("workers");
+        field.setAccessible(true);
+        return (ThreadPoolExecutor) field.get(scheduler);
     }
 
     private static void rejectedAndUnusualExecutorsCannotLeakLeases() throws Exception {

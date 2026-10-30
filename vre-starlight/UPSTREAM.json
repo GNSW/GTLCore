@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/PaperMC/Starlight",
+  "commit": "6585522a74113317be3ed06bbb17b5305d3075c0",
+  "branchAtImport": "forge (historical pre-1.20.2 commit)",
+  "upstreamVersion": "1.1.2",
+  "upstreamMinecraftBuild": "1.20",
+  "targetMinecraft": "1.20.1",
+  "targetForge": "47.3.7",
+  "license": "LGPL-3.0-only",
+  "sourceVerification": "All 46 upstream Git blobs verified against pinned Git tree SHA-1 before import",
+  "excludedStandaloneFiles": ["Starlight.java @Mod entrypoint", "MixinConnector.java", "mods.toml", "MANIFEST.MF", "logo.png", "pack.mcmeta"],
+  "architectureReference": "https://github.com/RelativityMC/ScalableLux/blob/128eee1a61176ded42591622c0f6c6717cf07617/patches/main/0006-ScalableLux-Implementation.patch",
+  "flowSchedIncluded": false
+}

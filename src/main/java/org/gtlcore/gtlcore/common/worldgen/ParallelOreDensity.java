@@ -418,6 +418,7 @@ public final class ParallelOreDensity {
         synchronized (VALIDATED) {
             VALIDATED.clear();
         }
+        NumericOreTileCache.clear();
     }
 
     @SubscribeEvent

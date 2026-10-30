@@ -332,5 +332,26 @@ public class Misc {
                 .outputItems(FLUID_REGULATOR_MAX)
                 .EUt(VA[13]).duration(100)
                 .save(provider);
+
+        ASSEMBLY_LINE_RECIPES.recipeBuilder("material_manipulator")
+                .inputItems(CustomTags.ZPM_CIRCUITS, 8)
+                .inputItems(ROBOT_ARM_ZPM, 4)
+                .inputItems(FLUID_REGULATOR_ZPM, 4)
+                .inputItems(FIELD_GENERATOR_IV, 2)
+                .inputItems(plateDouble, RhodiumPlatedPalladium, 4)
+                .inputItems(wireGtHex, SamariumIronArsenicOxide, 2)
+                .inputItems(Registries.getItemStack("gtceu:paracetamol_pill"), 16)
+                .inputItems(Registries.getItemStack("gtceu:rad_away_pill"), 16)
+                .inputItems(Registries.getItemStack("ae2wtlib:quantum_bridge_card"))
+                .inputFluids(SolderingAlloy.getFluid(5760))
+                .inputFluids(Polybenzimidazole.getFluid(4000))
+                .outputItems(MATTER_MANIPULATOR)
+                .EUt(VA[6]).duration(200)
+                .scannerResearch(b -> b
+                        .researchStack(Registries.getItemStack("ae2:spatial_anchor"))
+                        .dataStack(TOOL_DATA_STICK.asStack())
+                        .EUt(VA[5])
+                        .duration(300))
+                .save(provider);
     }
 }

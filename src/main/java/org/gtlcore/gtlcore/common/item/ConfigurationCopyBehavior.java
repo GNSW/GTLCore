@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.common.item;
 
 import org.gtlcore.gtlcore.common.item.manipulator.ManipulatorMEState;
+import org.gtlcore.gtlcore.common.machine.multiblock.part.NeutronSensorPartMachine;
+import org.gtlcore.gtlcore.common.machine.multiblock.part.TemperatureSensorPartMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IAutoConfiguratioGravityPart;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IAutoConfigurationMaintenanceHatch;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IGravityPartMachine;
@@ -31,6 +33,7 @@ import com.lowdragmc.lowdraglib.syncdata.accessor.IManagedAccessor;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
@@ -52,6 +55,8 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
         else if (machine instanceof QuantumChestMachine m) tag.put(QUANTUM_CHEST_CONFIGURATION, getQuantumChestCfg(m));
         else if (machine instanceof QuantumTankMachine m) tag.put(QUANTUM_TANK_CONFIGURATION, getQuantumTankCfg(m));
         else if (machine instanceof FluidHatchPartMachine m) tag.put(FLUID_OUTPUT_HATCH_CONFIGURATION, getFluidOutputHatchCfg(m));
+        else if (machine instanceof NeutronSensorPartMachine m) tag.put(NEUTRON_SENSOR_CONFIGURATION, getNeutronSensorCfg(m));
+        else if (machine instanceof TemperatureSensorPartMachine m) tag.put(TEMPERATURE_SENSOR_CONFIGURATION, getTemperatureSensorCfg(m));
         else if (machine instanceof ItemBusPartMachine m) getBusCfg(tag, m);
         else if (machine instanceof IMaintenanceMachine m) {
             tag.putFloat("durationMultiplier", m.getDurationMultiplier());
@@ -77,6 +82,8 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
         else if (machine instanceof QuantumChestMachine m) setQuantumChestCfg(tag.getCompound(QUANTUM_CHEST_CONFIGURATION), m);
         else if (machine instanceof QuantumTankMachine m) setQuantumTankCfg(tag.getCompound(QUANTUM_TANK_CONFIGURATION), m);
         else if (machine instanceof FluidHatchPartMachine m) setFluidOutputHatchCfg(tag.getCompound(FLUID_OUTPUT_HATCH_CONFIGURATION), m);
+        else if (machine instanceof NeutronSensorPartMachine m) setNeutronSensorCfg(tag.getCompound(NEUTRON_SENSOR_CONFIGURATION), m);
+        else if (machine instanceof TemperatureSensorPartMachine m) setTemperatureSensorCfg(tag.getCompound(TEMPERATURE_SENSOR_CONFIGURATION), m);
         else if (machine instanceof ItemBusPartMachine m) setBusCfg(tag, m);
         else if (machine instanceof IMaintenanceMachine) {
             if (tag.contains("durationMultiplier")) {
@@ -105,6 +112,8 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
     private static final String QUANTUM_CHEST_CONFIGURATION = "QuantumChestConfiguration";
     private static final String QUANTUM_TANK_CONFIGURATION = "QuantumTankConfiguration";
     private static final String FLUID_OUTPUT_HATCH_CONFIGURATION = "FluidOutputHatchConfiguration";
+    private static final String NEUTRON_SENSOR_CONFIGURATION = "NeutronSensorConfiguration";
+    private static final String TEMPERATURE_SENSOR_CONFIGURATION = "TemperatureSensorConfiguration";
     private static final String COPIED_CONFIGURATION_TYPE = "CopiedConfigurationType";
     private static final String COPIED_NAME_SUFFIX = "item.gtlcore.cfg_copy.copied_suffix";
     private static final int CONFIGURATION_SLOT = 0;
@@ -186,6 +195,28 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
                 } else {
                     context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_not_found"), true);
                 }
+            } else if (metaMachine instanceof NeutronSensorPartMachine neutronSensor) {
+                if (Objects.requireNonNull(context.getPlayer()).isShiftKeyDown()) {
+                    prepareCopy(tags, CopiedConfiguration.NEUTRON_SENSOR);
+                    tags.put(NEUTRON_SENSOR_CONFIGURATION, getNeutronSensorCfg(neutronSensor));
+                    context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_copied"), true);
+                } else if (tags.get(NEUTRON_SENSOR_CONFIGURATION) instanceof CompoundTag configuration) {
+                    setNeutronSensorCfg(configuration, neutronSensor);
+                    context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_pasted"), true);
+                } else {
+                    context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_not_found"), true);
+                }
+            } else if (metaMachine instanceof TemperatureSensorPartMachine temperatureSensor) {
+                if (Objects.requireNonNull(context.getPlayer()).isShiftKeyDown()) {
+                    prepareCopy(tags, CopiedConfiguration.TEMPERATURE_SENSOR);
+                    tags.put(TEMPERATURE_SENSOR_CONFIGURATION, getTemperatureSensorCfg(temperatureSensor));
+                    context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_copied"), true);
+                } else if (tags.get(TEMPERATURE_SENSOR_CONFIGURATION) instanceof CompoundTag configuration) {
+                    setTemperatureSensorCfg(configuration, temperatureSensor);
+                    context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_pasted"), true);
+                } else {
+                    context.getPlayer().displayClientMessage(Component.translatable("message.gtlcore.machine_data_not_found"), true);
+                }
             } else if (metaMachine instanceof ItemBusPartMachine itemBusPartMachine) {
                 if (Objects.requireNonNull(context.getPlayer()).isShiftKeyDown()) {
                     prepareCopy(tags, CopiedConfiguration.ITEM_BUS);
@@ -253,6 +284,8 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
         tags.remove(QUANTUM_CHEST_CONFIGURATION);
         tags.remove(QUANTUM_TANK_CONFIGURATION);
         tags.remove(FLUID_OUTPUT_HATCH_CONFIGURATION);
+        tags.remove(NEUTRON_SENSOR_CONFIGURATION);
+        tags.remove(TEMPERATURE_SENSOR_CONFIGURATION);
         for (String key : LEGACY_CONFIGURATION_KEYS) {
             tags.remove(key);
         }
@@ -272,6 +305,12 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
         }
         if (tags.contains(FLUID_OUTPUT_HATCH_CONFIGURATION)) {
             return CopiedConfiguration.FLUID_OUTPUT_HATCH;
+        }
+        if (tags.contains(NEUTRON_SENSOR_CONFIGURATION)) {
+            return CopiedConfiguration.NEUTRON_SENSOR;
+        }
+        if (tags.contains(TEMPERATURE_SENSOR_CONFIGURATION)) {
+            return CopiedConfiguration.TEMPERATURE_SENSOR;
         }
         if (!tags.getBoolean("Configuration")) {
             return null;
@@ -358,6 +397,33 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
         if (configuration.getBoolean("isLocked")) {
             metaMachine.tank.setLocked(true, FluidStack.loadFromTag(configuration.getCompound("lockedFluid")));
         }
+    }
+
+    private CompoundTag getNeutronSensorCfg(NeutronSensorPartMachine machine) {
+        CompoundTag configuration = new CompoundTag();
+        configuration.putInt("min", machine.getMin());
+        configuration.putInt("max", machine.getMax());
+        configuration.putBoolean("inverted", machine.isInverted());
+        return configuration;
+    }
+
+    private void setNeutronSensorCfg(CompoundTag configuration, NeutronSensorPartMachine machine) {
+        int min = Mth.clamp(configuration.getInt("min"), 0, 1_200_000);
+        int max = Mth.clamp(configuration.getInt("max"), 0, 1_200_000);
+        if (min > max) min = max;
+        machine.setMin(min);
+        machine.setMax(max);
+        machine.setInverted(configuration.getBoolean("inverted"));
+    }
+
+    private CompoundTag getTemperatureSensorCfg(TemperatureSensorPartMachine machine) {
+        CompoundTag configuration = new CompoundTag();
+        configuration.putInt("max", machine.getMax());
+        return configuration;
+    }
+
+    private void setTemperatureSensorCfg(CompoundTag configuration, TemperatureSensorPartMachine machine) {
+        machine.setMax(Mth.clamp(configuration.getInt("max"), 1, 16000));
     }
 
     private CompoundTag saveFluid(FluidStack fluid) {
@@ -451,6 +517,8 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
         QUANTUM_CHEST("quantum_chest", "item.gtlcore.cfg_copy.type.quantum_chest"),
         QUANTUM_TANK("quantum_tank", "item.gtlcore.cfg_copy.type.quantum_tank"),
         FLUID_OUTPUT_HATCH("fluid_output_hatch", "item.gtlcore.cfg_copy.type.fluid_output_hatch"),
+        NEUTRON_SENSOR("neutron_sensor", "item.gtlcore.cfg_copy.type.neutron_sensor"),
+        TEMPERATURE_SENSOR("temperature_sensor", "item.gtlcore.cfg_copy.type.temperature_sensor"),
         GRAVITY_CONFIGURATION_HATCH("gravity_configuration_hatch", "item.gtlcore.cfg_copy.type.gravity_configuration_hatch"),
         CONFIGURATION_MAINTENANCE_HATCH("configuration_maintenance_hatch", "item.gtlcore.cfg_copy.type.configuration_maintenance_hatch"),
         GRAVITY_HATCH("gravity_hatch", "item.gtlcore.cfg_copy.type.gravity_hatch");

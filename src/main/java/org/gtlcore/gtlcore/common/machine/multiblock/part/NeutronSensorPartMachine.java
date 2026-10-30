@@ -38,6 +38,7 @@ public class NeutronSensorPartMachine extends TieredPartMachine {
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(
             NeutronSensorPartMachine.class, TieredPartMachine.MANAGED_FIELD_HOLDER);
 
+    @Getter
     @Setter
     @Persisted
     @DescSynced

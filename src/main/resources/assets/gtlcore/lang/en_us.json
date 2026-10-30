@@ -666,6 +666,8 @@
   "item.gtlcore.cfg_copy.type.item_bus": "Item Bus",
   "item.gtlcore.cfg_copy.type.quantum_chest": "Quantum Chest",
   "item.gtlcore.cfg_copy.type.quantum_tank": "Quantum Tank",
+  "item.gtlcore.cfg_copy.type.neutron_sensor": "Neutron Sensor",
+  "item.gtlcore.cfg_copy.type.temperature_sensor": "Temperature Sensor",
   "item.gtlcore.cfg_copy.type.simple_machine": "Machine",
   "tooltip.gtlcore.cfg_copy": "Sneak-right-click a supported machine or hatch to copy its configuration, then right-click to apply it",
   "item.gtlcore.compressed_pufferfish": "Large Fish",

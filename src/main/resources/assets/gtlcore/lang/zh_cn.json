@@ -663,6 +663,8 @@
   "item.gtlcore.cfg_copy.type.item_bus": "物品仓",
   "item.gtlcore.cfg_copy.type.quantum_chest": "量子箱",
   "item.gtlcore.cfg_copy.type.quantum_tank": "量子缸",
+  "item.gtlcore.cfg_copy.type.neutron_sensor": "中子传感器",
+  "item.gtlcore.cfg_copy.type.temperature_sensor": "温度传感器",
   "item.gtlcore.cfg_copy.type.simple_machine": "小机器",
   "tooltip.gtlcore.cfg_copy": "潜行右键支持的机器/仓室复制配置，右键应用配置",
   "item.gtlcore.compressed_pufferfish": "大鱼",

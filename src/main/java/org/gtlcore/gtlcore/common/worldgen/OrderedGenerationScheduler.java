@@ -8,7 +8,6 @@ import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -54,13 +53,13 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
     private long peakOffloads;
 
     /**
-     * The queue and worker count bound reserved offloads, including those awaiting dependencies.
+     * The queue and worker count bound reserved offloads after their dependencies become ready.
      * Overflow work uses its native executor but still participates in all conflict ordering.
      * Native fallback is not an additional worker pool and is not a global concurrency cap.
      */
     public OrderedGenerationScheduler(int workerCount, int queuedOffloads) {
-        if (workerCount < 1 || workerCount > 2 || queuedOffloads < 1) {
-            throw new IllegalArgumentException("Expected 1..2 workers and a positive offload queue");
+        if (workerCount < 1 || workerCount > 8 || queuedOffloads < 1) {
+            throw new IllegalArgumentException("Expected 1..8 workers and a positive offload queue");
         }
         maximumReservedOffloads = Math.addExact(workerCount, queuedOffloads);
         AtomicInteger threadIds = new AtomicInteger();
@@ -126,19 +125,16 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
                     if (previous.guarded) frontier.add(previous);
                 }
             }
-            boolean reserve = requested && reservedOffloads < maximumReservedOffloads;
-            if (reserve) reservedOffloads++;
-            job = new Job<>(worldIdentity, area, nativeExecutor, operation, needsGuard, reserve);
+            job = new Job<>(worldIdentity, area, nativeExecutor, operation, needsGuard, requested);
             active.add(job);
             submitted++;
             if (needsGuard) guarded++;
             if (!predecessors.isEmpty()) delayed++;
             dependencyEdges += predecessors.size();
-            if (requested && !reserve) nativeFallbacks++;
             waiting++;
         }
         if (predecessors.isEmpty()) {
-            if (job.reservedOffload) {
+            if (job.offloadRequested) {
                 dispatch(job);
             } else {
                 // Native passive work preserves its original thread and immediate call order.
@@ -152,13 +148,29 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
     }
 
     private void dispatch(Job<?> job) {
-        if (job.reservedOffload) {
+        boolean reserve;
+        synchronized (lock) {
+            // Dependency waiters retain their spatial fence but no worker capacity. A ready,
+            // disjoint feature can therefore use idle workers even behind a long blocked wave.
+            reserve = job.offloadRequested && !closed && reservedOffloads < maximumReservedOffloads;
+            if (reserve) {
+                job.reservedOffload = true;
+                reservedOffloads++;
+            } else if (job.offloadRequested) nativeFallbacks++;
+        }
+        if (reserve) {
             try {
                 workers.execute(() -> start(job, true));
                 return;
-            } catch (RejectedExecutionException rejected) {
-                // Closing/queue saturation cannot drop a registered lease or bypass dependencies.
+            } catch (Throwable dispatchFailure) {
                 synchronized (lock) {
+                    // A worker/thread factory can start the action before execute throws. Its
+                    // real future still owns the reservation and spatial fence in that case.
+                    if (job.started.get()) return;
+                    // If execute enqueued before failing, that stale worker action must not
+                    // race the native fallback after we release its offload reservation.
+                    job.workerDispatchAborted = true;
+                    releaseOffloadReservation(job);
                     nativeFallbacks++;
                 }
             }
@@ -171,8 +183,9 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
     }
 
     private <T> void start(Job<T> job, boolean onWorker) {
-        if (!job.started.compareAndSet(false, true)) return;
         synchronized (lock) {
+            if (onWorker && job.workerDispatchAborted) return;
+            if (!job.started.compareAndSet(false, true)) return;
             waiting--;
             running++;
             peakRunning = Math.max(peakRunning, running);
@@ -208,7 +221,7 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
             List<Job<?>> active = worlds.get(job.world);
             active.remove(job);
             if (active.isEmpty()) worlds.remove(job.world);
-            if (job.reservedOffload) reservedOffloads--;
+            releaseOffloadReservation(job);
             running--;
             if (job.offloadedStart) activeOffloads--;
             completed++;
@@ -221,6 +234,13 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
         job.finished.complete(null);
         if (failure == null) job.result.complete(value);
         else job.result.completeExceptionally(failure);
+    }
+
+    /** Called under lock; a failed worker submission may release before native completion. */
+    private void releaseOffloadReservation(Job<?> job) {
+        if (!job.reservedOffload) return;
+        job.reservedOffload = false;
+        reservedOffloads--;
     }
 
     /** Avoid recursive completion chains with inline executors without changing executor choice. */
@@ -271,7 +291,10 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
         private final Executor nativeExecutor;
         private final Supplier<CompletableFuture<T>> operation;
         private final boolean guarded;
-        private final boolean reservedOffload;
+        private final boolean offloadRequested;
+        // Protected by the scheduler lock, including the worker's initial claim.
+        private boolean reservedOffload;
+        private boolean workerDispatchAborted;
         private boolean offloadedStart;
         private final AtomicBoolean started = new AtomicBoolean();
         private final AtomicBoolean ended = new AtomicBoolean();
@@ -285,13 +308,13 @@ public final class OrderedGenerationScheduler implements AutoCloseable {
         };
 
         private Job(Object world, ChunkArea area, Executor nativeExecutor, Supplier<CompletableFuture<T>> operation,
-                    boolean guarded, boolean reservedOffload) {
+                    boolean guarded, boolean offloadRequested) {
             this.world = world;
             this.area = area;
             this.nativeExecutor = nativeExecutor;
             this.operation = operation;
             this.guarded = guarded;
-            this.reservedOffload = reservedOffload;
+            this.offloadRequested = offloadRequested;
         }
     }
 }

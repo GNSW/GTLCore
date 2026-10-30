@@ -43,7 +43,7 @@ public final class OreDensityCellCache {
         if (!Double.isFinite(xzScale) || !Double.isFinite(yScale) || !Double.isFinite(valueFactor)) return null;
         SingleOctave first = SingleOctave.capture(access.gtlcore$first());
         SingleOctave second = SingleOctave.capture(access.gtlcore$second());
-        return first == null || second == null ? null : new Sampler(xzScale, yScale, valueFactor, first, second);
+        return first == null || second == null ? null : new Sampler(normal, xzScale, yScale, valueFactor, first, second);
     }
 
     private static DensityFunction unwrapDirect(DensityFunction function) {
@@ -64,24 +64,32 @@ public final class OreDensityCellCache {
 
     public record Statistics(long slices, long sampledPoints, long cellHits, long cellMisses) {}
 
-    static final class Sampler {
+    static final class Sampler implements NumericOreTileCache.Computer {
 
         private final double xzScale;
         private final double yScale;
         private final double valueFactor;
         private final SingleOctave first;
         private final SingleOctave second;
+        private final NumericOreTileCache.Cursor tileCache;
         private long points;
 
-        Sampler(double xzScale, double yScale, double valueFactor, SingleOctave first, SingleOctave second) {
+        Sampler(NormalNoise noise, double xzScale, double yScale, double valueFactor, SingleOctave first, SingleOctave second) {
             this.xzScale = xzScale;
             this.yScale = yScale;
             this.valueFactor = valueFactor;
             this.first = first;
             this.second = second;
+            this.tileCache = NumericOreTileCache.create(noise, xzScale, yScale);
         }
 
         double sample(int blockX, int blockY, int blockZ) {
+            points++;
+            return tileCache == null ? compute(blockX, blockY, blockZ) : tileCache.sample(blockX, blockY, blockZ, this);
+        }
+
+        @Override
+        public double compute(int blockX, int blockY, int blockZ) {
             // Preserve DensityFunctions.Noise then NormalNoise's separate multiplications.
             double x = (double) blockX * xzScale;
             double y = (double) blockY * yScale;
@@ -89,7 +97,6 @@ public final class OreDensityCellCache {
             double secondX = x * 1.0181268882175227D;
             double secondY = y * 1.0181268882175227D;
             double secondZ = z * 1.0181268882175227D;
-            points++;
             return (first.sample(x, y, z) + second.sample(secondX, secondY, secondZ)) * valueFactor;
         }
 
@@ -99,6 +106,7 @@ public final class OreDensityCellCache {
             POINTS.addAndGet(points);
             HITS.addAndGet(first.hits + second.hits);
             MISSES.addAndGet(first.misses + second.misses);
+            if (tileCache != null) tileCache.recordStatistics();
         }
     }
 

@@ -73,6 +73,14 @@ public final class ForgeRegionEngine {
     }
     public static List<Status> statuses(ServerLevel level) { return RuntimeBridge.statuses(Objects.requireNonNull(level)); }
     /**
+     * Server-thread, read-only diagnostics for the chunk containing {@code position}.
+     * Never loads a chunk or serializes terrain. The detached human-readable lines are
+     * diagnostic text, not a stable machine-parsing API. Missing evidence is not a skip.
+     */
+    public static List<String> inspectChunk(ServerLevel level, BlockPos position) {
+        return RuntimeBridge.inspectChunk(Objects.requireNonNull(level), Objects.requireNonNull(position).immutable());
+    }
+    /**
      * Recovery-paused work cannot be resumed without valid co-saved evidence.
      * Synchronous region callbacks receive applied=false and a reason; queue their controls for a later server tick.
      */

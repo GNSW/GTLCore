@@ -37,7 +37,7 @@ final class AdapterConfig {
                 .defineInRange("preparation_threads", Math.max(4, Math.min(16, Runtime.getRuntime().availableProcessors())), 1, 32);
         MILLIS_PER_TICK = b.comment("One shared cooperative main-thread budget across all dimensions and operations. A single native callback/load cannot be preempted.")
                 .defineInRange("millis_per_tick", 40.0, 0.1, 40.0);
-        VISITS_PER_TICK = b.comment("Preparation work units: palette entries for full clears, voxel inspections for mixed masks. Historical name retained for config compatibility.")
+        VISITS_PER_TICK = b.comment("Bulk preparation work units: palette entries for full clears, palette entries plus packed storage/mask words for packed selections, or 4096 voxel inspections for ordinary mixed encoding. Wall-clock budget still applies. Historical name retained for config compatibility.")
                 .defineInRange("voxel_visits_per_tick", 262144, 1, 1_000_000);
         WRITES_PER_TICK = b.comment("Commit work units: one per replaced section or native block write. A whole-chunk transaction is indivisible and can exceed the remaining units.")
                 .defineInRange("block_writes_per_tick", 262144, 1, 1_000_000);

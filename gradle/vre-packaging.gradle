@@ -13,6 +13,9 @@ def nestedFileType = loomLoader.loadClass('net.fabricmc.loom.build.nesting.Inclu
 def nestedMetadataType = loomLoader.loadClass('net.fabricmc.loom.build.nesting.IncludedJarFactory$Metadata')
 sourceSets.main.java.srcDir('vre-forge/src/main/java')
 sourceSets.main.resources.srcDir('vre-forge/src/main/resources')
+ext.vreStarlightRoot = 'vre-starlight'
+ext.vreStarlightParentRefmap = 'gtlcore-refmap.json'
+apply from: 'gradle/vre-starlight-packaging.gradle'
 dependencies {
     implementation project(':vre-engine')
     forgeRuntimeLibrary project(':vre-engine')
@@ -69,6 +72,7 @@ def adapterRefmap = tasks.register('generateVreAdapterRefmap') {
 
 def adapterDevelopmentJar = tasks.register('vreAdapterDevelopmentJar', Jar) {
     dependsOn tasks.named('classes'), adapterRefmap
+    destinationDirectory = layout.buildDirectory.dir('intermediates/vre')
     archiveBaseName = 'voxel-region-forge-adapter-1.20.1'
     archiveVersion = engine.version.toString()
     archiveClassifier = 'dev'
@@ -89,6 +93,7 @@ def adapterDevelopmentJar = tasks.register('vreAdapterDevelopmentJar', Jar) {
 }
 def adapter = tasks.register('vreAdapterJar', remapJarType) {
     dependsOn adapterDevelopmentJar
+    destinationDirectory = layout.buildDirectory.dir('intermediates/vre')
     inputFile = adapterDevelopmentJar.flatMap { it.archiveFile }
     archiveBaseName = 'voxel-region-forge-adapter-1.20.1'
     archiveVersion = engine.version.toString()
@@ -162,7 +167,7 @@ tasks.named('remapJar', remapJarType) {
 tasks.register('verifyPackagedVre') {
     group = 'verification'
     description = 'Checks embedded VRE adapter/core isolation, native hooks, and absence of test-mod content.'
-    dependsOn tasks.named('remapJar')
+    dependsOn tasks.named('remapJar'), tasks.named('verifyPackagedVreStarlight')
     inputs.file(adapter.flatMap { it.archiveFile })
     doLast {
         new java.util.zip.ZipFile(tasks.named('remapJar').get().archiveFile.get().asFile).withCloseable { zip ->

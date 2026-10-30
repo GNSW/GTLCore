@@ -4,6 +4,7 @@ package org.voxelregion.forge.mixin;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
@@ -21,6 +22,7 @@ import net.minecraft.world.level.lighting.SkyLightEngine;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.voxelregion.forge.NativeAccess;
 import org.voxelregion.forge.DetachedLightTasks;
 import org.voxelregion.lighting.ClearedChunkLighting;
@@ -32,6 +34,7 @@ abstract class LightFenceMixin implements NativeAccess.LightFence {
     @Shadow @Final private ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> sorterMailbox;
     @Shadow @Final private ObjectList<?> lightTasks;
     @Shadow private void runUpdate() { throw new AssertionError(); }
+    @Unique private final AtomicLongArray vre$solvedRegionCounters = new AtomicLongArray(9);
 
     @org.spongepowered.asm.mixin.injection.Inject(method = "initializeLight", at = @org.spongepowered.asm.mixin.injection.At("HEAD"), cancellable = true)
     private void vre$initializePreparedColumn(net.minecraft.world.level.chunk.ChunkAccess chunk, boolean alreadyLit,
@@ -274,27 +277,242 @@ abstract class LightFenceMixin implements NativeAccess.LightFence {
     }
 
     @Override public CompletableFuture<Void> vre$changedChecks(ChunkPos position, java.util.List<NativeAccess.LightChanges> input) {
+        return vre$combinedChecks(position, input, new int[0], false);
+    }
+
+    @Override public NativeAccess.SolvedRegionStatistics vre$solvedRegionStatistics() {
+        return new NativeAccess.SolvedRegionStatistics(vre$solvedRegionCounters.get(0), vre$solvedRegionCounters.get(1),
+                vre$solvedRegionCounters.get(2), vre$solvedRegionCounters.get(3), vre$solvedRegionCounters.get(4),
+                vre$solvedRegionCounters.get(5), vre$solvedRegionCounters.get(6), vre$solvedRegionCounters.get(7),
+                vre$solvedRegionCounters.get(8));
+    }
+
+    @Override public CompletableFuture<Boolean> vre$installSolvedRegion(
+            java.util.List<NativeAccess.SolvedLightColumn> input, java.util.List<ChunkPos> participantInput,
+            BooleanSupplier stillValid) {
+        return vre$installRegion(input, participantInput, false, 0, 0, 0, 0, stillValid);
+    }
+
+    @Override public CompletableFuture<Boolean> vre$installSolvedMutationRegion(
+            java.util.List<NativeAccess.SolvedLightColumn> input, java.util.List<ChunkPos> participantInput,
+            int minDirtyChunkX, int minDirtyChunkZ, int maxDirtyChunkX, int maxDirtyChunkZ,
+            BooleanSupplier stillValid) {
+        return vre$installRegion(input, participantInput, true,
+                minDirtyChunkX, minDirtyChunkZ, maxDirtyChunkX, maxDirtyChunkZ, stillValid);
+    }
+
+    @Override public boolean vre$supportsSolvedMutationRegion() {
+        var engine = (ThreadedLevelLightEngine) (Object) this;
+        var block = engine.getLayerListener(LightLayer.BLOCK);
+        var sky = engine.getLayerListener(LightLayer.SKY);
+        return block instanceof LightEngine<?, ?> && block instanceof NativeAccess.LightBoundary
+                && block instanceof NativeAccess.VisibleLightData
+                && (sky instanceof LightEngine<?, ?> && sky instanceof NativeAccess.VisibleLightData
+                        || sky == LayerLightEventListener.DummyLightLayerEventListener.INSTANCE);
+    }
+
+    @Unique private CompletableFuture<Boolean> vre$installRegion(
+            java.util.List<NativeAccess.SolvedLightColumn> input, java.util.List<ChunkPos> participantInput,
+            boolean ownsCompleteMutation, int minDirtyChunkX, int minDirtyChunkZ, int maxDirtyChunkX, int maxDirtyChunkZ,
+            BooleanSupplier stillValid) {
+        var columns = java.util.List.copyOf(input);
+        var participants = participantInput.stream().distinct().toList();
+        java.util.Objects.requireNonNull(stillValid, "stillValid");
+        if (columns.isEmpty() || columns.size() > 256 || participants.isEmpty() || participants.size() > 400)
+            throw new IllegalArgumentException("Solved light region exceeds bounded installation dimensions");
+        var engine = (ThreadedLevelLightEngine) (Object) this;
+        int minSectionY = engine.getMinLightSection() + 1;
+        int sectionCount = engine.getLightSectionCount() - 2;
+        var positions = new java.util.HashSet<Long>();
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (var column : columns) {
+            var position = column.position();
+            if (!positions.add(position.toLong()) || column.minSectionY() != minSectionY
+                    || column.solved().sectionCount() != sectionCount)
+                throw new IllegalArgumentException("Solved region must contain unique full-height world columns");
+            minX = Math.min(minX, position.x); maxX = Math.max(maxX, position.x);
+            minZ = Math.min(minZ, position.z); maxZ = Math.max(maxZ, position.z);
+        }
+        long width = (long) maxX - minX + 1, depth = (long) maxZ - minZ + 1;
+        if (width > columns.size() || depth > columns.size() || width * depth != columns.size())
+            throw new IllegalArgumentException("Solved installation must be a complete rectangle");
+        if (minX == Integer.MIN_VALUE || minZ == Integer.MIN_VALUE || maxX == Integer.MAX_VALUE || maxZ == Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Solved light region has no representable calculation halo");
+        if (ownsCompleteMutation && (minDirtyChunkX > maxDirtyChunkX || minDirtyChunkZ > maxDirtyChunkZ
+                || minDirtyChunkX <= minX || maxDirtyChunkX >= maxX
+                || minDirtyChunkZ <= minZ || maxDirtyChunkZ >= maxZ))
+            throw new IllegalArgumentException("Completed mutation footprint requires one full chunk of installation halo");
+        var participantKeys = new java.util.HashSet<Long>();
+        for (var position : participants) participantKeys.add(position.toLong());
+        for (long z = (long) minZ - 1; z <= (long) maxZ + 1; z++) {
+            for (long x = (long) minX - 1; x <= (long) maxX + 1; x++) {
+                if (!participantKeys.contains(ChunkPos.asLong((int) x, (int) z)))
+                    throw new IllegalArgumentException("Solved installation requires a complete calculation halo");
+            }
+        }
+        var block = engine.getLayerListener(LightLayer.BLOCK);
+        var sky = engine.getLayerListener(LightLayer.SKY);
+        vre$solvedRegionCounters.incrementAndGet(0);
+        if (!(block instanceof NativeAccess.LightBoundary boundary) || !vre$supportsSolvedMutationRegion()) {
+            vre$solvedRegionCounters.incrementAndGet(5);
+            return CompletableFuture.completedFuture(false);
+        }
+        var result = new CompletableFuture<Boolean>();
+        var identities = new net.minecraft.world.level.chunk.LightChunk[participants.size()];
+        int[] remaining = {participants.size()};
+        int left = minX, right = maxX, north = minZ, south = maxZ;
+        // Sorter priority can reorder different chunks. One marker in EVERY participant's
+        // lane is required; waiting on only the first chunk is not a multi-chunk fence.
+        for (int i = 0; i < participants.size(); i++) {
+            int index = i;
+            var position = participants.get(i);
+            try {
+                sorterMailbox.tell(ChunkTaskPriorityQueueSorter.message(() -> {
+                    if (result.isDone()) return;
+                    try {
+                        identities[index] = boundary.vre$lightChunk(position.x, position.z);
+                        if (--remaining[0] != 0) return;
+                        do { runUpdate(); } while (!lightTasks.isEmpty());
+                        if (!stillValid.getAsBoolean() || !vre$regionIdentitiesMatch(boundary, participants, identities)) {
+                            vre$solvedRegionCounters.incrementAndGet(3); result.complete(false); return;
+                        }
+                        long[] cut = ownsCompleteMutation && !Boolean.getBoolean("vre.verifyLightCut")
+                                ? new long[2] : vre$compareSolvedCut(block, sky, columns, left, right, north, south);
+                        vre$solvedRegionCounters.addAndGet(6, cut[0]);
+                        vre$solvedRegionCounters.addAndGet(7, cut[1]);
+                        if (cut[1] != 0) {
+                            if (!ownsCompleteMutation) {
+                                vre$solvedRegionCounters.incrementAndGet(2); result.complete(false); return;
+                            }
+                            vre$solvedRegionCounters.incrementAndGet(8);
+                        }
+                        // The comparison can cover a tall perimeter. Revalidate immediately before writes.
+                        if (!stillValid.getAsBoolean() || !vre$regionIdentitiesMatch(boundary, participants, identities)) {
+                            vre$solvedRegionCounters.incrementAndGet(3); result.complete(false); return;
+                        }
+                        var blockEngine = (LightEngine<?, ?>) block;
+                        for (var column : columns) for (int section = 0; section < sectionCount; section++) {
+                            long key = SectionPos.asLong(column.position().x, minSectionY + section, column.position().z);
+                            var solved = column.solved();
+                            int uniformBlock = solved.uniformBlock(section);
+                            vre$queueAllocated(blockEngine, key, uniformBlock >= 0
+                                    ? new DataLayer(uniformBlock) : new DataLayer(solved.blockSection(section)));
+                            if (sky instanceof LightEngine<?, ?> skyEngine) {
+                                int uniformSky = solved.uniformSky(section);
+                                vre$queueAllocated(skyEngine, key, uniformSky >= 0
+                                        ? new DataLayer(uniformSky) : new DataLayer(solved.skySection(section)));
+                            }
+                        }
+                        // Either the cut matches, or a completed mutation owns its full affected halo.
+                        // Publish all owned layers together without re-enqueueing prism/check nodes or
+                        // releasing generation tickets. Adjacent exact solutions commute on their overlap.
+                        runUpdate();
+                        boolean valid = stillValid.getAsBoolean() && vre$regionIdentitiesMatch(boundary, participants, identities);
+                        vre$solvedRegionCounters.incrementAndGet(valid ? 1 : 4);
+                        result.complete(valid);
+                    } catch (RuntimeException | LinkageError failure) {
+                        vre$solvedRegionCounters.incrementAndGet(5); result.completeExceptionally(failure);
+                    }
+                }, position.toLong(), ((NativeAccess.ChunkSave) chunkMap).vre$queueLevel(position.toLong())));
+            } catch (RuntimeException | LinkageError failure) {
+                vre$solvedRegionCounters.incrementAndGet(5); result.completeExceptionally(failure); break;
+            }
+        }
+        return result;
+    }
+
+    @Unique private static boolean vre$regionIdentitiesMatch(NativeAccess.LightBoundary boundary,
+            java.util.List<ChunkPos> participants, net.minecraft.world.level.chunk.LightChunk[] identities) {
+        for (int i = 0; i < participants.size(); i++) {
+            var position = participants.get(i);
+            if (identities[i] == null || boundary.vre$lightChunk(position.x, position.z) != identities[i]) return false;
+        }
+        return true;
+    }
+
+    @Unique private static long[] vre$compareSolvedCut(LayerLightEventListener block, LayerLightEventListener sky,
+            java.util.List<NativeAccess.SolvedLightColumn> columns, int minX, int maxX, int minZ, int maxZ) {
+        long compared = 0, mismatched = 0;
+        boolean hasSky = sky instanceof LightEngine<?, ?>;
+        var cursor = new BlockPos.MutableBlockPos();
+        for (var column : columns) {
+            var pos = column.position(); var solved = column.solved();
+            boolean west = pos.x == minX, east = pos.x == maxX;
+            boolean north = pos.z == minZ, south = pos.z == maxZ;
+            if (!(west || east || north || south)) continue;
+            int bottom = column.minSectionY() * 16;
+            // Only horizontal cuts need an equality proof. A full-world-height solution has
+            // fixed exterior conditions above/below the world, even if bottom lava was removed.
+            for (int y = 0; y < solved.height(); y++) {
+                for (int z = 0; z < 16; z++) {
+                    if (west) {
+                        compared++;
+                        if (!vre$matchesSolvedCell(block, sky, hasSky, cursor.set(pos.getMinBlockX(), bottom + y,
+                                pos.getMinBlockZ() + z), solved, 0, y, z)) mismatched++;
+                    }
+                    if (east) {
+                        compared++;
+                        if (!vre$matchesSolvedCell(block, sky, hasSky, cursor.set(pos.getMinBlockX() + 15, bottom + y,
+                                pos.getMinBlockZ() + z), solved, 15, y, z)) mismatched++;
+                    }
+                }
+                for (int x = west ? 1 : 0; x < (east ? 15 : 16); x++) {
+                    if (north) {
+                        compared++;
+                        if (!vre$matchesSolvedCell(block, sky, hasSky, cursor.set(pos.getMinBlockX() + x, bottom + y,
+                                pos.getMinBlockZ()), solved, x, y, 0)) mismatched++;
+                    }
+                    if (south) {
+                        compared++;
+                        if (!vre$matchesSolvedCell(block, sky, hasSky, cursor.set(pos.getMinBlockX() + x, bottom + y,
+                                pos.getMinBlockZ() + 15), solved, x, y, 15)) mismatched++;
+                    }
+                }
+            }
+        }
+        return new long[] {compared, mismatched};
+    }
+
+    @Unique private static boolean vre$matchesSolvedCell(LayerLightEventListener block, LayerLightEventListener sky,
+            boolean hasSky, BlockPos position, ClearedChunkLighting.Result solved, int x, int y, int z) {
+        return block.getLightValue(position) == solved.block(x, y, z)
+                && (!hasSky || sky.getLightValue(position) == solved.sky(x, y, z));
+    }
+
+    @Override public CompletableFuture<Void> vre$combinedChecks(ChunkPos position,
+            java.util.List<NativeAccess.LightChanges> input, int[] boundarySectionYs, boolean replaySkySources) {
+        // Freeze both caller-owned collections before handing them to the light owner.
         var changes = java.util.List.copyOf(input);
+        int[] sections = Arrays.stream(boundarySectionYs).distinct().sorted().toArray();
+        if (changes.isEmpty() && sections.length == 0) return vre$afterChunkWork(position);
         var result = new CompletableFuture<Void>();
-        // One sorter entry per chunk, not one entry for every removed voxel. The
-        // exact native check set is retained and consumed on the light owner.
+        // Drain preceding section/native callback work once, queue both unchanged check
+        // sets, then propagate once. Mixed partial/full sections must not publish an
+        // intermediate light image between their changed-cell and boundary checks.
         sorterMailbox.tell(ChunkTaskPriorityQueueSorter.message(() -> {
             try {
                 do { runUpdate(); } while (!lightTasks.isEmpty());
                 var engine = (ThreadedLevelLightEngine)(Object)this;
                 var block = engine.getLayerListener(LightLayer.BLOCK);
                 var sky = engine.getLayerListener(LightLayer.SKY);
-                var cursor = new BlockPos.MutableBlockPos();
-                for (var section : changes) {
-                    var cells = section.cells();
-                    for (int i = cells.nextSetBit(0); i >= 0; i = cells.nextSetBit(i + 1))
-                        vre$checkBoth(block, sky, cursor.set(position.getMinBlockX() + (i & 15),
-                                section.sectionY() * 16 + (i >>> 8), position.getMinBlockZ() + ((i >>> 4) & 15)));
-                }
+                vre$checkChanged(block, sky, position, changes);
+                if (sections.length != 0)
+                    vre$checkSectionBoundaries(block, sky, position, sections, replaySkySources);
                 runUpdate(); result.complete(null);
             } catch (RuntimeException | LinkageError error) { result.completeExceptionally(error); }
         }, position.toLong(), ((NativeAccess.ChunkSave) chunkMap).vre$queueLevel(position.toLong())));
         return result;
+    }
+
+    private static void vre$checkChanged(LayerLightEventListener block, LayerLightEventListener sky,
+            ChunkPos position, java.util.List<NativeAccess.LightChanges> changes) {
+        var cursor = new BlockPos.MutableBlockPos();
+        for (var section : changes) {
+            var cells = section.cells();
+            for (int i = cells.nextSetBit(0); i >= 0; i = cells.nextSetBit(i + 1))
+                vre$checkBoth(block, sky, cursor.set(position.getMinBlockX() + (i & 15),
+                        section.sectionY() * 16 + (i >>> 8), position.getMinBlockZ() + ((i >>> 4) & 15)));
+        }
     }
 
     private static void vre$checkPrism(LayerLightEventListener block, LayerLightEventListener sky,
@@ -320,71 +538,61 @@ abstract class LightFenceMixin implements NativeAccess.LightFence {
     }
 
     @Override public CompletableFuture<Void> vre$batchChecks(ChunkPos position, int[] sectionYs, boolean replaySkySources) {
-        // Freeze caller-owned input before handing it to the native lighting thread.
-        int[] sections = Arrays.stream(sectionYs).distinct().sorted().toArray();
-        CompletableFuture<Void> result = new CompletableFuture<>();
-        sorterMailbox.tell(ChunkTaskPriorityQueueSorter.message(() -> {
-            try {
-                // In particular, apply the preceding updateSectionStatus calls before checking nodes.
-                do { runUpdate(); } while (!lightTasks.isEmpty());
-                var engine = (ThreadedLevelLightEngine) (Object) this;
-                LayerLightEventListener block = engine.getLayerListener(LightLayer.BLOCK);
-                LayerLightEventListener sky = engine.getLayerListener(LightLayer.SKY);
-                BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-                int minX = position.getMinBlockX(), minZ = position.getMinBlockZ();
-                for (int i = 0; i < sections.length; i++) {
-                    int baseY = sections[i] << 4;
-                    // Four side faces, without duplicate edge nodes.
-                    for (int y = baseY; y < baseY + 16; y++) {
-                        for (int z = 0; z < 16; z++) {
-                            vre$checkBoth(block, sky, cursor.set(minX, y, minZ + z));
-                            vre$checkBoth(block, sky, cursor.set(minX + 15, y, minZ + z));
-                        }
-                        for (int x = 1; x < 15; x++) {
-                            vre$checkBoth(block, sky, cursor.set(minX + x, y, minZ));
-                            vre$checkBoth(block, sky, cursor.set(minX + x, y, minZ + 15));
-                        }
-                    }
-                    boolean bottom = i == 0 || sections[i - 1] != sections[i] - 1;
-                    boolean top = i + 1 == sections.length || sections[i + 1] != sections[i] + 1;
-                    // Adjacent cleared sections form one prism; their shared horizontal face is internal.
-                    for (int x = 1; x < 15; x++) for (int z = 1; z < 15; z++) {
-                        if (bottom) vre$checkBoth(block, sky, cursor.set(minX + x, baseY, minZ + z));
-                        if (top) vre$checkBoth(block, sky, cursor.set(minX + x, baseY + 15, minZ + z));
-                    }
+        return vre$combinedChecks(position, java.util.List.of(), sectionYs, replaySkySources);
+    }
+
+    private static void vre$checkSectionBoundaries(LayerLightEventListener block, LayerLightEventListener sky,
+            ChunkPos position, int[] sections, boolean replaySkySources) {
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int minX = position.getMinBlockX(), minZ = position.getMinBlockZ();
+        for (int i = 0; i < sections.length; i++) {
+            int baseY = sections[i] << 4;
+            // Four side faces, without duplicate edge nodes.
+            for (int y = baseY; y < baseY + 16; y++) {
+                for (int z = 0; z < 16; z++) {
+                    vre$checkBoth(block, sky, cursor.set(minX, y, minZ + z));
+                    vre$checkBoth(block, sky, cursor.set(minX + 15, y, minZ + z));
                 }
-                // One native propagation pass consumes both layers' check sets. No generation tickets
-                // or light-correct flags are modified by this completion acknowledgement.
-                if (replaySkySources && sky instanceof SkyLightEngine skyEngine) {
-                    // Existing 15-valued sources can feed old 14-valued interior air. Replaying
-                    // increases alone prunes at those unchanged 14 nodes and misses newly opened
-                    // side corridors. Native checkNode performs decrease-then-increase at each
-                    // source/shadow interface, invalidating the old gradient before rebuilding it.
-                    int[] lowest = new int[256];
-                    NativeAccess.SkySources sources = (NativeAccess.SkySources) (Object) skyEngine;
-                    for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
-                        lowest[(z << 4) | x] = sources.vre$lowestSourceY(minX + x, minZ + z, Integer.MAX_VALUE);
-                    // x/z edges already participate in the six exterior faces. Equal-height open
-                    // columns add no work; a narrow old shaft adds only its vertical source edges.
-                    for (int z = 1; z < 15; z++) for (int x = 1; x < 15; x++) {
-                        int column = (z << 4) | x;
-                        int low = lowest[column];
-                        int high = Math.max(Math.max(lowest[column - 1], lowest[column + 1]),
-                                Math.max(lowest[column - 16], lowest[column + 16]));
-                        if (low >= high) continue;
-                        for (int section : sections) {
-                            int bottom = Math.max(section << 4, low);
-                            int top = Math.min((section << 4) + 16, high);
-                            for (int y = bottom; y < top; y++)
-                                sky.checkBlock(cursor.set(minX + x, y, minZ + z));
-                        }
-                    }
+                for (int x = 1; x < 15; x++) {
+                    vre$checkBoth(block, sky, cursor.set(minX + x, y, minZ));
+                    vre$checkBoth(block, sky, cursor.set(minX + x, y, minZ + 15));
                 }
-                runUpdate();
-                result.complete(null);
-            } catch (RuntimeException | LinkageError failure) { result.completeExceptionally(failure); }
-        }, position.toLong(), ((NativeAccess.ChunkSave) chunkMap).vre$queueLevel(position.toLong())));
-        return result;
+            }
+            boolean bottom = i == 0 || sections[i - 1] != sections[i] - 1;
+            boolean top = i + 1 == sections.length || sections[i + 1] != sections[i] + 1;
+            // Adjacent cleared sections form one prism; their shared horizontal face is internal.
+            for (int x = 1; x < 15; x++) for (int z = 1; z < 15; z++) {
+                if (bottom) vre$checkBoth(block, sky, cursor.set(minX + x, baseY, minZ + z));
+                if (top) vre$checkBoth(block, sky, cursor.set(minX + x, baseY + 15, minZ + z));
+            }
+        }
+        // One native propagation pass consumes both layers' check sets. No generation tickets
+        // or light-correct flags are modified by this completion acknowledgement.
+        if (replaySkySources && sky instanceof SkyLightEngine skyEngine) {
+            // Existing 15-valued sources can feed old 14-valued interior air. Replaying
+            // increases alone prunes at those unchanged 14 nodes and misses newly opened
+            // side corridors. Native checkNode performs decrease-then-increase at each
+            // source/shadow interface, invalidating the old gradient before rebuilding it.
+            int[] lowest = new int[256];
+            NativeAccess.SkySources sources = (NativeAccess.SkySources) (Object) skyEngine;
+            for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
+                lowest[(z << 4) | x] = sources.vre$lowestSourceY(minX + x, minZ + z, Integer.MAX_VALUE);
+            // x/z edges already participate in the six exterior faces. Equal-height open
+            // columns add no work; a narrow old shaft adds only its vertical source edges.
+            for (int z = 1; z < 15; z++) for (int x = 1; x < 15; x++) {
+                int column = (z << 4) | x;
+                int low = lowest[column];
+                int high = Math.max(Math.max(lowest[column - 1], lowest[column + 1]),
+                        Math.max(lowest[column - 16], lowest[column + 16]));
+                if (low >= high) continue;
+                for (int section : sections) {
+                    int bottom = Math.max(section << 4, low);
+                    int top = Math.min((section << 4) + 16, high);
+                    for (int y = bottom; y < top; y++)
+                        sky.checkBlock(cursor.set(minX + x, y, minZ + z));
+                }
+            }
+        }
     }
 
     private static void vre$checkBoth(LayerLightEventListener block, LayerLightEventListener sky, BlockPos position) {

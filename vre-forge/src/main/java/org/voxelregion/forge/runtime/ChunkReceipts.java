@@ -74,6 +74,8 @@ final class ChunkReceipts implements ICapabilitySerializable<CompoundTag> {
 
     long mutationRevision() { return mutationRevision; }
     boolean trackingValid() { return trackingValid; }
+    /** Detached identities for bounded read-only diagnostics, including receipts of pruned tasks. */
+    java.util.List<UUID> operationIds() { return java.util.List.copyOf(entries.keySet()); }
 
     void changed() {
         if (mutationRevision == Long.MAX_VALUE) trackingValid = false;

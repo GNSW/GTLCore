@@ -84,14 +84,19 @@ public final class ClearedChunkLightBatch {
      */
     public static CompletableFuture<Void> afterWholeChunkMutation(ServerLevel level, LevelChunk chunk,
             Supplier<CompletableFuture<Void>> nativeFallback) {
+        var provider = (NativeAccess.LightFence) level.getChunkSource().getLightEngine();
+        if (provider.vre$rebuildsWholeChunks())
+            return provider.vre$fullChecks(chunk.getPos(), level.getMinSection(), level.getSectionsCount());
         var air = AirRegionLightBatch.tryQueue(level, chunk, nativeFallback);
         if (air != null) return air;
-        return queue(level, chunk, List.of(), nativeFallback);
+        return TerrainLightBatch.queue(level, chunk, nativeFallback);
     }
 
     private static CompletableFuture<Void> queue(ServerLevel level, LevelChunk chunk,
             List<PaletteSectionClearBackend.Prepared> plans, Supplier<CompletableFuture<Void>> nativeFallback) {
         if (!level.getServer().isSameThread()) throw new IllegalStateException("Light proof requires the server thread");
+        var provider = (NativeAccess.LightFence) level.getChunkSource().getLightEngine();
+        if (provider.vre$rebuildsWholeChunks()) return nativeFallback.get();
         int height = level.getHeight();
         if (height < 16 || height > ClearedChunkLighting.MAX_HEIGHT || height % 16 != 0)
             return fallback(nativeFallback, FallbackReason.INVALID_HEIGHT);

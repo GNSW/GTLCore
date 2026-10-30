@@ -26,11 +26,15 @@ public final class RegionGeneration {
     private static final AtomicLong FINISHED = new AtomicLong();
     private static final AtomicLong FAILURES = new AtomicLong();
     private static final boolean DISABLED = Boolean.getBoolean("gtlcore.disableParallelChunkGeneration");
+    private static final int WORKER_LIMIT = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() - 1));
+    // Zero selects CPU-based sizing; a positive override permits matched diagnostic comparisons.
+    // Even an override retains the eight-worker and CPU-minus-one limits.
+    private static final int WORKER_OVERRIDE = Integer.getInteger("gtlcore.regionGenerationWorkers", 0);
+    private static final int WORKER_COUNT = WORKER_OVERRIDE > 0 ? Math.min(WORKER_LIMIT, WORKER_OVERRIDE) : WORKER_LIMIT;
 
     private static final class World {
 
-        final OrderedGenerationScheduler scheduler = new OrderedGenerationScheduler(
-                Math.max(1, Math.min(2, Runtime.getRuntime().availableProcessors() - 1)), 64);
+        final OrderedGenerationScheduler scheduler = new OrderedGenerationScheduler(WORKER_COUNT, 64);
         volatile boolean active;
         volatile boolean stopping;
     }

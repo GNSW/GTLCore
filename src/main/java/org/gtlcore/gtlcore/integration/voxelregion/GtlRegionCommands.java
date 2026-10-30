@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.integration.voxelregion;
 
+import org.gtlcore.gtlcore.GTLCore;
+
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -35,6 +37,14 @@ final class GtlRegionCommands {
         generate.then(clearFluids);
         radius.then(generate);
         root.then(Commands.literal("blast").then(radius));
+        root.then(Commands.literal("inspect")
+                .executes(context -> inspect(context.getSource(), BlockPos.containing(context.getSource().getPosition())))
+                .then(Commands.argument("chunkX", IntegerArgumentType.integer(-1875000, 1874999))
+                        .then(Commands.argument("chunkZ", IntegerArgumentType.integer(-1875000, 1874999))
+                                .executes(context -> inspect(context.getSource(), new BlockPos(
+                                        IntegerArgumentType.getInteger(context, "chunkX") * 16 + 8,
+                                        BlockPos.containing(context.getSource().getPosition()).getY(),
+                                        IntegerArgumentType.getInteger(context, "chunkZ") * 16 + 8))))));
         root.then(Commands.literal("status").executes(context -> {
             int count = 0;
             for (var level : context.getSource().getServer().getAllLevels()) {
@@ -51,6 +61,15 @@ final class GtlRegionCommands {
                     .executes(context -> control(context.getSource(), StringArgumentType.getString(context, "id"), action))));
         }
         event.getDispatcher().register(root);
+    }
+
+    private static int inspect(CommandSourceStack source, BlockPos position) {
+        var lines = ForgeRegionEngine.inspectChunk(source.getLevel(), position);
+        for (String line : lines) {
+            source.sendSuccess(() -> Component.literal("[VRE inspect] " + line), false);
+            GTLCore.LOGGER.info("[VRE inspect] {}", line);
+        }
+        return 1;
     }
 
     private static int submit(CommandSourceStack source, int radius, boolean generate, boolean clearFluids) {

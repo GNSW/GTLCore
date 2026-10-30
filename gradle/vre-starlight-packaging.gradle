@@ -1,0 +1,129 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+// The LGPL component stays a distinct, replaceable JarJar library. VRE sources
+// keep their MPL license; the upstream engine's source and notices ship separately.
+def sourceRoot = file(project.ext.vreStarlightRoot)
+def parentRefmap = project.ext.vreStarlightParentRefmap
+def componentVersion = '1.1.2-vre'
+def configName = 'vre-starlight.mixins.json'
+def loomLoader = plugins.getPlugin('dev.architectury.loom').class.classLoader
+def remapType = loomLoader.loadClass('net.fabricmc.loom.task.RemapJarTask')
+def nestedFileType = loomLoader.loadClass('net.fabricmc.loom.build.nesting.IncludedJarFactory$NestedFile')
+def metadataType = loomLoader.loadClass('net.fabricmc.loom.build.nesting.IncludedJarFactory$Metadata')
+
+sourceSets.main.java.srcDir(new File(sourceRoot, 'src/main/java'))
+sourceSets.main.resources.srcDir(new File(sourceRoot, 'src/main/resources'))
+loom.forge {
+    mixinConfig configName
+    accessTransformers.from(new File(sourceRoot, 'src/main/resources/META-INF/accesstransformer.cfg'))
+}
+
+def refmap = tasks.register('generateVreStarlightRefmap') {
+    dependsOn tasks.named('compileJava')
+    def original = layout.buildDirectory.file("classes/java/main/${parentRefmap}")
+    def output = layout.buildDirectory.dir('generated/vre-starlight-resources')
+    inputs.file(original)
+    outputs.dir(output)
+    doLast {
+        def source = new JsonSlurper().parse(original.get().asFile, 'UTF-8')
+        def filtered = { entries -> (entries ?: [:]).findAll { key, value -> key.startsWith('ca/spottedleaf/starlight/') } }
+        def result = [mappings: filtered(source.mappings)]
+        if (source.data) result.data = source.data.collectEntries { namespace, entries -> [(namespace): filtered(entries)] }
+        if (result.mappings.isEmpty()) throw new GradleException('Global light engine Mixin mappings were not generated')
+        def target = output.get().file('vre-starlight.refmap.json').asFile
+        target.parentFile.mkdirs()
+        target.setText(JsonOutput.prettyPrint(JsonOutput.toJson(result)) + '\n', 'UTF-8')
+    }
+}
+def development = tasks.register('vreStarlightDevelopmentJar', Jar) {
+    dependsOn tasks.named('classes'), refmap
+    destinationDirectory = layout.buildDirectory.dir('intermediates/vre')
+    archiveBaseName = 'vre-starlight-forge-1.20.1'
+    archiveVersion = componentVersion
+    archiveClassifier = 'dev'
+    from(sourceSets.main.output) {
+        include 'ca/spottedleaf/starlight/**', configName
+        include 'META-INF/accesstransformer.cfg'
+    }
+    from(refmap)
+    from(sourceRoot) {
+        include 'LICENSE', 'NOTICE', 'UPSTREAM.json'
+        into 'META-INF/starlight'
+    }
+    manifest.attributes('FMLModType': 'GAMELIBRARY',
+            'Automatic-Module-Name': 'ca.spottedleaf.starlight',
+            'Implementation-Version': componentVersion,
+            'MixinConfigs': configName,
+            'Bundle-License': 'https://www.gnu.org/licenses/lgpl-3.0.html')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+def component = tasks.register('vreStarlightJar', remapType) {
+    dependsOn development
+    destinationDirectory = layout.buildDirectory.dir('intermediates/vre')
+    inputFile = development.flatMap { it.archiveFile }
+    archiveBaseName = 'vre-starlight-forge-1.20.1'
+    archiveVersion = componentVersion
+    archiveClassifier = ''
+    sourceNamespace = 'named'
+    targetNamespace = 'srg'
+    addNestedDependencies = false
+}
+tasks.named('jar') {
+    exclude 'ca/spottedleaf/starlight/**', configName, 'vre-starlight.refmap.json'
+    // The top-level Forge mod also supplies AT discovery for embedded libraries.
+    // All bytecode belonging to the light engine lives only in its LGPL jar.
+    doFirst {
+        def configs = (manifest.attributes.get('MixinConfigs') ?: '').toString().split(',').findAll { it }
+        manifest.attributes('MixinConfigs': (configs + configName).unique().join(','))
+    }
+}
+tasks.withType(Jar).matching { it.name == 'sourcesJar' }.configureEach {
+    from(sourceRoot) {
+        include 'LICENSE', 'NOTICE', 'UPSTREAM.json', 'src/**'
+        into 'third_party/starlight-forge'
+    }
+}
+tasks.named('remapJar', remapType) {
+    dependsOn component
+    forgeNestedJars.add(component.flatMap { it.archiveFile }.map { archive ->
+        def metadata = metadataType.getConstructor(String, String, String, String).newInstance(
+                'ca.spottedleaf.starlight', 'vre-starlight-forge-1.20.1', componentVersion, null)
+        nestedFileType.getConstructor(metadataType, File).newInstance(metadata, archive.asFile)
+    })
+    nestedJars.from(component.flatMap { it.archiveFile })
+}
+tasks.register('verifyPackagedVreStarlight') {
+    group = 'verification'
+    dependsOn tasks.named('remapJar')
+    doLast {
+        new java.util.zip.ZipFile(component.get().archiveFile.get().asFile).withCloseable { zip ->
+            ['ca/spottedleaf/starlight/common/light/StarLightEngine.class', configName,
+             'vre-starlight.refmap.json', 'META-INF/starlight/LICENSE',
+             'META-INF/starlight/NOTICE', 'META-INF/starlight/UPSTREAM.json'].each { name ->
+                if (zip.getEntry(name) == null) throw new GradleException("Missing global lighting component entry: ${name}")
+            }
+            def mappings = zip.getInputStream(zip.getEntry('vre-starlight.refmap.json')).withCloseable {
+                new JsonSlurper().parse(it, 'UTF-8')
+            }
+            if (!mappings.mappings || mappings.mappings.keySet().any { !it.startsWith('ca/spottedleaf/starlight/') })
+                throw new GradleException('Global lighting refmap must contain only its own mappings')
+            if (zip.getEntry('META-INF/mods.toml') != null)
+                throw new GradleException('Embedded lighting component must not register a second mod')
+        }
+        new java.util.zip.ZipFile(tasks.named('remapJar').get().archiveFile.get().asFile).withCloseable { zip ->
+            if (zip.getEntry('ca/spottedleaf/starlight/common/light/StarLightEngine.class') != null)
+                throw new GradleException('Global lighting classes must stay in the LGPL nested jar')
+            if (zip.getEntry('META-INF/accesstransformer.cfg') == null)
+                throw new GradleException('Missing embedded global lighting access transformers')
+            def metadata = zip.getInputStream(zip.getEntry('META-INF/jarjar/metadata.json')).withCloseable {
+                new JsonSlurper().parse(it, 'UTF-8')
+            }
+            def entries = metadata.jars.findAll { it.identifier.group == 'ca.spottedleaf.starlight' }
+            if (entries.size() != 1 || zip.getEntry(entries.first().path) == null)
+                throw new GradleException('Expected exactly one embedded global lighting library')
+        }
+    }
+}
+tasks.named('build') { dependsOn tasks.named('verifyPackagedVreStarlight') }

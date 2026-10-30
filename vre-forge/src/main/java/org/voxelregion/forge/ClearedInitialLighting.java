@@ -22,6 +22,7 @@ public final class ClearedInitialLighting {
 
     static void register(ServerLevel level, ChunkAccess chunk) {
         if (!HostIntegration.supportsBulk(level)) return;
+        if (((NativeAccess.LightFence) level.getChunkSource().getLightEngine()).vre$rebuildsWholeChunks()) return;
         int floor = AirRegionLightBatch.floor(level, chunk);
         if (floor != Integer.MAX_VALUE && plans.size() < 4096) plans.put(chunk, new Plan(level, floor));
     }

@@ -6,16 +6,17 @@ import java.util.BitSet;
 import java.util.Objects;
 
 /**
- * Detached light solution for a 16x16 column of AIR or opaque, non-emitting
- * retained voxels. It solves the supplied fixed boundary problem, not an
- * unbounded world. A native host must validate terrain/boundary evidence before
+ * Detached light solution for a 16x16 column with fixed optical properties.
+ * It solves the supplied fixed boundary problem, not an unbounded world.
+ * A native host must validate terrain/boundary evidence before
  * installation and reconcile exterior light after installation. Old neighbor
  * light is not proof that the global post-edit field has already converged.
  *
- * <p>Both diffuse layers lose one level per air edge. Direct sky is 15 only in
- * columns proved open above, down to their first retained opaque voxel. No
- * internal emitter, partial shape, translucent block or fluid is represented;
- * those require a different proof or the native engine. Values are 0..15.
+ * <p>Both diffuse layers lose max(1, destination opacity) per open edge.
+ * Emitters provide block-light seeds even when their own voxel is opaque.
+ * Direct sky is 15 only in columns proved open above, until a host-proved
+ * direct-sky stop. Hosts resolve partial shapes to directed edge masks before
+ * detaching this input; the solver never invokes world or block-state code.
  */
 public final class ClearedChunkLighting {
     public static final int MAX_HEIGHT = 4096;
@@ -26,30 +27,73 @@ public final class ClearedChunkLighting {
     /**
      * Immutable local-coordinate input. Index is x | z&lt;&lt;4 | y&lt;&lt;8.
      * WEST/EAST face index is z+16*y; NORTH/SOUTH is x+16*y; DOWN/UP is x+16*z.
-     * Face arrays contain actual neighbor light, before the one-level entry
+     * Face arrays contain actual neighbor light, before the destination entry
      * loss. An open-face bit proves the crossing is not shape-occluded. Direct
      * sky requires a separate vertical-sky proof, not merely a value of 15.
      */
     public static final class Snapshot {
         private final int height, cells;
-        private final BitSet opaque, directSkyColumns;
+        private final BitSet opaque, directSkyColumns, directSkyStops;
+        private final byte[] opacity, emission, blockedOutgoingFaces;
         private final byte[][] blockOutside, skyOutside;
         private final BitSet[] openFaces;
         private final boolean blockDark, skyDark;
 
         public Snapshot(int height, BitSet opaque, byte[][] blockOutside, byte[][] skyOutside,
                 BitSet[] openFaces, BitSet directSkyColumns) {
+            this(height, opaque, null, null, null, opaque, blockOutside, skyOutside, openFaces, directSkyColumns);
+        }
+
+        /**
+         * General optical input, detached with defensive copies. Opacity and emission each contain
+         * one 0..15 value per cell. A set bit {@code 1 << Face.ordinal()} in blockedOutgoingFaces
+         * forbids propagation FROM that cell toward that face; hosts must include both endpoint
+         * shapes in this edge proof. The array may be null when all internal edges are open.
+         *
+         * <p>A stopDirectSky bit means direct sky cannot ENTER that cell, rather than merely being
+         * blocked below it. Nonzero opacity is always a stop, even when omitted from this mask.
+         * Blocked internal downward edges also stop direct sky at their lower destination,
+         * automatically. This stop mask does not replace blockedOutgoingFaces for diffuse propagation. Boundary
+         * openFaces separately prove crossings from the exterior into this column.
+         */
+        public Snapshot(int height, byte[] opacity, byte[] emission, byte[] blockedOutgoingFaces,
+                BitSet stopDirectSky, byte[][] blockOutside, byte[][] skyOutside,
+                BitSet[] openFaces, BitSet directSkyColumns) {
+            this(height, null, Objects.requireNonNull(opacity, "opacity"),
+                    Objects.requireNonNull(emission, "emission"), blockedOutgoingFaces,
+                    stopDirectSky, blockOutside, skyOutside, openFaces, directSkyColumns);
+        }
+
+        private Snapshot(int height, BitSet opaque, byte[] opacity, byte[] emission,
+                byte[] blockedOutgoingFaces, BitSet stopDirectSky, byte[][] blockOutside,
+                byte[][] skyOutside, BitSet[] openFaces, BitSet directSkyColumns) {
             if (height < 16 || height > MAX_HEIGHT || height % 16 != 0)
                 throw new IllegalArgumentException("Light column height must be a multiple of 16 in [16,4096]");
             this.height = height; cells = height * 256;
-            this.opaque = copyBits(opaque, cells, "opaque");
+            this.opaque = opaque == null ? new BitSet(cells) : copyBits(opaque, cells, "opaque");
+            this.opacity = opacity == null ? null : copyCells(opacity, cells, 15, "opacity");
+            this.emission = emission == null ? null : copyCells(emission, cells, 15, "emission");
+            this.blockedOutgoingFaces = blockedOutgoingFaces == null ? null :
+                    copyCells(blockedOutgoingFaces, cells, 63, "blocked outgoing faces");
+            this.directSkyStops = copyBits(stopDirectSky, cells, "direct sky stops");
+            boolean anyEmission = false;
+            if (this.opacity != null) {
+                for (int index = 0; index < cells; index++) {
+                    if (this.opacity[index] > 0) this.directSkyStops.set(index);
+                    if (this.opacity[index] == 15) this.opaque.set(index);
+                    if (index >= 256 && this.blockedOutgoingFaces != null &&
+                            (this.blockedOutgoingFaces[index] & 4) != 0)
+                        this.directSkyStops.set(index - 256);
+                    anyEmission |= this.emission[index] > 0;
+                }
+            }
             this.directSkyColumns = copyBits(directSkyColumns, 256, "direct sky");
             this.blockOutside = copyFaces(blockOutside, height);
             this.skyOutside = copyFaces(skyOutside, height);
             Objects.requireNonNull(openFaces, "openFaces");
             if (openFaces.length != 6) throw new IllegalArgumentException("Expected six open-face masks");
             this.openFaces = new BitSet[6];
-            boolean anyBlock = false, anySky = !this.directSkyColumns.isEmpty();
+            boolean anyBlock = anyEmission, anySky = !this.directSkyColumns.isEmpty();
             for (Face face : Face.values()) {
                 int f = face.ordinal();
                 this.openFaces[f] = copyBits(openFaces[f], faceSize(height, face), "open face");
@@ -66,7 +110,18 @@ public final class ClearedChunkLighting {
         }
         public int height() { return height; }
         public int sectionCount() { return height / 16; }
-        public long estimatedWorkingBytes() { return 2048L + 9L * cells + 2L * (64L * height + 512); }
+        public long estimatedWorkingBytes() {
+            return 2048L + 9L * cells + 2L * (64L * height + 512) +
+                    (opacity == null ? 0 : 2L * cells) + (blockedOutgoingFaces == null ? 0 : cells);
+        }
+        private int loss(int index) { return opacity == null ? opaque.get(index) ? 15 : 1 : Math.max(1, opacity[index]); }
+        private static byte[] copyCells(byte[] source, int cells, int maximum, String name) {
+            if (source.length != cells) throw new IllegalArgumentException("Wrong " + name + " dimensions");
+            byte[] result = source.clone();
+            for (byte value : result) if (value < 0 || value > maximum)
+                throw new IllegalArgumentException(name + " values must be in [0," + maximum + "]");
+            return result;
+        }
         private static BitSet copyBits(BitSet source, int size, String name) {
             Objects.requireNonNull(source, name);
             if (source.length() > size) throw new IllegalArgumentException(name + " exceeds its domain");
@@ -158,7 +213,7 @@ public final class ClearedChunkLighting {
             input = Objects.requireNonNull(snapshot, "snapshot");
             if (maxWorkingBytes < snapshot.estimatedWorkingBytes()) throw new IllegalArgumentException("Light solver memory budget exceeded");
             skyOpen = (BitSet) snapshot.directSkyColumns.clone();
-            if (snapshot.blockDark && (snapshot.skyDark || snapshot.opaque.isEmpty() && skyOpen.cardinality() == 256)) {
+            if (snapshot.blockDark && (snapshot.skyDark || snapshot.directSkyStops.isEmpty() && skyOpen.cardinality() == 256)) {
                 result = new Result(snapshot.height, null, null, snapshot.skyDark ? 0 : 15, 0);
                 stage = Stage.COMPLETE;
             } else {
@@ -215,7 +270,9 @@ public final class ClearedChunkLighting {
         }
         private void initialize(int index) {
             int x = index & 15, z = index >>> 4 & 15, y = index >>> 8, column = index & 255;
-            if (input.opaque.get(index)) { skyOpen.clear(column); return; }
+            if (input.directSkyStops.get(index)) skyOpen.clear(column);
+            if (input.emission != null) block[index] = input.emission[index];
+            if (input.opaque.get(index)) return;
             if (skyOpen.get(column)) sky[index] = 15;
             if (x == 0) seed(index, Face.WEST, z + y * 16);
             if (x == 15) seed(index, Face.EAST, z + y * 16);
@@ -228,24 +285,42 @@ public final class ClearedChunkLighting {
         private void seed(int index, Face face, int faceIndex) {
             int f = face.ordinal();
             if (!input.openFaces[f].get(faceIndex)) return;
-            sky[index] = (byte) Math.max(sky[index], input.skyOutside[f][faceIndex] - 1);
-            block[index] = (byte) Math.max(block[index], input.blockOutside[f][faceIndex] - 1);
+            int loss = input.loss(index);
+            sky[index] = (byte) Math.max(sky[index], input.skyOutside[f][faceIndex] - loss);
+            block[index] = (byte) Math.max(block[index], input.blockOutside[f][faceIndex] - loss);
         }
         private void propagate(byte[] values) {
             int index = queue[head++]; if (head == queue.length) head = 0;
             size--; queued.clear(index);
-            int next = values[index] - 1;
-            if (next <= 0) return;
+            int level = values[index];
+            if (level <= 1) return;
             int x = index & 15, z = index >>> 4 & 15, y = index >>> 8;
-            if (x > 0) offer(values, index - 1, next);
-            if (x < 15) offer(values, index + 1, next);
-            if (z > 0) offer(values, index - 16, next);
-            if (z < 15) offer(values, index + 16, next);
-            if (y > 0) offer(values, index - 256, next);
-            if (y < input.height - 1) offer(values, index + 256, next);
+            if (input.opacity == null) {
+                // Preserve the air/opaque hot path: no scalar array or directed-edge reads.
+                int next = level - 1;
+                if (x > 0) offerOpaque(values, index - 1, next);
+                if (x < 15) offerOpaque(values, index + 1, next);
+                if (z > 0) offerOpaque(values, index - 16, next);
+                if (z < 15) offerOpaque(values, index + 16, next);
+                if (y > 0) offerOpaque(values, index - 256, next);
+                if (y < input.height - 1) offerOpaque(values, index + 256, next);
+            } else {
+                int blocked = input.blockedOutgoingFaces == null ? 0 : input.blockedOutgoingFaces[index];
+                if (x > 0 && (blocked & 1) == 0) offerOptical(values, index - 1, level);
+                if (x < 15 && (blocked & 2) == 0) offerOptical(values, index + 1, level);
+                if (y > 0 && (blocked & 4) == 0) offerOptical(values, index - 256, level);
+                if (y < input.height - 1 && (blocked & 8) == 0) offerOptical(values, index + 256, level);
+                if (z > 0 && (blocked & 16) == 0) offerOptical(values, index - 16, level);
+                if (z < 15 && (blocked & 32) == 0) offerOptical(values, index + 16, level);
+            }
         }
-        private void offer(byte[] values, int index, int value) {
+        private void offerOpaque(byte[] values, int index, int value) {
             if (values[index] >= value || input.opaque.get(index)) return;
+            values[index] = (byte) value; enqueue(index);
+        }
+        private void offerOptical(byte[] values, int index, int sourceLevel) {
+            int value = sourceLevel - input.loss(index);
+            if (values[index] >= value) return;
             values[index] = (byte) value; enqueue(index);
         }
         private void enqueue(int index) {
@@ -260,7 +335,7 @@ public final class ClearedChunkLighting {
         // An open sky column with no incoming block light only needs voxel work below its
         // highest retained solid. All complete sections above that band are exactly sky=15,
         // block=0. In particular a five-layer bedrock floor must not scan 384 levels of AIR.
-        if (snapshot.blockDark && snapshot.directSkyColumns.cardinality() == 256 && !snapshot.opaque.isEmpty()) {
+        if (snapshot.opacity == null && snapshot.blockDark && snapshot.directSkyColumns.cardinality() == 256 && !snapshot.opaque.isEmpty()) {
             int bandHeight = Math.max(16, (((snapshot.opaque.length() + 255) / 256 + 15) / 16) * 16);
             if (bandHeight < snapshot.height) {
                 byte[][] sky = new byte[6][], block = new byte[6][];

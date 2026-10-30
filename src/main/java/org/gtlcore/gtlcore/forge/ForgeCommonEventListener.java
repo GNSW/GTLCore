@@ -9,18 +9,25 @@ import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem;
 import org.gtlcore.gtlcore.utils.Registries;
 
+import com.gregtechceu.gtceu.api.capability.GTCapabilityHelper;
+import com.gregtechceu.gtceu.api.capability.ICoverable;
+import com.gregtechceu.gtceu.api.cover.CoverBehavior;
+import com.gregtechceu.gtceu.api.cover.IUICover;
+import com.gregtechceu.gtceu.api.gui.factory.CoverUIFactory;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.api.machine.feature.IUIMachine;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityTeleportEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -74,6 +81,7 @@ public class ForgeCommonEventListener {
             }
             return;
         }
+        if (openCoverUi(event)) return;
         if (event.getItemStack().is(GTLItems.PATTERN_BOX.asItem())) {
             InteractionResult result = PatternBoxBehavior.handleBlockUse(event.getItemStack(),
                     new UseOnContext(event.getLevel(), event.getEntity(), event.getHand(), event.getItemStack(), event.getHitVec()));
@@ -92,6 +100,27 @@ public class ForgeCommonEventListener {
             }
             event.setCanceled(true);
         }
+    }
+
+    private static boolean openCoverUi(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getHand() != InteractionHand.MAIN_HAND || !event.getItemStack().isEmpty() ||
+                !event.getEntity().isShiftKeyDown() || event.getFace() == null) {
+            return false;
+        }
+        BlockHitResult hit = event.getHitVec();
+        var side = ICoverable.traceCoverSide(hit);
+        var coverable = GTCapabilityHelper.getCoverable(event.getLevel(), event.getPos(), side);
+        if (coverable == null) return false;
+        CoverBehavior cover = coverable.getCoverAtSide(side);
+        if (!(cover instanceof IUICover)) return false;
+
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.CONSUME);
+        if (event.getEntity() instanceof ServerPlayer player) {
+            CoverUIFactory.INSTANCE.openUI(cover, player);
+            player.swing(event.getHand());
+        }
+        return true;
     }
 
     @SubscribeEvent

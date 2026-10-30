@@ -1587,5 +1587,7 @@
   "item.gtlcore.infinite_spray_can.mode.14": "Red",
   "item.gtlcore.infinite_spray_can.mode.15": "Black",
   "item.gtlcore.infinite_spray_can.mode.16": "Solvent",
-  "item.gtlcore.infinite_spray_can.menu": "Select Spray Color"
+  "item.gtlcore.infinite_spray_can.menu": "Select Spray Color",
+  "tooltip.gtlcore.socket_preview.available": "Cyan outline: free socket for the held part",
+  "tooltip.gtlcore.socket_preview.occupied": "Orange outline: occupied or blocked socket"
 }

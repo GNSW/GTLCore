@@ -4,6 +4,8 @@ import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.client.ae2.JeiTerminalSearchTarget;
 import org.gtlcore.gtlcore.client.gui.IPatternModifierScreen;
 import org.gtlcore.gtlcore.client.gui.SetReplaceAmountScreen;
+import org.gtlcore.gtlcore.client.socketpreview.PartItems;
+import org.gtlcore.gtlcore.client.socketpreview.SocketPreview;
 import org.gtlcore.gtlcore.common.item.StructureWriteBehavior;
 import org.gtlcore.gtlcore.integration.ae2.WirelessTerminalGridResolver;
 import org.gtlcore.gtlcore.integration.ae2.wireless.JeiWirelessTerminalOrderPackets;
@@ -14,6 +16,7 @@ import org.gtlcore.gtlcore.integration.jei.grouping.TagGroupingRules;
 import com.lowdragmc.lowdraglib.LDLib;
 import com.lowdragmc.lowdraglib.client.utils.RenderBufferUtils;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -21,6 +24,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -71,6 +75,7 @@ public class ForgeClientEventListener {
     public static void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             org.gtlcore.gtlcore.client.NoClipClient.clientTick();
+            SocketPreview.tick();
         }
     }
 
@@ -231,6 +236,20 @@ public class ForgeClientEventListener {
     }
 
     /**
+     * 手持多方块部件时，提示青色/橙色描边分别代表可放置和已占用。
+     */
+    @SubscribeEvent
+    public static void onSocketPreviewTooltip(ItemTooltipEvent event) {
+        if (!PartItems.isRegisteredPart(event.getItemStack())) {
+            return;
+        }
+        event.getToolTip().add(Component.translatable("tooltip.gtlcore.socket_preview.available")
+                .withStyle(ChatFormatting.AQUA));
+        event.getToolTip().add(Component.translatable("tooltip.gtlcore.socket_preview.occupied")
+                .withStyle(ChatFormatting.GOLD));
+    }
+
+    /**
      * 移除 InvTweaks 添加到样板修改器数量编辑子屏上的排序按钮（低优先级保证在 InvTweaks 之后执行）。
      */
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -248,6 +267,9 @@ public class ForgeClientEventListener {
     @SubscribeEvent
     public static void onRenderWorldLast(RenderLevelStageEvent event) {
         RenderLevelStageEvent.Stage stage = event.getStage();
+        if (stage == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
+            SocketPreview.render(event);
+        }
         if (stage == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             Minecraft mc = Minecraft.getInstance();
             ClientLevel level = mc.level;

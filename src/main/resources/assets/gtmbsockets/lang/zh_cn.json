@@ -1,9 +1,0 @@
-{
-  "tooltip.gtmbsockets.placement": "拿在主手或副手：青色描边标出可放置的仓室/总线位置",
-  "tooltip.gtmbsockets.occupied": "橙色描边表示该位置已被占用或被其他方块挡住",
-  "gui.gtmbsockets.config.title": "GT Multiblock Sockets",
-  "gui.gtmbsockets.config.refresh": "数量统计刷新：%s tick",
-  "gui.gtmbsockets.config.hint": "仓室数量上限的统计间隔。数值越小反应越快，越大越省性能。",
-  "gui.gtmbsockets.config.done": "保存",
-  "gui.gtmbsockets.config.cancel": "取消"
-}

@@ -1,6 +1,6 @@
 {
-  "pack": {
-    "pack_format": 15,
-    "description": "GT Multiblock Sockets"
-  }
+    "pack": {
+        "description": "gtlcore resources",
+        "pack_format": 9
+    }
 }

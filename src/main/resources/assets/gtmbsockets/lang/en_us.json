@@ -1,9 +1,0 @@
-{
-  "tooltip.gtmbsockets.placement": "Hold in either hand: cyan outlines mark valid hatch/bus sockets",
-  "tooltip.gtmbsockets.occupied": "Orange outlines mark sockets that are occupied or blocked",
-  "gui.gtmbsockets.config.title": "GT Multiblock Sockets",
-  "gui.gtmbsockets.config.refresh": "Limit refresh: %s ticks",
-  "gui.gtmbsockets.config.hint": "How often hatch-limit counts refresh. Lower = faster reaction, higher = less CPU.",
-  "gui.gtmbsockets.config.done": "Save",
-  "gui.gtmbsockets.config.cancel": "Cancel"
-}

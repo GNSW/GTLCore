@@ -1,4 +1,0 @@
-Manifest-Version: 1.0
-Implementation-Title: GT Multiblock Sockets
-Implementation-Version: 1.0.3
-MixinConfigs: mixins.gtmbsockets.json

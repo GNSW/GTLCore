@@ -1,4 +1,9 @@
 {
+  "gtlcore.cover.supply_all.off": "整组供给：关",
+  "gtlcore.cover.supply_all.on": "整组供给：开",
+  "gtlcore.cover.supply_all.tooltip": "过滤器中全部资源按指定数量整组转移，任一不足则全部等待。大批次会等待传输额度累计。",
+  "gtlcore.cover.supply_all.requirements": "需要精确供给模式和非空的简单白名单过滤器。过滤器不符合要求时暂停整组供给。",
+  "gtlcore.cover.supply_all.handlers": "请连接直接物品库存或支持按罐操作的流体目标。物品管网转发及不支持的流体目标不执行整组转移。",
   "mm.menu.modes": "选择模式",
   "mm.menu.back": "返回",
   "mm.menu.hint": "点击展开或选择 · 点击中心／Esc 返回上一级",

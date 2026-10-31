@@ -24,6 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.voxelregion.forge.GenerationBridge;
 import org.voxelregion.forge.GenerationGate;
 import org.voxelregion.forge.ClearedGeneration;
+import org.voxelregion.runtime.ScopedReentryPermit;
 
 /** Admission facts from the actual native disk-read and new-ProtoChunk path. */
 @Mixin(ChunkMap.class)
@@ -34,13 +35,22 @@ public abstract class GenerationChunkMapMixin implements GenerationBridge {
     @Shadow @Final ServerLevel level;
     @Shadow @Final private BlockableEventLoop<Runnable> mainThreadExecutor;
     @Shadow private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> scheduleChunkGeneration(ChunkHolder holder, ChunkStatus status) { throw new AssertionError(); }
-    @Unique private boolean vre$ordinaryGeneration;
+    @Unique private ScopedReentryPermit<ChunkHolder, ChunkStatus> vre$ordinaryGeneration;
 
     @Override public boolean vre$generationBusy(long position) {
         if (!level.getServer().isSameThread()) throw new IllegalStateException("Generation holder evidence requires the server thread");
         return updatingChunkMap.containsKey(position) || visibleChunkMap.containsKey(position) || pendingUnloads.containsKey(position);
     }
     @Override public Executor vre$generationExecutor() { return mainThreadExecutor; }
+    @Override public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> vre$requestLightRead(ChunkPos position) {
+        if (!level.getServer().isSameThread()) throw new IllegalStateException("Light read requests require the server thread");
+        var holder = updatingChunkMap.get(position.toLong());
+        if (holder == null || visibleChunkMap.get(position.toLong()) != holder
+                || holder.getTicketLevel() > net.minecraft.server.level.ChunkLevel.byStatus(ChunkStatus.FEATURES)) return null;
+        // Unlike ServerChunkCache.getChunkFuture, this never runsDistanceManagerUpdates or
+        // managedBlock. Existing read-ahead requests share this very same native future.
+        return holder.getOrScheduleFuture(ChunkStatus.FEATURES, (ChunkMap)(Object)this);
+    }
     @Override public boolean vre$postProcessingReady(net.minecraft.world.level.chunk.LevelChunk chunk) {
         if (!level.getServer().isSameThread()) throw new IllegalStateException("Generation completion requires the server thread");
         var holder = updatingChunkMap.get(chunk.getPos().toLong());
@@ -65,12 +75,14 @@ public abstract class GenerationChunkMapMixin implements GenerationBridge {
     @Inject(method = "scheduleChunkGeneration", at = @At("HEAD"), cancellable = true)
     private void vre$materializeClearedTerrain(ChunkHolder holder, ChunkStatus status,
             CallbackInfoReturnable<CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>>> callback) {
-        if (vre$ordinaryGeneration) return;
-        var replacement = ClearedGeneration.schedule(level, (ChunkMap) (Object) this, holder, status, () -> {
-            vre$ordinaryGeneration = true;
-            try { return scheduleChunkGeneration(holder, status); }
-            finally { vre$ordinaryGeneration = false; }
-        });
+        if (!level.getServer().isSameThread()) throw new IllegalStateException("Generation admission requires the server thread");
+        if (vre$ordinaryGeneration == null) vre$ordinaryGeneration = new ScopedReentryPermit<>();
+        // Bypass only this exact call back into the original body. That body
+        // schedules neighbor/parent futures synchronously; those still need their
+        // own cleared-terrain admission instead of inheriting a global bypass.
+        if (vre$ordinaryGeneration.consume(holder, status)) return;
+        var replacement = ClearedGeneration.schedule(level, (ChunkMap) (Object) this, holder, status,
+                () -> vre$ordinaryGeneration.call(holder, status, () -> scheduleChunkGeneration(holder, status)));
         if (replacement != null) callback.setReturnValue(replacement);
     }
 }

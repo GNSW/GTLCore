@@ -8,10 +8,10 @@ The Gradle wrapper is distributed by Gradle under Apache License 2.0.
 Minecraft, Forge and optional integration dependencies are not part of the
 portable library. Their licenses remain applicable to their own components.
 
-The Forge integration also embeds a separate Starlight-derived lighting
-component under LGPL-3.0-only. Its source, upstream identity, changes and license
-are in third_party/starlight-forge/. It is not part of the MPL portable library
-and is packaged as a distinct, replaceable JarJar library.
+The previously imported third-party lighting implementation has been removed
+from the current source and distribution. Earlier releases containing that
+component retain their original licenses; removal does not relicense those
+releases or make the imported implementation VoxelRegionEngine's own work.
 
 The supplied DESIGN-v0.1.md is a design proposal; the implemented capabilities
 and current limitations are documented in README.md and docs/.

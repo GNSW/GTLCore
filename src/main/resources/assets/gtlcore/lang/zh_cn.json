@@ -1589,5 +1589,17 @@
   "item.gtlcore.infinite_spray_can.mode.16": "溶剂",
   "item.gtlcore.infinite_spray_can.menu": "选择喷漆颜色",
   "tooltip.gtlcore.socket_preview.available": "青色描边：可放置手中部件",
-  "tooltip.gtlcore.socket_preview.occupied": "橙色描边：已占用或被阻挡"
+  "tooltip.gtlcore.socket_preview.occupied": "橙色描边：已占用或被阻挡",
+  "block.gtlcore.wireless_charging_station": "无线充能中继器",
+  "tooltip.gtlcore.wireless_charging_station.0": "需放入1~16个同等级力场发生器（LV~MAX）",
+  "tooltip.gtlcore.wireless_charging_station.1": "每个力场发生器提供0.25A，电压等级等同力场发生器等级",
+  "tooltip.gtlcore.wireless_charging_station.2": "用闪存右键绑定队伍后跨维度全距离给该队伍玩家身上的物品充电",
+  "gui.gtlcore.wireless_charging_station.owner": "所有者：%s",
+  "gui.gtlcore.wireless_charging_station.unbound": "未绑定队伍",
+  "gui.gtlcore.wireless_charging_station.status": "状态：%s",
+  "gui.gtlcore.wireless_charging_station.active": "运行中",
+  "gui.gtlcore.wireless_charging_station.inactive": "未放入力场发生器",
+  "gui.gtlcore.wireless_charging_station.power": "供电：%s A / %s 电压",
+  "block.gtceu.wireless_charging_station": "无线充能中继器",
+  "gui.gtlcore.wireless_charging_station.wireless_eu": "无线电网：%s EU"
 }

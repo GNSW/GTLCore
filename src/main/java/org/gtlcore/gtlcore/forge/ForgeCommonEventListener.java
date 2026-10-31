@@ -4,6 +4,7 @@ import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.common.data.GTLBlocks;
 import org.gtlcore.gtlcore.common.data.GTLItems;
 import org.gtlcore.gtlcore.common.item.PatternBoxBehavior;
+import org.gtlcore.gtlcore.common.machine.generator.WirelessChargingStationMachine;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem;
@@ -16,6 +17,7 @@ import com.gregtechceu.gtceu.api.cover.IUICover;
 import com.gregtechceu.gtceu.api.gui.factory.CoverUIFactory;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.api.machine.feature.IUIMachine;
+import com.gregtechceu.gtceu.common.data.GTItems;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -48,6 +50,12 @@ public class ForgeCommonEventListener {
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onBindingToolLeftClick(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getItemStack().is(GTItems.TOOL_DATA_STICK.asItem()) &&
+                MetaMachine.getMachine(event.getLevel(), event.getPos()) instanceof WirelessChargingStationMachine station) {
+            event.setCanceled(true);
+            if (!event.getLevel().isClientSide) station.unbindTeam();
+            return;
+        }
         if (!event.getEntity().isShiftKeyDown() ||
                 !(event.getEntity().getMainHandItem().getItem() instanceof org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem) ||
                 !org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime.canOpenWirelessTargetMenu(event.getLevel(), event.getPos()))
@@ -79,6 +87,13 @@ public class ForgeCommonEventListener {
             if (event.getEntity() instanceof ServerPlayer player) {
                 WirelessNetworkBindingToolItem.openNetworkTab(player, machine, event.getHitVec());
             }
+            return;
+        }
+        if (event.getItemStack().is(GTItems.TOOL_DATA_STICK.asItem()) &&
+                MetaMachine.getMachine(event.getLevel(), event.getPos()) instanceof WirelessChargingStationMachine station) {
+            if (!event.getLevel().isClientSide) station.bindTeam(event.getEntity());
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
             return;
         }
         if (openCoverUi(event)) return;

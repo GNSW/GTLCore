@@ -50,14 +50,12 @@ import static com.gregtechceu.gtceu.data.recipe.CraftingComponent.*;
 import static com.gregtechceu.gtceu.data.recipe.misc.MetaTileEntityLoader.registerMachineRecipe;
 import static org.gtlcore.gtlcore.common.data.GTLBlocks.CRAFTING_STORAGE_MAX;
 import static org.gtlcore.gtlcore.common.data.GTLItems.CIRCUIT_INFINITY_CELL;
+import static org.gtlcore.gtlcore.common.data.GTLMachines.*;
 import static org.gtlcore.gtlcore.common.data.GTLMachines.GTAEMachines.*;
-import static org.gtlcore.gtlcore.common.data.GTLMachines.TAG_FILTER_ME_STOCK_BUS_PART_MACHINE;
-import static org.gtlcore.gtlcore.common.data.GTLMachines.VIRTUAL_INGREDIENT_SUPPLY_MACHINE;
 import static org.gtlcore.gtlcore.common.data.GTLMaterials.*;
 import static org.gtlcore.gtlcore.common.data.GTLRecipeTypes.SPACE_COSMIC_PROBE_RECEIVERS_RECIPES;
 import static org.gtlcore.gtlcore.common.data.machines.AdditionalMultiBlockMachine.TRANSFINITE_COMPUTATION_ARRAY;
-import static org.gtlcore.gtlcore.integration.ae2.wireless.GTLWirelessAeContent.WIRELESS_NETWORK_BOOKMARK;
-import static org.gtlcore.gtlcore.integration.ae2.wireless.GTLWirelessAeContent.WIRELESS_NETWORK_CORE;
+import static org.gtlcore.gtlcore.integration.ae2.wireless.GTLWirelessAeContent.*;
 import static org.gtlcore.gtlcore.integration.wildcard.WildcardPatternCompatImpl.ME_STOCKING_WILDCARD_PATTERN_BUFFER;
 import static org.gtlcore.gtlcore.integration.wildcard.WildcardPatternCompatImpl.ME_WILDCARD_PATTERN_BUFFER;
 import static org.gtlcore.gtlcore.utils.Registries.getItem;
@@ -943,8 +941,18 @@ public class MachineRecipe {
                 .inputItems(WIRELESS_TOOL.asItem())
                 .inputItems(CIRCUIT.getIngredient(EV))
                 .inputItems(EMITTER_EV)
-                .outputItems(org.gtlcore.gtlcore.integration.ae2.wireless.GTLWirelessAeContent.WIRELESS_NETWORK_BINDING_TOOL.get())
+                .outputItems(WIRELESS_NETWORK_BINDING_TOOL.get())
                 .duration(200).EUt(VA[EV]).save(provider);
+
+        ASSEMBLER_RECIPES.recipeBuilder("wireless_charging_station")
+                .inputItems(GTMachines.HULL[3])
+                .inputItems(FIELD_GENERATOR_LV, 4)
+                .inputItems(CIRCUIT.getIngredient(HV), 8)
+                .inputItems(EMITTER_HV, 2)
+                .inputItems(wireFine, AnnealedCopper, 2)
+                .inputFluids(Polytetrafluoroethylene.getFluid(1080))
+                .outputItems(WIRELESS_CHARGING_STATION)
+                .duration(200).EUt(VA[HV]).save(provider);
     }
 
     private static void space_probe(Material material, int grade, int amount, int circuit, Consumer<FinishedRecipe> provider) {

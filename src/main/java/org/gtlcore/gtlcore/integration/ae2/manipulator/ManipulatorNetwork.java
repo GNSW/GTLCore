@@ -77,7 +77,9 @@ public final class ManipulatorNetwork implements ICraftingRequester {
     }
 
     private final ManipulatorTask task;
-    private final IManagedGridNode node;
+    private final CompoundTag nodeData;
+    private IManagedGridNode node;
+    private ManipulatorPlanService provider;
     private IGridNode boundNode;
     private final Map<ICraftingLink, AEKey> links = new LinkedHashMap<>();
     private final Map<AEKey, Long> outstanding = new LinkedHashMap<>();
@@ -91,14 +93,8 @@ public final class ManipulatorNetwork implements ICraftingRequester {
 
     public ManipulatorNetwork(ManipulatorTask task, CompoundTag saved) {
         this.task = task;
-        node = GridHelper.createManagedNode(this, new IGridNodeListener<ManipulatorNetwork>() {
-
-            public void onSaveChanges(ManipulatorNetwork owner, IGridNode n) {
-                task.changed();
-            }
-        }).setInWorldNode(false).setIdlePowerUsage(0).setVisualRepresentation(GTLItems.MATTER_MANIPULATOR)
-                .addService(ICraftingRequester.class, this);
-        node.loadFromNBT(saved.getCompound("Node"));
+        nodeData = saved.getCompound("Node").copy();
+        node = createNode();
         planRequests.putAll(ManipulatorResources.read(saved.getList("PlanRequests", Tag.TAG_COMPOUND)));
         for (Tag t : saved.getList("Links", Tag.TAG_COMPOUND)) {
             CompoundTag entry = (CompoundTag) t;
@@ -109,16 +105,38 @@ public final class ManipulatorNetwork implements ICraftingRequester {
         }
     }
 
+    private IManagedGridNode createNode() {
+        var managed = GridHelper.createManagedNode(this, new IGridNodeListener<ManipulatorNetwork>() {
+
+            public void onSaveChanges(ManipulatorNetwork owner, IGridNode n) {
+                task.changed();
+            }
+        }).setInWorldNode(false).setIdlePowerUsage(0).setVisualRepresentation(GTLItems.MATTER_MANIPULATOR)
+                .addService(ICraftingRequester.class, this);
+        managed.loadFromNBT(nodeData);
+        if (provider != null) managed.addService(ICraftingProvider.class, provider);
+        return managed;
+    }
+
+    private void resetNode() {
+        if (node.isReady()) {
+            node.saveToNBT(nodeData);
+            node.destroy();
+            // AE2 managed nodes cannot be initialized again after destruction.
+            node = createNode();
+        }
+        boundNode = null;
+    }
+
     public IGrid connect(ServerPlayer player) {
         var access = accessPoint(player, task.binding);
         var target = access == null ? null : access.getActionableNode();
         if (target == null) {
-            if (node.isReady()) node.destroy();
-            boundNode = null;
+            resetNode();
             return null;
         }
         if (target != boundNode || !node.isReady()) {
-            if (node.isReady()) node.destroy();
+            resetNode();
             node.setOwningPlayer(player);
             node.create(player.serverLevel(), null);
             GridHelper.createConnection(node.getNode(), target);
@@ -129,6 +147,7 @@ public final class ManipulatorNetwork implements ICraftingRequester {
     }
 
     public void addProvider(ManipulatorPlanService provider) {
+        this.provider = provider;
         node.addService(ICraftingProvider.class, provider);
     }
 
@@ -231,15 +250,13 @@ public final class ManipulatorNetwork implements ICraftingRequester {
             calculation.cancel(true);
             calculation = null;
         }
-        node.destroy();
-        boundNode = null;
+        resetNode();
     }
 
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
-        CompoundTag nodeTag = new CompoundTag();
-        node.saveToNBT(nodeTag);
-        tag.put("Node", nodeTag);
+        node.saveToNBT(nodeData);
+        tag.put("Node", nodeData.copy());
         ListTag list = new ListTag();
         links.forEach((link, key) -> {
             CompoundTag entry = new CompoundTag();

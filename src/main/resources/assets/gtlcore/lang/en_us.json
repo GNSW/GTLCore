@@ -1,4 +1,9 @@
 {
+  "gtlcore.cover.supply_all.off": "Supply all: OFF",
+  "gtlcore.cover.supply_all.on": "Supply all: ON",
+  "gtlcore.cover.supply_all.tooltip": "Transfer every configured resource as one exact batch, or transfer nothing. Large batches wait for transfer credit.",
+  "gtlcore.cover.supply_all.requirements": "Requires Supply Exact and a nonempty simple whitelist filter. An invalid filter pauses grouped supply.",
+  "gtlcore.cover.supply_all.handlers": "Use direct inventories or tank-addressable fluid destinations. Item pipe routing and unsupported fluid destinations do not transfer batches.",
   "mm.menu.modes": "Select mode",
   "mm.menu.back": "Back",
   "mm.menu.hint": "Click to open or select · Center / Esc to go back",

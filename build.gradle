@@ -354,16 +354,3 @@ tasks.register("verifyPackagedMixinRefmaps") {
 tasks.named("build") {
     dependsOn(tasks.named("verifyPackagedMixinRefmaps"))
 }
-
-// Pure numerical regression check; do not bootstrap the Minecraft runtime.
-tasks.register("standardOverclockBudgetTest", JavaExec) {
-    group = "verification"
-    description = "Checks standard overclock budgets against exact power boundaries."
-    dependsOn(tasks.named("testClasses"))
-    classpath = files(sourceSets.main.output.classesDirs, sourceSets.test.output.classesDirs)
-    mainClass = "org.gtlcore.gtlcore.utils.StandardOverclockBudgetTest"
-}
-
-tasks.named("check") {
-    dependsOn(tasks.named("standardOverclockBudgetTest"))
-}

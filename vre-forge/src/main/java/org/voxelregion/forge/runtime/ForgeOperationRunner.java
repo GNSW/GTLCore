@@ -49,6 +49,7 @@ final class ForgeOperationRunner {
     private static final TicketType<UUID> TICKET = TicketType.create("voxelregion_test", Comparator.<UUID>naturalOrder());
     private static final TagKey<Block> PROTECTED = TagKey.create(Registries.BLOCK, new ResourceLocation(RuntimeBridge.PERSISTENCE_NAMESPACE, "protected"));
     private static final Map<UUID, HeldChunk> HELD = new HashMap<>();
+    private static final Map<UUID, LightReadLease> LIGHT_READS = new HashMap<>();
     private static final Map<ServerLevel, it.unimi.dsi.fastutil.longs.LongOpenHashSet> RESERVED = new java.util.IdentityHashMap<>();
     private static final Map<UUID, EntityWork> ENTITIES = new HashMap<>();
     private static final Map<UUID, java.util.ArrayDeque<PendingCommit>> IN_FLIGHT = new HashMap<>();
@@ -395,9 +396,11 @@ final class ForgeOperationRunner {
         task.message = "";
         if (task.wholeChunk && !task.chunkStarted) {
             if (!finishNativeGeneration(level, task, chunk)) return false;
+            if (!holdLightReads(level, task, chunk)) return false;
             return prepareWholeChunk(level, task, chunk, currentVolume, budget);
         }
         if (task.wholeChunk) throw new IllegalStateException("A complete-chunk commit cannot span server ticks");
+        if (!holdLightReads(level, task, chunk)) return false;
         ChunkReceipts receipts = ChunkReceipts.of(chunk);
         if (task.chunkStarted) receipts.adoptLiveChanges(task.id, task.phase);
         if (!task.chunkStarted) {
@@ -1020,6 +1023,21 @@ final class ForgeOperationRunner {
         enqueueCommit(task, chunk, false);
     }
 
+    private static boolean holdLightReads(ServerLevel level, OperationData.Task task, LevelChunk chunk) {
+        if (!(level.getChunkSource().getLightEngine() instanceof org.voxelregion.forge.lighting.WorldLightProvider.Access access)
+                || access.vre$worldLighting() == null) return true;
+        LightReadLease lease = LIGHT_READS.computeIfAbsent(task.id,
+                ignored -> LightReadLease.acquire(level, chunk.getPos(), task.generate));
+        try {
+            if (lease.ready()) return true;
+        } catch (LightReadLease.MissingExistingTerrain unavailable) {
+            pause(task, OperationData.State.PAUSED_UNLOADED, unavailable.getMessage());
+            return false;
+        }
+        task.message = "Retaining the affected light columns and their FEATURES terrain halo before changing blocks.";
+        return false;
+    }
+
     /** Transfer one current ticket to a bounded completion queue before advancing any cursor. */
     private static void enqueueCommit(OperationData.Task task, LevelChunk chunk, boolean countAck) {
         HeldChunk held = HELD.get(task.id);
@@ -1035,7 +1053,8 @@ final class ForgeOperationRunner {
         }
         var future = CompletableFuture.allOf(saved, packet, task.queuedLightWork);
         var queue = IN_FLIGHT.computeIfAbsent(task.id, ignored -> new java.util.ArrayDeque<>());
-        queue.addLast(new PendingCommit(held, task.phase, task.queuedLightWork, saved, packet, nativeSave, future, countAck));
+        queue.addLast(new PendingCommit(held, LIGHT_READS.remove(task.id), task.phase,
+                task.queuedLightWork, saved, packet, nativeSave, future, countAck));
         task.unconfirmedFences++;
         HELD.remove(task.id);
         task.needsChunkPacket = false;
@@ -1073,6 +1092,7 @@ final class ForgeOperationRunner {
             } finally {
                 task.authoritativeLightThrough = level.getGameTime() + 40;
                 commit.held.level.getChunkSource().removeRegionTicket(TICKET, commit.held.position, commit.held.ticketDistance, task.id);
+                if (commit.lightReads != null) commit.lightReads.close();
                 unreserve(commit.held);
                 task.unconfirmedFences--;
             }
@@ -1103,6 +1123,7 @@ final class ForgeOperationRunner {
     }
     static long estimatedMetadataBytes(MinecraftServer server) {
         long bytes = 8L * 1024 + ChunkReadAhead.estimatedBytes()
+                + 256L * LightReadLease.retainedColumns() + 256L * (LIGHT_READS.size() + pendingCommits())
                 + org.voxelregion.forge.AirRegionLightBatch.estimatedBytes()
                 + org.voxelregion.forge.ParallelChunkCompression.estimatedBytes()
                 + org.voxelregion.forge.ClearedGeneration.estimatedPendingBytes()
@@ -1208,6 +1229,8 @@ final class ForgeOperationRunner {
             held.level.getChunkSource().removeRegionTicket(TICKET, held.position, held.ticketDistance, id);
             unreserve(held);
         }
+        var lightReads = LIGHT_READS.remove(id);
+        if (lightReads != null) lightReads.close();
     }
     private static void unreserve(HeldChunk held) {
         var reservations = RESERVED.get(held.level);
@@ -1221,11 +1244,13 @@ final class ForgeOperationRunner {
         completionWindow.reset(); admissionWindow = 128; completedThisFrame = 0;
         ChunkReadAhead.stop();
         org.voxelregion.forge.ClearedGeneration.stop();
-        java.util.Set<UUID> ids = new java.util.HashSet<>(HELD.keySet()); ids.addAll(GENERATING.keySet());
+        java.util.Set<UUID> ids = new java.util.HashSet<>(HELD.keySet()); ids.addAll(GENERATING.keySet()); ids.addAll(LIGHT_READS.keySet());
         for (UUID id : ids) release(id);
         // Stop is not a durable acknowledgement: retain each task's nonzero persisted uncertainty marker.
-        for (var entry : IN_FLIGHT.entrySet()) for (var commit : entry.getValue())
+        for (var entry : IN_FLIGHT.entrySet()) for (var commit : entry.getValue()) {
             commit.held.level.getChunkSource().removeRegionTicket(TICKET, commit.held.position, commit.held.ticketDistance, entry.getKey());
+            if (commit.lightReads != null) commit.lightReads.close();
+        }
         IN_FLIGHT.clear(); RESERVED.clear(); PREPARING.clear(); DEFERRED_POST_PROCESSING.clear(); EXISTING.clear();
         ENTITIES.clear(); OperationOcclusion.stop(); roundRobin = 0;
     }
@@ -1255,7 +1280,7 @@ final class ForgeOperationRunner {
         }
     }
     private record HeldChunk(ServerLevel level, ChunkPos position, int ticketDistance) {}
-    private record PendingCommit(HeldChunk held, long phase, CompletableFuture<Void> light,
+    private record PendingCommit(HeldChunk held, LightReadLease lightReads, long phase, CompletableFuture<Void> light,
             CompletableFuture<Void> save, CompletableFuture<Void> packet, NativeCommitFences.SaveFence nativeSave,
             CompletableFuture<Void> future, boolean countAck) {}
     private static final class EntityWork {

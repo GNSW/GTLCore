@@ -309,6 +309,7 @@
     "gtm.api.recipe.RecipeIteratorMixin",
     "gtm.api.recipe.RecipeLogicAccessor",
     "gtm.api.recipe.RecipeModifierListMixin",
+    "gtm.api.recipe.RecipeHelperOverclockMixin",
     "gtm.api.recipe.condition.CleanroomConditionMixin",
     "gtm.cover.ConveyorCoverMixin",
     "gtm.cover.InfiniteWaterCoverMixin",

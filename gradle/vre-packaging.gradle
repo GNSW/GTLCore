@@ -167,7 +167,8 @@ tasks.register('verifyPackagedVre') {
     doLast {
         // Reject removed-provider output even when it survives an incremental
         // compile/resource copy. Rebuild from clean outputs after migration.
-        def removedMarkers = ['ca/spottedleaf/', 'ca.spottedleaf.', 'vre-starlight', 'META-INF/starlight/']
+        def removedMarkers = ['ca/spottedleaf/', 'ca.spottedleaf.', 'vre-starlight', 'META-INF/starlight/',
+                              'WorldLightProvider', 'WorldLightEngineMixin', 'WorldLightFenceMixin', 'LightingMixinPlugin']
         Closure checkBytes = { String label, byte[] bytes ->
             def text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
             if (removedMarkers.any { label.contains(it) || text.contains(it) })
@@ -213,6 +214,9 @@ tasks.register('verifyPackagedVre') {
                 def config = zip.getInputStream(entry).withCloseable { new JsonSlurper().parse(it, 'UTF-8') }
                 if (config.refmap != 'voxelregion-forge.refmap.json' || zip.getEntry(config.refmap) == null)
                     throw new GradleException("Missing independent VRE refmap: $name")
+                if (name == 'voxelregion-forge.mixins.json'
+                        && (config.plugin || !config.mixins.contains('LightFenceMixin')))
+                    throw new GradleException('VRE must use only the region light fence, without a global-light selector')
             }
             def mappings = zip.getInputStream(zip.getEntry('voxelregion-forge.refmap.json')).withCloseable {
                 new JsonSlurper().parse(it, 'UTF-8')

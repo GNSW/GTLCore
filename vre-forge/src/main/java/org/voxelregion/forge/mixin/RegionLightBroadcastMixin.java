@@ -17,9 +17,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.voxelregion.forge.CompleteChunkLightPacket;
 import org.voxelregion.forge.runtime.RuntimeBridge;
-import org.voxelregion.forge.lighting.WorldLightProvider;
 
-/** Clients displaying authoritative fields need updates throughout their tracked area. */
+/** Only region operations need authoritative light updates throughout their tracked area. */
 @Mixin(ChunkHolder.class)
 abstract class RegionLightBroadcastMixin {
     @Shadow @Final private BitSet skyChangedLightSectionFilter;
@@ -32,13 +31,8 @@ abstract class RegionLightBroadcastMixin {
             boolean boundaryOnly, LevelChunk chunk) {
         if (!boundaryOnly) return provider.getPlayers(position, false);
         boolean authoritative = chunk.getLevel() instanceof ServerLevel level
-                && (vre$worldLightProvider(level) || RuntimeBridge.needsAuthoritativeLight(level, position));
+                && RuntimeBridge.needsAuthoritativeLight(level, position);
         return provider.getPlayers(position, boundaryOnly && !authoritative);
-    }
-
-    private static boolean vre$worldLightProvider(ServerLevel level) {
-        return level.getChunkSource().getLightEngine() instanceof WorldLightProvider.Access access
-                && access.vre$worldLighting() != null;
     }
 
     @Redirect(method = "broadcastChanges", at = @At(value = "INVOKE",

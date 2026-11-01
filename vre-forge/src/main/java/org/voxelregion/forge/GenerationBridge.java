@@ -9,4 +9,8 @@ public interface GenerationBridge {
     Executor vre$generationExecutor();
     /** Nonblocking owner-thread check; propagates an exceptional native post-processing future. */
     boolean vre$postProcessingReady(net.minecraft.world.level.chunk.LevelChunk chunk);
+    /** Poll after adding a FEATURES read ticket; null means native ticket propagation is pending. */
+    java.util.concurrent.CompletableFuture<com.mojang.datafixers.util.Either<
+            net.minecraft.world.level.chunk.ChunkAccess, net.minecraft.server.level.ChunkHolder.ChunkLoadingFailure>>
+            vre$requestLightRead(net.minecraft.world.level.ChunkPos position);
 }

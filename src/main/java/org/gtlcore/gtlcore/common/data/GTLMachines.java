@@ -7,6 +7,7 @@ import org.gtlcore.gtlcore.common.data.machines.*;
 import org.gtlcore.gtlcore.common.machine.VirtualIngredientSupplyMachine;
 import org.gtlcore.gtlcore.common.machine.generator.LightningRodMachine;
 import org.gtlcore.gtlcore.common.machine.generator.MagicEnergyMachine;
+import org.gtlcore.gtlcore.common.machine.generator.WirelessChargingStationMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.electric.CoilWorkableElectricMultipleRecipesMultiblockMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.*;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.*;
@@ -163,9 +164,20 @@ public class GTLMachines {
             .aisle("dbbbd dbbbd    d d    dbbbd dbbbd", " CCC   CCC             CCC   CCC ", " CCC   CCC             CCC   CCC ", " CCC   CCC             CCC   CCC ", "dbbbd dbbbd           dbbbd dbbbd", "  d     d               d     d  ", "  d     d               d     d  ", "                                 ", "  d     d               d     d  ", "  d     d               d     d  ", "dbbbd dbbbd           dbbbd dbbbd", " CCC   CCC             CCC   CCC ", " CCC   CCC             CCC   CCC ", " CCC   CCC   d     d   CCC   CCC ", "dbbbd dbbdCCCb     bCCCdbbd dbbbd", "         bCCCb     bCCCb         ", "         bCCCb     bCCCb         ", "         d   d     d   d         ", "                                 ", "         d   d     d   d         ", "         bCCCb     bCCCb         ", "         bCCCb     bCCCb         ", "         bCCCb     bCCCb         ", "         d   d     d   d         ")
             .aisle(" ddd   ddd             ddd   ddd ", "                                 ", "                                 ", "                                 ", " ddd   ddd             ddd   ddd ", "                                 ", "                                 ", "                                 ", "                                 ", "                                 ", " ddd   ddd             ddd   ddd ", "                                 ", "                                 ", "                                 ", " ddd   ddd   d     d   ddd   ddd ", "         d   d     d   d         ", "         d   d     d   d         ", "                                 ", "                                 ", "                                 ", "         d   d     d   d         ", "         d   d     d   d         ", "         d   d     d   d         ", "                                 ");
 
-    //////////////////////////////////////
-    // *** Simple Machine ***//
-    //////////////////////////////////////
+    public static final MachineDefinition WIRELESS_CHARGING_STATION = REGISTRATE
+            .machine("wireless_charging_station", WirelessChargingStationMachine::new)
+            .tier(GTValues.HV)
+            .rotationState(RotationState.ALL)
+            .workableCasingRenderer(GTCEu.id("block/casings/voltage/hv/side"),
+                    GTCEu.id("block/multiblock/fusion_reactor"))
+            .langValue("HV Wireless Charging Station")
+            .tooltips(Component.translatable("tooltip.gtlcore.wireless_charging_station.0"),
+                    Component.translatable("tooltip.gtlcore.wireless_charging_station.1"),
+                    Component.translatable("tooltip.gtlcore.wireless_charging_station.2"))
+            .tooltipBuilder(GTL_ADD)
+            .compassNode("charger")
+            .register();
+
     public static final MachineDefinition[] SEMI_FLUID_GENERATOR = GTMachines.registerSimpleGenerator("semi_fluid",
             GTLRecipeTypes.SEMI_FLUID_GENERATOR_FUELS, GTMachines.genericGeneratorTankSizeFunction, 0.1f, GTValues.LV, GTValues.MV,
             GTValues.HV);

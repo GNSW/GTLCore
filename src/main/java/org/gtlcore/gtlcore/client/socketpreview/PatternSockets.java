@@ -11,6 +11,7 @@ import com.gregtechceu.gtceu.api.pattern.TraceabilityPredicate;
 import com.gregtechceu.gtceu.api.pattern.predicates.SimplePredicate;
 
 import com.lowdragmc.lowdraglib.utils.BlockInfo;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
@@ -34,12 +35,13 @@ import java.util.WeakHashMap;
  * Turns a GregTech {@link BlockPattern} into a list of cells and answers whether a cell accepts a
  * particular part item or block.
  *
- * <p>Everything is cached:
+ * <p>
+ * Everything is cached:
  * <ul>
- *     <li>one {@link BlockPattern} per {@link MultiblockMachineDefinition} (the factory may build a
- *         fresh pattern on every call);</li>
- *     <li>one cell list per (pattern, front, up, flipped) combination;</li>
- *     <li>one candidate item/block set per {@link SimplePredicate}.</li>
+ * <li>one {@link BlockPattern} per {@link MultiblockMachineDefinition} (the factory may build a
+ * fresh pattern on every call);</li>
+ * <li>one cell list per (pattern, front, up, flipped) combination;</li>
+ * <li>one candidate item/block set per {@link SimplePredicate}.</li>
  * </ul>
  */
 public final class PatternSockets {
@@ -50,8 +52,7 @@ public final class PatternSockets {
     private static final Map<OrientationKey, List<Cell>> CELLS = new HashMap<>();
     private static final Map<OrientationKey, Map<Long, List<Cell>>> SECTION_CELLS = new HashMap<>();
     private static final Map<SimplePredicate, CandidateSet> CANDIDATES = new IdentityHashMap<>();
-    private static final Set<BlockPattern> FAILED_PATTERNS =
-            Collections.newSetFromMap(new IdentityHashMap<>());
+    private static final Set<BlockPattern> FAILED_PATTERNS = Collections.newSetFromMap(new IdentityHashMap<>());
 
     private static volatile boolean accessorFailed;
 
@@ -59,7 +60,7 @@ public final class PatternSockets {
 
     public static BlockPattern patternFor(MultiblockControllerMachine controller) {
         // A few controllers (cleanroom, charcoal pile, GTLCore simulation machine, ...) build
-        // their pattern dynamically instead of using the definition factory.  Honour them and
+        // their pattern dynamically instead of using the definition factory. Honour them and
         // keep their pattern for a short while so a huge dynamic pattern is not rebuilt per frame.
         if (overridesGetPattern(controller.getClass())) {
             long now = System.currentTimeMillis();
@@ -137,7 +138,7 @@ public final class PatternSockets {
     }
 
     /**
-     * Cells grouped by their 16x16x16 section relative to the controller.  A large multiblock is
+     * Cells grouped by their 16x16x16 section relative to the controller. A large multiblock is
      * then walked section-by-section around the player instead of scanning every cell every tick.
      */
     public static Map<Long, List<Cell>> sectionCellsFor(BlockPattern pattern, Direction front,
@@ -168,7 +169,7 @@ public final class PatternSockets {
     }
 
     /**
-     * Checks whether the looked-at block is one of the structure cells of this pattern.  Used for
+     * Checks whether the looked-at block is one of the structure cells of this pattern. Used for
      * casing blocks, which have no block entity that could point at the controller.
      */
     public static boolean contains(BlockPattern pattern, Direction front, Direction up, boolean flipped,
@@ -259,7 +260,7 @@ public final class PatternSockets {
             Set<Long> seen = new HashSet<>();
 
             // This loop mirrors BlockPattern#checkPatternAt exactly, including the aisle
-            // repetitions.  The only difference is that we do not evaluate the predicate here;
+            // repetitions. The only difference is that we do not evaluate the predicate here;
             // every non-controller cell is recorded and filtered by the held item later.
             int minZ = -center[4];
             boolean findFirstAisle = false;

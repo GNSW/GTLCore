@@ -8,6 +8,7 @@ import appeng.items.tools.powered.WirelessTerminalItem;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -56,6 +57,8 @@ public final class CuriosCompat {
 
     public record TerminalSlot(ItemStack stack, String identifier, int index) {}
 
+    public record CurioSlot(ItemStack stack, String identifier, int index) {}
+
     @SuppressWarnings("unchecked")
     public static @Nullable TerminalSlot findWirelessTerminal(Player player) {
         if (!isLoaded()) {
@@ -82,6 +85,38 @@ public final class CuriosCompat {
             // Curios may be unavailable or incompatible; fall back to no curios support.
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static List<CurioSlot> getCurioSlots(Player player) {
+        if (!isLoaded()) return List.of();
+        try {
+            Object helper = getCuriosHelperMethod.invoke(null);
+            List<Object> results = (List<Object>) findCuriosMethod.invoke(
+                    helper, player, (Predicate<ItemStack>) stack -> true);
+            List<CurioSlot> slots = new ArrayList<>(results.size());
+            for (Object result : results) {
+                ItemStack stack = (ItemStack) slotResultStackMethod.invoke(result);
+                if (stack.isEmpty()) continue;
+                Object slotContext = slotResultSlotContextMethod.invoke(result);
+                slots.add(new CurioSlot(stack,
+                        (String) slotContextIdentifierMethod.invoke(slotContext),
+                        (int) slotContextIndexMethod.invoke(slotContext)));
+            }
+            return slots;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    public static void writeAllCurios(Player player) {
+        for (CurioSlot slot : getCurioSlots(player)) {
+            writeStackBack(slot.identifier(), slot.index(), player, slot.stack());
+        }
+    }
+
+    public static List<ItemStack> getCurioStacks(Player player) {
+        return getCurioSlots(player).stream().map(CurioSlot::stack).toList();
     }
 
     public static ItemStack locateItem(String identifier, int index, Player player) {

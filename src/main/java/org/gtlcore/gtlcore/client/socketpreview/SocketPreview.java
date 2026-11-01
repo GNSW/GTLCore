@@ -11,9 +11,6 @@ import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiPart;
 import com.gregtechceu.gtceu.api.machine.multiblock.MultiblockControllerMachine;
 import com.gregtechceu.gtceu.api.pattern.BlockPattern;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -36,6 +33,10 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -46,12 +47,13 @@ import java.util.Set;
 /**
  * Client-side socket overlay.
  *
- * <p>Only the single multiblock controller under the player's crosshair is rendered.  A small area
+ * <p>
+ * Only the single multiblock controller under the player's crosshair is rendered. A small area
  * is drawn: a 24 block render radius and a roughly 90 degree view cone, capped at
- * {@link #MAX_BOXES} nearest boxes.  Controller discovery still uses a wider 13x13 chunk area so a
+ * {@link #MAX_BOXES} nearest boxes. Controller discovery still uses a wider 13x13 chunk area so a
  * large multiblock whose controller is farther away can still be resolved from a casing block;
- * the discovery itself is invisible and only runs every 20 ticks.  A box rebuild runs every 4
- * ticks.  Only block positions that are loaded, non-air and have at least one air neighbour are
+ * the discovery itself is invisible and only runs every 20 ticks. A box rebuild runs every 4
+ * ticks. Only block positions that are loaded, non-air and have at least one air neighbour are
  * considered, so a formed shell produces a readable set of sockets instead of the whole structure
  * volume.
  */
@@ -250,7 +252,7 @@ public final class SocketPreview {
         VertexConsumer lines = buffers.getBuffer(type);
 
         // RenderLevelStageEvent hands out the level renderer's pose stack, which is still at
-        // world origin (block entities translate by pos - camera themselves).  Move it to the
+        // world origin (block entities translate by pos - camera themselves). Move it to the
         // camera before drawing absolute world-space AABBs.
         poseStack.pushPose();
         boolean lineWidthSet = false;
@@ -339,7 +341,7 @@ public final class SocketPreview {
     }
 
     /**
-     * Picks exactly one controller: the one under the crosshair.  Looking at a controller or a
+     * Picks exactly one controller: the one under the crosshair. Looking at a controller or a
      * hatch/bus resolves through its block entity; looking at a casing resolves by checking which
      * nearby structure pattern owns that cell.
      */
@@ -549,7 +551,7 @@ public final class SocketPreview {
                             boolean otherMachine = current instanceof IMachineBlock;
                             boolean accepted = PatternSockets.acceptsBlock(cell.predicate(), current);
                             // The held part itself or another machine in the socket means
-                            // "occupied".  A plain casing accepted by the cell is free to be
+                            // "occupied". A plain casing accepted by the cell is free to be
                             // replaced.
                             boolean available = accepted && !samePart && !otherMachine;
                             BOXES.add(new Box(aabb,
@@ -575,7 +577,7 @@ public final class SocketPreview {
 
     /**
      * True when the point is within {@link #RENDER_RANGE_SQ} of the player's eyes and inside a
-     * roughly 90 degree cone around the look direction.  The check uses the squared projection
+     * roughly 90 degree cone around the look direction. The check uses the squared projection
      * against the (unit) look vector, so no normalisation is needed.
      */
     private static boolean isInFront(Vec3 eye, Vec3 look, double x, double y, double z) {

@@ -1,4 +1,9 @@
 {
+  "gtlcore.cover.supply_all.off": "Supply all: OFF",
+  "gtlcore.cover.supply_all.on": "Supply all: ON",
+  "gtlcore.cover.supply_all.tooltip": "Transfer every configured resource as one exact batch, or transfer nothing. Large batches wait for transfer credit.",
+  "gtlcore.cover.supply_all.requirements": "Requires Supply Exact and a nonempty simple whitelist filter. An invalid filter pauses grouped supply.",
+  "gtlcore.cover.supply_all.handlers": "Use direct inventories or tank-addressable fluid destinations. Item pipe routing and unsupported fluid destinations do not transfer batches.",
   "mm.menu.modes": "Select mode",
   "mm.menu.back": "Back",
   "mm.menu.hint": "Click to open or select · Center / Esc to go back",
@@ -1589,5 +1594,17 @@
   "item.gtlcore.infinite_spray_can.mode.16": "Solvent",
   "item.gtlcore.infinite_spray_can.menu": "Select Spray Color",
   "tooltip.gtlcore.socket_preview.available": "Cyan outline: free socket for the held part",
-  "tooltip.gtlcore.socket_preview.occupied": "Orange outline: occupied or blocked socket"
+  "tooltip.gtlcore.socket_preview.occupied": "Orange outline: occupied or blocked socket",
+  "block.gtlcore.wireless_charging_station": "Wireless Charging Repeater",
+  "tooltip.gtlcore.wireless_charging_station.0": "Place between 1 and 16 Field Generators of the same level (LV–MAX)",
+  "tooltip.gtlcore.wireless_charging_station.1": "Each Field Generator supplies 0.25 A; the voltage rating corresponds to the Field Generator levels",
+  "tooltip.gtlcore.wireless_charging_station.2": "After right-clicking to bind a team using Data Stick, recharge the items carried by players in that team across all dimensions and distances",
+  "gui.gtlcore.wireless_charging_station.owner": "Owner: %s",
+  "gui.gtlcore.wireless_charging_station.unbound": "Unbound to any team",
+  "gui.gtlcore.wireless_charging_station.status": "Status: %s",
+  "gui.gtlcore.wireless_charging_station.active": "Active",
+  "gui.gtlcore.wireless_charging_station.inactive": "No Field Generator",
+  "gui.gtlcore.wireless_charging_station.power": "Power: %s A / %s",
+  "block.gtceu.wireless_charging_station": "Wireless Charging Repeater",
+  "gui.gtlcore.wireless_charging_station.wireless_eu": "Wireless EU: %s"
 }

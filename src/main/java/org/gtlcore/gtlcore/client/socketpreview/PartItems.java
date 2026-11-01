@@ -21,12 +21,14 @@ import java.util.Set;
 /**
  * Helpers for recognising GregTech part items.
  *
- * <p>Rendering uses {@link #partMachine(ItemStack)} only: every non-controller
- * {@link MetaMachineItem} is considered.  A single-block machine never matches a multiblock
+ * <p>
+ * Rendering uses {@link #partMachine(ItemStack)} only: every non-controller
+ * {@link MetaMachineItem} is considered. A single-block machine never matches a multiblock
  * pattern cell, while custom addon parts (including parts that are not registered to a
  * {@link PartAbility}) still work.
  *
- * <p>The tooltip uses the stricter {@link #isRegisteredPart(ItemStack)} check.  Abilities are
+ * <p>
+ * The tooltip uses the stricter {@link #isRegisteredPart(ItemStack)} check. Abilities are
  * collected reflectively so parts added by GTCEu, GTLCore and other addons are covered without
  * hard-coding every ability constant.
  */
@@ -66,7 +68,7 @@ public final class PartItems {
 
     /**
      * True for a non-controller machine item whose block is registered to at least one
-     * {@link PartAbility}.  This keeps the placement tooltip off ordinary single-block machines.
+     * {@link PartAbility}. This keeps the placement tooltip off ordinary single-block machines.
      */
     public static boolean isRegisteredPart(ItemStack stack) {
         MetaMachineItem machineItem = partMachine(stack);

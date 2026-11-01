@@ -7,15 +7,15 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-/** Native storage hooks and the global chunk-owned provider must never coexist. */
+/** Selects the owner-thread fence without changing virtual worlds' light contract. */
 public final class LightingMixinPlugin implements IMixinConfigPlugin {
-    private static final Set<String> NATIVE_ONLY = Set.of(
-            "LightFenceMixin", "VisibleLightEngineMixin", "VisibleLightStorageMixin", "SkySourcesAccessMixin");
 
     @Override public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         String simpleName = mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1);
-        return !NATIVE_ONLY.contains(simpleName)
-                || !ca.spottedleaf.starlight.common.config.GlobalLightConfig.enabled();
+        boolean global = !"false".equalsIgnoreCase(System.getProperty("vre.globalLighting"));
+        if (simpleName.equals("LightFenceMixin")) return !global;
+        if (simpleName.equals("WorldLightEngineMixin") || simpleName.equals("WorldLightFenceMixin")) return global;
+        return true;
     }
     @Override public void onLoad(String mixinPackage) { }
     @Override public String getRefMapperConfig() { return null; }

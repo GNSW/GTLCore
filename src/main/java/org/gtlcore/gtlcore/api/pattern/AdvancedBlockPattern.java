@@ -3,7 +3,6 @@ package org.gtlcore.gtlcore.api.pattern;
 import org.gtlcore.gtlcore.common.item.UltimateTerminalBehavior;
 import org.gtlcore.gtlcore.integration.ae2.WirelessTerminalGridResolver;
 import org.gtlcore.gtlcore.integration.terminal.StableBlockCandidates;
-import org.gtlcore.gtlcore.integration.terminal.host.MirrorIntent;
 import org.gtlcore.gtlcore.mixin.gtm.api.machine.IMultiblockStateInvoker;
 
 import com.gregtechceu.gtceu.api.machine.IMachineBlockEntity;
@@ -157,7 +156,6 @@ public class AdvancedBlockPattern extends BlockPattern {
         clearWorldState(buildState);
         IMultiController controller = worldState.getController();
         BlockPos centerPos = controller.self().getPos();
-        MirrorIntent.remember(world, centerPos, autoBuildSetting.isFlipped());
         Direction facing = controller.self().getFrontFacing();
         Direction upwardsFacing = controller.self().getUpwardsFacing();
         boolean isFlipped = autoBuildSetting.isFlipped();
@@ -392,7 +390,6 @@ public class AdvancedBlockPattern extends BlockPattern {
         if (level.isClientSide()) return;
 
         BlockPos centerPos = controller.self().getPos();
-        MirrorIntent.clear(level, centerPos);
         Direction facing = controller.self().getFrontFacing();
         Direction upwardsFacing = controller.self().getUpwardsFacing();
 
@@ -411,12 +408,12 @@ public class AdvancedBlockPattern extends BlockPattern {
             if (repetitions != null && repetitions.length == this.fingerLength &&
                     matchContext.containsKey(MATCHED_MIN_Z_CONTEXT)) {
                 layout = new DismantleLayout(matchContext.getInt(MATCHED_MIN_Z_CONTEXT), repetitions,
-                        worldState.isNeededFlip());
+                        worldState.isNeededFlip(), Integer.MAX_VALUE);
             }
         }
         if (layout == null) {
-            layout = findPartialDismantleLayout(level, centerPos, facing, upwardsFacing,
-                    autoBuildSetting.isFlipped() && controller.self().allowFlip());
+            layout = findBestPartialDismantleLayout(level, centerPos, facing, upwardsFacing,
+                    controller.self().allowFlip());
         }
 
         int[] repeat = layout.repetitions();
@@ -470,10 +467,6 @@ public class AdvancedBlockPattern extends BlockPattern {
                                         }
                                     }
                                     if (remainder.isEmpty()) continue;
-                                    if (autoBuildSetting.isStrictAeOutput()) {
-                                        player.drop(remainder, false);
-                                        continue;
-                                    }
                                     // 3.1 尝试放入嵌套容器（如背包袋）
                                     remainder = insertIntoNestedItemHandler(player, remainder);
                                     // 3.2 尝试放入玩家原生背包
@@ -501,17 +494,30 @@ public class AdvancedBlockPattern extends BlockPattern {
         }
     }
 
+    private DismantleLayout findBestPartialDismantleLayout(Level level, BlockPos centerPos, Direction facing,
+                                                           Direction upwardsFacing, boolean allowsFlip) {
+        DismantleLayout normal = findPartialDismantleLayout(level, centerPos, facing, upwardsFacing, false);
+        if (!allowsFlip) return normal;
+        DismantleLayout flipped = findPartialDismantleLayout(level, centerPos, facing, upwardsFacing, true);
+        return flipped.score() > normal.score() ? flipped : normal;
+    }
+
     private DismantleLayout findPartialDismantleLayout(Level level, BlockPos centerPos, Direction facing,
                                                        Direction upwardsFacing, boolean isFlipped) {
         int controllerAisle = this.centerOffset[2];
         int[] repetitions = new int[this.fingerLength];
         MultiblockState probeState = new MultiblockState(level, centerPos);
+        int score = 0;
 
         int z = 0;
         for (int aisle = controllerAisle; aisle < this.fingerLength; aisle++) {
             int count = findPartialRepetitions(level, centerPos, facing, upwardsFacing, isFlipped, probeState,
                     aisle, z, 1);
             repetitions[aisle] = count;
+            for (int repeat = 0; repeat < count; repeat++) {
+                score += scoreSlice(level, centerPos, facing, upwardsFacing, isFlipped, probeState, aisle,
+                        z + repeat);
+            }
             z += count;
         }
 
@@ -520,9 +526,13 @@ public class AdvancedBlockPattern extends BlockPattern {
             int count = findPartialRepetitions(level, centerPos, facing, upwardsFacing, isFlipped, probeState,
                     aisle, z, -1);
             repetitions[aisle] = count;
+            for (int repeat = 0; repeat < count; repeat++) {
+                score += scoreSlice(level, centerPos, facing, upwardsFacing, isFlipped, probeState, aisle,
+                        z - repeat);
+            }
             z -= count;
         }
-        return new DismantleLayout(z + 1, repetitions, isFlipped);
+        return new DismantleLayout(z + 1, repetitions, isFlipped, score);
     }
 
     private int findPartialRepetitions(Level level, BlockPos centerPos, Direction facing, Direction upwardsFacing,
@@ -561,7 +571,7 @@ public class AdvancedBlockPattern extends BlockPattern {
         return score;
     }
 
-    private record DismantleLayout(int minZ, int[] repetitions, boolean isFlipped) {}
+    private record DismantleLayout(int minZ, int[] repetitions, boolean isFlipped, int score) {}
 
     private int[] getConfiguredRepetitions(int repeatCount) {
         int[] repetitions = new int[this.fingerLength];

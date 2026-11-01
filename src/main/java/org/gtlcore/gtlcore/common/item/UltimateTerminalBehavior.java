@@ -369,7 +369,7 @@ public class UltimateTerminalBehavior implements IItemUIFactory {
         private final Object2ObjectMap<Block, Block> tierReplacements = new Object2ObjectOpenHashMap<>();
         private final Set<Block> blocks = new ObjectOpenHashSet<>();
         private int repeatCount;
-        private boolean noHatchMode, replaceMode, isFlipped, dismantleMode, aeMode, strictAeOutput;
+        private boolean noHatchMode, replaceMode, isFlipped, dismantleMode, aeMode;
         private GlobalPos boundAE;
 
         public AutoBuildSetting() {
@@ -379,10 +379,9 @@ public class UltimateTerminalBehavior implements IItemUIFactory {
             this.isFlipped = false;
             this.dismantleMode = false;
             this.aeMode = false;
-            this.strictAeOutput = false;
         }
 
-        public void addTierSelection(Block[] tierBlocks, Block selectedBlock) {
+        private void addTierSelection(Block[] tierBlocks, Block selectedBlock) {
             for (Block tierBlock : tierBlocks) {
                 this.tierReplacements.put(tierBlock, selectedBlock);
                 this.blocks.add(tierBlock);

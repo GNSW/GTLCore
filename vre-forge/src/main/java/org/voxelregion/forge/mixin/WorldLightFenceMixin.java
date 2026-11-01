@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -148,33 +149,41 @@ abstract class WorldLightFenceMixin implements NativeAccess.LightFence {
                     failure -> requested.setLightCorrect(false)));
     }
 
-    @Inject(method = "lightChunk", at = @At("RETURN"), cancellable = true)
-    private void vre$verifyGenerationPublication(ChunkAccess requested, boolean alreadyLit,
-            CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
+    @Redirect(method = "lightChunk", at = @At(value = "INVOKE",
+            target = "Ljava/util/concurrent/CompletableFuture;supplyAsync(Ljava/util/function/Supplier;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;",
+            remap = false))
+    private CompletableFuture<ChunkAccess> vre$verifyGenerationPublication(Supplier<ChunkAccess> success,
+            Executor postOwner, ChunkAccess requested, boolean alreadyLit) {
         WorldLightProvider provider = ((WorldLightProvider.Access)(Object)this).vre$worldLighting();
-        if (provider == null) return;
-        // On success native POST releases its ticket and completes its supplier. A missing
-        // field fails the dependent future; a fatal owner error stops the whole light owner.
-        // An already completed future would run plain thenApply on its registering thread.
-        // Explicit owner dispatch also keeps the implicit-NBT capture on the light mailbox.
-        CompletableFuture<ChunkAccess> verified = callback.getReturnValue().thenApplyAsync(chunk -> {
+        if (provider == null) return CompletableFuture.supplyAsync(success, postOwner);
+        // Verify in this request's native POST, before it marks light correct and releases
+        // its ticket. A second mailbox hop can observe a later update/unload and wrongly
+        // revoke this already successful publication. The native executor also handles
+        // futures that finish before the RETURN hook can register their failure tracking.
+        return CompletableFuture.supplyAsync(() -> {
             Throwable terminal = vre$lightOwnerFailure.failure();
             if (terminal != null) throw new java.util.concurrent.CompletionException(terminal);
             try {
                 // Vanilla NBT may contain no light arrays for an implicitly empty/zero
                 // field. No queueSectionData callback exists in that legitimate case.
-                if (alreadyLit) provider.initializeImplicitSavedColumn(chunk.getPos());
-                provider.requirePublished(chunk.getPos());
+                if (alreadyLit) provider.initializeImplicitSavedColumn(requested.getPos());
+                provider.requirePublished(requested.getPos());
+                return success.get();
             }
             catch (RuntimeException | Error failure) {
-                chunk.setLightCorrect(false);
+                requested.setLightCorrect(false);
                 throw failure;
             }
-            return chunk;
-        }, this::vre$dispatchOwner);
-        callback.setReturnValue(vre$lightOwnerFailure.track(verified, failure -> {
+        }, postOwner);
+    }
+
+    @Inject(method = "lightChunk", at = @At("RETURN"), cancellable = true)
+    private void vre$trackGenerationPublication(ChunkAccess requested, boolean alreadyLit,
+            CallbackInfoReturnable<CompletableFuture<ChunkAccess>> callback) {
+        if (((WorldLightProvider.Access)(Object)this).vre$worldLighting() == null) return;
+        callback.setReturnValue(vre$lightOwnerFailure.track(callback.getReturnValue(), failure -> {
             requested.setLightCorrect(false);
-            // The native success POST is intentionally discarded after terminal failure.
+            // Verification failure skips the native success supplier and its ticket release.
             // This method itself schedules the ticket removal on the server owner.
             ((ChunkMapAccessMixin)chunkMap).vre$releaseLightTicket(requested.getPos());
         }));

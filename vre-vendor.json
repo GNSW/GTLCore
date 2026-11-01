@@ -1,9 +1,9 @@
 {
   "library": "VoxelRegionEngine",
   "version": "0.1.0",
-  "sourceRevision": "751457e9137afe2888d9e8afc6574f5c0f9f5153",
+  "sourceRevision": "d4681c97e9565f3b90b1eae33baf8aff63f968c4",
   "sourceDirty": false,
-  "sourceSha256": "45d683a63c2a0f49fa6fff36a3d4c2be586b6288d09206c1701b19e43bf21624",
+  "sourceSha256": "3cffbf0258511399f73aefbf6b4c7c4a1be63c67481900889a4d39f30a9af5c7",
   "files": {
     "vre-engine/LICENSE": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
     "vre-engine/NOTICE": "bfe689fb116fd68533828a34827ac3b0c2d71b7f3fec9960614b296190805ca2",
@@ -140,7 +140,7 @@
     "vre-forge/src/main/java/org/voxelregion/forge/mixin/VisibleLightEngineMixin.java": "b89859c8c019f863694160ef366f3dc46df0c5c4da38bfa30121cf0dd5125279",
     "vre-forge/src/main/java/org/voxelregion/forge/mixin/VisibleLightStorageMixin.java": "519618a181c995128b69af143e440293a604f17f3446698e3ac80f50f78996c9",
     "vre-forge/src/main/java/org/voxelregion/forge/mixin/WorldLightEngineMixin.java": "bcb1fe1eeb11a00a545c93ab1d919050a7ee4b69dff92b932831b855ed54d3ea",
-    "vre-forge/src/main/java/org/voxelregion/forge/mixin/WorldLightFenceMixin.java": "f5157a101f8916c74416fbb2c3df44d5286644009d681d5da0dcf5b2fd63a004",
+    "vre-forge/src/main/java/org/voxelregion/forge/mixin/WorldLightFenceMixin.java": "20b1d5fb249936802f1f15153f7c886146c676d4d9ab98f0916c6749f5aeea54",
     "vre-forge/src/main/java/org/voxelregion/forge/runtime/AdapterConfig.java": "df28fa72728d3e4e87366ba18fdd3f6c1d216c858e6b7a58813ea7a0de5e208e",
     "vre-forge/src/main/java/org/voxelregion/forge/runtime/BoundedNbtReader.java": "56ca511f7a628273e29240de45706395fd6ef8d941ddad62c397dacb72a70a13",
     "vre-forge/src/main/java/org/voxelregion/forge/runtime/ChunkMutationTracking.java": "22d2a1ff0b83351f89a62e0b60cb45c2cc97e166cde8417950defc0f87daf0d1",

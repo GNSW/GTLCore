@@ -1,7 +1,10 @@
 package org.gtlcore.gtlcore.network;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.network.packet.CMirrorStateRequest;
 import org.gtlcore.gtlcore.network.packet.CSetNoClip;
+import org.gtlcore.gtlcore.network.packet.CTerminalAction;
+import org.gtlcore.gtlcore.network.packet.SMirrorStateResponse;
 import org.gtlcore.gtlcore.network.packet.SSetNoClip;
 import org.gtlcore.gtlcore.network.packet.SStructureDetectHighlight;
 
@@ -19,5 +22,8 @@ public class GTLNetworkHandler extends NetworkHandler {
         registerPacket(CSetNoClip.class, CSetNoClip::new);
         registerPacket(SSetNoClip.class, SSetNoClip::new);
         registerPacket(SStructureDetectHighlight.class, SStructureDetectHighlight::new);
+        registerPacket(CTerminalAction.class, CTerminalAction::new);
+        registerPacket(CMirrorStateRequest.class, CMirrorStateRequest::new);
+        registerPacket(SMirrorStateResponse.class, SMirrorStateResponse::new);
     }
 }

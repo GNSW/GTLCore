@@ -306,11 +306,16 @@ public final class WorldLightProvider {
         if (deferred.contains(key) || !visible.containsKey(key)) throw new MissingLightHaloException(List.of(key));
     }
 
-    /** Native already-lit NBT can legitimately omit every light array. Runs only on its POST owner. */
+    /** Finish an already-lit load on its POST owner, including recovery of a deferred field. */
     public synchronized void initializeImplicitSavedColumn(ChunkPos position) {
         ensureHealthy();
         long key = position.toLong();
-        if (client || visible.containsKey(key) || deferred.contains(key) || disabled.contains(key)) return;
+        if (client || disabled.contains(key)) return;
+        if (visible.containsKey(key) && !deferred.contains(key)) return;
+        // Saved NBT may omit every light array. A previous update can also have deferred
+        // this field while a neighbor was unavailable: initializeLight's POST enables
+        // it after the native drain, so its newly queued recovery has not run yet.
+        // Rebuild before the load's completion check; a stale visible image is not proof.
         sourceColumn(position);
         drain();
     }

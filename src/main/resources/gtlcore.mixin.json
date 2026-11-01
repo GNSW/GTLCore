@@ -46,6 +46,7 @@
     "ae2.gui.CraftingStatusSearchScreenMixin",
     "ae2.gui.CraftingStatusTableRendererMixin",
     "ae2.gui.EnergyLevelEmitterScreenMixin",
+    "ae2.gui.MathExpressionParserMixin",
     "ae2.gui.AefMEStorageScreenMixin",
     "ae2.gui.MEStorageScreenMixin",
     "ae2.gui.FastCellMEStorageScreenMixin",

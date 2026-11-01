@@ -1,9 +1,9 @@
 {
   "library": "VoxelRegionEngine",
   "version": "0.1.0",
-  "sourceRevision": "0958ac0035522e2d6a843466809966f870402abd",
+  "sourceRevision": "751457e9137afe2888d9e8afc6574f5c0f9f5153",
   "sourceDirty": false,
-  "sourceSha256": "f837d252709794d5ac807db2e6909e2e44c828300036c113e1b4cb668aca6d19",
+  "sourceSha256": "45d683a63c2a0f49fa6fff36a3d4c2be586b6288d09206c1701b19e43bf21624",
   "files": {
     "vre-engine/LICENSE": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
     "vre-engine/NOTICE": "bfe689fb116fd68533828a34827ac3b0c2d71b7f3fec9960614b296190805ca2",
@@ -105,7 +105,7 @@
     "vre-forge/src/main/java/org/voxelregion/forge/TerrainRemovalProof.java": "37cd439855b7aba7a6a3d8f385f45cda97eb96bdcd9fc3a8967f5319f8eb509d",
     "vre-forge/src/main/java/org/voxelregion/forge/UniformSectionEncoding.java": "0e19a7a6464f478323587ea7d77ba44d8b2fc98cc80a33acf2ed14b6392ca468",
     "vre-forge/src/main/java/org/voxelregion/forge/bootstrap/LightingMixinPlugin.java": "900b965420959aac480089fd39883758616da931d08b0f293ff05c27e41c3f15",
-    "vre-forge/src/main/java/org/voxelregion/forge/lighting/WorldLightProvider.java": "e0ebbb32e9e9ab09ceccc429f25997aa8e7d2e46d91dd88a1a135d2c37288a1e",
+    "vre-forge/src/main/java/org/voxelregion/forge/lighting/WorldLightProvider.java": "1ef18d8d24a97f3069e5471fd666d3ccfd3a172f823b007141165903ca64420e",
     "vre-forge/src/main/java/org/voxelregion/forge/lighting/WorldOptics.java": "9436aba54b234733ebd34fc1da2e5863f3eb5459205ffb80b83c6ee33f2a0687",
     "vre-forge/src/main/java/org/voxelregion/forge/mixin/ChunkMapAccessMixin.java": "04c071e7305852305164cf973021749a0f1513a43885e983f989d75b8ad29ced",
     "vre-forge/src/main/java/org/voxelregion/forge/mixin/ChunkMutationMixin.java": "17476e480e84fb81774820b43875e6f6e6b2c15a7cbf643061c66fbbbd4ba367",

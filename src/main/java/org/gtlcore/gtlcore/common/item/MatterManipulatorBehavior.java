@@ -80,7 +80,7 @@ public final class MatterManipulatorBehavior extends ComponentItem {
             return InteractionResult.CONSUME;
         }
         if (player.isShiftKeyDown()) {
-            begin(player, context.getHand(), context.getClickedPos());
+            begin(player, context.getHand(), context.getClickedPos(), true);
         } else if (!context.getLevel().isClientSide) {
             select(stack, player, context.getClickedPos().relative(context.getClickedFace()));
         }
@@ -98,19 +98,19 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         if (isMarker(stack)) return InteractionResultHolder.fail(stack);
         if (player.isShiftKeyDown()) {
             var hit = player.pick(player.getBlockReach(), 0, false);
-            begin(player, hand, hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK ? block.getBlockPos() : BlockPos.containing(hit.getLocation()));
+            begin(player, hand, hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK ? block.getBlockPos() : BlockPos.containing(hit.getLocation()), true);
         } else if (player instanceof ServerPlayer serverPlayer) HeldItemUIFactory.INSTANCE.openUI(serverPlayer, hand);
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
-    private static void begin(Player player, InteractionHand hand, BlockPos pos) {
+    private static void begin(Player player, InteractionHand hand, BlockPos pos, boolean forceSelect) {
         if (player instanceof ServerPlayer serverPlayer) {
             ItemStack stack = player.getItemInHand(hand);
             CompoundTag tag = stack.getOrCreateTag();
             var settings = ManipulatorSettings.read(stack);
             var task = ManipulatorSavedData.get(serverPlayer.server).task(serverPlayer, stack);
             boolean resume = task != null && !task.cancelled && !task.finished();
-            boolean selection = settings.a == null || settings.b == null || settings.template() && !settings.hasTarget();
+            boolean selection = forceSelect || settings.a == null || settings.b == null || settings.template() && !settings.hasTarget();
             tag.putLong("ManipulatorUsePos", pos.asLong());
             tag.putBoolean("ManipulatorExecuted", false);
             // Decide the gesture once: aborting a start must never fall back to selecting a point.

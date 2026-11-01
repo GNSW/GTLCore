@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.client.socketpreview;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.config.ConfigHolder;
 
 import com.gregtechceu.gtceu.api.block.IMachineBlock;
 import com.gregtechceu.gtceu.api.item.MetaMachineItem;
@@ -49,11 +50,11 @@ import java.util.Set;
  *
  * <p>
  * Only the single multiblock controller under the player's crosshair is rendered. A small area
- * is drawn: a 24 block render radius and a roughly 90 degree view cone, capped at
- * {@link #MAX_BOXES} nearest boxes. Controller discovery still uses a wider 13x13 chunk area so a
- * large multiblock whose controller is farther away can still be resolved from a casing block;
- * the discovery itself is invisible and only runs every 20 ticks. A box rebuild runs every 4
- * ticks. Only block positions that are loaded, non-air and have at least one air neighbour are
+ * is drawn: a configurable render radius (24 blocks by default) and a roughly 90 degree view cone,
+ * capped at {@link #MAX_BOXES} nearest boxes. Controller discovery still uses a wider 13x13 chunk
+ * area so a large multiblock whose controller is farther away can still be resolved from a casing
+ * block; the discovery itself is invisible and only runs every 20 ticks. A box rebuild runs every
+ * 4 ticks. Only block positions that are loaded, non-air and have at least one air neighbour are
  * considered, so a formed shell produces a readable set of sockets instead of the whole structure
  * volume.
  */
@@ -61,11 +62,9 @@ public final class SocketPreview {
 
     private static final int SCAN_RADIUS_CHUNKS = 6;
     private static final double CONTROLLER_RANGE_SQ = 96.0D * 96.0D;
-    private static final double RENDER_RANGE_SQ = 24.0D * 24.0D;
     private static final int CONTROLLER_REFRESH_TICKS = 20;
     private static final int BOX_REFRESH_TICKS = 4;
     private static final int MAX_BOXES = 512;
-    private static final int SECTION_RADIUS = 2;
     private static final double RAY_RANGE = 64.0D;
     private static final double MIN_FACING_DOT = 0.7D;
     private static final float ALPHA = 0.9F;
@@ -108,6 +107,7 @@ public final class SocketPreview {
     private static Vec3 lastBuildEye;
     private static Vec3 lastBuildLook;
     private static int lastBuildTick;
+    private static int lastBuildRange;
 
     private SocketPreview() {}
 
@@ -124,6 +124,10 @@ public final class SocketPreview {
     }
 
     private static void tickUnsafe() {
+        if (!isEnabled()) {
+            clear();
+            return;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft == null ? null : minecraft.player;
         ClientLevel level = minecraft == null ? null : minecraft.level;
@@ -186,13 +190,17 @@ public final class SocketPreview {
         boolean targetChanged = selected != target;
         target = selected;
 
+        int renderRange = renderRangeBlocks();
+        boolean rangeChanged = renderRange != lastBuildRange;
         boolean viewChanged = !sameView(lastBuildEye, lastBuildLook, eye, look);
         int sinceBuild = tick - lastBuildTick;
-        if (itemChanged || targetChanged || sinceBuild >= (viewChanged ? BOX_REFRESH_TICKS : 10)) {
-            rebuildBoxes(level, player, part, selected, eye, look);
+        if (itemChanged || targetChanged || rangeChanged ||
+                sinceBuild >= (viewChanged ? BOX_REFRESH_TICKS : 10)) {
+            rebuildBoxes(level, player, part, selected, eye, look, renderRange);
             lastBuildEye = eye;
             lastBuildLook = look;
             lastBuildTick = tick;
+            lastBuildRange = renderRange;
         }
     }
 
@@ -210,6 +218,7 @@ public final class SocketPreview {
         lastBuildEye = null;
         lastBuildLook = null;
         lastBuildTick = 0;
+        lastBuildRange = 0;
     }
 
     private static boolean sameView(Vec3 aEye, Vec3 aLook, Vec3 bEye, Vec3 bLook) {
@@ -239,7 +248,7 @@ public final class SocketPreview {
     }
 
     private static void renderUnsafe(RenderLevelStageEvent event) {
-        if (BOXES.isEmpty()) {
+        if (!isEnabled() || BOXES.isEmpty()) {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
@@ -290,6 +299,19 @@ public final class SocketPreview {
         target = null;
         tick = 0;
         resetCaches();
+    }
+
+    public static boolean isEnabled() {
+        return ConfigHolder.INSTANCE == null ||
+                ConfigHolder.INSTANCE.graphics.socketPreview.socketPreviewEnabled;
+    }
+
+    private static int renderRangeBlocks() {
+        if (ConfigHolder.INSTANCE == null) {
+            return ConfigHolder.DEFAULT_SOCKET_PREVIEW_RENDER_RANGE;
+        }
+        return Math.max(1, Math.min(ConfigHolder.MAX_SOCKET_PREVIEW_RENDER_RANGE,
+                ConfigHolder.INSTANCE.graphics.socketPreview.socketPreviewRenderRange));
     }
 
     private static void refreshControllers(ClientLevel level, LocalPlayer player) {
@@ -465,7 +487,8 @@ public final class SocketPreview {
     }
 
     private static void rebuildBoxes(ClientLevel level, LocalPlayer player, MetaMachineItem part,
-                                     MultiblockControllerMachine controller, Vec3 eye, Vec3 look) {
+                                     MultiblockControllerMachine controller, Vec3 eye, Vec3 look,
+                                     int renderRange) {
         BOXES.clear();
         if (controller == null || controller.isInValid()) {
             return;
@@ -492,12 +515,14 @@ public final class SocketPreview {
             int baseX = (playerPos.getX() >> 4) - (controllerPos.getX() >> 4);
             int baseY = (playerPos.getY() >> 4) - (controllerPos.getY() >> 4);
             int baseZ = (playerPos.getZ() >> 4) - (controllerPos.getZ() >> 4);
+            int sectionRadius = Math.max(1, (renderRange + 15) >> 4);
+            double renderRangeSq = (double) renderRange * renderRange;
             Map<Long, List<PatternSockets.Cell>> sections = PatternSockets.sectionCellsFor(
                     pattern, front, up, controller.isFlipped());
 
-            for (int sx = -SECTION_RADIUS; sx <= SECTION_RADIUS; sx++) {
-                for (int sy = -SECTION_RADIUS; sy <= SECTION_RADIUS; sy++) {
-                    for (int sz = -SECTION_RADIUS; sz <= SECTION_RADIUS; sz++) {
+            for (int sx = -sectionRadius; sx <= sectionRadius; sx++) {
+                for (int sy = -sectionRadius; sy <= sectionRadius; sy++) {
+                    for (int sz = -sectionRadius; sz <= sectionRadius; sz++) {
                         List<PatternSockets.Cell> cells = sections.get(
                                 PatternSockets.sectionKey(baseX + sx, baseY + sy, baseZ + sz));
                         if (cells == null) {
@@ -511,7 +536,7 @@ public final class SocketPreview {
                                 continue;
                             }
                             if (!isInFront(eye, look, pos.getX() + 0.5D, pos.getY() + 0.5D,
-                                    pos.getZ() + 0.5D)) {
+                                    pos.getZ() + 0.5D, renderRangeSq)) {
                                 continue;
                             }
                             if (!PatternSockets.accepts(cell.predicate(), heldItem) ||
@@ -576,16 +601,17 @@ public final class SocketPreview {
     }
 
     /**
-     * True when the point is within {@link #RENDER_RANGE_SQ} of the player's eyes and inside a
-     * roughly 90 degree cone around the look direction. The check uses the squared projection
+     * True when the point is within the configured render range of the player's eyes and inside
+     * a roughly 90 degree cone around the look direction. The check uses the squared projection
      * against the (unit) look vector, so no normalisation is needed.
      */
-    private static boolean isInFront(Vec3 eye, Vec3 look, double x, double y, double z) {
+    private static boolean isInFront(Vec3 eye, Vec3 look, double x, double y, double z,
+                                     double renderRangeSq) {
         double dx = x - eye.x;
         double dy = y - eye.y;
         double dz = z - eye.z;
         double distanceSq = dx * dx + dy * dy + dz * dz;
-        if (distanceSq > RENDER_RANGE_SQ || distanceSq < 1.0E-6D) {
+        if (distanceSq > renderRangeSq || distanceSq < 1.0E-6D) {
             return false;
         }
         double projection = dx * look.x + dy * look.y + dz * look.z;

@@ -240,7 +240,7 @@ public class ForgeClientEventListener {
      */
     @SubscribeEvent
     public static void onSocketPreviewTooltip(ItemTooltipEvent event) {
-        if (!PartItems.isRegisteredPart(event.getItemStack())) {
+        if (!SocketPreview.isEnabled() || !PartItems.isRegisteredPart(event.getItemStack())) {
             return;
         }
         event.getToolTip().add(Component.translatable("tooltip.gtlcore.socket_preview.available")

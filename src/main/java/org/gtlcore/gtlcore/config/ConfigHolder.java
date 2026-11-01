@@ -16,6 +16,8 @@ public class ConfigHolder {
     public static final int DEFAULT_MACHINE_STARTUP_AE_TICK_BUDGET_PER_LEVEL = 32;
     public static final int DEFAULT_MACHINE_STARTUP_TICK_TIME_BUDGET_MILLIS = 10;
     public static final int DEFAULT_GTCEU_JEI_SLOW_RECIPE_TYPE_WARNING_MILLIS = 100;
+    public static final int DEFAULT_SOCKET_PREVIEW_RENDER_RANGE = 24;
+    public static final int MAX_SOCKET_PREVIEW_RENDER_RANGE = 64;
     private static final Object LOCK = new Object();
 
     public static void init() {
@@ -450,6 +452,10 @@ public class ConfigHolder {
         public PreviewOptions multiblockPreview = new PreviewOptions();
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.socketPreview.comment")
+        public SocketPreviewOptions socketPreview = new SocketPreviewOptions();
+
+        @Configurable
         @Configurable.Comment("config.gtlcore.option.bloom.comment")
         public BloomOptions bloom = new BloomOptions();
     }
@@ -504,6 +510,18 @@ public class ConfigHolder {
         @Configurable.Comment("config.gtlcore.option.cacheMb.comment")
         @Configurable.Range(min = 0, max = 1024)
         public int cacheMb = 192;
+    }
+
+    public static class SocketPreviewOptions {
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.socketPreviewEnabled.comment")
+        public boolean socketPreviewEnabled = true;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.socketPreviewRenderRange.comment")
+        @Configurable.Range(min = 1, max = MAX_SOCKET_PREVIEW_RENDER_RANGE)
+        public int socketPreviewRenderRange = DEFAULT_SOCKET_PREVIEW_RENDER_RANGE;
     }
 
     public static class DebugLoggingOptions {

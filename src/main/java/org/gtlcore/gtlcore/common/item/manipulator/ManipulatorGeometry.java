@@ -61,12 +61,14 @@ public final class ManipulatorGeometry {
     }
 
     public static BlockPos target(BlockPos local, int array, ManipulatorSettings s) {
+        BlockPos anchor = s.targetMin();
+        if (anchor == null) throw new IllegalArgumentException("mm.error.selection");
         BlockPos repeat = local(array, new BlockPos(s.repeat[0], s.repeat[1], s.repeat[2]));
         BlockPos extent = extent(s);
         BlockPos transformed = vector(local, s).subtract(transformedMin(s));
-        return new BlockPos(Math.toIntExact((long) s.anchor.getX() + transformed.getX() + (long) repeat.getX() * ((long) extent.getX() + s.spacing[0])),
-                Math.toIntExact((long) s.anchor.getY() + transformed.getY() + (long) repeat.getY() * ((long) extent.getY() + s.spacing[1])),
-                Math.toIntExact((long) s.anchor.getZ() + transformed.getZ() + (long) repeat.getZ() * ((long) extent.getZ() + s.spacing[2])));
+        return new BlockPos(Math.toIntExact((long) anchor.getX() + transformed.getX() + (long) repeat.getX() * ((long) extent.getX() + s.spacing[0])),
+                Math.toIntExact((long) anchor.getY() + transformed.getY() + (long) repeat.getY() * ((long) extent.getY() + s.spacing[1])),
+                Math.toIntExact((long) anchor.getZ() + transformed.getZ() + (long) repeat.getZ() * ((long) extent.getZ() + s.spacing[2])));
     }
 
     /** -1 excludes a cell; 0/1/2/3 identify corner/edge/surface/interior materials. */

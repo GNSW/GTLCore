@@ -40,7 +40,7 @@ import java.util.List;
 
 public final class MatterManipulatorBehavior extends ComponentItem {
 
-    public static final int HOLD_TICKS = SharedConstants.TICKS_PER_SECOND;
+    public static final int HOLD_TICKS = SharedConstants.TICKS_PER_SECOND * 2;
 
     public MatterManipulatorBehavior(Properties properties) {
         super(properties.stacksTo(1));
@@ -82,7 +82,7 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         if (player.isShiftKeyDown()) {
             begin(player, context.getHand(), context.getClickedPos());
         } else if (!context.getLevel().isClientSide) {
-            select(stack, player, context.getClickedPos());
+            select(stack, player, context.getClickedPos().relative(context.getClickedFace()));
         }
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
     }
@@ -110,7 +110,7 @@ public final class MatterManipulatorBehavior extends ComponentItem {
             var settings = ManipulatorSettings.read(stack);
             var task = ManipulatorSavedData.get(serverPlayer.server).task(serverPlayer, stack);
             boolean resume = task != null && !task.cancelled && !task.finished();
-            boolean selection = settings.a == null || settings.b == null || settings.template() && settings.anchor == null;
+            boolean selection = settings.a == null || settings.b == null || settings.template() && !settings.hasTarget();
             tag.putLong("ManipulatorUsePos", pos.asLong());
             tag.putBoolean("ManipulatorExecuted", false);
             // Decide the gesture once: aborting a start must never fall back to selecting a point.
@@ -157,8 +157,14 @@ public final class MatterManipulatorBehavior extends ComponentItem {
             return;
         }
         settings.dimension = dimension;
-        if (settings.paste && settings.template()) settings.anchor = pos;
-        else if (settings.a == null || settings.b != null) {
+        if (settings.paste && settings.template()) {
+            if (settings.pasteA == null) settings.pasteA = pos;
+            else if (settings.pasteB == null) settings.pasteB = pos;
+            else {
+                settings.pasteA = pos;
+                settings.pasteB = null;
+            }
+        } else if (settings.a == null || settings.b != null) {
             settings.a = pos;
             settings.b = null;
         } else settings.b = pos;
@@ -174,16 +180,21 @@ public final class MatterManipulatorBehavior extends ComponentItem {
             case COPY -> {
                 s.mode = ManipulatorSettings.Mode.COPY;
                 s.paste = false;
+                s.clearTarget();
             }
             case CUT -> {
                 s.mode = ManipulatorSettings.Mode.MOVE;
                 s.paste = false;
+                s.clearTarget();
             }
-            case PASTE -> s.paste = true;
+            case PASTE -> {
+                s.paste = true;
+                s.clearTarget();
+            }
             case CLEAR -> {
                 s.a = null;
                 s.b = null;
-                s.anchor = null;
+                s.clearTarget();
                 s.dimension = "";
             }
             case RESET -> {
@@ -267,10 +278,13 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         Component use = Component.keybind("key.use");
         Component sneakUse = Component.translatable("mm.tooltip.chord", Component.keybind("key.sneak"), use);
         tooltip.add(controlHint(Component.translatable("mm.tooltip.air", use), "mm.tooltip.menu"));
+        tooltip.add(Component.translatable("mm.tooltip.selection_title").withStyle(ChatFormatting.AQUA));
         tooltip.add(controlHint(Component.translatable("mm.tooltip.block", use), "mm.tooltip.select"));
         tooltip.add(controlHint(sneakUse, "mm.tooltip.tap"));
         tooltip.add(Component.translatable("mm.tooltip.control", sneakUse.copy().withStyle(ChatFormatting.YELLOW),
                 Component.translatable("mm.tooltip.execute", (float) HOLD_TICKS / SharedConstants.TICKS_PER_SECOND)).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("mm.tooltip.selection_target").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("mm.tooltip.selection_edit").withStyle(ChatFormatting.GRAY));
         tooltip.add(controlHint(Component.translatable("mm.tooltip.copy_keys", Component.keybind("key.gtlcore.manipulator.copy"),
                 Component.keybind("key.gtlcore.manipulator.cut"), Component.keybind("key.gtlcore.manipulator.paste")), "mm.tooltip.copy"));
         tooltip.add(controlHint(Component.keybind("key.gtlcore.manipulator.clear"), "mm.tooltip.clear"));

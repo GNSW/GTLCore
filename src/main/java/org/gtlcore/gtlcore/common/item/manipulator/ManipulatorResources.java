@@ -69,7 +69,8 @@ public final class ManipulatorResources {
             } else if (key instanceof AEFluidKey fluid && stack.getCount() == 1) {
                 var handler = FluidUtil.getFluidHandler(stack.copy()).orElse(null);
                 if (handler == null) continue;
-                var taken = handler.drain(fluid.toStack((int) Math.min(Integer.MAX_VALUE, amount - got)), IFluidHandler.FluidAction.EXECUTE);
+                var action = simulate ? IFluidHandler.FluidAction.SIMULATE : IFluidHandler.FluidAction.EXECUTE;
+                var taken = handler.drain(fluid.toStack((int) Math.min(Integer.MAX_VALUE, amount - got)), action);
                 got += taken.getAmount();
                 if (!simulate && !taken.isEmpty()) inventory.setItem(slot, handler.getContainer());
             }

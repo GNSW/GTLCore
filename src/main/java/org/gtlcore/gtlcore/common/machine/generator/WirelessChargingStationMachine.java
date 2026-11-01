@@ -13,6 +13,7 @@ import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.api.machine.TickableSubscription;
 import com.gregtechceu.gtceu.api.machine.TieredMachine;
 import com.gregtechceu.gtceu.api.machine.feature.IFancyUIMachine;
+import com.gregtechceu.gtceu.api.machine.feature.IMachineModifyDrops;
 import com.gregtechceu.gtceu.api.machine.trait.NotifiableItemStackHandler;
 import com.gregtechceu.gtceu.common.data.GTItems;
 
@@ -42,7 +43,7 @@ import org.jetbrains.annotations.NotNull;
 import java.math.BigInteger;
 import java.util.*;
 
-public class WirelessChargingStationMachine extends TieredMachine implements IFancyUIMachine {
+public class WirelessChargingStationMachine extends TieredMachine implements IFancyUIMachine, IMachineModifyDrops {
 
     protected static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(
             WirelessChargingStationMachine.class, MetaMachine.MANAGED_FIELD_HOLDER);
@@ -123,6 +124,11 @@ public class WirelessChargingStationMachine extends TieredMachine implements IFa
         owner = null;
         ownerDisplay = null;
         markDirty();
+    }
+
+    @Override
+    public void onDrops(List<ItemStack> drops) {
+        clearInventory(fieldGenerators.storage);
     }
 
     @Override

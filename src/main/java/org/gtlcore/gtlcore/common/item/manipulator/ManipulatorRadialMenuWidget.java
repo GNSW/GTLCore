@@ -51,15 +51,15 @@ public final class ManipulatorRadialMenuWidget extends Widget {
     private static final int ICON_SIZE = 24;
     private static final int TITLE_Y = 3;
     private static final int HINT_Y = 207;
-    private static final int NORMAL_COLOR = 0xEF15191D;
-    private static final int HOVER_COLOR = 0xFF426D85;
+    private static final int NORMAL_COLOR = 0xA015191D;
+    private static final int HOVER_COLOR = 0xD0426D85;
     private static final int TEXT_COLOR = 0xFFE5E9EB;
     private static final int ACTIVE_TEXT_COLOR = 0xFF8EE8FF;
     private static final int HOVER_TEXT_COLOR = 0xFFFFE49C;
 
     private final ItemStackTexture icon;
     private final ColorRectTexture circle = new ColorRectTexture(NORMAL_COLOR).setRadius(RADIUS);
-    private final ColorRectTexture center = new ColorRectTexture(0xFF353F47).setRadius(CENTER_RADIUS);
+    private final ColorRectTexture center = new ColorRectTexture(0xB0353F47).setRadius(CENTER_RADIUS);
     private final ColorRectTexture centerHover = new ColorRectTexture(HOVER_COLOR).setRadius(CENTER_RADIUS);
     private List<Entry> entries = List.of();
     private List<Component> labels = List.of();

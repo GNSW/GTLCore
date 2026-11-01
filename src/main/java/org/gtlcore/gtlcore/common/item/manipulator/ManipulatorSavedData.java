@@ -96,8 +96,11 @@ public final class ManipulatorSavedData extends SavedData {
     }
 
     private static void validate(ServerPlayer player, ManipulatorSettings s) {
-        if (s.a == null || s.b == null || s.template() && s.anchor == null) throw new IllegalArgumentException("mm.error.selection");
+        if (s.a == null || s.b == null || s.template() && !s.hasTarget()) throw new IllegalArgumentException("mm.error.selection");
         if (!s.dimension.equals(player.level().dimension().location().toString())) throw new IllegalArgumentException("mm.error.dimension");
+        if (s.pasteA != null && s.pasteB != null &&
+                !s.targetSize().equals(ManipulatorGeometry.extent(s)))
+            throw new IllegalArgumentException("mm.error.target_size");
         long count = s.volume();
         if (s.template()) for (int repeat : s.repeat) count = Math.multiplyExact(count, repeat);
         if (count > ConfigHolder.INSTANCE.manipulator.maxBlocks || count <= 0) throw new IllegalArgumentException("mm.error.size");
@@ -132,7 +135,9 @@ public final class ManipulatorSavedData extends SavedData {
                 continue;
             }
             task.tick(player, tool, deadline);
-            String status = task.message + " " + task.completed() + "/" + task.operationCount();
+            String status = task.unsupportedBlocks ?
+                    "mm.error.unsupported_blocks|" + task.completed() + "/" + task.operationCount() :
+                    task.message + " " + task.completed() + "/" + task.operationCount();
             if (task.failure != null) status += " @ " + task.failure.toShortString();
             if (!tool.getOrCreateTag().getString("ManipulatorStatus").equals(status)) {
                 tool.getOrCreateTag().putString("ManipulatorStatus", status);

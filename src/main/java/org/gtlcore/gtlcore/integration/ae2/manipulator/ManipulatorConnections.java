@@ -3,9 +3,14 @@ package org.gtlcore.gtlcore.integration.ae2.manipulator;
 import org.gtlcore.gtlcore.common.item.manipulator.ManipulatorGeometry;
 import org.gtlcore.gtlcore.common.item.manipulator.ManipulatorSettings;
 import org.gtlcore.gtlcore.common.item.manipulator.ManipulatorTask;
+import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachineBase;
+import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferProxyPartMachine;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeSavedData;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkCoreBlockEntity;
+
+import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
+import com.gregtechceu.gtceu.api.machine.MetaMachine;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,6 +37,17 @@ public final class ManipulatorConnections {
         if (level.getBlockEntity(pos) instanceof WirelessNetworkCoreBlockEntity core) {
             core.setOwner(player);
             WirelessAeSavedData.get(level.getServer()).setCore(core.getFrequency(), GlobalPos.of(level.dimension(), pos));
+        }
+    }
+
+    public static void rebindProxyBuffers(ManipulatorTask task, ServerLevel level) {
+        for (ManipulatorTask.Operation op : task.operations) {
+            if (!(level.getBlockEntity(op.target()) instanceof MetaMachineBlockEntity holder)) continue;
+            if (!(holder.getMetaMachine() instanceof MEPatternBufferProxyPartMachine proxy)) continue;
+            BlockPos target = op.snapshot().proxyBufferTarget(task.settings, op.target());
+            if (target != null && MetaMachine.getMachine(level, target) instanceof MEPatternBufferPartMachineBase) {
+                proxy.setBuffer(target);
+            }
         }
     }
 

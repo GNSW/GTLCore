@@ -10,6 +10,7 @@ import com.gregtechceu.gtceu.api.gui.UITemplate;
 
 import com.lowdragmc.lowdraglib.gui.factory.HeldItemUIFactory;
 import com.lowdragmc.lowdraglib.gui.modular.ModularUI;
+import com.lowdragmc.lowdraglib.gui.texture.ColorRectTexture;
 import com.lowdragmc.lowdraglib.gui.texture.GuiTextureGroup;
 import com.lowdragmc.lowdraglib.gui.texture.TextTexture;
 import com.lowdragmc.lowdraglib.gui.widget.ButtonWidget;
@@ -40,6 +41,12 @@ import static org.gtlcore.gtlcore.common.item.manipulator.ManipulatorRadialMenuW
 
 public final class ManipulatorUI extends WidgetGroup {
 
+    private enum SelectionScope {
+        SOURCE,
+        TARGET,
+        BOTH
+    }
+
     private static final int WIDTH = 384;
     private static final int HEIGHT = 354;
     private static final int PANEL_Y = 27;
@@ -50,6 +57,8 @@ public final class ManipulatorUI extends WidgetGroup {
     private final ManipulatorRadialMenuWidget radial;
     private final WidgetGroup shortcuts = new WidgetGroup(0, 291, WIDTH, 18);
     private final List<WidgetGroup> panels = new ArrayList<>();
+    private final List<WidgetGroup> coordinateRows = new ArrayList<>();
+    private SelectionScope editScope = SelectionScope.SOURCE;
     private final WidgetGroup coordinates;
     private final WidgetGroup array;
     private final WidgetGroup inventory;
@@ -134,7 +143,7 @@ public final class ManipulatorUI extends WidgetGroup {
 
     private void showMode() {
         List<Entry> entries = new ArrayList<>();
-        entries.add(new Entry("mm.menu.coordinates", () -> openPanel(coordinates, this::showMode)));
+        entries.add(new Entry("mm.menu.edit_selection", this::showEditScope));
         switch (mode) {
             case BUILD -> {
                 entries.add(new Entry("mm.menu.shape", this::showShape));
@@ -162,6 +171,164 @@ public final class ManipulatorUI extends WidgetGroup {
         entries.add(new Entry("mm.materials", () -> openPanel(inventory, this::showMode)));
         entries.add(new Entry("mm.clear", () -> command(MatterManipulatorBehavior.Action.CLEAR)));
         show(key("mm.mode.", mode), entries, this::showModes);
+    }
+
+    private void showEditScope() {
+        List<Entry> entries = new ArrayList<>();
+        entries.add(new Entry("mm.scope.source", () -> {
+            editScope = SelectionScope.SOURCE;
+            showSelectionEditor();
+        }, () -> editScope == SelectionScope.SOURCE));
+        if (settings().template()) {
+            entries.add(new Entry("mm.scope.target", () -> {
+                editScope = SelectionScope.TARGET;
+                showSelectionEditor();
+            }, () -> editScope == SelectionScope.TARGET));
+            entries.add(new Entry("mm.scope.both", () -> {
+                editScope = SelectionScope.BOTH;
+                showSelectionEditor();
+            }, () -> editScope == SelectionScope.BOTH));
+        }
+        show("mm.menu.edit_selection", entries, this::showMode);
+    }
+
+    private void showSelectionEditor() {
+        List<Entry> entries = new ArrayList<>();
+        entries.add(new Entry("mm.menu.coordinates", this::openSelectionCoordinates));
+        entries.add(new Entry("mm.menu.nudge", this::showNudge));
+        if (editScope == SelectionScope.SOURCE) entries.add(new Entry("mm.menu.expand", this::showExpand));
+        show(key("mm.scope.", editScope), entries, this::showEditScope);
+    }
+
+    private void openSelectionCoordinates() {
+        for (int i = 0; i < coordinateRows.size(); i++) {
+            boolean visible = editScope == SelectionScope.BOTH ||
+                    editScope == SelectionScope.SOURCE && i <= 1 ||
+                    editScope == SelectionScope.TARGET && i >= 3;
+            coordinateRows.get(i).setVisible(visible).setActive(visible);
+        }
+        openPanel(coordinates, this::showSelectionEditor);
+    }
+
+    private void showNudge() {
+        List<Entry> entries = new ArrayList<>();
+        if (editScope != SelectionScope.TARGET) {
+            entries.add(action("mm.nudge.a", () -> nudge(editScope, 0)));
+            entries.add(action("mm.nudge.b", () -> nudge(editScope, 1)));
+        }
+        if (editScope != SelectionScope.SOURCE) {
+            entries.add(action("mm.nudge.paste_a", () -> nudge(editScope, 3)));
+            entries.add(action("mm.nudge.paste_b", () -> nudge(editScope, 4)));
+        }
+        entries.add(action("mm.nudge.whole", () -> nudge(editScope, -1)));
+        entries.add(action("mm.nudge.here", this::moveSelectionHere));
+        show("mm.menu.nudge", entries, this::showSelectionEditor);
+    }
+
+    private void showExpand() {
+        show("mm.menu.expand", List.of(
+                action("mm.expand.up1", () -> expandSource(Direction.UP, 1)),
+                action("mm.expand.up16", () -> expandSource(Direction.UP, 16)),
+                action("mm.expand.down1", () -> expandSource(Direction.DOWN, 1)),
+                action("mm.expand.down16", () -> expandSource(Direction.DOWN, 16)),
+                action("mm.expand.forward1", () -> expandSource(player.getDirection(), 1)),
+                action("mm.expand.back1", () -> expandSource(player.getDirection().getOpposite(), 1)),
+                action("mm.expand.out1", () -> expandSource(1)),
+                action("mm.expand.out16", () -> expandSource(16)),
+                action("mm.expand.in1", () -> expandSource(-1))), this::showSelectionEditor);
+    }
+
+    private void nudge(SelectionScope scope, int point) {
+        Direction direction = Direction.getNearest(player.getLookAngle().x, player.getLookAngle().y, player.getLookAngle().z);
+        edit(settings -> {
+            if (point >= 0) {
+                movePoint(settings, point, direction);
+                return;
+            }
+            if (scope != SelectionScope.TARGET) {
+                movePoint(settings, 0, direction);
+                movePoint(settings, 1, direction);
+            }
+            if (scope != SelectionScope.SOURCE) {
+                movePoint(settings, 3, direction);
+                movePoint(settings, 4, direction);
+            }
+        });
+    }
+
+    private void expandSource(int amount) {
+        expandSource(Direction.getNearest(player.getLookAngle().x, player.getLookAngle().y, player.getLookAngle().z), amount);
+    }
+
+    private void expandSource(Direction direction, int amount) {
+        edit(settings -> {
+            if (settings.a == null || settings.b == null) return;
+            BlockPos[] source = expandBox(settings.a, settings.b, direction, amount);
+            settings.a = source[0];
+            settings.b = source[1];
+            if (settings.pasteA != null && settings.pasteB != null) {
+                BlockPos[] target = expandBox(settings.pasteA, settings.pasteB, direction, amount);
+                settings.pasteA = target[0];
+                settings.pasteB = target[1];
+            }
+        });
+    }
+
+    private static BlockPos[] expandBox(BlockPos a, BlockPos b, Direction direction, int amount) {
+        int minX = Math.min(a.getX(), b.getX());
+        int minY = Math.min(a.getY(), b.getY());
+        int minZ = Math.min(a.getZ(), b.getZ());
+        int maxX = Math.max(a.getX(), b.getX());
+        int maxY = Math.max(a.getY(), b.getY());
+        int maxZ = Math.max(a.getZ(), b.getZ());
+        int dx = direction.getStepX() * amount;
+        int dy = direction.getStepY() * amount;
+        int dz = direction.getStepZ() * amount;
+        if (direction.getStepX() > 0) maxX += dx;
+        else if (direction.getStepX() < 0) minX += dx;
+        if (direction.getStepY() > 0) maxY += dy;
+        else if (direction.getStepY() < 0) minY += dy;
+        if (direction.getStepZ() > 0) maxZ += dz;
+        else if (direction.getStepZ() < 0) minZ += dz;
+        if (minX > maxX) {
+            if (direction.getStepX() > 0) maxX = minX;
+            else minX = maxX;
+        }
+        if (minY > maxY) {
+            if (direction.getStepY() > 0) maxY = minY;
+            else minY = maxY;
+        }
+        if (minZ > maxZ) {
+            if (direction.getStepZ() > 0) maxZ = minZ;
+            else minZ = maxZ;
+        }
+        return new BlockPos[] {
+                new BlockPos(minX, minY, minZ),
+                new BlockPos(maxX, maxY, maxZ)
+        };
+    }
+
+    private void moveSelectionHere() {
+        edit(settings -> {
+            if (editScope != SelectionScope.TARGET && (settings.a == null || settings.b == null)) return;
+            if (editScope != SelectionScope.SOURCE && (settings.pasteA == null || settings.pasteB == null)) return;
+            BlockPos target = editScope == SelectionScope.TARGET ? settings.targetMin() : settings.min();
+            if (target == null) return;
+            BlockPos delta = player.blockPosition().subtract(target);
+            if (editScope != SelectionScope.TARGET) {
+                settings.a = settings.a == null ? null : settings.a.offset(delta);
+                settings.b = settings.b == null ? null : settings.b.offset(delta);
+            }
+            if (editScope != SelectionScope.SOURCE) {
+                settings.pasteA = settings.pasteA == null ? null : settings.pasteA.offset(delta);
+                settings.pasteB = settings.pasteB == null ? null : settings.pasteB.offset(delta);
+            }
+        });
+    }
+
+    private void movePoint(ManipulatorSettings settings, int point, Direction direction) {
+        BlockPos pos = point(settings, point);
+        if (pos != null) setPoint(settings, point, pos.relative(direction));
     }
 
     private void showRemoval(Runnable back) {
@@ -263,7 +430,7 @@ public final class ManipulatorUI extends WidgetGroup {
 
     private WidgetGroup panel(String title) {
         WidgetGroup panel = new WidgetGroup(0, PANEL_Y, WIDTH, PANEL_HEIGHT);
-        panel.setBackground(GuiTextures.BACKGROUND);
+        panel.setBackground(new ColorRectTexture(0xB3101418));
         panel.addWidget(new LabelWidget(8, 9, title));
         var back = new ButtonWidget(WIDTH - 72, 4, 64, 18, new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture("mm.menu.back")), click -> radial.backFromClient());
         back.setClientSideWidget();
@@ -282,14 +449,15 @@ public final class ManipulatorUI extends WidgetGroup {
 
     private WidgetGroup coordinates() {
         WidgetGroup panel = panel("mm.menu.coordinates");
-        for (int row = 0; row < 3; row++) {
+        for (int row = 0; row < 5; row++) {
             int point = row;
-            int y = 47 + row * 58;
-            panel.addWidget(new LabelWidget(8, y, "mm.point." + row));
+            int y = 35 + row * 40;
+            WidgetGroup rowGroup = new WidgetGroup(0, 0, WIDTH, PANEL_HEIGHT);
+            rowGroup.addWidget(new LabelWidget(8, y, "mm.point." + row));
             for (int i = 0; i < 3; i++) {
                 int axis = i;
-                panel.addWidget(new LabelWidget(8 + axis * 102, y + 20, axisName(axis)));
-                panel.addWidget(new TextFieldWidget(21 + axis * 102, y + 15, 84, 18, () -> {
+                rowGroup.addWidget(new LabelWidget(8 + axis * 102, y + 20, axisName(axis)));
+                rowGroup.addWidget(new TextFieldWidget(21 + axis * 102, y + 15, 84, 18, () -> {
                     BlockPos pos = point(settings(), point);
                     return pos == null ? "" : Integer.toString(pos.get(Direction.Axis.values()[axis]));
                 }, text -> {
@@ -302,7 +470,10 @@ public final class ManipulatorUI extends WidgetGroup {
                     });
                 }).setNumbersOnly(-Level.MAX_LEVEL_SIZE, Level.MAX_LEVEL_SIZE));
             }
-            button(panel, 318, y + 15, 58, "mm.here", () -> edit(settings -> setPoint(settings, point, player.blockPosition())));
+            rowGroup.addWidget(new ButtonWidget(318, y + 15, 58, 18, new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture("mm.here")),
+                    click -> server(() -> edit(settings -> setPoint(settings, point, player.blockPosition())))));
+            coordinateRows.add(rowGroup);
+            panel.addWidget(rowGroup);
         }
         button(panel, 8, 239, 118, "mm.clear", () -> command(MatterManipulatorBehavior.Action.CLEAR));
         return panel;
@@ -381,13 +552,16 @@ public final class ManipulatorUI extends WidgetGroup {
     }
 
     private static BlockPos point(ManipulatorSettings settings, int point) {
-        return point == 0 ? settings.a : point == 1 ? settings.b : settings.anchor;
+        return point == 0 ? settings.a : point == 1 ? settings.b : point == 2 ? settings.anchor :
+                point == 3 ? settings.pasteA : settings.pasteB;
     }
 
     private void setPoint(ManipulatorSettings settings, int point, BlockPos pos) {
         if (point == 0) settings.a = pos;
         else if (point == 1) settings.b = pos;
-        else settings.anchor = pos;
+        else if (point == 2) settings.anchor = pos;
+        else if (point == 3) settings.pasteA = pos;
+        else settings.pasteB = pos;
         settings.dimension = player.level().dimension().location().toString();
     }
 

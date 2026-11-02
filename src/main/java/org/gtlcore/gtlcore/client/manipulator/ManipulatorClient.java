@@ -184,7 +184,7 @@ public final class ManipulatorClient {
         var s = ManipulatorSettings.read(stack);
         var mc = Minecraft.getInstance();
         if (s.a == null || s.b == null || !s.dimension.equals(mc.level.dimension().location().toString())) return;
-        if (s.template() && s.anchor != null) {
+        if (s.template() && s.hasTarget()) {
             try {
                 long arrays = Math.multiplyExact(Math.multiplyExact((long) s.repeat[0], s.repeat[1]), s.repeat[2]);
                 ManipulatorGeometry.target(s.size().offset(-1, -1, -1), Math.toIntExact(arrays - 1), s);
@@ -203,7 +203,7 @@ public final class ManipulatorClient {
             box(pose, lines, s.min(), s.size(), 0.2f, 0.55f, 1);
             int limit = ConfigHolder.INSTANCE.manipulator.previewLimit;
             long volume = s.volume();
-            if (s.template() && s.anchor != null) {
+            if (s.template() && s.hasTarget()) {
                 long arrays = (long) s.repeat[0] * s.repeat[1] * s.repeat[2];
                 for (int array = 0; array < Math.min(arrays, limit); array++) box(pose, lines, ManipulatorGeometry.target(BlockPos.ZERO, array, s).offset(ManipulatorGeometry.transformedMin(s)), ManipulatorGeometry.extent(s), 1, 0.55f, 0.1f);
                 if (volume * arrays <= limit) {

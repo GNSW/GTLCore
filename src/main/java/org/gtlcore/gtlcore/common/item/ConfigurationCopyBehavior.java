@@ -9,6 +9,7 @@ import org.gtlcore.gtlcore.common.machine.multiblock.part.maintenance.IGravityPa
 import org.gtlcore.gtlcore.integration.gtmt.ConfigurableEnergyHatch;
 
 import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
+import com.gregtechceu.gtceu.api.capability.IControllable;
 import com.gregtechceu.gtceu.api.capability.IEnergyContainer;
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.item.component.ICustomDescriptionId;
@@ -17,6 +18,7 @@ import com.gregtechceu.gtceu.api.item.tool.behavior.IToolBehavior;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
 import com.gregtechceu.gtceu.api.machine.SimpleTieredMachine;
 import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMaintenanceMachine;
+import com.gregtechceu.gtceu.api.machine.multiblock.MultiblockControllerMachine;
 import com.gregtechceu.gtceu.api.machine.multiblock.part.TieredIOPartMachine;
 import com.gregtechceu.gtceu.api.machine.trait.NotifiableItemStackHandler;
 import com.gregtechceu.gtceu.common.item.IntCircuitBehaviour;
@@ -63,6 +65,11 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
             if (machine instanceof IGravityPartMachine gravity) tag.putInt("currentGravity", gravity.getCurrentGravity());
         } else if (machine instanceof ParallelHatchPartMachine m) {
             tag.putInt("currentParallel", m.getCurrentParallel());
+        } else if (machine instanceof MultiblockControllerMachine) {
+            tag.putBoolean("Controller", true);
+            if (machine instanceof IControllable control) {
+                tag.putBoolean("isWorkingEnabled", control.isWorkingEnabled());
+            }
         } else if (machine instanceof TieredIOPartMachine m && m.getTraits().stream().anyMatch(IEnergyContainer.class::isInstance)) {
             tag.putBoolean("isWorkingEnabled", m.isWorkingEnabled());
             if (m instanceof ConfigurableEnergyHatch configurable) tag.put("EnergyConfiguration", configurable.gtlcore$getEnergySettings());
@@ -98,6 +105,10 @@ public class ConfigurationCopyBehavior implements IToolBehavior, IInteractionIte
             if (machine instanceof IGravityPartMachine m && tag.contains("currentGravity")) m.setCurrentGravity(tag.getInt("currentGravity"));
         } else if (machine instanceof ParallelHatchPartMachine m && tag.contains("currentParallel")) {
             m.setCurrentParallel(tag.getInt("currentParallel"));
+        } else if (machine instanceof MultiblockControllerMachine) {
+            if (machine instanceof IControllable control && tag.contains("isWorkingEnabled")) {
+                control.setWorkingEnabled(tag.getBoolean("isWorkingEnabled"));
+            }
         } else if (machine instanceof TieredIOPartMachine m && m.getTraits().stream().anyMatch(IEnergyContainer.class::isInstance)) {
             if (m instanceof ConfigurableEnergyHatch configurable && tag.contains("EnergyConfiguration")) configurable.gtlcore$applyEnergySettings(tag.getCompound("EnergyConfiguration"));
             if (m instanceof IBindable bindable && tag.contains("EnergyBinding")) {

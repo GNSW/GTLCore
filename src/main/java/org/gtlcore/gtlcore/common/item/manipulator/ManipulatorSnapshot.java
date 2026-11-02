@@ -62,6 +62,19 @@ import java.util.Map;
 /** Adapters explicitly separate configuration from paid physical contents. */
 public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag data, Map<AEKey, Long> cost) {
 
+    public static final class UnsupportedBlockEntityException extends IllegalArgumentException {
+
+        public UnsupportedBlockEntityException(String message) {
+            super(message);
+        }
+    }
+
+    public static ManipulatorSnapshot skip(BlockState state) {
+        CompoundTag data = new CompoundTag();
+        data.putBoolean("Skip", true);
+        return new ManipulatorSnapshot(state, ItemStack.EMPTY, data, Map.of());
+    }
+
     public static ManipulatorSnapshot plain(BlockState state, ItemStack item) {
         Map<AEKey, Long> cost = new LinkedHashMap<>();
         ManipulatorResources.add(cost, item);
@@ -149,7 +162,7 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
             MetaMachine machine = holder.getMetaMachine();
             data.putString("Kind", "gt");
             CompoundTag configuration = ConfigurationCopyBehavior.INSTANCE.captureConfiguration(machine);
-            if (configuration.isEmpty() && !(machine instanceof MEPatternBufferPartMachine || machine instanceof MEPatternBufferProxyPartMachine)) unsupported(be);
+            if (configuration.isEmpty() && !(machine instanceof MEPatternBufferPartMachineBase || machine instanceof MEPatternBufferProxyPartMachine)) unsupported(be);
             data.put("Configuration", configuration);
             data.putString("Facing", machine.getFrontFacing().getName());
             data.putInt("Color", machine.getPaintingColor());
@@ -261,7 +274,7 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
         var implementation = be instanceof MetaMachineBlockEntity holder ? holder.getMetaMachine() : be;
         GTLCore.LOGGER.warn("Unsupported manipulator snapshot for {} at {} (implementation {})",
                 BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(be.getType()), be.getBlockPos(), implementation.getClass().getName());
-        throw new IllegalArgumentException("mm.error.adapter|" + BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(be.getType()));
+        throw new UnsupportedBlockEntityException("mm.error.adapter|" + BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(be.getType()));
     }
 
     static CompoundTag savePhysicalStack(ItemStack stack) {
@@ -370,7 +383,8 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
                 proxy.setBuffer(BlockPos.of(data.getLong("ProxySource")));
             }
             case "gt" -> {
-                MetaMachine machine = ((MetaMachineBlockEntity) be).getMetaMachine();
+                if (!(be instanceof MetaMachineBlockEntity holder)) throw new IllegalStateException("mm.error.restore");
+                MetaMachine machine = holder.getMetaMachine();
                 machine.setFrontFacing(ManipulatorGeometry.direction(Direction.byName(data.getString("Facing")), settings));
                 machine.setPaintingColor(data.getInt("Color"));
                 CompoundTag configuration = transformConfiguration(data.getCompound("Configuration"), settings);
@@ -462,6 +476,17 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
         if (relative.getX() < 0 || relative.getX() >= size.getX() || relative.getY() < 0 || relative.getY() >= size.getY() || relative.getZ() < 0 || relative.getZ() >= size.getZ()) return source;
         BlockPos originalDestination = ManipulatorGeometry.target(BlockPos.of(data.getLong("Origin")).subtract(s.min()), 0, s);
         return ManipulatorGeometry.target(relative, 0, s).offset(destination.subtract(originalDestination));
+    }
+
+    public BlockPos proxyBufferTarget(ManipulatorSettings s, BlockPos destination) {
+        if (!data.contains("ProxySource")) return null;
+        BlockPos source = BlockPos.of(data.getLong("ProxySource"));
+        if (!data.contains("Origin")) return source;
+        return reference(source, s, destination);
+    }
+
+    public BlockPos proxyBufferSource() {
+        return data.contains("ProxySource") ? BlockPos.of(data.getLong("ProxySource")) : null;
     }
 
     private void moveSharedReference(appeng.helpers.patternprovider.PatternProviderLogicHost provider, ManipulatorSettings s, BlockPos pos) {

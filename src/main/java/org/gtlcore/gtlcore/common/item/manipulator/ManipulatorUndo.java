@@ -9,7 +9,10 @@ import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeSavedData;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkCoreBlockEntity;
 
+import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
+import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
+import com.gregtechceu.gtceu.api.pattern.MultiblockWorldSavedData;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -388,6 +391,11 @@ public final class ManipulatorUndo {
                 if (restored == null) throw new IllegalStateException("Unable to undo manipulator entity at " + pos);
                 level.setBlockEntity(restored);
                 restored.setChanged();
+                if (restored instanceof MetaMachineBlockEntity holder &&
+                        holder.getMetaMachine() instanceof IMultiController controller) {
+                    if (controller.isFormed()) controller.onStructureInvalid();
+                    MultiblockWorldSavedData.getOrCreate(level).removeMapping(controller.getMultiblockState());
+                }
             }
             level.sendBlockUpdated(pos, state, state, Block.UPDATE_CLIENTS);
         }

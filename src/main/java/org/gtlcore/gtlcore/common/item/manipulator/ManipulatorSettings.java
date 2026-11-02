@@ -58,6 +58,8 @@ public final class ManipulatorSettings {
     public BlockPos a;
     public BlockPos b;
     public BlockPos anchor;
+    public BlockPos pasteA;
+    public BlockPos pasteB;
     public String dimension = "";
     public boolean paste;
     public final int[] rotation = new int[3];
@@ -80,6 +82,8 @@ public final class ManipulatorSettings {
         if (tag.contains("A")) s.a = BlockPos.of(tag.getLong("A"));
         if (tag.contains("B")) s.b = BlockPos.of(tag.getLong("B"));
         if (tag.contains("Anchor")) s.anchor = BlockPos.of(tag.getLong("Anchor"));
+        if (tag.contains("PasteA")) s.pasteA = BlockPos.of(tag.getLong("PasteA"));
+        if (tag.contains("PasteB")) s.pasteB = BlockPos.of(tag.getLong("PasteB"));
         s.dimension = tag.getString("Dimension");
         s.paste = tag.getBoolean("Paste");
         for (int i = 0; i < 3; i++) {
@@ -99,6 +103,8 @@ public final class ManipulatorSettings {
             s.a = null;
             s.b = null;
             s.anchor = null;
+            s.pasteA = null;
+            s.pasteB = null;
             s.dimension = "";
             s.paste = false;
         }
@@ -117,6 +123,8 @@ public final class ManipulatorSettings {
         if (a != null) tag.putLong("A", a.asLong());
         if (b != null) tag.putLong("B", b.asLong());
         if (anchor != null) tag.putLong("Anchor", anchor.asLong());
+        if (pasteA != null) tag.putLong("PasteA", pasteA.asLong());
+        if (pasteB != null) tag.putLong("PasteB", pasteB.asLong());
         tag.putString("Dimension", dimension);
         tag.putBoolean("Paste", paste);
         for (int i = 0; i < 3; i++) {
@@ -147,6 +155,33 @@ public final class ManipulatorSettings {
     public long volume() {
         BlockPos size = size();
         return (long) size.getX() * size.getY() * size.getZ();
+    }
+
+    public BlockPos targetMin() {
+        if (pasteA != null && pasteB != null) {
+            return new BlockPos(Math.min(pasteA.getX(), pasteB.getX()), Math.min(pasteA.getY(), pasteB.getY()),
+                    Math.min(pasteA.getZ(), pasteB.getZ()));
+        }
+        return anchor;
+    }
+
+    public BlockPos targetSize() {
+        if (pasteA != null && pasteB != null) {
+            return new BlockPos(Math.abs(pasteA.getX() - pasteB.getX()) + 1,
+                    Math.abs(pasteA.getY() - pasteB.getY()) + 1,
+                    Math.abs(pasteA.getZ() - pasteB.getZ()) + 1);
+        }
+        return size();
+    }
+
+    public boolean hasTarget() {
+        return targetMin() != null;
+    }
+
+    public void clearTarget() {
+        anchor = null;
+        pasteA = null;
+        pasteB = null;
     }
 
     public boolean template() {

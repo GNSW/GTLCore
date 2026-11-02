@@ -5,6 +5,11 @@ import org.gtlcore.gtlcore.integration.ae2.manipulator.ManipulatorConnections;
 import org.gtlcore.gtlcore.integration.ae2.manipulator.ManipulatorNetwork;
 import org.gtlcore.gtlcore.integration.ae2.manipulator.ManipulatorPlanService;
 
+import com.gregtechceu.gtceu.api.machine.MetaMachine;
+import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
+import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiPart;
+import com.gregtechceu.gtceu.api.pattern.MultiblockWorldSavedData;
+
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -55,6 +60,9 @@ public final class ManipulatorTask {
     public int planMode;
     public String message = "mm.status.scanning";
     public BlockPos failure;
+    public boolean unsupportedBlocks;
+    private boolean operationSkipped;
+    private boolean proxyBindingsDone;
     private final ManipulatorSavedData savedData;
     private final ManipulatorNetwork network;
     public final ManipulatorPlanService plans;
@@ -98,6 +106,7 @@ public final class ManipulatorTask {
         paused = true; // a restart never resumes world edits without a fresh use gesture.
         autoOrder = tag.getBoolean("AutoOrder");
         cancelled = tag.getBoolean("Cancelled");
+        unsupportedBlocks = tag.getBoolean("UnsupportedBlocks");
         scan = tag.getInt("Scan");
         cursor = tag.getInt("Cursor");
         ready = tag.getBoolean("Ready");
@@ -124,6 +133,13 @@ public final class ManipulatorTask {
     public void status(String key) {
         if (!message.equals(key)) {
             message = key;
+            changed();
+        }
+    }
+
+    private void markUnsupported() {
+        if (!unsupportedBlocks) {
+            unsupportedBlocks = true;
             changed();
         }
     }
@@ -186,11 +202,18 @@ public final class ManipulatorTask {
                 Operation operation = operations.get(cursor);
                 failure = operation.target;
                 if (!commit(level, player, tool, grid, operation)) return;
-                for (var entry : operation.snapshot.cost().entrySet()) remaining.computeIfPresent(entry.getKey(), (k, n) -> Math.max(0, n - entry.getValue()));
+                if (!operationSkipped) {
+                    for (var entry : operation.snapshot.cost().entrySet()) remaining.computeIfPresent(entry.getKey(), (k, n) -> Math.max(0, n - entry.getValue()));
+                }
+                operationSkipped = false;
                 cursor++;
                 changed();
             }
             if (cursor == operations.size()) {
+                if (!proxyBindingsDone) {
+                    ManipulatorConnections.rebindProxyBuffers(this, level);
+                    proxyBindingsDone = true;
+                }
                 while (finishPhase < 2 && allowance-- > 0 && System.nanoTime() < deadline) {
                     if (finishCursor == operations.size()) {
                         finishPhase++;
@@ -215,6 +238,11 @@ public final class ManipulatorTask {
             paused = true;
             status("mm.error.restore");
             changed();
+        } catch (RuntimeException exception) {
+            org.gtlcore.gtlcore.GTLCore.LOGGER.error("Manipulator {} failed at {}", id, failure, exception);
+            paused = true;
+            status("mm.error.restore");
+            changed();
         }
     }
 
@@ -229,7 +257,13 @@ public final class ManipulatorTask {
                 status("mm.error.permission");
                 return false;
             }
-            var snapshot = ManipulatorSnapshot.capture(level, pos, player, settings);
+            ManipulatorSnapshot snapshot;
+            try {
+                snapshot = ManipulatorSnapshot.capture(level, pos, player, settings);
+            } catch (ManipulatorSnapshot.UnsupportedBlockEntityException exception) {
+                markUnsupported();
+                snapshot = ManipulatorSnapshot.skip(level.getBlockState(pos));
+            }
             if (settings.mode == ManipulatorSettings.Mode.MOVE) {
                 for (long proxy : snapshot.data().getLongArray("BufferProxies")) if (!loaded(level, BlockPos.of(proxy))) return false;
             }
@@ -259,6 +293,17 @@ public final class ManipulatorTask {
             status("mm.error.permission");
             return false;
         }
+        if (!settings.template() && level.getBlockEntity(target) != null) {
+            var probe = ManipulatorSettings.read(settings.save());
+            probe.mode = ManipulatorSettings.Mode.MOVE;
+            try {
+                ManipulatorSnapshot.capture(level, target, player, probe);
+            } catch (ManipulatorSnapshot.UnsupportedBlockEntityException exception) {
+                markUnsupported();
+                scan++;
+                return true;
+            }
+        }
         ManipulatorSnapshot snapshot;
         if (settings.template()) snapshot = template.get(index);
         else {
@@ -274,6 +319,10 @@ public final class ManipulatorTask {
             }
             BlockState state = settings.mode == ManipulatorSettings.Mode.REMOVE ? Blocks.AIR.defaultBlockState() : settings.materials[material];
             snapshot = ManipulatorSnapshot.plain(state, state.isAir() ? ItemStack.EMPTY : new ItemStack(state.getBlock().asItem()));
+        }
+        if (snapshot.data().getBoolean("Skip")) {
+            scan++;
+            return true;
         }
         BlockState transformed = settings.template() ? ManipulatorGeometry.state(snapshot.state(), settings) : snapshot.state();
         BlockState old = level.getBlockState(target);
@@ -367,11 +416,39 @@ public final class ManipulatorTask {
     }
 
     private boolean mayRemove(BlockState old) {
-        return old.isAir() || settings.removal == ManipulatorSettings.Removal.ALL ||
+        return settings.mode == ManipulatorSettings.Mode.REMOVE || old.isAir() ||
+                settings.removal == ManipulatorSettings.Removal.ALL ||
                 settings.removal == ManipulatorSettings.Removal.REPLACEABLE && old.canBeReplaced();
     }
 
+    private boolean sourceMatches(ServerLevel level, Operation op) {
+        if (level.getBlockState(op.source()) != op.snapshot().state()) return false;
+        BlockEntity source = level.getBlockEntity(op.source());
+        CompoundTag persistent = op.snapshot().data().getCompound("Persistent");
+        if (source == null) return persistent.isEmpty();
+        if (persistent.isEmpty()) return false;
+        var type = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(source.getType());
+        return type != null && type.toString().equals(persistent.getString("id"));
+    }
+
+    private static void invalidateStructure(ServerLevel level, BlockPos pos) {
+        MetaMachine machine = MetaMachine.getMachine(level, pos);
+        if (machine instanceof IMultiController controller) {
+            invalidateController(level, controller);
+        } else if (machine instanceof IMultiPart part) {
+            for (IMultiController controller : new ArrayList<>(part.getControllers())) {
+                invalidateController(level, controller);
+            }
+        }
+    }
+
+    private static void invalidateController(ServerLevel level, IMultiController controller) {
+        if (controller.isFormed()) controller.onStructureInvalid();
+        MultiblockWorldSavedData.getOrCreate(level).removeMapping(controller.getMultiblockState());
+    }
+
     private boolean commit(ServerLevel level, ServerPlayer player, ItemStack tool, IGrid grid, Operation op) {
+        operationSkipped = false;
         if (!loaded(level, op.target)) return false;
         if (!allowed(level, player, op.target)) {
             paused = true;
@@ -385,25 +462,38 @@ public final class ManipulatorTask {
             return false;
         }
         boolean moving = settings.mode == ManipulatorSettings.Mode.MOVE;
+        Operation current = op;
         if (undo.enabled && op.expected.hasBlockEntity()) {
             // This adapter already rejects direct replacement: removal can refund into an unrelated network.
             if (com.gregtechceu.gtceu.api.machine.MetaMachine.getMachine(level, op.target) instanceof org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachineBase) throw new IllegalArgumentException("mm.error.undo_adapter");
             var captureSettings = ManipulatorSettings.read(settings.save());
             captureSettings.mode = ManipulatorSettings.Mode.MOVE;
-            ManipulatorSnapshot.capture(level, op.target, player, captureSettings);
+            try {
+                ManipulatorSnapshot.capture(level, op.target, player, captureSettings);
+            } catch (ManipulatorSnapshot.UnsupportedBlockEntityException exception) {
+                markUnsupported();
+                operationSkipped = true;
+                return true;
+            }
         }
         if (moving) {
             if (!loaded(level, op.source) || !allowed(level, player, op.source)) return false;
-            if (level.getBlockState(op.source) != op.snapshot.state()) {
+            if (!sourceMatches(level, op)) {
                 paused = true;
                 status("mm.error.source_changed");
                 return false;
             }
             BlockEntity source = level.getBlockEntity(op.source);
-            if (source != null && !source.saveWithFullMetadata().equals(op.snapshot.data().getCompound("Persistent"))) {
-                paused = true;
-                status("mm.error.source_changed");
-                return false;
+            if (source != null) {
+                try {
+                    ManipulatorSnapshot refreshed = ManipulatorSnapshot.capture(level, op.source(), player, settings);
+                    current = new Operation(op.source(), op.target(), op.state(), op.expected(), refreshed);
+                    operations.set(cursor, current);
+                } catch (ManipulatorSnapshot.UnsupportedBlockEntityException exception) {
+                    markUnsupported();
+                    operationSkipped = true;
+                    return true;
+                }
             }
             if (ForgeHooks.onBlockBreakEvent(level, player.gameMode.getGameModeForPlayer(), player, op.source) < 0) {
                 paused = true;
@@ -424,40 +514,43 @@ public final class ManipulatorTask {
                 }
             }
         }
-        var undoBefore = undo.capture(this, level, op);
+        var undoBefore = undo.capture(this, level, current);
         if (undo.enabled && undoBefore == null) return false;
-        long eu = energy(level, player, op.target, op.expected, op.state);
+        long eu = energy(level, player, current.target(), current.expected(), current.state());
         if (!player.isCreative() && !ManipulatorNetwork.charge(tool, grid, eu)) {
             status("mm.status.energy");
             return false;
         }
-        CompoundTag previous = level.getBlockEntity(op.target) == null ? null : level.getBlockEntity(op.target).saveWithFullMetadata();
-        BlockSnapshot before = BlockSnapshot.create(level.dimension(), level, op.target);
+        CompoundTag previous = level.getBlockEntity(current.target()) == null ? null : level.getBlockEntity(current.target()).saveWithFullMetadata();
+        BlockSnapshot before = BlockSnapshot.create(level.dimension(), level, current.target());
         Map<AEKey, Long> recovered = new LinkedHashMap<>();
         boolean success = false;
-        ManipulatorSavedData.captureDrops(level, op.target, recovered);
+        ManipulatorSavedData.captureDrops(level, current.target(), recovered);
         undo.beginCapture(this, level, undoBefore);
         try {
-            if (!op.expected.isAir() && !player.gameMode.destroyBlock(op.target)) {
+            if (!moving) invalidateStructure(level, current.target());
+            if (!current.expected().isAir() && !player.gameMode.destroyBlock(current.target())) {
                 status("mm.error.permission");
                 return false;
             }
-            if (!place(level, player, op, moving)) {
+            if (!place(level, player, current, moving)) {
                 status("mm.error.placement");
                 return false;
             }
-            if (!op.state.isAir() && ForgeEventFactory.onBlockPlace(player, before, net.minecraft.core.Direction.UP)) {
+            if (!current.state().isAir() && ForgeEventFactory.onBlockPlace(player, before, net.minecraft.core.Direction.UP)) {
                 status("mm.error.permission");
                 return false;
             }
-            op.snapshot.restore(level, op.target, player, settings);
+            current.snapshot().restore(level, current.target(), player, settings);
             if (moving) {
+                invalidateStructure(level, current.target());
                 // Detach the original entity before removing its block: inventories must not drop twice.
-                level.removeBlockEntity(op.source);
-                if (!level.setBlock(op.source, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL) && !level.getBlockState(op.source).isAir()) throw new IllegalStateException("Move source removal failed");
+                invalidateStructure(level, current.source());
+                level.removeBlockEntity(current.source());
+                if (!level.setBlock(current.source(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL) && !level.getBlockState(current.source()).isAir()) throw new IllegalStateException("Move source removal failed");
             }
-            ManipulatorConnections.initializeCore(level, op.target, player);
-            undo.record(this, level, undoBefore, moving ? Map.of() : op.snapshot.cost(), recovered);
+            ManipulatorConnections.initializeCore(level, current.target(), player);
+            undo.record(this, level, undoBefore, moving ? Map.of() : current.snapshot().cost(), recovered);
             success = true;
         } finally {
             undo.endCapture();
@@ -465,15 +558,15 @@ public final class ManipulatorTask {
             if (!success) {
                 if (undoBefore != null) undoBefore.restore(level);
                 else {
-                    restore(level, op.target, op.expected, previous);
-                    if (moving) restore(level, op.source, op.snapshot.state(), op.snapshot.data().contains("Persistent") ? op.snapshot.data().getCompound("Persistent") : null);
+                    restore(level, current.target(), current.expected(), previous);
+                    if (moving) restore(level, current.source(), current.snapshot().state(), current.snapshot().data().contains("Persistent") ? current.snapshot().data().getCompound("Persistent") : null);
                 }
                 if (!player.isCreative()) ManipulatorNetwork.refund(tool, eu);
                 paused = true;
                 changed();
             }
         }
-        if (!moving) op.snapshot.cost().forEach((key, amount) -> escrow.computeIfPresent(key, (k, n) -> n - amount));
+        if (!moving) current.snapshot().cost().forEach((key, amount) -> escrow.computeIfPresent(key, (k, n) -> n - amount));
         recovered.forEach((key, amount) -> ManipulatorResources.add(escrow, key, amount));
         refundSurplus(player, grid);
         status("mm.status.running");
@@ -585,6 +678,7 @@ public final class ManipulatorTask {
         tag.put("Operations", ops);
         tag.putBoolean("AutoOrder", autoOrder);
         tag.putBoolean("Cancelled", cancelled);
+        tag.putBoolean("UnsupportedBlocks", unsupportedBlocks);
         tag.putBoolean("Ready", ready);
         tag.putInt("Scan", scan);
         tag.putInt("Cursor", cursor);

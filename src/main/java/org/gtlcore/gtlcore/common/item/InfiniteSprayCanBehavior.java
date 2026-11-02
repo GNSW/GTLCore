@@ -4,6 +4,8 @@ import com.gregtechceu.gtceu.api.item.component.IAddInformation;
 import com.gregtechceu.gtceu.api.item.component.IInteractionItem;
 import com.gregtechceu.gtceu.common.item.ColorSprayBehaviour;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -22,6 +24,7 @@ import java.util.List;
 public class InfiniteSprayCanBehavior implements IInteractionItem, IAddInformation {
 
     public static final int MODE_COUNT = 17;
+    public static final int CONFIG_HOLD_TICKS = SharedConstants.TICKS_PER_SECOND;
     private static final String MODE_TAG = "SprayMode";
     private static final ColorSprayBehaviour[] COLORS = new ColorSprayBehaviour[16];
     private static final ColorSprayBehaviour SOLVENT = new ColorSprayBehaviour(() -> ItemStack.EMPTY, 1024, -1);
@@ -56,6 +59,10 @@ public class InfiniteSprayCanBehavior implements IInteractionItem, IAddInformati
         ItemStack stack = context.getItemInHand();
         int mode = getMode(stack);
         Player player = context.getPlayer();
+        if (player != null && player.isShiftKeyDown()) {
+            player.startUsingItem(context.getHand());
+            return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
+        }
         if (player != null && context.getLevel().getBlockEntity(context.getClickedPos()) instanceof CableBusBlockEntity cableBus) {
             AEColor color = mode < 16 ? AEColor.fromDye(DyeColor.byId(mode)) : AEColor.TRANSPARENT;
             if (cableBus.recolourBlock(context.getClickedFace(), color, player)) {
@@ -72,5 +79,11 @@ public class InfiniteSprayCanBehavior implements IInteractionItem, IAddInformati
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.mode." + getMode(stack)));
+        tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.tooltip.configure",
+                Component.keybind("key.sneak"), Component.keybind("key.use"),
+                CONFIG_HOLD_TICKS / SharedConstants.TICKS_PER_SECOND)
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.tooltip.locked")
+                .withStyle(ChatFormatting.DARK_GRAY));
     }
 }

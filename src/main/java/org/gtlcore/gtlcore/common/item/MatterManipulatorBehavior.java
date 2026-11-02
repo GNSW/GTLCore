@@ -158,11 +158,18 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         }
         settings.dimension = dimension;
         if (settings.paste && settings.template()) {
-            if (settings.pasteA == null) settings.pasteA = pos;
-            else if (settings.pasteB == null) settings.pasteB = pos;
-            else {
+            if (settings.a == null || settings.b == null) {
+                player.displayClientMessage(Component.translatable("mm.error.selection"), true);
+                return;
+            }
+            if (settings.pasteA == null || settings.pasteB == null) {
+                BlockPos extent = ManipulatorGeometry.extent(settings);
                 settings.pasteA = pos;
-                settings.pasteB = null;
+                settings.pasteB = pos.offset(extent.getX() - 1, extent.getY() - 1, extent.getZ() - 1);
+            } else {
+                BlockPos delta = pos.subtract(settings.targetMin());
+                settings.pasteA = settings.pasteA.offset(delta);
+                settings.pasteB = settings.pasteB.offset(delta);
             }
         } else if (settings.a == null || settings.b != null) {
             settings.a = pos;

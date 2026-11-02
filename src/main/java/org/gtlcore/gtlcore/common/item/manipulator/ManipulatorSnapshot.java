@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.common.item.manipulator;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.common.data.GTLMachines;
 import org.gtlcore.gtlcore.common.item.ConfigurationCopyBehavior;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MEPatternBufferPartMachineBase;
@@ -87,6 +88,14 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
         BlockState state = level.getBlockState(pos);
         ItemStack item = state.isAir() ? ItemStack.EMPTY : new ItemStack(state.getBlock().asItem());
         BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof MetaMachineBlockEntity holder && settings.mode == ManipulatorSettings.Mode.COPY &&
+                holder.getMetaMachine() instanceof MEPatternBufferPartMachineBase) {
+            var result = plain(GTLMachines.GTAEMachines.ME_PATTERN_BUFFER_PROXY.getBlock().defaultBlockState(), GTLMachines.GTAEMachines.ME_PATTERN_BUFFER_PROXY.asStack());
+            result.data.putLong("ProxySource", pos.asLong());
+            result.data.putString("Kind", "proxy");
+            result.data.putString("Facing", holder.getMetaMachine().getFrontFacing().getName());
+            return result;
+        }
         var result = plain(state, item);
         if (be == null) return result;
         CompoundTag data = result.data;
@@ -474,6 +483,10 @@ public record ManipulatorSnapshot(BlockState state, ItemStack item, CompoundTag 
         BlockPos source = BlockPos.of(data.getLong("ProxySource"));
         if (!data.contains("Origin")) return source;
         return reference(source, s, destination);
+    }
+
+    public BlockPos proxyBufferSource() {
+        return data.contains("ProxySource") ? BlockPos.of(data.getLong("ProxySource")) : null;
     }
 
     private void moveSharedReference(appeng.helpers.patternprovider.PatternProviderLogicHost provider, ManipulatorSettings s, BlockPos pos) {

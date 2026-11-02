@@ -47,6 +47,11 @@ public final class ManipulatorConnections {
             BlockPos target = op.snapshot().proxyBufferTarget(task.settings, op.target());
             if (target != null && MetaMachine.getMachine(level, target) instanceof MEPatternBufferPartMachineBase) {
                 proxy.setBuffer(target);
+                continue;
+            }
+            BlockPos source = op.snapshot().proxyBufferSource();
+            if (source != null && MetaMachine.getMachine(level, source) instanceof MEPatternBufferPartMachineBase) {
+                proxy.setBuffer(source);
             }
         }
     }

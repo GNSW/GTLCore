@@ -227,6 +227,12 @@ public final class ManipulatorUI extends WidgetGroup {
 
     private void showExpand() {
         show("mm.menu.expand", List.of(
+                action("mm.expand.up1", () -> expandSource(Direction.UP, 1)),
+                action("mm.expand.up16", () -> expandSource(Direction.UP, 16)),
+                action("mm.expand.down1", () -> expandSource(Direction.DOWN, 1)),
+                action("mm.expand.down16", () -> expandSource(Direction.DOWN, 16)),
+                action("mm.expand.forward1", () -> expandSource(player.getDirection(), 1)),
+                action("mm.expand.back1", () -> expandSource(player.getDirection().getOpposite(), 1)),
                 action("mm.expand.out1", () -> expandSource(1)),
                 action("mm.expand.out16", () -> expandSource(16)),
                 action("mm.expand.in1", () -> expandSource(-1))), this::showSelectionEditor);
@@ -251,7 +257,10 @@ public final class ManipulatorUI extends WidgetGroup {
     }
 
     private void expandSource(int amount) {
-        Direction direction = Direction.getNearest(player.getLookAngle().x, player.getLookAngle().y, player.getLookAngle().z);
+        expandSource(Direction.getNearest(player.getLookAngle().x, player.getLookAngle().y, player.getLookAngle().z), amount);
+    }
+
+    private void expandSource(Direction direction, int amount) {
         edit(settings -> {
             if (settings.a == null || settings.b == null) return;
             BlockPos[] source = expandBox(settings.a, settings.b, direction, amount);

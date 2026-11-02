@@ -8,6 +8,7 @@ import com.lowdragmc.lowdraglib.utils.Position;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -56,6 +57,14 @@ public final class ManipulatorRadialMenuWidget extends Widget {
     private static final int TEXT_COLOR = 0xFFE5E9EB;
     private static final int ACTIVE_TEXT_COLOR = 0xFF8EE8FF;
     private static final int HOVER_TEXT_COLOR = 0xFFFFE49C;
+
+    private record FixedShader(ShaderInstance shader) implements Supplier<ShaderInstance> {
+
+        @Override
+        public ShaderInstance get() {
+            return shader;
+        }
+    }
 
     private final ItemStackTexture icon;
     private final ColorRectTexture circle = new ColorRectTexture(NORMAL_COLOR).setRadius(RADIUS);
@@ -265,7 +274,7 @@ public final class ManipulatorRadialMenuWidget extends Widget {
         try {
             BufferUploader.drawWithShader(buffer.end());
         } finally {
-            RenderSystem.setShader(() -> shader);
+            RenderSystem.setShader(new FixedShader(shader));
         }
     }
 }

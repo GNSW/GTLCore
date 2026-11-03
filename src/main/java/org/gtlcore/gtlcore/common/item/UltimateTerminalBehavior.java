@@ -63,6 +63,9 @@ public class UltimateTerminalBehavior implements IItemUIFactory {
     private static final String ACTIVE_TIER_TAG = "Tier";
     private static final String TIER_SELECTIONS_TAG = "TierSelections";
     private static final int BLOCK_SELECTOR_GAP = 4;
+    private static final int SETTINGS_WIDTH = 200;
+    private static final int SETTINGS_HEIGHT = 169;
+    private static final int SETTINGS_PADDING = 4;
 
     public UltimateTerminalBehavior() {}
 
@@ -140,13 +143,17 @@ public class UltimateTerminalBehavior implements IItemUIFactory {
 
     @Override
     public ModularUI createUI(HeldItemUIFactory.HeldItemHolder heldItemHolder, Player player) {
-        return (new ModularUI(166, 176, heldItemHolder, player)).widget(this.createWidget(player));
+        return (new ModularUI(SETTINGS_WIDTH, SETTINGS_HEIGHT, heldItemHolder, player)).widget(this.createWidget(player));
     }
 
     private Widget createWidget(Player player) {
         final var handItem = player.getMainHandItem();
-        WidgetGroup group = new WidgetGroup(0, 0, 200, 136);
-        var contain = new DraggableScrollableWidgetGroup(4, 4, 192, 128)
+        WidgetGroup group = new WidgetGroup(0, 0, SETTINGS_WIDTH, SETTINGS_HEIGHT);
+        var contain = new DraggableScrollableWidgetGroup(
+                SETTINGS_PADDING,
+                SETTINGS_PADDING,
+                SETTINGS_WIDTH - SETTINGS_PADDING * 2,
+                SETTINGS_HEIGHT - SETTINGS_PADDING * 2)
                 .setBackground(GuiTextures.DISPLAY).setYScrollBarWidth(2)
                 .setYBarStyle(null, ColorPattern.T_WHITE.rectTexture().setRadius(1.0F));
         contain.addWidget(new ExtendLabelWidget(65, 8, translatable("gui.gtlcore.ultimate_terminal_settings")))

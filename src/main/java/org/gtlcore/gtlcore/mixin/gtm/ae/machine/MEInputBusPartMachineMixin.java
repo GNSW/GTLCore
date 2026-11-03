@@ -23,6 +23,7 @@ import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -34,6 +35,9 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
     @Shadow(remap = false)
     protected ExportOnlyAEItemList aeItemHandler;
 
+    @Unique
+    private boolean gtlcore$syncChanged = false;
+
     public MEInputBusPartMachineMixin(IMachineBlockEntity holder, IO io, Object... args) {
         super(holder, io, args);
     }
@@ -44,7 +48,7 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
                      shift = At.Shift.AFTER),
             remap = false)
     public void autoIO(CallbackInfo ci) {
-        if (aeItemHandler instanceof IOptimizedMEList machine) {
+        if (gtlcore$syncChanged && aeItemHandler instanceof IOptimizedMEList machine) {
             machine.setChanged(true);
         }
     }
@@ -79,12 +83,15 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
 
     /**
      * @author Dragons
-     * @reason sync long
+     * @reason sync long + cached inventory pre-check and conditional dirty marking
      */
     @SuppressWarnings("DataFlowIssue")
     @Overwrite(remap = false)
     protected void syncME() {
-        MEStorage networkInv = this.getMainNode().getGrid().getStorageService().getInventory();
+        var storageService = this.getMainNode().getGrid().getStorageService();
+        MEStorage networkInv = storageService.getInventory();
+        var cachedInventory = storageService.getCachedInventory();
+        gtlcore$syncChanged = false;
 
         for (ExportOnlyAEItemSlot aeSlot : this.aeItemHandler.getInventory()) {
             GenericStack exceedItem = aeSlot.exceedStack();
@@ -94,18 +101,22 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
                         this.actionSource);
                 if (inserted > 0) {
                     ((IMETransfer) aeSlot).extractGenericStack(inserted, false, true);
-                    continue;
                 } else {
                     ((IMETransfer) aeSlot).extractGenericStack(total, false, true);
+                }
+                gtlcore$syncChanged = true;
+                if (inserted > 0) {
+                    continue;
                 }
             }
 
             GenericStack reqItem = aeSlot.requestStack();
-            if (reqItem != null) {
+            if (reqItem != null && cachedInventory.get(reqItem.what()) > 0) {
                 long extracted = networkInv.extract(reqItem.what(), reqItem.amount(), Actionable.MODULATE,
                         this.actionSource);
                 if (extracted != 0) {
                     aeSlot.addStack(new GenericStack(reqItem.what(), extracted));
+                    gtlcore$syncChanged = true;
                 }
             }
         }

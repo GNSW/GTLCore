@@ -1,7 +1,6 @@
 package org.gtlcore.gtlcore.common.machine.multiblock.part;
 
 import org.gtlcore.gtlcore.api.machine.trait.MEPart.IModifiableSyncOffset;
-import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
 import org.gtlcore.gtlcore.client.gui.widget.AEDualConfigWidget;
 
 import com.gregtechceu.gtceu.api.machine.IMachineBlockEntity;
@@ -91,10 +90,7 @@ public class MEDualInputHatchPartMachine extends MEInputBusPartMachine implement
         }
 
         super.syncME();
-        var storageService = grid.getStorageService();
-        MEStorage networkInventory = storageService.getInventory();
-        var cachedInventory = storageService.getCachedInventory();
-        boolean changed = false;
+        MEStorage networkInventory = grid.getStorageService().getInventory();
         for (ExportOnlyAEFluidSlot slot : this.aeFluidHandler.getInventory()) {
             GenericStack excess = slot.exceedStack();
             if (excess != null) {
@@ -102,24 +98,19 @@ public class MEDualInputHatchPartMachine extends MEInputBusPartMachine implement
                 long inserted = networkInventory.insert(
                         excess.what(), excessAmount, Actionable.MODULATE, this.actionSource);
                 slot.drain(inserted > 0 ? inserted : excessAmount, false);
-                changed = true;
                 if (inserted > 0) {
                     continue;
                 }
             }
 
             GenericStack requested = slot.requestStack();
-            if (requested != null && cachedInventory.get(requested.what()) > 0) {
+            if (requested != null) {
                 long extracted = networkInventory.extract(
                         requested.what(), requested.amount(), Actionable.MODULATE, this.actionSource);
                 if (extracted > 0) {
                     slot.addStack(new GenericStack(requested.what(), extracted));
-                    changed = true;
                 }
             }
-        }
-        if (changed && this.aeFluidHandler instanceof IOptimizedMEList optimized) {
-            optimized.setChanged(true);
         }
     }
 

@@ -16,6 +16,7 @@ import net.minecraft.nbt.CompoundTag;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGridNodeListener;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
 import org.jetbrains.annotations.NotNull;
@@ -33,6 +34,9 @@ public abstract class MEInputHatchPartMachineMixin extends MEHatchPartMachine im
 
     @Shadow(remap = false)
     protected ExportOnlyAEFluidList aeFluidHandler;
+
+    @Shadow(remap = false)
+    protected IActionSource actionSource;
 
     @Unique
     private boolean gtlcore$syncChanged = false;

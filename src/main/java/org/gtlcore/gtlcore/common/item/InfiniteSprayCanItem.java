@@ -23,8 +23,10 @@ public final class InfiniteSprayCanItem extends ComponentItem {
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!player.isShiftKeyDown()) return InteractionResultHolder.pass(stack);
         if (player instanceof ServerPlayer serverPlayer) HeldItemUIFactory.INSTANCE.openUI(serverPlayer, hand);
-        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
     @Override

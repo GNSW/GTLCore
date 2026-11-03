@@ -4,6 +4,7 @@ import com.gregtechceu.gtceu.api.item.component.IAddInformation;
 import com.gregtechceu.gtceu.api.item.component.IInteractionItem;
 import com.gregtechceu.gtceu.common.item.ColorSprayBehaviour;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
@@ -72,5 +73,10 @@ public class InfiniteSprayCanBehavior implements IInteractionItem, IAddInformati
     @Override
     public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.mode." + getMode(stack)));
+        tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.tooltip.configure",
+                Component.keybind("key.sneak"), Component.keybind("key.use"))
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.tooltip.locked")
+                .withStyle(ChatFormatting.DARK_GRAY));
     }
 }

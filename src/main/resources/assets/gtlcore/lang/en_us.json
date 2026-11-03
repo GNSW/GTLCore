@@ -1627,6 +1627,8 @@
   "item.gtlcore.infinite_spray_can.mode.15": "Black",
   "item.gtlcore.infinite_spray_can.mode.16": "Solvent",
   "item.gtlcore.infinite_spray_can.menu": "Select Spray Color",
+  "item.gtlcore.infinite_spray_can.tooltip.configure": "Aim at air and press %1$s + %2$s: select a color",
+  "item.gtlcore.infinite_spray_can.tooltip.locked": "The selected color stays locked until changed in the configuration menu",
   "tooltip.gtlcore.socket_preview.available": "Cyan outline: free socket for the held part",
   "tooltip.gtlcore.socket_preview.occupied": "Orange outline: occupied or blocked socket",
   "block.gtlcore.wireless_charging_station": "Wireless Charging Repeater",

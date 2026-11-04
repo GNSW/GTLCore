@@ -8,13 +8,22 @@ import appeng.api.stacks.GenericStack;
 import com.llamalad7.mixinextras.sugar.Local;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 
 /**
  * @author EasterFG on 2024/9/26
  */
 @Mixin(AEFluidConfigSlotWidget.class)
 public abstract class AEFluidConfigSlotWidgetMixin {
+
+    @ModifyConstant(method = "mouseWheelMove",
+                    constant = @Constant(longValue = 2L),
+                    remap = false)
+    private long ctrlScrollMultiplier(long original) {
+        return 1000L;
+    }
 
     @ModifyArg(method = "drawInBackground",
                at = @At(value = "INVOKE", target = "Lcom/lowdragmc/lowdraglib/gui/util/DrawerHelper;drawStringFixedCorner(Lnet/minecraft/client/gui/GuiGraphics;Ljava/lang/String;FFIZF)V", ordinal = 0),

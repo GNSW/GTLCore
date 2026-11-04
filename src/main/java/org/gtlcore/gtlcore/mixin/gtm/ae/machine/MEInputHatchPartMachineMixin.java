@@ -13,9 +13,13 @@ import com.gregtechceu.gtceu.integration.ae2.slot.ExportOnlyAEFluidList;
 
 import net.minecraft.nbt.CompoundTag;
 
+import appeng.api.config.Actionable;
 import appeng.api.networking.IGridNodeListener;
+import appeng.api.stacks.GenericStack;
+import appeng.api.storage.MEStorage;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -32,14 +36,43 @@ public abstract class MEInputHatchPartMachineMixin extends MEHatchPartMachine im
         super(holder, io, args);
     }
 
-    @Inject(method = "autoIO",
-            at = @At(value = "INVOKE",
-                     target = "Lcom/gregtechceu/gtceu/integration/ae2/machine/MEInputHatchPartMachine;syncME()V",
-                     shift = At.Shift.AFTER),
-            remap = false)
-    public void autoIO(CallbackInfo ci) {
-        if (aeFluidHandler instanceof IOptimizedMEList machine) {
-            machine.setChanged(true);
+    /**
+     * @author Dragons
+     * @reason skip empty network lookups and mark cached contents dirty only after actual changes
+     */
+    @SuppressWarnings("DataFlowIssue")
+    @Overwrite(remap = false)
+    protected void syncME() {
+        var grid = this.getMainNode().getGrid();
+        if (grid == null) return;
+        var storageService = grid.getStorageService();
+        MEStorage networkInv = storageService.getInventory();
+        var cachedInventory = storageService.getCachedInventory();
+        boolean changed = false;
+
+        for (var aeSlot : this.aeFluidHandler.getInventory()) {
+            GenericStack exceedItem = aeSlot.exceedStack();
+            if (exceedItem != null) {
+                long total = exceedItem.amount();
+                long inserted = networkInv.insert(exceedItem.what(), total, Actionable.MODULATE,
+                        this.actionSource);
+                aeSlot.drain(inserted > 0 ? inserted : total, false);
+                changed = true;
+                if (inserted > 0) continue;
+            }
+
+            GenericStack reqItem = aeSlot.requestStack();
+            if (reqItem != null && cachedInventory.get(reqItem.what()) > 0) {
+                long extracted = networkInv.extract(reqItem.what(), reqItem.amount(), Actionable.MODULATE,
+                        this.actionSource);
+                if (extracted > 0) {
+                    aeSlot.addStack(new GenericStack(reqItem.what(), extracted));
+                    changed = true;
+                }
+            }
+        }
+        if (changed && this.aeFluidHandler instanceof IOptimizedMEList optimized) {
+            optimized.setChanged(true);
         }
     }
 

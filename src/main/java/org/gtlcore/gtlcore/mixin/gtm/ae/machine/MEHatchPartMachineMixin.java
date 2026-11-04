@@ -45,7 +45,9 @@ public abstract class MEHatchPartMachineMixin extends FluidHatchPartMachine impl
 
     @Override
     public boolean shouldSyncME() {
-        return this.self().getOffsetTimer() % (gTLCore$syncOffset == 0 ? ME_UPDATE_INTERVAL : gTLCore$syncOffset) == 0L;
+        long interval = gTLCore$syncOffset == 0 ? ME_UPDATE_INTERVAL : gTLCore$syncOffset;
+        long phase = Integer.toUnsignedLong(this.self().getPos().hashCode());
+        return (this.self().getOffsetTimer() + phase) % interval == 0L;
     }
 
     @Unique

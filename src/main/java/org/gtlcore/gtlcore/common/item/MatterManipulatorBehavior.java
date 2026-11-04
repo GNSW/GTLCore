@@ -40,7 +40,7 @@ import java.util.List;
 
 public final class MatterManipulatorBehavior extends ComponentItem {
 
-    public static final int HOLD_TICKS = SharedConstants.TICKS_PER_SECOND * 2;
+    public static final int HOLD_TICKS = SharedConstants.TICKS_PER_SECOND * 3 / 2;
 
     public MatterManipulatorBehavior(Properties properties) {
         super(properties.stacksTo(1));

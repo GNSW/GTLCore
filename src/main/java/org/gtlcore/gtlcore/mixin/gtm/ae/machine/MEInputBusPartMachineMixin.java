@@ -38,17 +38,6 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
         super(holder, io, args);
     }
 
-    @Inject(method = "autoIO",
-            at = @At(value = "INVOKE",
-                     target = "Lcom/gregtechceu/gtceu/integration/ae2/machine/MEInputBusPartMachine;syncME()V",
-                     shift = At.Shift.AFTER),
-            remap = false)
-    public void autoIO(CallbackInfo ci) {
-        if (aeItemHandler instanceof IOptimizedMEList machine) {
-            machine.setChanged(true);
-        }
-    }
-
     @Inject(method = "writeConfigToTag",
             at = @At("RETURN"),
             remap = false)
@@ -79,12 +68,17 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
 
     /**
      * @author Dragons
-     * @reason sync long
+     * @reason sync long, skip empty network lookups and mark cached contents dirty only after actual changes
      */
     @SuppressWarnings("DataFlowIssue")
     @Overwrite(remap = false)
     protected void syncME() {
-        MEStorage networkInv = this.getMainNode().getGrid().getStorageService().getInventory();
+        var grid = this.getMainNode().getGrid();
+        if (grid == null) return;
+        var storageService = grid.getStorageService();
+        MEStorage networkInv = storageService.getInventory();
+        var cachedInventory = storageService.getCachedInventory();
+        boolean changed = false;
 
         for (ExportOnlyAEItemSlot aeSlot : this.aeItemHandler.getInventory()) {
             GenericStack exceedItem = aeSlot.exceedStack();
@@ -98,16 +92,21 @@ public abstract class MEInputBusPartMachineMixin extends MEBusPartMachine implem
                 } else {
                     ((IMETransfer) aeSlot).extractGenericStack(total, false, true);
                 }
+                changed = true;
             }
 
             GenericStack reqItem = aeSlot.requestStack();
-            if (reqItem != null) {
+            if (reqItem != null && cachedInventory.get(reqItem.what()) > 0) {
                 long extracted = networkInv.extract(reqItem.what(), reqItem.amount(), Actionable.MODULATE,
                         this.actionSource);
                 if (extracted != 0) {
                     aeSlot.addStack(new GenericStack(reqItem.what(), extracted));
+                    changed = true;
                 }
             }
+        }
+        if (changed && this.aeItemHandler instanceof IOptimizedMEList optimized) {
+            optimized.setChanged(true);
         }
     }
 }

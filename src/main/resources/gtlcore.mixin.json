@@ -121,6 +121,7 @@
     "toolbelt.ToolBeltItemMixin",
     "toolbelt.BeltContainerMixin",
     "gtm.cover.GTUtilSolarMixin",
+    "gtm.ColorSprayBehaviourAccessor",
     "gtm.StableBlockCandidatesMixin",
     "gtm.worldgen.SurfaceIndicatorGeneratorMixin",
     "gtm.worldgen.VeinedVeinGeneratorMixin",

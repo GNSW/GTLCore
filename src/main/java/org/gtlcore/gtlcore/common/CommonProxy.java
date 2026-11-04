@@ -14,6 +14,7 @@ import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAePackets;
 import org.gtlcore.gtlcore.integration.ftbu.AreaShape;
 import org.gtlcore.gtlcore.network.GTLNetworkHandler;
+import org.gtlcore.gtlcore.network.InfiniteSprayCanPackets;
 
 import com.gregtechceu.gtceu.api.GTCEuAPI;
 import com.gregtechceu.gtceu.api.data.chemical.material.event.MaterialEvent;
@@ -49,6 +50,7 @@ public class CommonProxy {
         WirelessAeNetworkRuntime.register(MinecraftForge.EVENT_BUS);
         WirelessAePackets.register();
         org.gtlcore.gtlcore.network.ManipulatorPackets.register();
+        InfiniteSprayCanPackets.register();
         org.gtlcore.gtlcore.integration.ftbquests.QuestTranslationNetwork.register();
         CuriosTerminalLocator.register();
         eventBus.addListener(this::commonSetup);

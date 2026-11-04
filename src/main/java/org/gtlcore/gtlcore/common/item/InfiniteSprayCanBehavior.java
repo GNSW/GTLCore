@@ -212,7 +212,7 @@ public class InfiniteSprayCanBehavior implements IInteractionItem, IAddInformati
                 "item.gtlcore.infinite_spray_can.tooltip.mode.range" :
                 "item.gtlcore.infinite_spray_can.tooltip.mode.single").withStyle(ChatFormatting.AQUA));
         tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.tooltip.mode_switch",
-                Component.keybind("key.sneak"), Component.keybind("key.attack")).withStyle(ChatFormatting.GRAY));
+                Component.keybind("key.gtlcore.infinite_spray_can.mode")).withStyle(ChatFormatting.GRAY));
         if (isRangeMode(stack)) {
             tooltip.add(Component.translatable("item.gtlcore.infinite_spray_can.tooltip.range")
                     .withStyle(ChatFormatting.GRAY));

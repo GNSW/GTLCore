@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.common.item.InfiniteSprayCanBehavior;
 import org.gtlcore.gtlcore.common.item.InfiniteSprayCanItem;
 import org.gtlcore.gtlcore.network.InfiniteSprayCanPackets;
 
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
@@ -12,11 +13,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.client.settings.KeyConflictContext;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -25,11 +29,24 @@ import org.lwjgl.glfw.GLFW;
 @Mod.EventBusSubscriber(modid = GTLCore.MOD_ID, value = net.minecraftforge.api.distmarker.Dist.CLIENT)
 public final class InfiniteSprayCanClient {
 
+    private static final String TOGGLE_KEY_NAME = "key.gtlcore.infinite_spray_can.mode";
+    private static KeyMapping toggleKey;
     private static BlockPos rangeStart;
     private static String rangeDimension = "";
     private static boolean rangeMode;
 
     private InfiniteSprayCanClient() {}
+
+    @Mod.EventBusSubscriber(modid = GTLCore.MOD_ID, value = net.minecraftforge.api.distmarker.Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
+    public static final class Registration {
+
+        @SubscribeEvent
+        public static void keys(RegisterKeyMappingsEvent event) {
+            toggleKey = new KeyMapping(TOGGLE_KEY_NAME, KeyConflictContext.IN_GAME,
+                    InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_I, "key.categories.gtlcore");
+            event.register(toggleKey);
+        }
+    }
 
     private static ItemStack sprayCan() {
         Minecraft minecraft = Minecraft.getInstance();
@@ -41,15 +58,14 @@ public final class InfiniteSprayCanClient {
     }
 
     @SubscribeEvent
-    public static void onMouseButton(InputEvent.MouseButton.Pre event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || toggleKey == null) return;
         Minecraft minecraft = Minecraft.getInstance();
-        if (event.getAction() != GLFW.GLFW_PRESS || event.getButton() != GLFW.GLFW_MOUSE_BUTTON_LEFT ||
-                minecraft.screen != null || minecraft.player == null || !minecraft.player.isShiftKeyDown() ||
-                sprayCan().isEmpty()) {
-            return;
+        while (toggleKey.consumeClick()) {
+            if (minecraft.screen == null && !sprayCan().isEmpty()) {
+                InfiniteSprayCanPackets.toggleMode();
+            }
         }
-        event.setCanceled(true);
-        InfiniteSprayCanPackets.toggleMode();
     }
 
     public static void receiveSelection(InfiniteSprayCanPackets.Selection selection) {

@@ -79,7 +79,9 @@ public class AEDualConfigWidget extends WidgetGroup {
         this.addWidget(new LabelWidget(66, navigationY + 5, () -> this.page + " / " + MAX_PAGE));
         this.addWidget(this.pageUpWidget);
         this.addWidget(this.pageDownWidget);
-        this.amountSetWidget = new AEDualAmountSetWidget(31, -50, this);
+        int amountSetX = (getSizeWidth() - AEDualAmountSetWidget.WIDGET_WIDTH) / 2;
+        int amountSetY = getSizeHeight() + 4;
+        this.amountSetWidget = new AEDualAmountSetWidget(amountSetX, amountSetY, this);
         this.addWidget(this.amountSetWidget);
         this.addWidget(this.amountSetWidget.getAmountText());
         this.disableAmount();

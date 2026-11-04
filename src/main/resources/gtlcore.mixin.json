@@ -74,6 +74,7 @@
     "gtm.api.recipe.ContentMixin",
     "gtm.client.TooltipsHandlerMixin",
     "gtm.gui.AEConfigSlotWidgetMixin",
+    "gtm.gui.AEItemConfigSlotWidgetMixin",
     "gtm.gui.AEFluidConfigSlotWidgetMixin",
     "gtm.gui.AEListDisplayWidgetMixin",
     "gtm.gui.ConfiguratorPanelMixin",

@@ -315,8 +315,8 @@ public class AEDualConfigSlotWidget extends Widget implements IGhostItemTarget, 
             long amount = config.amount();
             long newAmount;
             if (control) {
-                if (increase && amount > Long.MAX_VALUE / 2) return;
-                newAmount = increase ? amount * 2 : amount / 2;
+                if (increase && amount > Long.MAX_VALUE / 1000) return;
+                newAmount = increase ? amount * 1000 : amount / 1000;
             } else {
                 if (increase && amount == Long.MAX_VALUE) return;
                 newAmount = amount + (increase ? 1 : -1);

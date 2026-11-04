@@ -15,13 +15,13 @@ import org.jetbrains.annotations.NotNull;
 public class AEDualAmountSetWidget extends Widget {
 
     private static final int SET_SLOT_ID = 0;
-    private static final int WIDGET_WIDTH = 80;
-    private static final int WIDGET_HEIGHT = 30;
-    private static final int TEXT_X = 3;
+    static final int WIDGET_WIDTH = 96;
+    static final int WIDGET_HEIGHT = 36;
+    private static final int TEXT_X = 4;
     private static final int TEXT_Y = 3;
-    private static final int INPUT_Y = 11;
-    private static final int INPUT_WIDTH = 65;
-    private static final int INPUT_HEIGHT = 14;
+    private static final int INPUT_Y = 12;
+    private static final int INPUT_WIDTH = 88;
+    private static final int INPUT_HEIGHT = 18;
 
     private int index = -1;
     @Getter

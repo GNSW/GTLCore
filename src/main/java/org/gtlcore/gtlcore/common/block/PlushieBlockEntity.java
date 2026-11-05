@@ -23,6 +23,8 @@ import java.util.WeakHashMap;
 /** Stores the wearable's appearance and the synchronized music playback state. */
 public final class PlushieBlockEntity extends BlockEntity {
 
+    public static final double MUSIC_RANGE = 20.0;
+    private static final double MUSIC_RANGE_SQUARED = MUSIC_RANGE * MUSIC_RANGE;
     private static final Map<Level, Set<BlockPos>> LOADED = new WeakHashMap<>();
     private ItemStack plushie = ItemStack.EMPTY;
     private long startTick = -1;
@@ -54,8 +56,23 @@ public final class PlushieBlockEntity extends BlockEntity {
 
     public void togglePlaying() {
         if (level == null || level.isClientSide || isRemoved()) return;
-        startTick = isPlaying() ? -1 : level.getGameTime();
+        startTick = isPlaying() ? -1 : synchronizedStartTick();
         sync();
+    }
+
+    private long synchronizedStartTick() {
+        PlushieBlockEntity nearest = null;
+        double nearestDistance = MUSIC_RANGE_SQUARED;
+        for (PlushieBlockEntity candidate : getActivePlushies(level)) {
+            double distance = worldPosition.distSqr(candidate.worldPosition);
+            if (distance > nearestDistance || distance == nearestDistance && nearest != null &&
+                    candidate.startTick >= nearest.startTick) {
+                continue;
+            }
+            nearest = candidate;
+            nearestDistance = distance;
+        }
+        return nearest == null ? level.getGameTime() : nearest.startTick;
     }
 
     public void setPlushie(ItemStack stack) {

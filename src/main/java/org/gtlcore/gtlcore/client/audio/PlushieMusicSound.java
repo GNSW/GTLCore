@@ -10,6 +10,7 @@ import net.minecraft.client.resources.sounds.Sound;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.client.sounds.SoundBufferLibrary;
+import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
@@ -25,28 +26,37 @@ import javax.sound.sampled.AudioFormat;
 /** One positional music stream, seeked to the shared server tick when it is (re)created. */
 public final class PlushieMusicSound extends AbstractTickableSoundInstance {
 
-    private final PlushieBlockEntity plushie;
     private final Level level;
+    private final BlockPos anchor;
     private final long startTick;
     private volatile long elapsedTicks;
 
-    public PlushieMusicSound(PlushieBlockEntity plushie) {
+    public PlushieMusicSound(Level level, BlockPos anchor, long startTick, int plushieCount) {
         super(SoundEvent.createVariableRangeEvent(GTLCore.id("plushie_music")), SoundSource.RECORDS,
                 SoundInstance.createUnseededRandom());
-        this.plushie = plushie;
-        level = Objects.requireNonNull(plushie.getLevel(), "Plushie must belong to a level");
-        startTick = plushie.getStartTick();
+        this.level = Objects.requireNonNull(level, "Plushie sound must belong to a level");
+        this.anchor = anchor.immutable();
+        this.startTick = startTick;
         elapsedTicks = Math.max(0, level.getGameTime() - startTick);
-        x = plushie.getBlockPos().getX() + 0.5;
-        y = plushie.getBlockPos().getY() + 0.5;
-        z = plushie.getBlockPos().getZ() + 0.5;
+        x = anchor.getX() + 0.5;
+        y = anchor.getY() + 0.5;
+        z = anchor.getZ() + 0.5;
         looping = true;
         relative = false;
         attenuation = SoundInstance.Attenuation.LINEAR;
+        updateGroup(plushieCount);
     }
 
-    public boolean matchesPlayingPlushie(PlushieBlockEntity candidate) {
-        return candidate == plushie && candidate.getStartTick() == startTick && candidate.isPlaying();
+    public BlockPos getAnchor() {
+        return anchor;
+    }
+
+    public boolean matchesGroup(Level level, long startTick) {
+        return this.level == level && this.startTick == startTick;
+    }
+
+    public void updateGroup(int plushieCount) {
+        volume = Math.min(4.0F, 1.0F + Math.max(0, plushieCount - 1) * 0.5F);
     }
 
     public void cancel() {
@@ -60,8 +70,9 @@ public final class PlushieMusicSound extends AbstractTickableSoundInstance {
 
     @Override
     public boolean canPlaySound() {
-        return !isStopped() && !plushie.isRemoved() && plushie.getLevel() == level &&
-                matchesPlayingPlushie(plushie) && level.getBlockEntity(plushie.getBlockPos()) == plushie;
+        if (isStopped() || !level.hasChunkAt(anchor)) return false;
+        return level.getBlockEntity(anchor) instanceof PlushieBlockEntity plushie && !plushie.isRemoved() &&
+                plushie.getStartTick() == startTick && plushie.isPlaying();
     }
 
     @Override

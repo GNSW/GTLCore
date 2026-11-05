@@ -1310,6 +1310,8 @@
   "gui.gtlcore.preview.transfer_failed": "Material transfer did not complete. Reopen the preview from the pattern encoding terminal and try again.",
   "gui.gtlcore.preview.title": "Structure preview: %s",
   "gui.gtlcore.preview.candidates": "Valid blocks here",
+  "gui.gtlcore.preview.expand_material": "Left-click to expand or hide available blocks",
+  "gui.gtlcore.preview.visibility_hint": "All → controller only → controller and replaceable blocks; hidden blocks are not rendered",
   "gui.gtlcore.preview.hide_candidates": "Hide valid block list",
   "gui.gtlcore.preview.select_block": "Select a block in the structure to see the valid blocks for that position.",
   "gui.gtlcore.preview.min_layer": "At least %s per layer",

@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.client.preview;
 
+import org.gtlcore.gtlcore.api.gui.PatternPreviewWidget;
+
 import com.gregtechceu.gtceu.api.gui.GuiTextures;
 import com.gregtechceu.gtceu.api.pattern.TraceabilityPredicate;
 import com.gregtechceu.gtceu.api.pattern.predicates.SimplePredicate;
@@ -115,7 +117,7 @@ public final class PreviewCandidatePanel extends WidgetGroup {
         }
     }
 
-    public record Group(List<ItemStack> stacks, List<Component> tooltips, List<Component> limits) {
+    public record Group(List<ItemStack> stacks, List<Component> tooltips, List<Component> limits, String countLabel) {
 
         public static Group of(SimplePredicate simple, TraceabilityPredicate predicate) {
             var limits = new ArrayList<>(simple.getToolTips(null));
@@ -126,7 +128,8 @@ public final class PreviewCandidatePanel extends WidgetGroup {
             if (simple.maxLayerCount >= 0) {
                 limits.add(Component.translatable("gui.gtlcore.preview.max_layer", simple.maxLayerCount));
             }
-            return new Group(List.copyOf(simple.getCandidates()), List.copyOf(simple.getToolTips(predicate)), List.copyOf(limits));
+            return new Group(List.copyOf(simple.getCandidates()), List.copyOf(simple.getToolTips(predicate)), List.copyOf(limits),
+                    PreviewMaterialRows.countLabel(simple.minCount, simple.maxCount));
         }
     }
 
@@ -147,6 +150,23 @@ public final class PreviewCandidatePanel extends WidgetGroup {
                 var stack = group.stacks().get(index);
                 addWidget(new SlotWidget(handler, index, PADDING + index % columns * SLOT_SIZE,
                         itemTop + index / columns * SLOT_SIZE, false, false) {
+
+                    @Override
+                    public List<Object> getXEIIngredients() {
+                        return List.of();
+                    }
+
+                    @Override
+                    public void drawInBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
+                        super.drawInBackground(graphics, mouseX, mouseY, partialTicks);
+                        for (var parent = getParent(); parent != null; parent = parent.getParent()) {
+                            if (parent instanceof PatternPreviewWidget preview) {
+                                PreviewMaterialRows.drawBorder(graphics, getPositionX(), getPositionY(), preview.materialBorderColor(stack));
+                                break;
+                            }
+                        }
+                        PreviewMaterialRows.drawCount(graphics, getPositionX(), getPositionY(), group.countLabel());
+                    }
 
                     @Override
                     public boolean mouseClicked(double mouseX, double mouseY, int button) {

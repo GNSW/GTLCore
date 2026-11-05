@@ -351,6 +351,28 @@ tasks.register("verifyPackagedMixinRefmaps") {
     }
 }
 
+tasks.register("verifyPackagedAe2Screens") {
+    group = "verification"
+    description = "Checks that AE2 screen overrides are included in the production jar."
+    dependsOn(tasks.named("remapJar"))
+    inputs.dir("src/main/resources/assets/ae2/screens")
+    inputs.file(tasks.named("remapJar").flatMap { it.archiveFile })
+
+    doLast {
+        def resourceRoot = file("src/main/resources").toPath()
+        def archive = tasks.named("remapJar").get().archiveFile.get().asFile
+        new java.util.zip.ZipFile(archive).withCloseable { zip ->
+            fileTree("src/main/resources/assets/ae2/screens").each { resource ->
+                def path = resourceRoot.relativize(resource.toPath()).toString().replace('\\', '/')
+                def entry = zip.getEntry(path)
+                if (entry == null || entry.size == 0) {
+                    throw new GradleException("Missing packaged AE2 screen resource: $path. Rerun processResources before building.")
+                }
+            }
+        }
+    }
+}
+
 tasks.named("build") {
-    dependsOn(tasks.named("verifyPackagedMixinRefmaps"))
+    dependsOn(tasks.named("verifyPackagedMixinRefmaps"), tasks.named("verifyPackagedAe2Screens"))
 }

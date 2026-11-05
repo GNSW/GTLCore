@@ -1310,6 +1310,8 @@
   "gui.gtlcore.preview.transfer_failed": "材料转移未完成，请在样板编码终端重新打开预览后重试。",
   "gui.gtlcore.preview.title": "结构预览：%s",
   "gui.gtlcore.preview.candidates": "此处可放置",
+  "gui.gtlcore.preview.expand_material": "左键展开或收起可用方块",
+  "gui.gtlcore.preview.visibility_hint": "全部 → 仅主方块 → 主方块与可替换方块；隐藏方块不渲染",
   "gui.gtlcore.preview.hide_candidates": "收起可放置方块列表",
   "gui.gtlcore.preview.select_block": "点击结构中的方块，查看此处可放置的方块。",
   "gui.gtlcore.preview.min_layer": "每层最少：%s 个",

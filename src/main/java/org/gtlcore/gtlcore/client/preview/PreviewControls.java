@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.client.preview;
 
+import org.gtlcore.gtlcore.api.gui.PatternPreviewWidget;
 import org.gtlcore.gtlcore.mixin.ldlib.client.PreviewSceneAccessor;
 
 import com.gregtechceu.gtceu.api.gui.GuiTextures;
@@ -319,10 +320,14 @@ public final class PreviewControls {
         int controlX = toolbarLeft;
         for (var child : widget.widgets) {
             if (fullscreenOnly(child)) continue;
+            if (widget instanceof PatternPreviewWidget preview && preview.isMaterialRow(child)) {
+                preview.layoutMaterialRows(sceneLeft, screenHeight - 50, Math.max(18, sceneRight - sceneLeft));
+                continue;
+            }
             if (child == scene) {
                 child.setSelfPosition(sceneLeft, CONTENT_TOP);
                 child.setSize(Math.max(1, sceneRight - sceneLeft),
-                        Math.max(1, screenHeight - CONTENT_TOP - WINDOW_MARGIN - 4));
+                        Math.max(1, screenHeight - CONTENT_TOP - 54));
             } else if (child == expand) {
                 child.setSelfPosition(buttonX, TOOLBAR_TOP);
                 child.setSize(BUTTON_SIZE, BUTTON_SIZE);

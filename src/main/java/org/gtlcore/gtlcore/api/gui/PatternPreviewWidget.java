@@ -6,6 +6,7 @@ import org.gtlcore.gtlcore.api.pattern.PreviewMatcherTiming;
 import org.gtlcore.gtlcore.client.preview.PreviewCandidatePanel;
 import org.gtlcore.gtlcore.client.preview.PreviewControls;
 import org.gtlcore.gtlcore.client.preview.PreviewHeight;
+import org.gtlcore.gtlcore.client.preview.PreviewMaterialRows;
 import org.gtlcore.gtlcore.client.preview.PreviewPicking;
 import org.gtlcore.gtlcore.client.preview.PreviewRendererAccess;
 import org.gtlcore.gtlcore.client.preview.PreviewScenes;
@@ -35,7 +36,6 @@ import com.lowdragmc.lowdraglib.gui.editor.ColorPattern;
 import com.lowdragmc.lowdraglib.gui.texture.*;
 import com.lowdragmc.lowdraglib.gui.util.ClickData;
 import com.lowdragmc.lowdraglib.gui.widget.*;
-import com.lowdragmc.lowdraglib.jei.IngredientIO;
 import com.lowdragmc.lowdraglib.utils.*;
 
 import net.minecraft.ChatFormatting;
@@ -81,7 +81,6 @@ import org.joml.Vector3f;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * 部分代码参考自GTM
@@ -105,8 +104,6 @@ public class PatternPreviewWidget extends WidgetGroup {
     private final MBPattern[] patterns;
     private int index;
     private int layer;
-    private final List<SlotWidget> slotWidgets;
-    private final List<SlotWidget> candidates;
     private boolean showModules = false;
     private PreviewControls previewControls;
     private final Map<BlockState, BlockInfo> plainBlocks = new IdentityHashMap<>();
@@ -114,6 +111,55 @@ public class PatternPreviewWidget extends WidgetGroup {
     private BlockPos selectedMaterialPos;
     private List<BlockPos> replaceablePositions = List.of();
     private boolean replaceablePositionsDirty = true;
+    private final PreviewMaterialRows.Selection materialSelection = new PreviewMaterialRows.Selection();
+    private DraggableScrollableWidgetGroup materialCandidateRow;
+    private List<BlockPos> unfilteredCore = List.of();
+    private int visibilityMode;
+
+    public boolean isMaterialRow(Widget widget) {
+        return widget == scrollableWidgetGroup || widget == materialCandidateRow;
+    }
+
+    public void layoutMaterialRows(int x, int y, int width) {
+        scrollableWidgetGroup.setSelfPosition(x, y);
+        scrollableWidgetGroup.setSize(width, 22);
+        materialCandidateRow.setSelfPosition(x, y + 24);
+        materialCandidateRow.setSize(width, 22);
+    }
+
+    public int materialBorderColor(ItemStack stack) {
+        return materialSelection.borderColor(AEItemKey.of(stack));
+    }
+
+    private void refreshVisibilityKeepingCamera() {
+        var center = new Vector3f(sceneWidget.getCenter());
+        float zoom = sceneWidget.getZoom();
+        refreshVisibility();
+        sceneWidget.setCenter(center);
+        sceneWidget.setZoom(zoom);
+    }
+
+    private void refreshVisibility() {
+        if (index < 0 || index >= patterns.length) return;
+        var pattern = patterns[index];
+        var controller = pattern.controllerBase.self().getPos();
+        var selected = materialSelection.selected();
+        var allowedByPredicate = new IdentityHashMap<TraceabilityPredicate, Set<AEItemKey>>();
+        var visible = unfilteredCore.stream().filter(pos -> {
+            if (visibilityMode == 0 || pos.equals(controller)) return true;
+            if (visibilityMode == 1) return false;
+            var predicate = pattern.predicateMap.get(pos);
+            var options = allowedByPredicate.computeIfAbsent(predicate, PreviewMaterialRows::candidates);
+            var item = patternMaterial(pos);
+            if (item == null) {
+                var state = LEVEL.getBlockState(pos);
+                item = AEItemKey.of(state.getBlock().getCloneItemStack(LEVEL, pos, state));
+            }
+            return selected == null ? options.size() > 1 || !options.isEmpty() && !options.contains(item) : options.contains(selected);
+        }).toList();
+        sceneWidget.setRenderedCore(visible, null);
+        replaceablePositionsDirty = true;
+    }
 
     protected PatternPreviewWidget(MultiblockMachineDefinition controllerDefinition) {
         super(0, 0, 160, 160);
@@ -121,8 +167,6 @@ public class PatternPreviewWidget extends WidgetGroup {
             setClientSideWidget();
             this.controllerDefinition = controllerDefinition;
             layer = -1;
-            slotWidgets = new ObjectArrayList<>();
-            candidates = new ObjectArrayList<>();
 
             addWidget(sceneWidget = new SceneWidget(3, 3, 150, 150, LEVEL) {
 
@@ -131,6 +175,20 @@ public class PatternPreviewWidget extends WidgetGroup {
                     // GUI and scene rendering share buffers but use different projection matrices.
                     graphics.flush();
                     super.drawInBackground(graphics, mouseX, mouseY, partialTicks);
+                }
+
+                @Override
+                public boolean mouseClicked(double mouseX, double mouseY, int button) {
+                    if (button == 1 && isMouseOverElement(mouseX, mouseY) && hoverPosFace != null) {
+                        selectedPosFace = null;
+                        clickPosFace = null;
+                        selectedMaterialPos = null;
+                        materialSelection.position(null);
+                        clearCandidates();
+                        if (previewControls != null) previewControls.selectPatternMaterial(null);
+                        return true;
+                    }
+                    return super.mouseClicked(mouseX, mouseY, button);
                 }
 
                 @Override
@@ -197,7 +255,6 @@ public class PatternPreviewWidget extends WidgetGroup {
                 }
             }
                     .setOnSelected(this::onPosSelected)
-                    .setRenderFacing(false)
                     .setRenderFacing(false));
 
             refreshScrollableWidget();
@@ -230,8 +287,17 @@ public class PatternPreviewWidget extends WidgetGroup {
                     this::updateLayer)
                     .setHoverBorderTexture(1, -1));
 
+            addWidget(new ButtonWidget(138, 70, 18, 18,
+                    controlTexture(() -> switch (visibilityMode) {
+                        case 1 -> "MAIN";
+                        case 2 -> "PARTS";
+                        default -> "ALL";
+                    }), click -> {
+                        visibilityMode = (visibilityMode + 1) % 3;
+                        refreshVisibilityKeepingCamera();
+                    }).setHoverTooltips(Component.translatable("gui.gtlcore.preview.visibility_hint")));
             if (this.patterns.length != 0 && this.patterns[0].hasModule) {
-                addWidget(new ButtonWidget(138, 70, 18, 18, controlTexture(() -> showModules ? "M:ON" : "M:OFF"),
+                addWidget(new ButtonWidget(138, 90, 18, 18, controlTexture(() -> showModules ? "M:ON" : "M:OFF"),
                         (x) -> toggleModules())
                         .setHoverBorderTexture(1, -1)
                         .setHoverTooltips(Component.translatable("gui.gtlcore.module.show")));
@@ -264,12 +330,7 @@ public class PatternPreviewWidget extends WidgetGroup {
                     material = AEItemKey.of(state.getBlock().getCloneItemStack(LEVEL, pos, state));
                 }
                 if (material == null) return false;
-                var alternatives = candidatesByPredicate.computeIfAbsent(predicate, key -> Stream.concat(key.common.stream(), key.limited.stream())
-                        .filter(simple -> simple != null && simple.candidates != null)
-                        .flatMap(simple -> simple.getCandidates().stream())
-                        .filter(stack -> !stack.isEmpty())
-                        .map(AEItemKey::of)
-                        .collect(Collectors.toSet()));
+                var alternatives = candidatesByPredicate.computeIfAbsent(predicate, PreviewMaterialRows::candidates);
                 return !alternatives.isEmpty() && (alternatives.size() > 1 || !alternatives.contains(material));
             }).toList();
             replaceablePositionsDirty = false;
@@ -439,7 +500,8 @@ public class PatternPreviewWidget extends WidgetGroup {
                 stream = stream.filter(pos -> !modelDisabled.contains(pos.asLong()));
             }
         }
-        sceneWidget.setRenderedCore(stream.toList(), null);
+        unfilteredCore = stream.toList();
+        refreshVisibility();
         replaceablePositionsDirty = true;
         if (previewControls != null) previewControls.sceneChanged();
     }
@@ -462,6 +524,7 @@ public class PatternPreviewWidget extends WidgetGroup {
         }
         if (index >= patterns.length || index < 0) return;
         clearCandidates();
+        materialSelection.clear();
         if (this.index != index) materialReplacements.clear();
         selectedMaterialPos = null;
         if (previewControls != null) previewControls.selectPatternMaterial(null);
@@ -475,32 +538,45 @@ public class PatternPreviewWidget extends WidgetGroup {
 
     private void refreshMaterialSlots() {
         refreshScrollableWidget();
-        slotWidgets.clear();
-        var materials = patternIngredients().stream()
-                .map(options -> options.stream().map(stack -> ((AEItemKey) stack.what()).toStack(Math.toIntExact(stack.amount()))).toList())
-                .toList();
-        var itemHandler = new CycleItemStackHandler(materials);
-        for (int i = 0; i < materials.size(); i++) {
-            final var itemStack = materials.get(i).get(0);
-            final var widget = new SlotWidget(itemHandler, i, 4 + i * 18, 0, false, false)
-                    .setBackgroundTexture(ColorPattern.T_GRAY.rectTexture())
-                    .setIngredientIO(IngredientIO.INPUT)
-                    .setOnAddedTooltips((w, tips) -> tips.add(Component.translatable("gtceu.machine.quantum_chest.items_stored")
-                            .withStyle(ChatFormatting.DARK_AQUA)
-                            .append(Component.literal(String.valueOf(itemStack.getCount())))));
-            slotWidgets.add(widget);
-            scrollableWidgetGroup.addWidget(widget);
-        }
+        if (materialCandidateRow != null) removeWidget(materialCandidateRow);
+        materialCandidateRow = new DraggableScrollableWidgetGroup(3, 134, 154, 22);
+        materialCandidateRow.setXScrollBarHeight(4);
+        materialCandidateRow.setXBarStyle(GuiTextures.SLIDER_BACKGROUND, GuiTextures.BUTTON);
+        materialCandidateRow.setScrollable(true);
+        materialCandidateRow.setDraggable(false);
+        materialCandidateRow.setScrollWheelDirection(DraggableScrollableWidgetGroup.ScrollWheelDirection.HORIZONTAL);
+        addWidget(materialCandidateRow);
+        var pattern = patterns[index];
+        var materials = new LinkedHashMap<BlockPos, AEItemKey>();
+        pattern.materials.forEach((pos, item) -> materials.put(pos, patternMaterial(pos)));
+        PreviewMaterialRows.populate(materials, pattern.predicateMap, pattern.controllerBase.self().getPos(),
+                scrollableWidgetGroup, materialCandidateRow, materialSelection, this::refreshVisibilityKeepingCamera,
+                material -> {
+                    if (previewControls == null) return;
+                    var groups = new ArrayList<PreviewCandidatePanel.Group>();
+                    if (material != null) {
+                        var seen = Collections.newSetFromMap(new IdentityHashMap<SimplePredicate, Boolean>());
+                        pattern.predicateMap.values().stream().distinct().forEach(predicate -> {
+                            for (var simple : PreviewMaterialRows.predicates(predicate)) {
+                                if (simple.getCandidates().stream().anyMatch(stack -> material.item().equals(AEItemKey.of(stack))) && seen.add(simple)) {
+                                    groups.add(PreviewCandidatePanel.Group.of(simple, predicate));
+                                }
+                            }
+                        });
+                    }
+                    previewControls.setCandidates(groups);
+                });
+        if (previewControls == null || !previewControls.fullscreen()) sceneWidget.setSize(150, 104);
         if (previewControls != null) previewControls.layout();
     }
 
     private void refreshScrollableWidget() {
         if (scrollableWidgetGroup != null) removeWidget(scrollableWidgetGroup);
-        var result = new DraggableScrollableWidgetGroup(3, 132, 154, 22)
+        var result = new DraggableScrollableWidgetGroup(3, 110, 154, 22)
                 .setXScrollBarHeight(4)
                 .setXBarStyle(GuiTextures.SLIDER_BACKGROUND, GuiTextures.BUTTON)
                 .setScrollable(true)
-                .setDraggable(true);
+                .setDraggable(false);
         result.setScrollWheelDirection(DraggableScrollableWidgetGroup.ScrollWheelDirection.HORIZONTAL);
         result.setScrollYOffset(0);
         scrollableWidgetGroup = result;
@@ -534,46 +610,19 @@ public class PatternPreviewWidget extends WidgetGroup {
             previewControls.selectPatternMaterial(selectedMaterialPos == null ? null : patternMaterial(pos));
         }
         var predicate = pattern.predicateMap.get(pos);
+        materialSelection.position(predicate);
 
-        if (predicate != null) {
-            var predicates = new LinkedHashSet<SimplePredicate>();
-            predicates.addAll(predicate.common);
-            predicates.addAll(predicate.limited);
-            predicates.remove(null);
-            predicates.removeIf(p -> p.candidates == null);
-
-            List<List<ItemStack>> candidateStacks = new ObjectArrayList<>();
-            List<List<Component>> predicateTips = new ObjectArrayList<>();
-            List<PreviewCandidatePanel.Group> groups = new ObjectArrayList<>();
-            for (var simplePredicate : predicates) {
-                var group = PreviewCandidatePanel.Group.of(simplePredicate, predicate);
-                if (!group.stacks().isEmpty()) {
-                    groups.add(group);
-                    candidateStacks.add(group.stacks());
-                    predicateTips.add(group.tooltips());
-                }
-            }
-            if (previewControls != null) previewControls.setCandidates(groups);
-
-            CycleItemStackHandler itemHandler = new CycleItemStackHandler(candidateStacks);
-            int maxCol = (160 - (((slotWidgets.size() - 1) / 9 + 1) * 18) - 35) % 18;
-            for (int i = 0; i < candidateStacks.size(); i++) {
-                int finalI = i;
-                final var widget = new SlotWidget(itemHandler, i, 3 + (i / maxCol) * 18, 3 + (i % maxCol) * 18, false,
-                        false)
-                        .setIngredientIO(IngredientIO.INPUT)
-                        .setBackgroundTexture(new ColorRectTexture(0x4fffffff))
-                        .setOnAddedTooltips((slot, list) -> list.addAll(predicateTips.get(finalI)));
-                candidates.add(widget);
-                addWidget(widget);
-            }
+        if (previewControls != null) {
+            var groups = PreviewMaterialRows.predicates(predicate).stream()
+                    .map(simple -> PreviewCandidatePanel.Group.of(simple, predicate))
+                    .filter(group -> !group.stacks().isEmpty())
+                    .toList();
+            previewControls.setCandidates(groups);
+            previewControls.layout();
         }
-        if (previewControls != null) previewControls.layout();
     }
 
     private void clearCandidates() {
-        for (var candidate : candidates) removeWidget(candidate);
-        candidates.clear();
         if (previewControls != null) previewControls.setCandidates(List.of());
     }
 

@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.mixin.gtm;
 
+import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.integration.jei.PreviewJeiTransfer;
 import org.gtlcore.gtlcore.integration.jei.SlotRecipeWidget;
 
@@ -50,9 +51,10 @@ public abstract class MultiblockInfoCategoryMixin extends ModularUIRecipeCategor
                 .map(MultiblockMachineDefinition.class::cast)
                 .filter(MultiblockMachineDefinition::isRenderXEIPreview)
                 .map(MultiblockInfoWrapper::new)
-                .toList(), executor).thenAcceptAsync(recipes -> {
-                    registry.addRecipes(RECIPE_TYPE, recipes);
-                }, executor);
+                .toList(), executor).thenAcceptAsync(recipes -> registry.addRecipes(RECIPE_TYPE, recipes), executor)
+                .whenComplete((result, error) -> {
+                    if (error != null) GTLCore.LOGGER.error("JEI multiblock preview registration failed", error);
+                });
         ci.cancel();
     }
 

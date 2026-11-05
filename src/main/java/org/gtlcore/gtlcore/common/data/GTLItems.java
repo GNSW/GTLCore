@@ -64,6 +64,12 @@ public class GTLItems {
             .model(NonNullBiConsumer.noop())
             .register();
 
+    public static final ItemEntry<RulerItem> RULER = REGISTRATE
+            .item("ruler", RulerItem::new)
+            .properties(p -> p.stacksTo(1))
+            .lang("Measuring Ruler")
+            .register();
+
     private static ItemEntry<StorageComponentItem> registerStorageComponentItem(int tier) {
         return REGISTRATE
                 .item("cell_component_" + tier + "m", p -> new StorageComponentItem(p, 1048576 * tier))

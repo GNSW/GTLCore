@@ -1,0 +1,12 @@
+{
+  "plushie_music": {
+    "subtitle": "subtitles.gtlcore.plushie_music",
+    "sounds": [
+      {
+        "name": "gtlcore:plushie_music",
+        "stream": true,
+        "attenuation_distance": 20
+      }
+    ]
+  }
+}

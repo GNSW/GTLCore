@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.client;
 
 import org.gtlcore.gtlcore.api.event.SourceTooltipRegistrationEvent;
 import org.gtlcore.gtlcore.client.ae2.wireless.WirelessAeClient;
+import org.gtlcore.gtlcore.client.audio.PlushieMusicClient;
 import org.gtlcore.gtlcore.client.bloom.BloomClient;
 import org.gtlcore.gtlcore.client.renderer.item.PlushieCurioRenderer;
 import org.gtlcore.gtlcore.client.renderer.machine.HarmonyAnimationRenderer;
@@ -28,6 +29,7 @@ public class ClientProxy extends CommonProxy {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(
                 org.gtlcore.gtlcore.client.renderer.item.PlushieColors::registerBlocks);
         BloomClient.init();
+        PlushieMusicClient.register();
         org.gtlcore.gtlcore.client.ftbquests.QuestTranslationsClient.init();
         org.gtlcore.gtlcore.client.monitor.EnergyMonitorRenderer.register(FMLJavaModLoadingContext.get().getModEventBus());
         WirelessAeClient.register(FMLJavaModLoadingContext.get().getModEventBus());

@@ -79,8 +79,8 @@ public class AEDualConfigWidget extends WidgetGroup {
         this.addWidget(new LabelWidget(66, navigationY + 5, () -> this.page + " / " + MAX_PAGE));
         this.addWidget(this.pageUpWidget);
         this.addWidget(this.pageDownWidget);
-        int amountSetX = (getSizeWidth() - AEDualAmountSetWidget.WIDGET_WIDTH) / 2;
-        int amountSetY = getSizeHeight() + 4;
+        int amountSetX = AmountBoxRenderer.GUI_WIDTH + AmountBoxRenderer.GAP - x;
+        int amountSetY = Math.max(0, (this.rows * 38 + 17 - AEDualAmountSetWidget.WIDGET_HEIGHT) / 2);
         this.amountSetWidget = new AEDualAmountSetWidget(amountSetX, amountSetY, this);
         this.addWidget(this.amountSetWidget);
         this.addWidget(this.amountSetWidget.getAmountText());

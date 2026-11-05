@@ -34,6 +34,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.material.FlowingFluid;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
@@ -140,11 +141,15 @@ public class AdvancedBlockPattern extends BlockPattern {
 
     private net.minecraft.world.level.material.Fluid getFluid(ItemStack stack) {
         if (stack.getItem() instanceof BlockItem blockItem && blockItem.getBlock() instanceof LiquidBlock liquidBlock) {
-            return liquidBlock.getFluid();
+            return sourceFluid(liquidBlock.getFluid());
         } else if (stack.getItem() instanceof BucketItem bucketItem) {
-            return bucketItem.getFluid();
+            return sourceFluid(bucketItem.getFluid());
         }
         return null;
+    }
+
+    private static net.minecraft.world.level.material.Fluid sourceFluid(net.minecraft.world.level.material.Fluid fluid) {
+        return fluid instanceof FlowingFluid flowing ? flowing.getSource() : fluid;
     }
 
     public void autoBuild(Player player, MultiblockState worldState,
@@ -445,9 +450,10 @@ public class AdvancedBlockPattern extends BlockPattern {
 
                         if (!blockState.isAir()) {
                             if (level instanceof ServerLevel serverLevel) {
-                                if (blockState.getBlock() instanceof LiquidBlock liquidBlock) {
+                                if (blockState.getBlock() instanceof LiquidBlock) {
                                     if (aeInventory != null) {
-                                        aeInventory.insert(AEFluidKey.of(liquidBlock.getFluid()), FluidType.BUCKET_VOLUME, Actionable.MODULATE, source);
+                                        aeInventory.insert(AEFluidKey.of(sourceFluid(blockState.getFluidState().getType())),
+                                                FluidType.BUCKET_VOLUME, Actionable.MODULATE, source);
                                     }
                                     level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
                                     continue;

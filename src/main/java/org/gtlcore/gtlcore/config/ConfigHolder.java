@@ -62,48 +62,51 @@ public class ConfigHolder {
     public static class ManipulatorOptions {
 
         @Configurable
-        @Configurable.Comment("MK-III capacity from the approved design, in EU.")
+        @Configurable.Comment("config.gtlcore.option.capacity.comment")
         @Configurable.Range(min = 1, max = Long.MAX_VALUE)
         public long capacity = 10_000_000_000L;
 
         @Configurable
-        @Configurable.Comment("MK-III target throughput; actual throughput is limited by the server tick budget.")
+        @Configurable.Comment("config.gtlcore.option.operationsPerSecond.comment")
         @Configurable.Range(min = 1, max = Integer.MAX_VALUE)
         public int operationsPerSecond = 1024;
 
         @Configurable
-        @Configurable.Comment("Shared server budget in milliseconds; defaults to the existing machine startup budget.")
+        @Configurable.Comment("config.gtlcore.option.tickBudgetMillis.comment")
         @Configurable.Range(min = 1, max = 50)
         public int tickBudgetMillis = DEFAULT_MACHINE_STARTUP_TICK_TIME_BUDGET_MILLIS;
 
         @Configurable
-        @Configurable.Comment("Maximum cells per task, initially sixteen chunk sections; bounds saved snapshot memory.")
+        @Configurable.Comment("config.gtlcore.option.maxBlocks.comment")
         @Configurable.Range(min = 1, max = Integer.MAX_VALUE)
         public int maxBlocks = 16 * 16 * 16 * 16;
 
         @Configurable
-        @Configurable.Comment("Snapshot memory budget in bytes, initially 1 KiB per default task cell (64 MiB).")
+        @Configurable.Comment("config.gtlcore.option.maxSnapshotBytes.comment")
         @Configurable.Range(min = 1024, max = Long.MAX_VALUE)
         public long maxSnapshotBytes = 16L * 16 * 16 * 16 * 1024;
 
         @Configurable
-        @Configurable.Comment("Base EU per hardness unit, initially one GT LV nominal voltage; tuning value, not the GTNH formula.")
+        @Configurable.Comment("config.gtlcore.option.baseEU.comment")
         @Configurable.Range(min = 1, max = Integer.MAX_VALUE)
         public int baseEU = (int) com.gregtechceu.gtceu.api.GTValues.VA[com.gregtechceu.gtceu.api.GTValues.LV];
 
         @Configurable
-        @Configurable.Comment("Distance normalization in blocks, initially one chunk width.")
+        @Configurable.Comment("config.gtlcore.option.distanceScale.comment")
         @Configurable.Range(min = 1, max = Integer.MAX_VALUE)
         public int distanceScale = 16;
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.previewLimit.comment")
         @Configurable.Range(min = 1, max = 65536)
         public int previewLimit = 1024;
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.preview.comment")
         public boolean preview = true;
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.previewThroughBlocks.comment")
         public boolean previewThroughBlocks = false;
     }
 

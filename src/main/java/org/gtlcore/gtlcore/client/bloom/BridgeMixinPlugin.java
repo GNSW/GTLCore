@@ -29,8 +29,11 @@ public final class BridgeMixinPlugin implements IMixinConfigPlugin {
     }
 
     public boolean shouldApplyMixin(String target, String mixin) {
-        if (!mixin.startsWith("org.gtlcore.gtlcore.mixin.bloom.")) return true;
         var mods = FMLLoader.getLoadingModList();
+        if (mixin.equals("org.gtlcore.gtlcore.mixin.extendedae.BlockFishbigMixin")) {
+            return mods != null && mods.getModFileById("expatternprovider") != null;
+        }
+        if (!mixin.startsWith("org.gtlcore.gtlcore.mixin.bloom.")) return true;
         if (mods != null && mods.getModFileById("gtlbloom") != null) return false;
         return !mixin.contains(".Oculus") || supportedOculus();
     }

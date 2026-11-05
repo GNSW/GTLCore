@@ -1,8 +1,10 @@
 package org.gtlcore.gtlcore.forge;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.common.block.PlushieBlockEntity;
 import org.gtlcore.gtlcore.common.data.GTLBlocks;
 import org.gtlcore.gtlcore.common.data.GTLItems;
+import org.gtlcore.gtlcore.common.data.GTLPlushies;
 import org.gtlcore.gtlcore.common.item.PatternBoxBehavior;
 import org.gtlcore.gtlcore.common.machine.generator.WirelessChargingStationMachine;
 import org.gtlcore.gtlcore.config.ConfigHolder;
@@ -75,6 +77,15 @@ public class ForgeCommonEventListener {
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (GTLPlushies.isExtendedFishbig(event.getLevel().getBlockState(event.getPos()).getBlock())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.sidedSuccess(event.getLevel().isClientSide));
+            if (!event.getLevel().isClientSide && !event.getEntity().isSpectator() &&
+                    event.getLevel().getBlockEntity(event.getPos()) instanceof PlushieBlockEntity plushie) {
+                plushie.togglePlaying();
+            }
+            return;
+        }
         if (event.getEntity().getOffhandItem().getItem() instanceof WirelessNetworkBindingToolItem &&
                 WirelessAeNetworkRuntime.canOpenWirelessTargetMenu(event.getLevel(), event.getPos()) &&
                 MetaMachine.getMachine(event.getLevel(), event.getPos()) instanceof IUIMachine machine) {

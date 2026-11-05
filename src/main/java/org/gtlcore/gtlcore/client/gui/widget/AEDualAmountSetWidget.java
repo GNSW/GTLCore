@@ -1,8 +1,5 @@
 package org.gtlcore.gtlcore.client.gui.widget;
 
-import com.gregtechceu.gtceu.api.gui.GuiTextures;
-
-import com.lowdragmc.lowdraglib.gui.util.DrawerHelper;
 import com.lowdragmc.lowdraglib.gui.widget.TextFieldWidget;
 import com.lowdragmc.lowdraglib.gui.widget.Widget;
 import com.lowdragmc.lowdraglib.utils.Position;
@@ -15,13 +12,12 @@ import org.jetbrains.annotations.NotNull;
 public class AEDualAmountSetWidget extends Widget {
 
     private static final int SET_SLOT_ID = 0;
-    static final int WIDGET_WIDTH = 96;
-    static final int WIDGET_HEIGHT = 36;
-    private static final int TEXT_X = 4;
-    private static final int TEXT_Y = 3;
-    private static final int INPUT_Y = 12;
-    private static final int INPUT_WIDTH = 88;
-    private static final int INPUT_HEIGHT = 18;
+    static final int WIDGET_WIDTH = AmountBoxRenderer.WIDTH;
+    static final int WIDGET_HEIGHT = AmountBoxRenderer.HEIGHT;
+    private static final int TEXT_X = AmountBoxRenderer.TEXT_X;
+    private static final int INPUT_Y = AmountBoxRenderer.INPUT_Y;
+    private static final int INPUT_WIDTH = AmountBoxRenderer.INPUT_WIDTH;
+    private static final int INPUT_HEIGHT = AmountBoxRenderer.INPUT_HEIGHT;
 
     private int index = -1;
     @Getter
@@ -61,24 +57,8 @@ public class AEDualAmountSetWidget extends Widget {
     public void drawInBackground(net.minecraft.client.gui.@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         super.drawInBackground(graphics, mouseX, mouseY, partialTicks);
         Position position = getPosition();
-        GuiTextures.BACKGROUND.draw(graphics, mouseX, mouseY, position.x, position.y, WIDGET_WIDTH, WIDGET_HEIGHT);
-        DrawerHelper.drawStringSized(
-                graphics,
-                isFluidSelected() ? "Amount (mB)" : "Amount",
-                position.x + TEXT_X,
-                position.y + TEXT_Y,
-                0x404040,
-                false,
-                1.0F,
-                false);
-        GuiTextures.DISPLAY.draw(
-                graphics,
-                mouseX,
-                mouseY,
-                position.x + TEXT_X,
-                position.y + INPUT_Y,
-                INPUT_WIDTH,
-                INPUT_HEIGHT);
+        AmountBoxRenderer.draw(graphics, mouseX, mouseY, position.x, position.y,
+                AmountBoxRenderer.label(isFluidSelected()));
     }
 
     private boolean isFluidSelected() {

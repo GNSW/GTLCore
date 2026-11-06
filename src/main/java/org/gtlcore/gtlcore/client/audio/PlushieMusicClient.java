@@ -12,8 +12,10 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -47,31 +49,84 @@ public final class PlushieMusicClient {
         }
 
         boolean checkChannels = ++soundCheckTicks % 20 == 0;
-        Set<BlockPos> positions = new HashSet<>();
-        for (PlushieBlockEntity plushie : PlushieBlockEntity.getActivePlushies(minecraft.level)) {
-            BlockPos pos = plushie.getBlockPos();
-            if (minecraft.player == null || minecraft.player.position().distanceToSqr(Vec3.atCenterOf(pos)) > 400) {
-                continue;
-            }
-            positions.add(pos);
-            PlushieMusicSound sound = SOUNDS.get(pos);
-            if (sound == null || !sound.matchesPlayingPlushie(plushie) ||
+        Set<BlockPos> activeAnchors = new HashSet<>();
+        for (SoundGroup group : findGroups(minecraft)) {
+            PlushieMusicSound sound = findExisting(group);
+            if (sound == null || !sound.matchesGroup(minecraft.level, group.startTick()) ||
                     checkChannels && !minecraft.getSoundManager().isActive(sound)) {
                 if (sound != null) sound.cancel();
-                sound = new PlushieMusicSound(plushie);
-                SOUNDS.put(pos, sound);
+                sound = new PlushieMusicSound(minecraft.level, group.anchor(), group.startTick(), group.count());
                 minecraft.getSoundManager().play(sound);
+            } else {
+                sound.updateGroup(group.count());
             }
+            activeAnchors.add(sound.getAnchor());
+            SOUNDS.put(sound.getAnchor(), sound);
         }
         SOUNDS.entrySet().removeIf(entry -> {
-            if (positions.contains(entry.getKey())) return false;
+            if (activeAnchors.contains(entry.getKey())) return false;
             entry.getValue().cancel();
             return true;
         });
+    }
+
+    private static List<SoundGroup> findGroups(Minecraft minecraft) {
+        List<PlushieBlockEntity> active = PlushieBlockEntity.getActivePlushies(minecraft.level);
+        boolean[] visited = new boolean[active.size()];
+        List<SoundGroup> groups = new ArrayList<>();
+        double rangeSquared = PlushieBlockEntity.MUSIC_RANGE * PlushieBlockEntity.MUSIC_RANGE;
+        double audibleSquared = PlushieBlockEntity.MUSIC_RANGE * PlushieBlockEntity.MUSIC_RANGE;
+
+        for (int seed = 0; seed < active.size(); seed++) {
+            if (visited[seed]) continue;
+            List<PlushieBlockEntity> members = new ArrayList<>();
+            List<Integer> pending = new ArrayList<>();
+            visited[seed] = true;
+            pending.add(seed);
+            for (int cursor = 0; cursor < pending.size(); cursor++) {
+                PlushieBlockEntity current = active.get(pending.get(cursor));
+                members.add(current);
+                for (int candidate = 0; candidate < active.size(); candidate++) {
+                    if (visited[candidate] || current.getBlockPos().distSqr(active.get(candidate).getBlockPos()) > rangeSquared) {
+                        continue;
+                    }
+                    visited[candidate] = true;
+                    pending.add(candidate);
+                }
+            }
+
+            if (minecraft.player == null || members.stream().noneMatch(plushie -> minecraft.player.position().distanceToSqr(Vec3.atCenterOf(plushie.getBlockPos())) <= audibleSquared)) {
+                continue;
+            }
+
+            PlushieBlockEntity anchor = members.get(0);
+            for (PlushieBlockEntity member : members) {
+                if (member.getStartTick() < anchor.getStartTick() ||
+                        member.getStartTick() == anchor.getStartTick() &&
+                                member.getBlockPos().asLong() < anchor.getBlockPos().asLong()) {
+                    anchor = member;
+                }
+            }
+            List<BlockPos> positions = members.stream().map(PlushieBlockEntity::getBlockPos).toList();
+            groups.add(new SoundGroup(anchor.getBlockPos().immutable(), anchor.getStartTick(), members.size(), positions));
+        }
+        return groups;
+    }
+
+    private static PlushieMusicSound findExisting(SoundGroup group) {
+        PlushieMusicSound direct = SOUNDS.get(group.anchor());
+        if (direct != null) return direct;
+        for (BlockPos position : group.positions()) {
+            PlushieMusicSound sound = SOUNDS.get(position);
+            if (sound != null) return sound;
+        }
+        return null;
     }
 
     private static void stopAll() {
         SOUNDS.values().forEach(PlushieMusicSound::cancel);
         SOUNDS.clear();
     }
+
+    private record SoundGroup(BlockPos anchor, long startTick, int count, List<BlockPos> positions) {}
 }

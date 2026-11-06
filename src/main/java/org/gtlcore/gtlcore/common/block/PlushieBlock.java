@@ -100,6 +100,7 @@ public final class PlushieBlock extends BaseEntityBlock {
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
                                  BlockHitResult hit) {
+        if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof PlushieBlockEntity plushie) {
             plushie.togglePlaying();
         }

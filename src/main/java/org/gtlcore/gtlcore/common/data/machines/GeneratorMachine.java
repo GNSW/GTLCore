@@ -32,6 +32,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Block;
 
+import java.util.Objects;
 import java.util.function.Supplier;
 
 import static com.gregtechceu.gtceu.api.pattern.Predicates.*;
@@ -81,7 +82,7 @@ public class GeneratorMachine {
                     .where("I", abilities(PartAbility.MUFFLER))
                     .build())
             .recoveryItems(
-                    () -> new ItemLike[] { GTItems.MATERIAL_ITEMS.get(TagPrefix.dustTiny, GTMaterials.Ash).get() })
+                    () -> new ItemLike[] { Objects.requireNonNull(GTItems.MATERIAL_ITEMS.get(TagPrefix.dustTiny, GTMaterials.Ash)).get() })
             .workableCasingRenderer(GTCEu.id("block/casings/solid/machine_casing_robust_tungstensteel"),
                     GTCEu.id("block/multiblock/generator/extreme_combustion_engine"), false)
             .register();

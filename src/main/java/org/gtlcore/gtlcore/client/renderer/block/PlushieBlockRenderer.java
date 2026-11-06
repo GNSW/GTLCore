@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,6 +24,7 @@ import com.mojang.math.Axis;
 /** Renders the existing block model through a per-frame squash transform. */
 public final class PlushieBlockRenderer implements BlockEntityRenderer<PlushieBlockEntity> {
 
+    private static final RenderType PLUSHIE_LAYER = RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS);
     private final BlockRenderDispatcher blockRenderer;
     private final RandomSource random = RandomSource.create();
 
@@ -55,8 +57,8 @@ public final class PlushieBlockRenderer implements BlockEntityRenderer<PlushieBl
             pose.translate(-0.5, 0, -0.5);
         }
         blockRenderer.getModelRenderer().tesselateBlock(plushie.getLevel(), blockRenderer.getBlockModel(state), state,
-                plushie.getBlockPos(), pose, buffers.getBuffer(RenderType.cutout()), false, random, state.getSeed(plushie.getBlockPos()),
-                overlay, ModelData.EMPTY, RenderType.cutout());
+                plushie.getBlockPos(), pose, buffers.getBuffer(PLUSHIE_LAYER), false, random,
+                state.getSeed(plushie.getBlockPos()), overlay, ModelData.EMPTY, PLUSHIE_LAYER);
         pose.popPose();
     }
 }

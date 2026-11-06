@@ -102,22 +102,22 @@ final class ForgeOperationRunner {
         double radius = Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz));
         if (radius > AdapterConfig.MAX_RADIUS.get()) throw new IllegalArgumentException("Geometry enclosing radius exceeds server maximum");
         return submitConfigured(level, actor, center, Math.max(1, (int) radius), options.fuseTicks(),
-                options.generateMissingChunks(), options.clearFluids(), geometry, options.destroyBedrock());
+                options.generateMissingChunks(), options.clearFluids(), geometry, options.destroyBedrock(), options.bypassClaims());
     }
 
     static OperationData.Task submitOptions(ServerLevel level, UUID actor, BlockPos center, int radius,
             org.voxelregion.forge.ForgeRegionEngine.Options options) throws IOException {
         return submitConfigured(level, actor, center, radius, options.fuseTicks(), options.generateMissingChunks(),
-                options.clearFluids(), null, options.destroyBedrock());
+                options.clearFluids(), null, options.destroyBedrock(), options.bypassClaims());
     }
 
     private static OperationData.Task submitConfigured(ServerLevel level, UUID actor, BlockPos center, int radius, int fuse,
             boolean generate, boolean clearFluids, RegionGeometry geometry) throws IOException {
-        return submitConfigured(level, actor, center, radius, fuse, generate, clearFluids, geometry, false);
+        return submitConfigured(level, actor, center, radius, fuse, generate, clearFluids, geometry, false, false);
     }
 
     private static OperationData.Task submitConfigured(ServerLevel level, UUID actor, BlockPos center, int radius, int fuse,
-            boolean generate, boolean clearFluids, RegionGeometry geometry, boolean destroyBedrock) throws IOException {
+            boolean generate, boolean clearFluids, RegionGeometry geometry, boolean destroyBedrock, boolean bypassClaims) throws IOException {
         if (radius < 1 || radius > AdapterConfig.MAX_RADIUS.get())
             throw new IllegalArgumentException("Radius " + radius + " must be 1.." + AdapterConfig.MAX_RADIUS.get()
                     + "; active server config: " + RuntimeBridge.activeConfigFile() + " (operations.maximum_radius)");
@@ -129,7 +129,7 @@ final class ForgeOperationRunner {
         if (pending >= AdapterConfig.MAX_OPERATIONS.get()) throw new IllegalStateException("Maximum pending operations reached");
         var task = new OperationData.Task(UUID.randomUUID(), actor, center.getX() + .5, center.getY() + .5, center.getZ() + .5,
                 radius, fuse, generate, clearFluids, AdapterConfig.RESISTANCE_LIMIT.get(), AdapterConfig.ENTITY_DAMAGE.get(),
-                AdapterConfig.PROTECT_ALL_CLAIMS.get(), AdapterConfig.PHYSICS.get(), level.getMinSection());
+                AdapterConfig.PROTECT_ALL_CLAIMS.get(), bypassClaims, AdapterConfig.PHYSICS.get(), level.getMinSection());
         task.destroyBedrock = destroyBedrock;
         task.clearedMissingTerrain = true;
         if (geometry != null) { task.geometry = geometry; task.volume = geometry.volume(); }
@@ -255,7 +255,7 @@ final class ForgeOperationRunner {
                 && task.resistance >= 1200.0) {
             org.voxelregion.forge.ClearedGeneration.register(level, task.id, task.intentHash(), task.volume,
                     task.clearFluids, task.destroyBedrock, () -> task.active() && task.state != OperationData.State.FUSE,
-                    pos -> ClaimChecks.check(level, pos.x, pos.z, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW);
+                    pos -> ClaimChecks.check(level, pos.x, pos.z, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW);
         }
         if (task.phase >= task.phaseCount()) {
             if (task.unconfirmedFences != 0) { task.state = OperationData.State.SETTLING; return false; }
@@ -317,7 +317,7 @@ final class ForgeOperationRunner {
             finishChunk(level, task);
             return true;
         }
-        ClaimChecks.Decision permission = ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim);
+        ClaimChecks.Decision permission = ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims);
         if (permission == ClaimChecks.Decision.UNAVAILABLE) {
             pause(task, OperationData.State.PAUSED_PROTECTION, "FTB protection is not ready or its API failed; no writes permitted.");
             return true;
@@ -371,7 +371,7 @@ final class ForgeOperationRunner {
                                 state -> state.is(Blocks.BEDROCK) ? task.destroyBedrock : !state.is(PROTECTED) && state.getBlock().getClass() == Block.class
                                         && state.getDestroySpeed(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO) >= 0
                                         && state.getBlock().getExplosionResistance() < task.resistance),
-                        () -> task.active() && ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW);
+                        () -> task.active() && ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW);
                 GENERATING.put(task.id, registration);
             }
             if (!registration.isDone()) { task.message = "Checking native chunk storage and generation safety."; return false; }
@@ -457,7 +457,7 @@ final class ForgeOperationRunner {
                 receipts.adoptLiveChanges(task.id, task.phase);
                 receipts.beforeWrite(task.id, task.phase, task.sectionY, 0);
                 var report = PaletteSectionClearBackend.commitBatch(plans, () -> task.active() && ClaimChecks.check(level,
-                        task.chunkX, task.chunkZ, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW && chunkInsideBorder(level, chunk));
+                        task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW && chunkInsideBorder(level, chunk));
                 if (report.applied()) {
                     // A later FIFO barrier cannot erase an earlier batch's exceptional completion.
                     task.queuedLightWork = CompletableFuture.allOf(task.queuedLightWork, report.lightWork());
@@ -516,7 +516,7 @@ final class ForgeOperationRunner {
                         BlockState replacement = task.clearFluids ? Blocks.AIR.defaultBlockState()
                                 : state.getFluidState().createLegacyBlock();
                         // Revalidate immediately before each actual write, including after arbitrary mod callbacks.
-                        ClaimChecks.Decision current = ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim);
+                        ClaimChecks.Decision current = ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims);
                         if (current != ClaimChecks.Decision.ALLOW) {
                             if (current == ClaimChecks.Decision.DENY) {
                                 skipDeniedChunk(level, task);
@@ -662,7 +662,7 @@ final class ForgeOperationRunner {
             task.message = "Waiting for batch-light memory before changing terrain.";
             return false;
         }
-        if (ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim) != ClaimChecks.Decision.ALLOW) {
+        if (ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims) != ClaimChecks.Decision.ALLOW) {
             PREPARING.remove(task.id);
             return true; // The next step applies the ordinary protection transition.
         }
@@ -684,7 +684,7 @@ final class ForgeOperationRunner {
             var report = PaletteSectionClearBackend.commitBatch(plan.sections,
                     () -> task.active() && committedPlan.borderMatches(level)
                             && (committedPlan.postProcessing == null || committedPlan.postProcessing.matchesMetadata())
-                            && ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW,
+                            && ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW,
                     (lightLevel, lightChunk, lightPlans, nativeFallback) -> mutationsFinished.thenCompose(complete ->
                             complete ? org.voxelregion.forge.ClearedChunkLightBatch.afterWholeChunkMutation(
                                     lightLevel, lightChunk, nativeFallback) : nativeFallback.get()));
@@ -710,7 +710,7 @@ final class ForgeOperationRunner {
                     if (state.isAir()) continue;
                     if (mustKeep(state, level, position, context, task.resistance, task.clearFluids, task.destroyBedrock)) { task.kept++; continue; }
                     BlockState replacement = task.clearFluids ? Blocks.AIR.defaultBlockState() : state.getFluidState().createLegacyBlock();
-                    ClaimChecks.Decision permission = ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim);
+                    ClaimChecks.Decision permission = ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims);
                     if (permission != ClaimChecks.Decision.ALLOW) {
                         receipts.afterWrite(task.id, task.phase, level.getMaxSection(), 0);
                         task.needsChunkPacket = true;
@@ -732,7 +732,7 @@ final class ForgeOperationRunner {
             if (plan.postProcessing != null && !task.active()) return true;
             if (plan.postProcessing != null && !plan.postProcessing.consumeAfterCommit(() -> task.active()
                     && committedPlan.borderMatches(level)
-                    && ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW)) {
+                    && ClaimChecks.check(level, task.chunkX, task.chunkZ, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW)) {
                 // A watcher can introduce new work after palette publication. Preserve it and the
                 // dirty receipt: this is a post-write recovery stop, never an unapplied retry.
                 receipts.afterWrite(task.id, task.phase, level.getMaxSection(), 0);
@@ -799,8 +799,8 @@ final class ForgeOperationRunner {
                     || !level.getWorldBorder().isWithinBounds(at)
                     || !level.getWorldBorder().isWithinBounds(origin)) continue;
             if (mustKeep(falling.getBlockState(), level, origin, context, task.resistance, task.clearFluids, task.destroyBedrock)) continue;
-            if (task.active() && ClaimChecks.check(level, pos.x, pos.z, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW
-                    && ClaimChecks.check(level, origin.getX() >> 4, origin.getZ() >> 4, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW)
+            if (task.active() && ClaimChecks.check(level, pos.x, pos.z, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW
+                    && ClaimChecks.check(level, origin.getX() >> 4, origin.getZ() >> 4, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW)
                 falling.discard();
         }
     }
@@ -815,7 +815,7 @@ final class ForgeOperationRunner {
             // fluids and special retained blocks receive a bounded direct notification.
             if (task.volume.contains(neighbor.getX(), neighbor.getY(), neighbor.getZ())
                     && retained.getBlock().getClass() == Block.class && !retained.is(PROTECTED)) continue;
-            if (ClaimChecks.check(level, neighbor.getX() >> 4, neighbor.getZ() >> 4, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW)
+            if (ClaimChecks.check(level, neighbor.getX() >> 4, neighbor.getZ() >> 4, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW)
                 level.neighborChanged(neighbor, oldBlock, source);
         }
     }
@@ -927,7 +927,7 @@ final class ForgeOperationRunner {
         if (!task.active() || task.generate || !task.wholeChunk || task.physics != AdapterConfig.Physics.NONE || !task.clearFluids
                 || task.propagation != FrozenOcclusion.Mode.NONE || !AdapterConfig.BULK_SECTIONS.get()
                 || !BULK_HOOKS.supportsBulk(level)
-                || ClaimChecks.check(level, chunk.getPos().x, chunk.getPos().z, task.protectEveryClaim) != ClaimChecks.Decision.ALLOW)
+                || ClaimChecks.check(level, chunk.getPos().x, chunk.getPos().z, task.protectEveryClaim, task.bypassClaims) != ClaimChecks.Decision.ALLOW)
             return null;
         Explosion context = new Explosion(level, null, task.cx, task.cy, task.cz, task.radius, false, Explosion.BlockInteraction.KEEP);
         Volume selected = task.phaseVolume(level.getMinBuildHeight(), level.getMaxBuildHeight());

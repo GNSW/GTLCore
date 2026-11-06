@@ -99,7 +99,7 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         if (player.isShiftKeyDown()) {
             var hit = player.pick(player.getBlockReach(), 0, false);
             begin(player, hand, hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK ? block.getBlockPos() : BlockPos.containing(hit.getLocation()), true);
-        } else if (player instanceof ServerPlayer serverPlayer) HeldItemUIFactory.INSTANCE.openUI(serverPlayer, hand);
+        }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
@@ -223,6 +223,8 @@ public final class MatterManipulatorBehavior extends ComponentItem {
                     else if (material < s.materials.length) s.materials[material] = state;
                 }
             }
+            case MENU -> HeldItemUIFactory.INSTANCE.openUI(player,
+                    player.getMainHandItem() == stack ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
         }
         s.save(stack);
         player.getInventory().setChanged();
@@ -235,7 +237,8 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         CLEAR,
         RESET,
         PICK,
-        WHITELIST
+        WHITELIST,
+        MENU
     }
 
     @Override
@@ -284,7 +287,8 @@ public final class MatterManipulatorBehavior extends ComponentItem {
         tooltip.add(Component.empty());
         Component use = Component.keybind("key.use");
         Component sneakUse = Component.translatable("mm.tooltip.chord", Component.keybind("key.sneak"), use);
-        tooltip.add(controlHint(Component.translatable("mm.tooltip.air", use), "mm.tooltip.menu"));
+        tooltip.add(controlHint(Component.translatable("mm.tooltip.air",
+                Component.keybind("key.gtlcore.manipulator.menu")), "mm.tooltip.menu"));
         tooltip.add(Component.translatable("mm.tooltip.selection_title").withStyle(ChatFormatting.AQUA));
         tooltip.add(controlHint(Component.translatable("mm.tooltip.block", use), "mm.tooltip.select"));
         tooltip.add(controlHint(sneakUse, "mm.tooltip.tap"));

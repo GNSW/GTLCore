@@ -17,6 +17,11 @@ final class ClaimChecks {
     private static Constructor<?> position;
 
     static Decision check(ServerLevel level, int x, int z, boolean protectEveryClaim) {
+        return check(level, x, z, protectEveryClaim, false);
+    }
+
+    static Decision check(ServerLevel level, int x, int z, boolean protectEveryClaim, boolean bypass) {
+        if (bypass) return Decision.ALLOW;
         initialize();
         if (!present) return Decision.ALLOW;
         if (failure != null) return Decision.UNAVAILABLE;

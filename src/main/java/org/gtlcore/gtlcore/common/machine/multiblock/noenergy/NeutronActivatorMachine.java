@@ -7,6 +7,7 @@ import org.gtlcore.gtlcore.api.recipe.RecipeResult;
 import org.gtlcore.gtlcore.common.data.GTLRecipeModifiers;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.NeutronAcceleratorPartMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.NeutronSensorPartMachine;
+import org.gtlcore.gtlcore.integration.voxelregion.GtlRegionExplosionFacade;
 
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.data.chemical.ChemicalHelper;
@@ -29,6 +30,7 @@ import com.lowdragmc.lowdraglib.syncdata.field.ManagedFieldHolder;
 import net.minecraft.ChatFormatting;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 
 import lombok.Getter;
@@ -39,12 +41,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
 @ParametersAreNonnullByDefault
 @MethodsReturnNonnullByDefault
 public class NeutronActivatorMachine extends NoEnergyMultiblockMachine {
+
+    private static final UUID MACHINE_ACTOR = new UUID(0, 0);
+    private static final int EXPLOSION_RADIUS = 12;
 
     public static final ManagedFieldHolder MANAGED_FIELD_HOLDER = new ManagedFieldHolder(
             NeutronActivatorMachine.class, NoEnergyMultiblockMachine.MANAGED_FIELD_HOLDER);
@@ -171,9 +177,21 @@ public class NeutronActivatorMachine extends NoEnergyMultiblockMachine {
                 this.eV += (int) Math.round(Math.max(increase * getEfficiencyFactor(), 1));
             }
         }
-        if (this.eV > 1200000000) this.eV = 0;
+        if (this.eV > 1200000000) {
+            this.eV = 0;
+            triggerExplosion();
+            return;
+        }
         moderateUpdate();
         absorptionUpdate();
+    }
+
+    private void triggerExplosion() {
+        if (getLevel() instanceof ServerLevel serverLevel) {
+            if (GtlRegionExplosionFacade.submitSphere(serverLevel, MACHINE_ACTOR, getPos(), EXPLOSION_RADIUS)) {
+                serverLevel.removeBlock(getPos(), false);
+            }
+        }
     }
 
     protected void moderateUpdate() {

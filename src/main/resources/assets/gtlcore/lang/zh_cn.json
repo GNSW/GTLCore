@@ -195,6 +195,7 @@
   "mm.error.refund": "请先接收旧工程暂存物料，再启动新工程。",
   "mm.error.access_point": "请对 ME 无线访问节点使用工具完成绑定。",
   "key.categories.gtlcore.manipulator": "GTLCore 物质操纵者",
+  "key.gtlcore.manipulator.menu": "打开轮盘",
   "key.gtlcore.manipulator.copy": "复制选区",
   "key.gtlcore.manipulator.cut": "移动选区",
   "key.gtlcore.manipulator.paste": "选择粘贴锚点",

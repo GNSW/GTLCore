@@ -18,6 +18,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
@@ -49,6 +50,7 @@ import static org.lwjgl.opengl.GL30C.*;
 public final class ManipulatorClient {
 
     private static KeyMapping[] keys = {};
+    private static KeyMapping menuKey;
     private static final BufferBuilder PREVIEW_BUFFER = new BufferBuilder(RenderType.lines().bufferSize());
     // A four-pixel ring with an inner radius of ten leaves the vanilla 15-pixel crosshair clear.
     private static final int HOLD_RING_RADIUS = 14;
@@ -75,9 +77,13 @@ public final class ManipulatorClient {
 
         @SubscribeEvent
         public static void keys(RegisterKeyMappingsEvent event) {
+            menuKey = new KeyMapping("key.gtlcore.manipulator.menu", KeyConflictContext.IN_GAME,
+                    KeyModifier.NONE, InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_RIGHT,
+                    "key.categories.gtlcore.manipulator");
             ManipulatorClient.keys = new KeyMapping[] {
                     key("copy", GLFW.GLFW_KEY_C), key("cut", GLFW.GLFW_KEY_X), key("paste", GLFW.GLFW_KEY_V), key("clear", GLFW.GLFW_KEY_Z)
             };
+            event.register(menuKey);
             for (KeyMapping key : ManipulatorClient.keys) event.register(key);
         }
     }
@@ -97,6 +103,18 @@ public final class ManipulatorClient {
         if (event.phase != TickEvent.Phase.END) return;
         boolean enabled = mc.screen == null && !tool().isEmpty() && !startingGesture && !waitForUseRelease;
         for (int i = 0; i < keys.length; i++) while (keys[i].consumeClick()) if (enabled) ManipulatorPackets.send(ACTIONS[i]);
+        if (menuKey != null) {
+            while (menuKey.consumeClick()) {
+                if (!enabled) continue;
+                if (isDefaultRightMenu() && (mc.player.isShiftKeyDown() || mc.hitResult instanceof BlockHitResult)) continue;
+                ManipulatorPackets.send(MatterManipulatorBehavior.Action.MENU);
+            }
+        }
+    }
+
+    private static boolean isDefaultRightMenu() {
+        return menuKey.getKey().getType() == InputConstants.Type.MOUSE &&
+                menuKey.getKey().getValue() == GLFW.GLFW_MOUSE_BUTTON_RIGHT;
     }
 
     private static boolean usingTool(Minecraft mc) {

@@ -25,11 +25,15 @@ public final class ForgeRegionEngine {
     public enum Control { PAUSE, RESUME, CANCEL }
 
     /** Server policy (protection, physics and budgets) is captured or consulted by the adapter. */
-    public record Options(int fuseTicks, boolean generateMissingChunks, boolean clearFluids, boolean destroyBedrock) {
-        public static final Options DEFAULT = new Options(0, true, true, false);
+    public record Options(int fuseTicks, boolean generateMissingChunks, boolean clearFluids, boolean destroyBedrock,
+                          boolean bypassClaims) {
+        public static final Options DEFAULT = new Options(0, true, true, false, false);
         /** Existing callers and charges retain bedrock protection. */
         public Options(int fuseTicks, boolean generateMissingChunks, boolean clearFluids) {
-            this(fuseTicks, generateMissingChunks, clearFluids, false);
+            this(fuseTicks, generateMissingChunks, clearFluids, false, false);
+        }
+        public Options(int fuseTicks, boolean generateMissingChunks, boolean clearFluids, boolean destroyBedrock) {
+            this(fuseTicks, generateMissingChunks, clearFluids, destroyBedrock, false);
         }
         public Options {
             if (fuseTicks < 0 || fuseTicks > 1200) throw new IllegalArgumentException("Fuse must be 0..1200 ticks");

@@ -78,6 +78,7 @@ final class OperationData extends SavedData {
         final double resistance;
         final double entityDamage;
         final boolean protectEveryClaim;
+        final boolean bypassClaims;
         final AdapterConfig.Physics physics;
         Volume volume;
         org.voxelregion.forge.RegionGeometry geometry;
@@ -123,7 +124,8 @@ final class OperationData extends SavedData {
         long visited, changed, kept, skippedChunks, finishedChunks;
 
         Task(UUID id, UUID actor, double cx, double cy, double cz, int radius, int fuse,
-             boolean generate, boolean clearFluids, double resistance, double entityDamage, boolean protectEveryClaim, AdapterConfig.Physics physics, int minSectionY) {
+             boolean generate, boolean clearFluids, double resistance, double entityDamage, boolean protectEveryClaim,
+             boolean bypassClaims, AdapterConfig.Physics physics, int minSectionY) {
             this.id = id;
             this.actor = actor;
             this.cx = cx;
@@ -136,6 +138,7 @@ final class OperationData extends SavedData {
             this.resistance = resistance;
             this.entityDamage = entityDamage;
             this.protectEveryClaim = protectEveryClaim;
+            this.bypassClaims = bypassClaims;
             this.physics = physics;
             volume = Sphere.of(cx, cy, cz, radius);
             chunkX = Math.floorDiv(volume.bounds().minX(), 16);
@@ -162,7 +165,7 @@ final class OperationData extends SavedData {
             // Stable representation of the complete immutable policy used by this adapter version.
             String text = id + "|" + actor + "|" + cx + "|" + cy + "|" + cz + "|" + radius
                     + "|" + generate + "|" + clearFluids + "|" + resistance + "|" + entityDamage
-                    + "|" + protectEveryClaim + "|" + physics + "|" + progression + "|" + shellWidth
+                    + "|" + protectEveryClaim + (bypassClaims ? "|bypassClaims:1" : "") + "|" + physics + "|" + progression + "|" + shellWidth
                     + (centralBootstrap ? "|centralBootstrap:1" : "")
                     + (wholeChunk ? "|wholeChunk:1" : "")
                     + (destroyBedrock ? "|destroyBedrock:1" : "")
@@ -218,6 +221,7 @@ final class OperationData extends SavedData {
             t.putLong("committedChunks", committedChunks); t.putLong("chunkCommitNanos", chunkCommitNanos);
             t.putDouble("resistance", resistance); t.putDouble("entityDamage", entityDamage);
             t.putBoolean("protectEveryClaim", protectEveryClaim);
+            t.putBoolean("bypassClaims", bypassClaims);
             t.putString("physics", physics.name());
             t.putString("state", state.name()); t.putString("message", message);
             t.putInt("chunkX", chunkX); t.putInt("chunkZ", chunkZ); t.putInt("sectionY", sectionY); t.putInt("voxel", voxel);
@@ -232,6 +236,7 @@ final class OperationData extends SavedData {
                     t.getInt("radius"), t.getInt("fuse"), t.getBoolean("generate"),
                     !t.contains("clearFluids") || t.getBoolean("clearFluids"), t.getDouble("resistance"),
                     t.getDouble("entityDamage"), t.getBoolean("protectEveryClaim"),
+                    t.contains("bypassClaims") && t.getBoolean("bypassClaims"),
                     t.contains("physics") ? AdapterConfig.Physics.valueOf(t.getString("physics")) : AdapterConfig.Physics.NONE, t.getInt("sectionY"));
             if (t.contains("geometry", Tag.TAG_COMPOUND)) { job.geometry = org.voxelregion.forge.RegionGeometry.load(t.getCompound("geometry")); job.volume = job.geometry.volume(); }
             job.state = State.valueOf(t.getString("state")); job.message = t.getString("message");

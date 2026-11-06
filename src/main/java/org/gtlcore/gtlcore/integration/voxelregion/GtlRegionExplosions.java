@@ -32,6 +32,7 @@ import java.util.UUID;
 public final class GtlRegionExplosions {
 
     private static final UUID MACHINE_ACTOR = new UUID(0, 0);
+    private static final ForgeRegionEngine.Options EXPLOSION_OPTIONS = new ForgeRegionEngine.Options(0, true, true, false, true);
     private static final ForgeConfigSpec SPEC;
     private static final ForgeConfigSpec.BooleanValue ENABLE_LARGE_FISSION;
     private static final ForgeConfigSpec.IntValue LARGE_FISSION_THRESHOLD;
@@ -129,7 +130,7 @@ public final class GtlRegionExplosions {
         int radius = Math.max(4, Math.round(power * 0.125f));
         if (radius > ForgeRegionEngine.maximumRadius())
             throw new IllegalArgumentException("Fission region radius exceeds configured limits");
-        return submitSphere(level, MACHINE_ACTOR, center, radius, ForgeRegionEngine.Options.DEFAULT);
+        return submitSphere(level, MACHINE_ACTOR, center, radius, EXPLOSION_OPTIONS);
     }
 
     public static ForgeRegionEngine.Handle submitSphere(ServerLevel level, UUID actor, BlockPos center, int radius,
@@ -139,7 +140,7 @@ public final class GtlRegionExplosions {
 
     public static boolean submitSphereDefault(ServerLevel level, UUID actor, BlockPos center, int radius) {
         try {
-            submitSphere(level, actor, center, radius, ForgeRegionEngine.Options.DEFAULT);
+            submitSphere(level, actor, center, radius, EXPLOSION_OPTIONS);
             return true;
         } catch (IOException e) {
             GTLCore.LOGGER.error("Failed to submit region explosion at {} radius {}", center, radius, e);

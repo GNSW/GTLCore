@@ -911,7 +911,7 @@
   "gtceu.machine.neutron_activator.tooltip.4": "Kinetic Energy Consumption Rate : MAX(time reduction*(parallel^1.5), 1)",
   "gtceu.machine.neutron_activator.tooltip.5": "When no neutron accelerator is running, neutron kinetic energy decreases by §e72KeV§r per second",
   "gtceu.machine.neutron_activator.tooltip.6": "Input graphite/beryllium powder to immediately absorb §e10MeV§r neutron kinetic energy",
-  "gtceu.machine.neutron_activator.tooltip.7": "If the neutron’s kinetic energy exceeds §e1.2GeV§r, it will be reset to zero",
+  "gtceu.machine.neutron_activator.tooltip.7": "If the neutron’s kinetic energy exceeds §e1.2GeV§r, it will detonate",
   "gtceu.machine.neutron_sensor.tooltip.0": "Outputs redstone signal based on §6Neutron Kinetic Energy§7, right-click to open GUI for settings",
   "gtceu.machine.off": "Off",
   "gtceu.machine.on": "On",

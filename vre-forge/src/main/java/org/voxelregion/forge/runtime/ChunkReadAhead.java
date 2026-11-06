@@ -51,7 +51,7 @@ final class ChunkReadAhead {
             var key = window.cursor.next();
             window.cursorOffset++;
             if (task.excludedChunks.contains(ChunkPos.asLong(key.x(), key.z()))
-                    || ClaimChecks.check(level, key.x(), key.z(), task.protectEveryClaim) != ClaimChecks.Decision.ALLOW) continue;
+                    || ClaimChecks.check(level, key.x(), key.z(), task.protectEveryClaim, task.bypassClaims) != ClaimChecks.Decision.ALLOW) continue;
             var pos = new ChunkPos(key.x(), key.z());
             // Ticket submission is nonblocking. Never call getChunk/getChunkFuture here: those
             // may managedBlock and turn the preparation window back into serial world generation.
@@ -122,7 +122,7 @@ final class ChunkReadAhead {
                     read.distance = 0;
                 }
             } else if (promotions > 0 && chunk != null && !usable
-                    && ClaimChecks.check(window.level, pos.x, pos.z, task.protectEveryClaim) == ClaimChecks.Decision.ALLOW) {
+                    && ClaimChecks.check(window.level, pos.x, pos.z, task.protectEveryClaim, task.bypassClaims) == ClaimChecks.Decision.ALLOW) {
                 source.addRegionTicket(TICKET, pos, 1, task.id);
                 source.removeRegionTicket(TICKET, pos, 0, task.id);
                 read.distance = 1; promotions--;

@@ -911,7 +911,7 @@
   "gtceu.machine.neutron_activator.tooltip.4": "动能消耗倍数为时间减免*(并行数^1.5)，不会小于1",
   "gtceu.machine.neutron_activator.tooltip.5": "没有中子加速器运行时，中子动能每秒降低§e72KeV§r中子动能",
   "gtceu.machine.neutron_activator.tooltip.6": "输入石墨/铍粉可以立即吸收§e10MeV§r中子动能",
-  "gtceu.machine.neutron_activator.tooltip.7": "如果中子动能大于§e1.2GeV§r会直接清空中子动能",
+  "gtceu.machine.neutron_activator.tooltip.7": "如果中子动能大于§e1.2GeV§r会直接爆炸",
   "gtceu.machine.neutron_sensor.tooltip.0": "基于§6中子动能§7输出红石信号，右键以打开GUI进行设置",
   "gtceu.machine.off": "关闭",
   "gtceu.machine.on": "打开",

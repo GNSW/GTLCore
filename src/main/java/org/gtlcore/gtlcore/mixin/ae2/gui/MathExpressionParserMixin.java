@@ -13,7 +13,7 @@ public abstract class MathExpressionParserMixin {
 
     @Unique
     @ModifyVariable(method = "parse", at = @At("HEAD"), argsOnly = true, index = 0, remap = false)
-    private static String gtlcore$expandAmountUnits(String expression) {
-        return AmountExpressionNormalizer.expandUnits(expression);
+    private static String gtlcore$normalizeAmountExpression(String expression) {
+        return AmountExpressionNormalizer.normalize(expression);
     }
 }

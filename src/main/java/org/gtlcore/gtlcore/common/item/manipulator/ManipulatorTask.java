@@ -52,6 +52,7 @@ public final class ManipulatorTask {
     public final List<Operation> operations = new ArrayList<>();
     public final Set<BlockPos> targets = new HashSet<>();
     public final ManipulatorUndo undo;
+    public boolean creativeBuild;
     public boolean paused;
     public boolean autoOrder = true;
     public boolean cancelled;
@@ -80,6 +81,7 @@ public final class ManipulatorTask {
         this.toolId = tool.getOrCreateTag().getUUID("ManipulatorId");
         this.settings = settings;
         this.planMode = planMode;
+        this.creativeBuild = player.isCreative();
         undo = new ManipulatorUndo(true);
         binding = tool.getOrCreateTag().getCompound("ManipulatorNetwork").copy();
         network = new ManipulatorNetwork(this, new CompoundTag());
@@ -107,6 +109,7 @@ public final class ManipulatorTask {
         autoOrder = tag.getBoolean("AutoOrder");
         cancelled = tag.getBoolean("Cancelled");
         unsupportedBlocks = tag.getBoolean("UnsupportedBlocks");
+        creativeBuild = tag.getBoolean("CreativeBuild");
         scan = tag.getInt("Scan");
         cursor = tag.getInt("Cursor");
         ready = tag.getBoolean("Ready");
@@ -342,7 +345,7 @@ public final class ManipulatorTask {
             }
             Operation operation = new Operation(source, target, transformed, old, snapshot);
             operations.add(operation);
-            if (settings.mode != ManipulatorSettings.Mode.MOVE) snapshot.cost().forEach((key, amount) -> ManipulatorResources.add(remaining, key, amount));
+            if (settings.mode != ManipulatorSettings.Mode.MOVE && !creativeBuild) snapshot.cost().forEach((key, amount) -> ManipulatorResources.add(remaining, key, amount));
         }
         targets.add(target);
         scan++;
@@ -501,7 +504,7 @@ public final class ManipulatorTask {
                 return false;
             }
         }
-        if (!moving) {
+        if (!moving && !creativeBuild) {
             for (var entry : op.snapshot.cost().entrySet()) {
                 long needed = entry.getValue() - escrow.getOrDefault(entry.getKey(), 0L);
                 if (needed <= 0) continue;
@@ -550,7 +553,9 @@ public final class ManipulatorTask {
                 if (!level.setBlock(current.source(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL) && !level.getBlockState(current.source()).isAir()) throw new IllegalStateException("Move source removal failed");
             }
             ManipulatorConnections.initializeCore(level, current.target(), player);
-            undo.record(this, level, undoBefore, moving ? Map.of() : current.snapshot().cost(), recovered);
+            undo.record(this, level, undoBefore,
+                    creativeBuild || moving ? Map.of() : current.snapshot().cost(),
+                    creativeBuild ? Map.of() : recovered);
             success = true;
         } finally {
             undo.endCapture();
@@ -566,8 +571,10 @@ public final class ManipulatorTask {
                 changed();
             }
         }
-        if (!moving) current.snapshot().cost().forEach((key, amount) -> escrow.computeIfPresent(key, (k, n) -> n - amount));
-        recovered.forEach((key, amount) -> ManipulatorResources.add(escrow, key, amount));
+        if (!creativeBuild) {
+            if (!moving) current.snapshot().cost().forEach((key, amount) -> escrow.computeIfPresent(key, (k, n) -> n - amount));
+            recovered.forEach((key, amount) -> ManipulatorResources.add(escrow, key, amount));
+        }
         refundSurplus(player, grid);
         status("mm.status.running");
         return true;
@@ -679,6 +686,7 @@ public final class ManipulatorTask {
         tag.putBoolean("AutoOrder", autoOrder);
         tag.putBoolean("Cancelled", cancelled);
         tag.putBoolean("UnsupportedBlocks", unsupportedBlocks);
+        tag.putBoolean("CreativeBuild", creativeBuild);
         tag.putBoolean("Ready", ready);
         tag.putInt("Scan", scan);
         tag.putInt("Cursor", cursor);

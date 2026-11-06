@@ -56,7 +56,7 @@ public final class PlushieBlockRenderer implements BlockEntityRenderer<PlushieBl
             pose.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
             pose.translate(-0.5, 0, -0.5);
         }
-        blockRenderer.getModelRenderer().tesselateBlock(plushie.getLevel(), blockRenderer.getBlockModel(state), state,
+        blockRenderer.getModelRenderer().tesselateWithoutAO(plushie.getLevel(), blockRenderer.getBlockModel(state), state,
                 plushie.getBlockPos(), pose, buffers.getBuffer(PLUSHIE_LAYER), false, random,
                 state.getSeed(plushie.getBlockPos()), overlay, ModelData.EMPTY, PLUSHIE_LAYER);
         pose.popPose();

@@ -28,16 +28,15 @@ Source A can be any corner, so the paste point does not necessarily correspond t
 
 Open "**Edit source/paste selection**" in the current mode and choose "Edit source selection", "Edit paste selection", or "Edit both". The latter two are available in Copy and Move modes.
 
-Use "Edit selection" to enter each point's XYZ coordinates directly. "Here" sets that point to the player's current block position.
+Use "Edit selection" to enter source point A and B coordinates directly. "Here" sets that point to the player's current block position. Paste points A and B are read-only and cannot be edited individually.
 
 ## **Nudging and moving selections**
 
 * **Nudge point A / B**: move the corresponding source endpoint.
-* **Nudge paste A / B**: move the corresponding destination endpoint.
 * **Nudge selection**: move the entire selection being edited.
 * **Move selection here**: align the selection's minimum corner with the player's block position. When editing both selections, the offset is calculated from the source and applied to both.
 
-Each nudge moves one block along the coordinate axis closest to your viewing direction. Look up or down to adjust height. Moving an endpoint on its own changes the selection size.
+Each nudge moves one block along the coordinate axis closest to your viewing direction. Look up or down to adjust height. The paste box only moves as a whole; its size always matches the transformed source size.
 
 ## **Expanding and contracting**
 

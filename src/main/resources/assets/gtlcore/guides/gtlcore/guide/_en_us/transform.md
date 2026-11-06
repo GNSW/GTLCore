@@ -9,7 +9,7 @@ navigation:
 
 ## **Rotation and mirroring**
 
-In Copy or Move mode, open "**Transform**" to rotate around the X, Y, or Z axis or mirror along an axis. Each rotation adds **90°**. Clicking a mirror option toggles it.
+In Copy or Move mode, open "**Transform**" to rotate around the X, Y, or Z axis or mirror along an axis. Each click rotates **90°**: left-click **+90°**, right-click **−90°**. Clicking a mirror option toggles it.
 
 * X and Z rotations change the vertical orientation. Y rotation turns the structure horizontally.
 * Some blocks cannot represent the requested vertical orientation. The tool reports an unsupported rotation.

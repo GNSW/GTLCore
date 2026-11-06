@@ -7,15 +7,15 @@ navigation:
 
 # Menus and shortcuts
 
-The menu key defaults to the right mouse button: hold the tool, aim at air, and right-click without sneaking to open the menu. When aiming at a block or sneaking, right-click is used for selection and construction. The other default shortcuts are listed below. After rebinding, follow the game's controls and item tooltip.
+The menu key defaults to **G**: press G while holding the tool to open the menu. The right mouse button is reserved for selecting points and construction. The other default shortcuts are listed below. After rebinding, follow the game's controls and item tooltip.
 
 ## **Using the menus**
 
-* **Open radial menu**: change the binding under "Controls → GTLCore Matter Manipulator". With the tool in either hand, press the menu key to choose a mode or setting. With the default right-click binding, aim at air without sneaking.
+* **Open radial menu**: change the binding under "Controls → GTLCore Matter Manipulator". With the tool in either hand, press the menu key to choose a mode or setting.
 * **Radial menu**: click a sector to open or select it. Click the center or press Esc to go back.
 * **Buttons below the menu**: open "Materials", "Network link", "Plans and orders", and "Task controls".
 
-Release right-click before using the menu key while selecting points or working.
+While selecting points or working, press G (or your menu key) to open the menu. If you rebind the menu key to right-click, release right-click first.
 
 ## **Selecting points and starting work**
 

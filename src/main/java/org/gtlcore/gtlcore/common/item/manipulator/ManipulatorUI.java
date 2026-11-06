@@ -133,6 +133,7 @@ public final class ManipulatorUI extends WidgetGroup {
                 edit(settings -> {
                     settings.mode = value;
                     settings.paste = false;
+                    settings.clearTarget();
                 });
                 showMode();
             }, () -> settings().mode == value));
@@ -202,10 +203,14 @@ public final class ManipulatorUI extends WidgetGroup {
 
     private void openSelectionCoordinates() {
         for (int i = 0; i < coordinateRows.size(); i++) {
+            WidgetGroup row = coordinateRows.get(i);
             boolean visible = editScope == SelectionScope.BOTH ||
                     editScope == SelectionScope.SOURCE && i <= 1 ||
                     editScope == SelectionScope.TARGET && i >= 3;
-            coordinateRows.get(i).setVisible(visible).setActive(visible);
+            // The paste box is derived from the source extent; only the source A/B points are editable.
+            boolean editable = i <= 1;
+            row.setVisible(visible).setActive(visible);
+            for (var child : row.widgets) child.setActive(visible && editable);
         }
         openPanel(coordinates, this::showSelectionEditor);
     }
@@ -215,10 +220,6 @@ public final class ManipulatorUI extends WidgetGroup {
         if (editScope != SelectionScope.TARGET) {
             entries.add(action("mm.nudge.a", () -> nudge(editScope, 0)));
             entries.add(action("mm.nudge.b", () -> nudge(editScope, 1)));
-        }
-        if (editScope != SelectionScope.SOURCE) {
-            entries.add(action("mm.nudge.paste_a", () -> nudge(editScope, 3)));
-            entries.add(action("mm.nudge.paste_b", () -> nudge(editScope, 4)));
         }
         entries.add(action("mm.nudge.whole", () -> nudge(editScope, -1)));
         entries.add(action("mm.nudge.here", this::moveSelectionHere));
@@ -368,7 +369,8 @@ public final class ManipulatorUI extends WidgetGroup {
         for (int i = 0; i < settings().rotation.length; i++) {
             int axis = i;
             entries.add(new Entry(() -> Component.translatable("mm.rotate." + axis).append("\n" + settings().rotation[axis] * 90 + "°"),
-                    () -> edit(settings -> settings.rotation[axis] = (settings.rotation[axis] + 1) % 4), () -> settings().rotation[axis] != 0));
+                    button -> edit(settings -> settings.rotation[axis] = (settings.rotation[axis] + (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT ? 3 : 1)) % 4),
+                    () -> settings().rotation[axis] != 0));
             entries.add(new Entry("mm.mirror." + axis, () -> edit(settings -> settings.mirror[axis] = !settings.mirror[axis]), () -> settings().mirror[axis]));
         }
         entries.add(new Entry("mm.reset", () -> command(MatterManipulatorBehavior.Action.RESET)));

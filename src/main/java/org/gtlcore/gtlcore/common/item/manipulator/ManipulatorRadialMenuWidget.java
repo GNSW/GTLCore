@@ -28,18 +28,23 @@ import org.lwjgl.glfw.GLFW;
 import java.util.BitSet;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 public final class ManipulatorRadialMenuWidget extends Widget {
 
-    public record Entry(Supplier<Component> text, Runnable action, BooleanSupplier selected) {
+    public record Entry(Supplier<Component> text, IntConsumer action, BooleanSupplier selected) {
 
         public Entry(String key, Runnable action) {
-            this(key, action, () -> false);
+            this(() -> Component.translatable(key), button -> action.run(), () -> false);
         }
 
         public Entry(String key, Runnable action, BooleanSupplier selected) {
-            this(() -> Component.translatable(key), action, selected);
+            this(() -> Component.translatable(key), button -> action.run(), selected);
+        }
+
+        public Entry(Supplier<Component> text, Runnable action, BooleanSupplier selected) {
+            this(text, button -> action.run(), selected);
         }
     }
 
@@ -157,14 +162,14 @@ public final class ManipulatorRadialMenuWidget extends Widget {
 
     @Override
     public void handleClientAction(int id, FriendlyByteBuf buffer) {
-        if (id == SELECT_ACTION) select(buffer.readVarInt());
+        if (id == SELECT_ACTION) select(buffer.readVarInt(), buffer.readVarInt());
         else if (id == BACK_ACTION) {
             if (back != null) back.run();
         } else super.handleClientAction(id, buffer);
     }
 
-    private void select(int index) {
-        if (index >= 0 && index < entries.size()) entries.get(index).action().run();
+    private void select(int index, int button) {
+        if (index >= 0 && index < entries.size()) entries.get(index).action().accept(button);
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -202,12 +207,15 @@ public final class ManipulatorRadialMenuWidget extends Widget {
     @Override
     @OnlyIn(Dist.CLIENT)
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) return false;
         int hovered = hovered(mouseX, mouseY);
         if (hovered == -1) return backFromClient();
         if (hovered < 0) return false;
-        writeClientAction(SELECT_ACTION, buffer -> buffer.writeVarInt(hovered));
-        select(hovered);
+        writeClientAction(SELECT_ACTION, buffer -> {
+            buffer.writeVarInt(hovered);
+            buffer.writeVarInt(button);
+        });
+        select(hovered, button);
         playButtonClickSound();
         return true;
     }

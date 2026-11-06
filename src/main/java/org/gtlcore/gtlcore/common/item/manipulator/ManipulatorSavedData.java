@@ -98,7 +98,7 @@ public final class ManipulatorSavedData extends SavedData {
     private static void validate(ServerPlayer player, ManipulatorSettings s) {
         if (s.a == null || s.b == null || s.template() && !s.hasTarget()) throw new IllegalArgumentException("mm.error.selection");
         if (!s.dimension.equals(player.level().dimension().location().toString())) throw new IllegalArgumentException("mm.error.dimension");
-        if (s.pasteA != null && s.pasteB != null &&
+        if (s.template() && s.pasteA != null && s.pasteB != null &&
                 !s.targetSize().equals(ManipulatorGeometry.extent(s)))
             throw new IllegalArgumentException("mm.error.target_size");
         long count = s.volume();

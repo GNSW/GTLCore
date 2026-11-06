@@ -734,7 +734,7 @@
   "gtceu.machine.fission_reactor.tooltip.9": "When supply >= demand, coolant consumption conditions are met, consume provided coolant, consumption = demand x coolant coefficient, and prevent reactor heating",
   "gtceu.machine.flotation_cell_regulator.tooltip.0": "Industrial-grade flotation cell",
   "gtceu.machine.fusion_reactor.tooltip.a": "Each machine recipe tier above machine tier increases max parallel by 4x, up to 16",
-  "gtceu.machine.generator_array.tooltip.0": "Powerful operating environment doubles the power of small generators in the machine",
+  "gtceu.machine.generator_array.tooltip.0": "Powerful operating environment doubles the parallel capacity of small generators in the machine",
   "gtceu.machine.generator_array.tooltip.1": "Can enable wireless power grid mode, generated power will be directly sent to wireless power grid",
   "gtceu.machine.generator_array.wireless": "Wireless Power Grid Mode:",
   "gtceu.machine.greenhouse.tooltip.0": "Requires sunlight to operate",

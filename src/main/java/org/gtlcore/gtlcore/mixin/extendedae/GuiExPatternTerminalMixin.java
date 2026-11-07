@@ -55,7 +55,7 @@ public abstract class GuiExPatternTerminalMixin implements JeiTerminalSearchTarg
     }
 
     @Inject(method = "itemStackMatchesSearchTerm", at = @At("HEAD"), cancellable = true)
-    private void gtlcore$matchPatternEncoder(ItemStack stack, String searchTerm, boolean outputSearch,
+    private void gtlcore$matchPatternEncoder(ItemStack stack, List<String> searchTokens, boolean outputSearch,
                                              CallbackInfoReturnable<Boolean> cir) {
         if (!outputSearch || stack.isEmpty()) {
             return;
@@ -65,7 +65,7 @@ public abstract class GuiExPatternTerminalMixin implements JeiTerminalSearchTarg
             return;
         }
         String encoderName = encoder.get().displayName();
-        if (UniversalSearch.contains(encoderName, searchTerm)) {
+        if (searchTokens.stream().allMatch(searchToken -> UniversalSearch.contains(encoderName, searchToken))) {
             this.matchedStack.add(stack);
             cir.setReturnValue(true);
         }

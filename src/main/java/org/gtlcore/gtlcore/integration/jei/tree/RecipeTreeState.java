@@ -27,6 +27,7 @@ final class RecipeTreeState {
         tree = null;
         craftingMode = false;
         RecipeTreeLookup.reset();
+        TreeIngredient.resetCaches();
     }
 
     static @Nullable IJeiRuntime runtime() {
@@ -72,6 +73,14 @@ final class RecipeTreeState {
         }
         String identity = DEFAULTS.get(ingredient.key());
         if (identity == null) {
+            for (TreeIngredient.Variant variant : ingredient.variants()) {
+                identity = DEFAULTS.get(variant.uid());
+                if (identity != null) {
+                    break;
+                }
+            }
+        }
+        if (identity == null) {
             return null;
         }
         return RecipeTreeLookup.find(runtime, ingredient, identity);
@@ -96,6 +105,9 @@ final class RecipeTreeState {
     static void addRecipe(String identity, List<TreeIngredient> outputs) {
         for (TreeIngredient output : outputs) {
             DEFAULTS.put(output.key(), identity);
+            for (TreeIngredient.Variant variant : output.variants()) {
+                DEFAULTS.put(variant.uid(), identity);
+            }
         }
         DEFAULTS.save();
         recalculate();
@@ -105,6 +117,11 @@ final class RecipeTreeState {
         for (TreeIngredient output : outputs) {
             if (identity.equals(DEFAULTS.get(output.key()))) {
                 DEFAULTS.remove(output.key());
+            }
+            for (TreeIngredient.Variant variant : output.variants()) {
+                if (identity.equals(DEFAULTS.get(variant.uid()))) {
+                    DEFAULTS.remove(variant.uid());
+                }
             }
         }
         DEFAULTS.save();

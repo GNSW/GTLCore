@@ -26,8 +26,17 @@ final class TreeCost {
         chanceCosts.clear();
         remainders.clear();
         chanceRemainders.clear();
+        // The goal item itself must always be crafted, even when one copy is already
+        // in the player's inventory. Only its ingredients count as already obtained.
+        java.util.Set<String> excluded = new java.util.HashSet<>();
+        excluded.add(node.ingredient.key());
+        for (TreeIngredient.Variant variant : node.ingredient.variants()) {
+            excluded.add(variant.uid());
+        }
         for (TreeIngredient stack : inventory.values()) {
-            remainders.put(stack.key(), new FlatMaterialCost(stack, stack.amount()));
+            if (!excluded.contains(stack.key())) {
+                remainders.put(stack.key(), new FlatMaterialCost(stack, stack.amount()));
+            }
         }
         calculateCost(node, batches * node.amount, ChanceState.DEFAULT, true);
     }
@@ -45,7 +54,11 @@ final class TreeCost {
         } else {
             FlatMaterialCost cost = costs.get(stack.key());
             if (cost != null) {
-                cost.amount += amount;
+                if (stack.toolLike()) {
+                    cost.amount = Math.max(cost.amount, amount);
+                } else {
+                    cost.amount += amount;
+                }
             } else {
                 costs.put(stack.key(), new FlatMaterialCost(stack, amount));
             }
@@ -237,7 +250,8 @@ final class TreeCost {
 
             if (node.children != null) {
                 for (MaterialNode child : node.children) {
-                    if (child.remainder != null && child.remainderAmount > 0) {
+                    if (!child.ingredient.toolLike() &&
+                            child.remainder != null && child.remainderAmount > 0) {
                         if (child.catalyst) {
                             addRemainder(child.remainder, child.remainderAmount,
                                     produced.consume(child.consumeChance));

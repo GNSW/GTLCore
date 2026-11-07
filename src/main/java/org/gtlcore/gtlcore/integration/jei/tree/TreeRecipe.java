@@ -88,10 +88,15 @@ final class TreeRecipe {
     }
 
     private static String identity(IRecipeCategory<?> category, Object recipe) {
-        String detail = recipe instanceof GTRecipeWrapper wrapper ?
-                wrapper.recipe.id + "|" + wrapper.recipe.inputs + "|" + wrapper.recipe.outputs :
-                String.valueOf(recipe);
-        return category.getRecipeType().getUid() + "|" + recipeId(recipe) + "|" +
+        String categoryId = category.getRecipeType().getUid().toString();
+        if (recipe instanceof GTRecipeWrapper wrapper && wrapper.recipe.id != null) {
+            return categoryId + "|" + wrapper.recipe.id;
+        }
+        if (recipe instanceof Recipe<?> vanillaRecipe && vanillaRecipe.getId() != null) {
+            return categoryId + "|" + vanillaRecipe.getId();
+        }
+        String detail = String.valueOf(recipe);
+        return categoryId + "|" + recipe.getClass().getName() + "|" +
                 Integer.toUnsignedString(detail.hashCode(), 16);
     }
 
@@ -209,7 +214,8 @@ final class TreeRecipe {
                 continue;
             }
             float chance = chanceFor(layout.getRecipe(), slot.getRole(), ingredients.get(0));
-            TreeIngredient ingredient = TreeIngredient.of(ingredientManager, ingredients, chance);
+            TreeIngredient ingredient = TreeIngredient.of(ingredientManager, ingredients, chance,
+                    slot.getRole() == RecipeIngredientRole.INPUT);
             if (ingredient.isEmpty()) {
                 continue;
             }

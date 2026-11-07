@@ -1,8 +1,13 @@
 package org.gtlcore.gtlcore.integration.jei.tree;
 
+import com.gregtechceu.gtceu.api.item.IGTTool;
+import com.gregtechceu.gtceu.api.item.tool.GTToolType;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraftforge.fluids.FluidStack;
@@ -16,7 +21,9 @@ import mezz.jei.api.runtime.IIngredientManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +71,13 @@ final class TreeIngredient {
     static TreeIngredient of(IIngredientManager ingredientManager,
                              Collection<? extends ITypedIngredient<?>> ingredients,
                              float chance) {
+        return of(ingredientManager, ingredients, chance, false);
+    }
+
+    static TreeIngredient of(IIngredientManager ingredientManager,
+                             Collection<? extends ITypedIngredient<?>> ingredients,
+                             float chance,
+                             boolean expandTools) {
         Map<String, Variant> unique = new LinkedHashMap<>();
         for (ITypedIngredient<?> typed : ingredients) {
             if (typed == null) {
@@ -74,7 +88,46 @@ final class TreeIngredient {
                 unique.putIfAbsent(variant.uid(), variant);
             }
         }
+        if (expandTools) {
+            for (Variant variant : List.copyOf(unique.values())) {
+                if (variant.toolType() != null) {
+                    for (Variant sibling : toolsOfType(ingredientManager, variant.toolType())) {
+                        unique.putIfAbsent(sibling.uid(), sibling);
+                    }
+                }
+            }
+        }
         return ofVariants(List.copyOf(unique.values()), chance);
+    }
+
+    private static final Map<GTToolType, List<Variant>> TOOL_VARIANTS = new HashMap<>();
+
+    static void resetCaches() {
+        TOOL_VARIANTS.clear();
+    }
+
+    private static List<Variant> toolsOfType(IIngredientManager ingredientManager,
+                                             GTToolType toolType) {
+        List<Variant> cached = TOOL_VARIANTS.get(toolType);
+        if (cached != null) {
+            return cached;
+        }
+        List<Variant> variants = new ArrayList<>();
+        for (Item item : BuiltInRegistries.ITEM) {
+            if (item instanceof IGTTool tool && tool.getToolType() == toolType) {
+                ItemStack stack = new ItemStack(item);
+                ITypedIngredient<ItemStack> typed = ingredientManager
+                        .createTypedIngredient(VanillaTypes.ITEM_STACK, stack)
+                        .orElse(null);
+                Variant variant = typed == null ? null : Variant.of(ingredientManager, typed, false);
+                if (variant != null) {
+                    variants.add(variant);
+                }
+            }
+        }
+        List<Variant> result = List.copyOf(variants);
+        TOOL_VARIANTS.put(toolType, result);
+        return result;
     }
 
     static TreeIngredient ofVariants(List<Variant> variants, float chance) {
@@ -133,6 +186,18 @@ final class TreeIngredient {
 
     boolean catalyst() {
         return catalyst;
+    }
+
+    boolean toolLike() {
+        if (variants.isEmpty()) {
+            return false;
+        }
+        for (Variant variant : variants) {
+            if (!variant.tool()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     boolean isEmpty() {
@@ -230,9 +295,10 @@ final class TreeIngredient {
                    String name,
                    long amount,
                    @Nullable Variant remainder,
-                   long remainderAmount) {
+                   long remainderAmount,
+                   @Nullable GTToolType toolType) {
 
-        private static final Variant EMPTY = new Variant(null, null, null, "", "", 1, null, 0);
+        private static final Variant EMPTY = new Variant(null, null, null, "", "", 1, null, 0, null);
 
         @SuppressWarnings("unchecked")
         static @Nullable Variant of(IIngredientManager ingredientManager,
@@ -266,9 +332,16 @@ final class TreeIngredient {
             ITypedIngredient<T> display = ingredientManager.createTypedIngredient(typed.getType(), copy)
                     .orElse(typed);
 
+            GTToolType toolType = ingredient instanceof ItemStack toolStack &&
+                    toolStack.getItem() instanceof IGTTool tool ? tool.getToolType() : null;
             Variant remainder = null;
             long remainderAmount = 0;
-            if (allowRemainder && ingredient instanceof ItemStack stack) {
+            if (allowRemainder && toolType != null) {
+                ITypedIngredient<T> self = ingredientManager.createTypedIngredient(typed.getType(), copy)
+                        .orElse(typed);
+                remainder = create(ingredientManager, self, false);
+                remainderAmount = 1;
+            } else if (allowRemainder && ingredient instanceof ItemStack stack) {
                 ItemStack remaining = stack.getCraftingRemainingItem();
                 if (!remaining.isEmpty()) {
                     ITypedIngredient<ItemStack> remainingTyped = ingredientManager.createTypedIngredient(
@@ -283,11 +356,15 @@ final class TreeIngredient {
             return new Variant((ITypedIngredient<Object>) typed,
                     (ITypedIngredient<Object>) display,
                     (IIngredientRenderer<Object>) ingredientManager.getIngredientRenderer(typed.getType()),
-                    uid, name, amount, remainder, remainderAmount);
+                    uid, name, amount, remainder, remainderAmount, toolType);
+        }
+
+        boolean tool() {
+            return toolType != null;
         }
 
         boolean catalytic() {
-            return remainder != null && remainder.uid.equals(uid);
+            return tool() || remainder != null && remainder.uid.equals(uid);
         }
 
         boolean isFluid() {

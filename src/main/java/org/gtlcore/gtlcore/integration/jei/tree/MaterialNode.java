@@ -50,6 +50,12 @@ final class MaterialNode {
     }
 
     private void recalculate(MaterialTree tree, List<TreeRecipe> used) {
+        if (!used.isEmpty() && ingredient.toolLike()) {
+            // GT crafting tools are reused; never expand their own recipe inside a tree.
+            this.recipe = null;
+            this.children = null;
+            return;
+        }
         TreeRecipe recipe = this.recipe;
         if (!used.isEmpty()) {
             recipe = tree.getRecipe(ingredient);

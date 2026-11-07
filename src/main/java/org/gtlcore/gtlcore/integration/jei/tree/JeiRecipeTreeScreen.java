@@ -1,482 +1,715 @@
 package org.gtlcore.gtlcore.integration.jei.tree;
 
-import org.gtlcore.gtlcore.integration.jei.tree.JeiRecipeTreeModel.CostEntry;
-import org.gtlcore.gtlcore.integration.jei.tree.JeiRecipeTreeModel.CostSummary;
-import org.gtlcore.gtlcore.integration.jei.tree.JeiRecipeTreeModel.IngredientStack;
-import org.gtlcore.gtlcore.integration.jei.tree.JeiRecipeTreeModel.RecipeNode;
+import org.gtlcore.gtlcore.integration.jei.tree.TreeIngredient.Variant;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.ItemStack;
 
-import mezz.jei.api.gui.IRecipeLayoutDrawable;
+import mezz.jei.api.constants.VanillaTypes;
+import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.recipe.IFocus;
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.api.recipe.category.IRecipeCategory;
+import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IJeiRuntime;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 
 /**
- * Full-screen recipe tree inspired by EMI's BoM screen, implemented without replacing JEI's GUI.
+ * EMI's BoM (recipe tree) screen, ported to JEI.
+ *
+ * <p>
+ * The layout, controls and cost/progress behaviour intentionally follow EMI's {@code BoMScreen}:
+ * the same node boxes, total cost/leftovers rows, batch control, crafting-mode toggle, fold/resolve
+ * interactions and inventory progress coloring.
+ * </p>
  */
 final class JeiRecipeTreeScreen extends Screen {
 
-    private static final int COST_PANEL_HEIGHT = 158;
-    private static final int TREE_TOP = 38;
-    private static final int NODE_SPACING_X = 38;
-    private static final int NODE_SPACING_Y = 48;
-    private static final int NODE_RADIUS = 11;
+    private static final int NODE_WIDTH = 30;
+    private static final int NODE_HORIZONTAL_SPACING = 8;
+    private static final int NODE_VERTICAL_SPACING = 20;
+    private static final int COST_HORIZONTAL_SPACING = 8;
+    private static final DecimalFormat AMOUNT_FORMAT = new DecimalFormat("#,###.##");
 
-    private final Screen parent;
+    private static int zoom = 0;
+
+    private final Screen old;
     private final IJeiRuntime runtime;
-    private final JeiRecipeTreeModel model;
-    private final Map<String, Integer> selections = new HashMap<>();
-    private final Set<String> collapsed = new HashSet<>();
 
-    private RecipeNode root;
-    private CostSummary costs;
-    private List<LayoutNode> layoutNodes = List.of();
-    private List<CostCell> costCells = List.of();
-    private long batches = 1;
-    private double panX;
-    private double panY = 14;
-    private float zoom = 1.0F;
-    private boolean dragging;
-    private boolean initialized;
-    private int costScroll;
-    private @Nullable CandidatePopup popup;
+    private Bounds batches = new Bounds(-24, -50, 48, 26);
+    private Bounds mode = new Bounds(-24, -50, 16, 16);
+    private Bounds help = new Bounds(0, 0, 16, 16);
+    private double offX;
+    private double offY;
+    private List<Node> nodes = List.of();
+    private List<Cost> costs = List.of();
+    private @Nullable Bounds costBounds;
+    private @Nullable Bounds remainderBounds;
+    private Map<String, TreeIngredient> playerInventory = Map.of();
+    private final Map<String, Optional<TreeRecipe>> preferredRecipes = new HashMap<>();
+    private boolean hasRemainders;
+    private int nodeWidth;
+    private int nodeHeight;
+    private int lastMouseX;
+    private int lastMouseY;
+    private double scrollAcc;
 
-    JeiRecipeTreeScreen(@Nullable Screen parent, IJeiRuntime runtime, IRecipeLayoutDrawable<?> layout) {
+    JeiRecipeTreeScreen(@Nullable Screen old, IJeiRuntime runtime) {
         super(Component.translatable("gtlcore.jei.recipe_tree.title"));
-        this.parent = parent;
+        this.old = old;
         this.runtime = runtime;
-        this.model = new JeiRecipeTreeModel(runtime, layout, selections, collapsed);
-        rebuild();
     }
 
     @Override
     protected void init() {
         super.init();
-        if (!initialized) {
-            initialized = true;
-            recenter();
+        MaterialTree tree = RecipeTreeState.tree();
+        if (tree != null) {
+            offY = height / -3.0;
+        } else {
+            offY = 0;
         }
+        recalculateTree();
     }
 
-    private void rebuild() {
-        root = model.build(batches);
-        costs = model.summarize(root);
-        layoutNodes = layoutTree(root);
-    }
-
-    private void recenter() {
-        panX = 0;
-        panY = 14;
-        if (layoutNodes.isEmpty()) {
-            zoom = 1.0F;
+    private void recalculateTree() {
+        help = new Bounds(width - 18, height - 18, 16, 16);
+        preferredRecipes.clear();
+        MaterialTree tree = RecipeTreeState.tree();
+        if (tree == null) {
+            nodes = List.of();
+            costs = List.of();
+            costBounds = null;
+            remainderBounds = null;
+            hasRemainders = false;
             return;
         }
-        int minX = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int maxY = 0;
-        for (LayoutNode node : layoutNodes) {
-            minX = Math.min(minX, node.x);
-            maxX = Math.max(maxX, node.x);
-            maxY = Math.max(maxY, node.y);
+
+        TreeVolume volume = addNewNodes(tree.goal, tree.batches, 1, 0, ChanceState.DEFAULT);
+        nodes = volume.nodes;
+        int horizontalOffset = (volume.maxRight() + volume.minLeft()) / 2;
+        for (Node node : nodes) {
+            node.x -= horizontalOffset;
         }
-        int viewportHeight = Math.max(40, getCostTop() - TREE_TOP);
-        float widthFit = Math.max(1, width - 80) / (float) Math.max(1, maxX - minX + 40);
-        float heightFit = Math.max(1, viewportHeight - 32) / (float) Math.max(1, maxY + 40);
-        zoom = Mth.clamp(Math.min(1.0F, Math.min(widthFit, heightFit)), 0.42F, 1.0F);
+        if (!nodes.isEmpty()) {
+            Node node = nodes.get(0);
+            int width = font.width("x" + tree.batches);
+            batches = new Bounds(node.x + node.width / 2 + 6, node.y - 10, width + 12, 22);
+        }
+
+        nodeWidth = volume.maxRight() - volume.minLeft();
+        nodeHeight = getNodeHeight(tree.goal);
+        playerInventory = snapshotInventory();
+        tree.calculateProgress(playerInventory);
+        Map<String, FlatMaterialCost> progressCosts = new HashMap<>();
+        for (FlatMaterialCost cost : tree.cost.costs.values()) {
+            progressCosts.put(cost.ingredient.key(), cost);
+        }
+        Map<String, ChanceMaterialCost> chanceProgressCosts = new HashMap<>();
+        for (ChanceMaterialCost cost : tree.cost.chanceCosts.values()) {
+            chanceProgressCosts.put(cost.ingredient.key(), cost);
+        }
+
+        costs = new ArrayList<>();
+        tree.calculateCost();
+
+        List<FlatMaterialCost> treeCosts = new ArrayList<>();
+        treeCosts.addAll(tree.cost.costs.values());
+        treeCosts.addAll(tree.cost.chanceCosts.values());
+        treeCosts.sort(this::compareCosts);
+
+        int cy = nodeHeight * NODE_VERTICAL_SPACING * 2;
+        int costX = 0;
+        for (FlatMaterialCost material : treeCosts) {
+            Cost cost = new Cost(material, costX, cy, false);
+            if (RecipeTreeState.craftingMode()) {
+                if (material instanceof ChanceMaterialCost chanceCost) {
+                    ChanceMaterialCost progress = chanceProgressCosts.get(material.ingredient.key());
+                    if (progress == null) {
+                        cost.alreadyDone = material.effectiveAmount();
+                    } else {
+                        cost.alreadyDone = (long) Math.ceil(
+                                chanceCost.amount * chanceCost.chance -
+                                        progress.amount * progress.chance);
+                    }
+                } else {
+                    FlatMaterialCost progress = progressCosts.get(material.ingredient.key());
+                    cost.alreadyDone = progress == null ? material.amount :
+                            material.amount - progress.amount;
+                }
+            }
+            costs.add(cost);
+            costX += 16 + COST_HORIZONTAL_SPACING + amountOverflow(cost.amountText());
+        }
+        int costOffset = (costX - COST_HORIZONTAL_SPACING) / 2;
+        for (Cost cost : costs) {
+            cost.x -= costOffset;
+        }
+        costBounds = rowBounds(costs, cy - 24, 32);
+
+        int totalCostWidth = font.width(Component.translatable("gtlcore.jei.recipe_tree.total_cost"));
+        mode = new Bounds(totalCostWidth / 2 + 4, cy - 20, 16, 16);
+
+        List<Cost> leftovers = new ArrayList<>();
+        List<FlatMaterialCost> remainderCosts = new ArrayList<>();
+        remainderCosts.addAll(tree.cost.remainders.values());
+        remainderCosts.addAll(tree.cost.chanceRemainders.values());
+        remainderCosts.sort(this::compareCosts);
+        cy += 40;
+        int remainderX = 0;
+        for (FlatMaterialCost material : remainderCosts) {
+            if (material.effectiveAmount() <= 0) {
+                continue;
+            }
+            Cost cost = new Cost(material, remainderX, cy, true);
+            leftovers.add(cost);
+            remainderX += 16 + COST_HORIZONTAL_SPACING + amountOverflow(cost.amountText());
+        }
+        costOffset = (remainderX - COST_HORIZONTAL_SPACING) / 2;
+        for (Cost cost : leftovers) {
+            cost.x -= costOffset;
+        }
+        costs.addAll(leftovers);
+        remainderBounds = rowBounds(leftovers, cy - 24, 32);
+        hasRemainders = !leftovers.isEmpty();
     }
 
-    private int getCostTop() {
-        return Math.max(TREE_TOP + 80, height - Math.min(COST_PANEL_HEIGHT, Math.max(118, height / 3)));
+    private static @Nullable Bounds rowBounds(List<Cost> cells, int top, int height) {
+        if (cells.isEmpty()) {
+            return null;
+        }
+        int minimum = Integer.MAX_VALUE;
+        int maximum = Integer.MIN_VALUE;
+        for (Cost cell : cells) {
+            minimum = Math.min(minimum, cell.x);
+            maximum = Math.max(maximum, cell.x + 16);
+        }
+        return new Bounds(minimum - 10, top, maximum - minimum + 20, height);
+    }
+
+    private int compareCosts(FlatMaterialCost first, FlatMaterialCost second) {
+        int result = Integer.compare(RecipeTreeLookup.order(runtime, first.ingredient),
+                RecipeTreeLookup.order(runtime, second.ingredient));
+        if (result != 0) {
+            return result;
+        }
+        return first.ingredient.displayVariant().name()
+                .compareToIgnoreCase(second.ingredient.displayVariant().name());
+    }
+
+    private Map<String, TreeIngredient> snapshotInventory() {
+        if (minecraft == null || minecraft.player == null) {
+            return Map.of();
+        }
+        IIngredientManager ingredientManager = runtime.getIngredientManager();
+        Map<String, TreeIngredient> inventory = new HashMap<>();
+        for (ItemStack stack : minecraft.player.getInventory().items) {
+            addInventoryStack(ingredientManager, inventory, stack);
+        }
+        for (ItemStack stack : minecraft.player.getInventory().offhand) {
+            addInventoryStack(ingredientManager, inventory, stack);
+        }
+        if (minecraft.player.containerMenu != null) {
+            addInventoryStack(ingredientManager, inventory,
+                    minecraft.player.containerMenu.getCarried());
+        }
+        return inventory;
+    }
+
+    private void addInventoryStack(IIngredientManager ingredientManager,
+                                   Map<String, TreeIngredient> inventory,
+                                   ItemStack stack) {
+        if (stack.isEmpty()) {
+            return;
+        }
+        ITypedIngredient<ItemStack> typed = ingredientManager
+                .createTypedIngredient(VanillaTypes.ITEM_STACK, stack).orElse(null);
+        if (typed == null) {
+            return;
+        }
+        Variant variant = Variant.of(ingredientManager, typed, false);
+        if (variant == null) {
+            return;
+        }
+        TreeIngredient existing = inventory.get(variant.uid());
+        long amount = (existing == null ? 0 : existing.amount()) + stack.getCount();
+        inventory.put(variant.uid(), TreeIngredient.single(variant).setAmount(amount));
+    }
+
+    private int getNodeHeight(MaterialNode node) {
+        if (node.recipe != null && node.state == FoldState.EXPANDED &&
+                node.children != null && !node.children.isEmpty()) {
+            int height = 1;
+            for (MaterialNode child : node.children) {
+                height = Math.max(height, getNodeHeight(child));
+            }
+            if (node.recipe.isResolution()) {
+                return height;
+            }
+            return height + 1;
+        }
+        return 1;
+    }
+
+    private TreeVolume addNewNodes(MaterialNode node,
+                                   long multiplier,
+                                   long divisor,
+                                   int depth,
+                                   ChanceState chance) {
+        if (node.catalyst) {
+            multiplier = node.amount;
+        } else {
+            multiplier = node.amount * (long) Math.ceil(multiplier / (float) divisor);
+        }
+        if (node.recipe != null && node.children != null && !node.children.isEmpty() &&
+                node.state == FoldState.EXPANDED) {
+            ChanceState produced = chance.produce(node.produceChance);
+            if (node.recipe.isResolution()) {
+                TreeVolume volume = addNewNodes(node.children.get(0), multiplier, node.divisor,
+                        depth, produced);
+                volume.nodes.get(0).resolution = node;
+                return volume;
+            }
+            TreeVolume left = null;
+            for (MaterialNode child : node.children) {
+                ChanceState consumed = produced.consume(child.consumeChance);
+                TreeVolume volume = addNewNodes(child, multiplier, node.divisor, depth + 1,
+                        consumed);
+                if (left == null) {
+                    left = volume;
+                } else {
+                    left.addToRight(volume);
+                }
+            }
+            if (left == null) {
+                left = new TreeVolume(node, multiplier, depth * NODE_VERTICAL_SPACING, chance);
+            } else {
+                left.addHead(node, multiplier, depth * NODE_VERTICAL_SPACING, chance);
+            }
+            return left;
+        }
+        return new TreeVolume(node, multiplier, depth * NODE_VERTICAL_SPACING, chance);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
         graphics.fill(0, 0, width, height, 0xE20B0F15);
+        drawHeader(graphics);
+        drawPanel(graphics, 6, 34, width - 12, height - 40, 0x40151D27, 0xFF41556B);
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
 
-        drawHeader(graphics, mouseX, mouseY);
-        drawTree(graphics, mouseX, mouseY, partialTick);
-        drawCostPanel(graphics, mouseX, mouseY);
-        if (popup != null) {
-            drawPopup(graphics, mouseX, mouseY);
-        }
-        drawTooltip(graphics, mouseX, mouseY);
-    }
+        float scale = getScale();
+        int scaledWidth = (int) (width / scale);
+        int scaledHeight = (int) (height / scale);
+        int contentWidth = nodeWidth * NODE_WIDTH;
+        int contentHeight = nodeHeight * NODE_VERTICAL_SPACING + 80;
+        int xBound = scaledWidth / 2 + contentWidth - 100;
+        int topBound = scaledHeight / -2 + 20;
+        int bottomBound = contentHeight + scaledHeight / 2 - 20;
+        offX = Mth.clamp(offX, -xBound, xBound);
+        offY = Mth.clamp(offY, -bottomBound, -topBound);
 
-    private void drawHeader(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, title, 12, 9, 0xFFF3F5F7, false);
-        graphics.drawString(font, Component.translatable("gtlcore.jei.recipe_tree.subtitle"),
-                12, 22, 0xFF8E99A8, false);
-
-        ButtonBounds reset = resetButton();
-        drawButton(graphics, reset, mouseX, mouseY,
-                Component.translatable("gtlcore.jei.recipe_tree.reset"));
-        ButtonBounds minus = batchMinusButton();
-        ButtonBounds plus = batchPlusButton();
-        drawButton(graphics, minus, mouseX, mouseY, Component.literal("-"));
-        drawButton(graphics, plus, mouseX, mouseY, Component.literal("+"));
-        String batchText = Component.translatable("gtlcore.jei.recipe_tree.batches", batches).getString();
-        graphics.drawString(font, batchText,
-                (minus.x() + minus.width() + plus.x()) / 2 - font.width(batchText) / 2,
-                12, 0xFFFFD36A, false);
-    }
-
-    private void drawButton(GuiGraphics graphics, ButtonBounds bounds, int mouseX, int mouseY,
-                            Component label) {
-        boolean hovered = bounds.contains(mouseX, mouseY);
-        int fill = hovered ? 0xFF344253 : 0xFF202A36;
-        int border = hovered ? 0xFF7BB9E8 : 0xFF4A5B70;
-        drawPanel(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height(), fill, border);
-        graphics.drawString(font, label,
-                bounds.x() + (bounds.width() - font.width(label)) / 2,
-                bounds.y() + (bounds.height() - font.lineHeight) / 2 + 1,
-                0xFFE7EDF5, false);
-    }
-
-    private void drawTree(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int bottom = getCostTop() - 5;
-        graphics.enableScissor(0, TREE_TOP, width, bottom);
-        graphics.fill(0, TREE_TOP, width, bottom, 0x241F2935);
+        int mx = (int) ((mouseX - width / 2.0) / scale - offX);
+        int my = (int) ((mouseY - height / 2.0) / scale - offY);
 
         graphics.pose().pushPose();
-        graphics.pose().translate(width / 2.0 + panX, TREE_TOP + panY, 0);
-        graphics.pose().scale(zoom, zoom, 1.0F);
+        graphics.pose().translate(width / 2.0, height / 2.0, 0);
+        graphics.pose().scale(scale, scale, 1.0F);
+        graphics.pose().translate((float) offX, (float) offY, 0);
 
-        for (LayoutNode node : layoutNodes) {
-            for (LayoutNode child : node.children) {
-                drawEdge(graphics, node, child);
+        MaterialTree tree = RecipeTreeState.tree();
+        if (tree != null) {
+            if (costBounds != null) {
+                drawPanel(graphics, costBounds.x(), costBounds.y(), costBounds.width(),
+                        costBounds.height(), 0xF01A222D, 0xFF41556B);
             }
+            if (remainderBounds != null) {
+                drawPanel(graphics, remainderBounds.x(), remainderBounds.y(),
+                        remainderBounds.width(), remainderBounds.height(),
+                        0xF01A222D, 0xFF41556B);
+            }
+            int cy = nodeHeight * NODE_VERTICAL_SPACING * 2;
+            graphics.drawCenteredString(font,
+                    Component.translatable("gtlcore.jei.recipe_tree.total_cost"), 0, cy - 16,
+                    0xFFFFD36A);
+            if (hasRemainders) {
+                graphics.drawCenteredString(font,
+                        Component.translatable("gtlcore.jei.recipe_tree.leftovers"), 0, cy - 16 + 40,
+                        0xFFFFD36A);
+            }
+            for (Cost cost : costs) {
+                cost.render(graphics);
+            }
+            for (Node node : nodes) {
+                node.render(graphics, mx, my);
+            }
+            int batchColor = batches.contains(mx, my) ? 0xFFFFF2B0 : 0xFFFFD36A;
+            graphics.drawString(font, "x" + tree.batches, batches.x() + 6,
+                    batches.y() + batches.height() / 2 - 4, batchColor, true);
+
+            boolean modeHovered = mode.contains(mx, my);
+            drawModeIcon(graphics, mode, modeHovered);
+        } else {
+            graphics.drawCenteredString(font,
+                    Component.translatable("gtlcore.jei.recipe_tree.empty.welcome"), 0, -72,
+                    0xFFFFD36A);
+            graphics.drawCenteredString(font,
+                    Component.translatable("gtlcore.jei.recipe_tree.empty.no_tree"), 0, -48,
+                    0xFFE7EDF5);
+            graphics.drawCenteredString(font,
+                    Component.translatable("gtlcore.jei.recipe_tree.empty.random_tree"), 0, -24,
+                    0xFF8E99A8);
+            graphics.drawCenteredString(font,
+                    Component.translatable("gtlcore.jei.recipe_tree.empty.random_tree_input"), 0, 0,
+                    0xFF8E99A8);
         }
 
-        LayoutNode hovered = nodeAt(mouseX, mouseY);
-        for (LayoutNode node : layoutNodes) {
-            drawNode(graphics, node, hovered == node);
-        }
         graphics.pose().popPose();
-        graphics.disableScissor();
-    }
 
-    private void drawEdge(GuiGraphics graphics, LayoutNode parent, LayoutNode child) {
-        int color = child.node.cycle ? 0xFFB65353 : 0xFF55708D;
-        int startY = parent.y + NODE_RADIUS;
-        int endY = child.y - NODE_RADIUS;
-        int middleY = (startY + endY) / 2;
-        graphics.fill(parent.x, startY, parent.x + 1, middleY + 1, color);
-        graphics.fill(Math.min(parent.x, child.x), middleY, Math.max(parent.x, child.x) + 1,
-                middleY + 1, color);
-        graphics.fill(child.x, middleY, child.x + 1, endY + 1, color);
-    }
+        boolean helpHovered = help.contains(mouseX, mouseY);
+        drawHelpIcon(graphics, help, helpHovered);
 
-    private void drawNode(GuiGraphics graphics, LayoutNode layout, boolean hovered) {
-        RecipeNode node = layout.node;
-        int left = layout.x - NODE_RADIUS;
-        int top = layout.y - NODE_RADIUS;
-        int right = layout.x + NODE_RADIUS;
-        int bottom = layout.y + NODE_RADIUS;
-        int border = hovered ? 0xFFFFD36A : nodeBorder(node);
-        int fill = hovered ? 0xFF2C3B4C : 0xFF18212C;
-        drawPanel(graphics, left, top, NODE_RADIUS * 2, NODE_RADIUS * 2, fill, border);
-        node.ingredient.render(graphics, left + 3, top + 3);
-
-        if (node.recipe != null) {
-            graphics.fill(right - 4, top + 2, right - 2, top + 4, 0xFF69D79B);
-        }
-        if (node.collapsed && !node.children.isEmpty()) {
-            graphics.fill(layout.x - 3, bottom - 4, layout.x + 3, bottom - 2, 0xFFFFD36A);
-        }
-
-        String amount = (node.ingredient.chance() < 1.0 ? "≈" : "") +
-                compact(node.ingredient.amount());
-        graphics.drawString(font, amount, right + 3, top + 2, 0xFFE8EDF4, false);
-        if (node.crafts > 1) {
-            Component crafts = Component.translatable("gtlcore.jei.recipe_tree.crafts", node.crafts)
-                    .withStyle(ChatFormatting.AQUA);
-            graphics.drawString(font, crafts, right + 3, top + 12, 0xFF8BD7E8, false);
+        Hover hover = getHoveredStack(mouseX, mouseY);
+        if (hover != null) {
+            drawHoverTooltip(graphics, hover, mouseX, mouseY);
+        } else if (tree != null && batches.contains(mx, my)) {
+            List<Component> lines = new ArrayList<>();
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.batch_size", tree.batches)
+                    .withStyle(ChatFormatting.YELLOW));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.batch_size.ideal")
+                    .withStyle(ChatFormatting.GRAY));
+            graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
+        } else if (tree != null && mode.contains(mx, my)) {
+            Component text = Component.translatable(RecipeTreeState.craftingMode() ?
+                    "gtlcore.jei.recipe_tree.mode.craft" :
+                    "gtlcore.jei.recipe_tree.mode.view");
+            graphics.renderComponentTooltip(font, List.of(text), mouseX, mouseY);
+        } else if (helpHovered) {
+            List<Component> lines = new ArrayList<>();
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.title")
+                    .withStyle(ChatFormatting.YELLOW));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.pan"));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.zoom"));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.fold"));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.resolve"));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.stack"));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.batch"));
+            lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.mode"));
+            graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
         }
     }
 
-    private int nodeBorder(RecipeNode node) {
-        if (node.depth == 0) {
-            return 0xFFFFC857;
-        }
-        if (node.cycle || node.budgetExceeded) {
-            return 0xFFC85A5A;
-        }
-        if (node.recipe != null) {
-            return 0xFF5FB78A;
-        }
-        return 0xFF708AA8;
+    private void drawHeader(GuiGraphics graphics) {
+        graphics.fill(0, 0, width, 33, 0xF0151D27);
+        graphics.fill(0, 32, width, 33, 0xFF41556B);
+        graphics.drawString(font, title, 12, 8, 0xFFF3F5F7, false);
+        Component subtitle = Component.translatable("gtlcore.jei.recipe_tree.subtitle");
+        graphics.drawString(font, font.plainSubstrByWidth(subtitle.getString(), width - 24),
+                12, 20, 0xFF8E99A8, false);
     }
 
-    private void drawCostPanel(GuiGraphics graphics, int mouseX, int mouseY) {
-        int top = getCostTop();
-        drawPanel(graphics, 6, top, width - 12, height - top - 6, 0xF01A222D, 0xFF41556B);
-        Component heading = Component.translatable("gtlcore.jei.recipe_tree.total_cost");
-        graphics.drawString(font, heading, 14, top + 8, 0xFFFFD36A, false);
-        Component summary = Component.translatable("gtlcore.jei.recipe_tree.summary",
-                costs.entries().size(), costs.nodeCount(), root.recipe != null ? 1 : 0);
-        graphics.drawString(font, summary, 14 + font.width(heading) + 10, top + 8, 0xFF94A5B8, false);
+    private void drawModeIcon(GuiGraphics graphics, Bounds bounds, boolean hovered) {
+        int border = hovered ? 0xFFFFD36A : 0xFF4A5B70;
+        int fill = hovered ? 0xFF344253 : 0xFF202A36;
+        drawPanel(graphics, bounds.x(), bounds.y(), 16, 16, fill, border);
+        int color = RecipeTreeState.craftingMode() ? 0xFF69D79B : 0xFF7BB9E8;
+        graphics.fill(bounds.x() + 3, bounds.y() + 3, bounds.x() + 13, bounds.y() + 4, color);
+        graphics.fill(bounds.x() + 3, bounds.y() + 7, bounds.x() + 13, bounds.y() + 8, color);
+        graphics.fill(bounds.x() + 3, bounds.y() + 11, bounds.x() + 13, bounds.y() + 12, color);
+        if (RecipeTreeState.craftingMode()) {
+            graphics.fill(bounds.x() + 6, bounds.y() + 3, bounds.x() + 10, bounds.y() + 13, color);
+        }
+    }
 
-        costCells = buildCostCells(top + 24);
-        for (CostCell cell : costCells) {
-            boolean hovered = cell.contains(mouseX, mouseY);
-            if (hovered) {
-                graphics.fill(cell.x() - 2, cell.y() - 2, cell.right() + 2, cell.bottom() + 2,
-                        0x664E769B);
+    private void drawHelpIcon(GuiGraphics graphics, Bounds bounds, boolean hovered) {
+        int border = hovered ? 0xFFFFD36A : 0xFF4A5B70;
+        int fill = hovered ? 0xFF344253 : 0xFF202A36;
+        drawPanel(graphics, bounds.x(), bounds.y(), 16, 16, fill, border);
+        Component question = Component.literal("?");
+        graphics.drawString(font, question, bounds.x() + 6, bounds.y() + 4, 0xFFE7EDF5, true);
+    }
+
+    private void drawHoverTooltip(GuiGraphics graphics, Hover hover, int mouseX, int mouseY) {
+        if (hover.stack != null) {
+            List<Component> lines = new ArrayList<>(hover.stack.tooltip());
+            if (Screen.hasShiftDown()) {
+                addAutoResolutionLines(hover, lines);
+            } else if (hover.node != null && hover.node.recipe != null) {
+                lines.add(hover.node.recipe.label().copy().withStyle(ChatFormatting.GREEN));
             }
-            cell.entry().ingredient().render(graphics, cell.x(), cell.y() + 2);
-            graphics.drawString(font, compact(cell.entry().amount()), cell.x() + 18,
-                    cell.y() + 6, 0xFFDCE5EF, false);
-        }
-
-        int columns = costColumns();
-        int rows = (costs.entries().size() + columns - 1) / columns;
-        int visibleRows = Math.max(1, (height - (top + 24) - 8) / 22);
-        if (rows > visibleRows) {
-            String scroll = Component.translatable("gtlcore.jei.recipe_tree.scroll", costScroll + 1, rows)
-                    .getString();
-            graphics.drawString(font, scroll, width - font.width(scroll) - 14, top + 8,
-                    0xFF77899D, false);
-        }
-    }
-
-    private List<CostCell> buildCostCells(int startY) {
-        int columns = costColumns();
-        int visibleRows = Math.max(1, (height - startY - 8) / 22);
-        int maxScroll = Math.max(0, (costs.entries().size() + columns - 1) / columns - visibleRows);
-        costScroll = Mth.clamp(costScroll, 0, maxScroll);
-        int start = costScroll * columns;
-        List<CostCell> cells = new ArrayList<>(Math.min(costs.entries().size(), columns * visibleRows));
-        for (int index = start; index < costs.entries().size(); index++) {
-            int relative = index - start;
-            int column = relative % columns;
-            int row = relative / columns;
-            if (row >= visibleRows) {
-                break;
+            if (hover.node != null) {
+                if (hover.node.consumeChance != 1) {
+                    lines.add(Component.translatable("gtlcore.jei.recipe_tree.chance.consume",
+                            percent(hover.node.consumeChance)).withStyle(ChatFormatting.GOLD));
+                } else if (hover.resolve != null && hover.resolve.consumeChance != 1) {
+                    lines.add(Component.translatable("gtlcore.jei.recipe_tree.chance.consume",
+                            percent(hover.resolve.consumeChance)).withStyle(ChatFormatting.GOLD));
+                }
+                if (hover.node.produceChance != 1) {
+                    lines.add(Component.translatable("gtlcore.jei.recipe_tree.chance.produce",
+                            percent(hover.node.produceChance)).withStyle(ChatFormatting.GOLD));
+                }
             }
-            int cellX = 14 + column * 82;
-            int cellY = startY + row * 22;
-            cells.add(new CostCell(costs.entries().get(index), cellX, cellY, 78, 20));
-        }
-        return cells;
-    }
-
-    private int costColumns() {
-        return Math.max(1, (width - 28) / 82);
-    }
-
-    private void drawPopup(GuiGraphics graphics, int mouseX, int mouseY) {
-        CandidatePopup current = popup;
-        if (current == null) {
-            return;
-        }
-        PopupBounds bounds = popupBounds(current);
-        drawPanel(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height(),
-                0xFF151D27, 0xFFFFD36A);
-        graphics.drawString(font, Component.translatable("gtlcore.jei.recipe_tree.choose"),
-                bounds.x() + 7, bounds.y() + 5, 0xFFFFD36A, false);
-
-        int selected = selections.getOrDefault(current.node().ingredient.key(), 0);
-        int rowY = bounds.y() + 18;
-        boolean autoHovered = mouseX >= bounds.x() && mouseX < bounds.right() &&
-                mouseY >= rowY && mouseY < rowY + 14;
-        if (autoHovered) {
-            graphics.fill(bounds.x() + 2, rowY, bounds.right() - 2, rowY + 14, 0x554E769B);
-        }
-        String auto = Component.translatable("gtlcore.jei.recipe_tree.auto").getString();
-        graphics.drawString(font, auto, bounds.x() + 7, rowY + 3,
-                selections.containsKey(current.node().ingredient.key()) ? 0xFFC8D1DB : 0xFF7DE0A8, false);
-        rowY += 14;
-
-        for (int index = 0; index < current.node().alternatives.size(); index++) {
-            boolean hovered = mouseX >= bounds.x() && mouseX < bounds.right() &&
-                    mouseY >= rowY && mouseY < rowY + 14;
-            if (hovered) {
-                graphics.fill(bounds.x() + 2, rowY, bounds.right() - 2, rowY + 14, 0x554E769B);
-            }
-            String label = font.plainSubstrByWidth(
-                    current.node().alternatives.get(index).label(index), bounds.width() - 18);
-            int color = selected == index ? 0xFFFFD36A : 0xFFDCE5EF;
-            graphics.drawString(font, label, bounds.x() + 7, rowY + 3, color, false);
-            rowY += 14;
-        }
-    }
-
-    private PopupBounds popupBounds(CandidatePopup current) {
-        int popupWidth = Math.min(286, Math.max(180, width - 16));
-        int popupHeight = 18 + 14 * (current.node().alternatives.size() + 1) + 4;
-        int popupX = Mth.clamp(current.anchorX(), 6, Math.max(6, width - popupWidth - 6));
-        int popupY = Mth.clamp(current.anchorY(), TREE_TOP, Math.max(TREE_TOP, height - popupHeight - 6));
-        return new PopupBounds(popupX, popupY, popupWidth, popupHeight);
-    }
-
-    private void drawTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        if (popup != null) {
-            return;
-        }
-
-        LayoutNode node = nodeAt(mouseX, mouseY);
-        if (node != null) {
-            List<Component> lines = new ArrayList<>(node.node.ingredient.tooltip());
-            if (lines.isEmpty()) {
-                lines.add(Component.literal(node.node.ingredient.name()));
-            }
-            if (!node.node.recipeLabel.isBlank()) {
-                lines.add(Component.literal(node.node.recipeLabel).withStyle(ChatFormatting.GREEN));
-            }
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.node.amount",
-                    node.node.ingredient.amount(), node.node.crafts).withStyle(ChatFormatting.GRAY));
-            if (node.node.ingredient.chance() < 1.0) {
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.chance",
-                        Math.round(node.node.ingredient.chance() * 10000.0) / 100.0)
-                        .withStyle(ChatFormatting.GOLD));
-            }
-            if (node.node.cycle) {
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.cycle")
-                        .withStyle(ChatFormatting.RED));
-            } else if (node.node.depthLimited || node.node.budgetExceeded) {
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.truncated")
-                        .withStyle(ChatFormatting.RED));
-            }
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.node.left")
-                    .withStyle(ChatFormatting.DARK_GRAY));
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.node.right")
-                    .withStyle(ChatFormatting.DARK_GRAY));
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.node.show")
-                    .withStyle(ChatFormatting.DARK_GRAY));
             graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
             return;
         }
-
-        for (CostCell cell : costCells) {
-            if (cell.contains(mouseX, mouseY)) {
-                List<Component> lines = new ArrayList<>(cell.entry().ingredient().tooltip());
-                if (lines.isEmpty()) {
-                    lines.add(Component.literal(cell.entry().ingredient().name()));
-                }
-                String marker = cell.entry().ingredient().chance() < 1.0 ? "≈" : "";
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.cost.total",
-                        marker + cell.entry().amount()).withStyle(ChatFormatting.GRAY));
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.cost.per_batch",
-                        marker + divideCeiling(cell.entry().amount(), batches))
-                        .withStyle(ChatFormatting.GOLD));
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.cost.show")
+        if (hover.category != null) {
+            graphics.renderComponentTooltip(font, List.of(hover.category.getTitle()), mouseX, mouseY);
+            return;
+        }
+        if (hover.node != null) {
+            List<Component> lines = new ArrayList<>();
+            if (hover.node.recipe != null) {
+                lines.add(hover.node.recipe.label().copy().withStyle(ChatFormatting.GREEN));
+            }
+            if (hover.node.recipe != null && !hover.node.recipe.isResolution()) {
+                lines.add(Component.translatable("gtlcore.jei.recipe_tree.help.fold")
                         .withStyle(ChatFormatting.DARK_GRAY));
-                graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
-                return;
+            }
+            graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
+        }
+    }
+
+    private void addAutoResolutionLines(Hover hover, List<Component> lines) {
+        if (hover.stack == null) {
+            return;
+        }
+        if (hover.stack.variants().size() > 1) {
+            Variant target = autoResolveVariant(hover.stack);
+            if (target != null) {
+                lines.add(Component.translatable("gtlcore.jei.recipe_tree.resolve.preview",
+                        target.name()).withStyle(ChatFormatting.GOLD));
+            }
+        } else {
+            TreeRecipe recipe = preferredRecipe(hover.stack);
+            if (recipe != null) {
+                lines.add(recipe.label().copy().withStyle(ChatFormatting.GOLD));
             }
         }
+    }
+
+    private @Nullable TreeRecipe preferredRecipe(TreeIngredient ingredient) {
+        return preferredRecipes.computeIfAbsent(ingredient.key(), key -> Optional.ofNullable(RecipeTreeState.preferredRecipe(ingredient, playerInventory)))
+                .orElse(null);
+    }
+
+    private @Nullable Variant autoResolveVariant(TreeIngredient ingredient) {
+        for (Variant variant : ingredient.variants()) {
+            if (playerInventory.containsKey(variant.uid())) {
+                return variant;
+            }
+        }
+        for (Cost cost : costs) {
+            for (Variant variant : ingredient.variants()) {
+                if (cost.cost.ingredient.key().equals(variant.uid())) {
+                    return variant;
+                }
+            }
+        }
+        return ingredient.variants().isEmpty() ? null : ingredient.variants().get(0);
+    }
+
+    private void drawPanel(GuiGraphics graphics, int x, int y, int width, int height,
+                           int fill, int border) {
+        graphics.fill(x, y, x + width, y + height, fill);
+        graphics.fill(x, y, x + width, y + 1, border);
+        graphics.fill(x, y + height - 1, x + width, y + height, border);
+        graphics.fill(x, y, x + 1, y + height, border);
+        graphics.fill(x + width - 1, y, x + width, y + height, border);
+    }
+
+    private static void drawLine(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color) {
+        if (x2 < x1) {
+            int swap = x1;
+            x1 = x2;
+            x2 = swap;
+        }
+        if (y2 < y1) {
+            int swap = y1;
+            y1 = y2;
+            y2 = swap;
+        }
+        graphics.fill(x1, y1, x2 - x1 + 1, y2 - y1 + 1, color);
+    }
+
+    private Hover getHoveredStack(int mouseX, int mouseY) {
+        float scale = getScale();
+        int mx = (int) ((mouseX - width / 2.0) / scale - offX);
+        int my = (int) ((mouseY - height / 2.0) / scale - offY);
+        for (Cost cost : costs) {
+            if (mx >= cost.x && mx < cost.x + 16 && my >= cost.y && my < cost.y + 16) {
+                return new Hover(cost.cost.ingredient);
+            }
+        }
+        for (Node node : nodes) {
+            Hover hover = node.getHover(mx, my);
+            if (hover != null) {
+                return hover;
+            }
+        }
+        return null;
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (popup != null) {
-            if (handlePopupClick(mouseX, mouseY)) {
-                return true;
-            }
-            popup = null;
-        }
+        Hover hover = getHoveredStack((int) mouseX, (int) mouseY);
+        float scale = getScale();
+        int mx = (int) ((mouseX - width / 2.0) / scale - offX);
+        int my = (int) ((mouseY - height / 2.0) / scale - offY);
+        MaterialTree tree = RecipeTreeState.tree();
 
-        if (resetButton().contains(mouseX, mouseY)) {
-            selections.clear();
-            collapsed.clear();
-            rebuild();
-            recenter();
-            return true;
-        }
-        if (batchMinusButton().contains(mouseX, mouseY)) {
-            adjustBatches(Screen.hasShiftDown() ? -16 : -1);
-            return true;
-        }
-        if (batchPlusButton().contains(mouseX, mouseY)) {
-            adjustBatches(Screen.hasShiftDown() ? 16 : 1);
-            return true;
-        }
-
-        for (CostCell cell : costCells) {
-            if (cell.contains(mouseX, mouseY)) {
-                showRecipes(cell.entry().ingredient());
-                return true;
-            }
-        }
-
-        if (mouseY >= TREE_TOP && mouseY < getCostTop()) {
-            LayoutNode node = nodeAt(mouseX, mouseY);
-            if (node != null) {
-                if (button == 1) {
-                    if (Screen.hasShiftDown()) {
-                        selections.remove(node.node.ingredient.key());
-                        rebuild();
-                    } else if (!node.node.children.isEmpty()) {
-                        if (!collapsed.remove(node.node.path)) {
-                            collapsed.add(node.node.path);
-                        }
-                        rebuild();
+        if (hover != null) {
+            if (button == 1 && hover.node != null && hover.node.recipe != null) {
+                if (Screen.hasShiftDown()) {
+                    if (tree != null) {
+                        tree.addResolution(hover.node.ingredient, null);
                     }
-                } else if (button == 0) {
-                    if (Screen.hasControlDown()) {
-                        showRecipes(node.node.ingredient);
-                    } else if (Screen.hasShiftDown()) {
-                        selections.remove(node.node.ingredient.key());
-                        rebuild();
-                    } else {
-                        popup = new CandidatePopup(node.node, (int) mouseX + 14, (int) mouseY + 8);
-                    }
+                } else if (!hover.node.recipe.isResolution() && tree != null) {
+                    hover.node.state = hover.node.state == FoldState.EXPANDED ?
+                            FoldState.COLLAPSED : FoldState.EXPANDED;
+                    tree.recalculate();
                 }
+                recalculateTree();
                 return true;
             }
-            if (button == 0 || button == 2) {
-                dragging = true;
-                return true;
+            if (hover.stack != null) {
+                if (Screen.hasShiftDown() && button == 0) {
+                    if (tree != null && autoResolve(hover.stack)) {
+                        recalculateTree();
+                    }
+                    return true;
+                }
+                if (button == 0) {
+                    openRecipes(hover.node == null ? null : hover.node.recipe, hover.stack);
+                    return true;
+                }
             }
+        } else if (tree != null && mode.contains(mx, my)) {
+            RecipeTreeState.setCraftingMode(!RecipeTreeState.craftingMode());
+            playClick();
+            recalculateTree();
+            return true;
+        } else if (tree != null && batches.contains(mx, my)) {
+            long ideal = tree.cost.getIdealBatch(tree.goal, 1, 1);
+            if (ideal != tree.batches) {
+                playClick();
+                tree.batches = Math.max(1, ideal);
+                recalculateTree();
+            }
+            return true;
         }
-
+        if (button == 0 || button == 2) {
+            dragging = true;
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    private boolean handlePopupClick(double mouseX, double mouseY) {
-        CandidatePopup current = popup;
-        if (current == null) {
+    private boolean dragging;
+
+    private boolean autoResolve(TreeIngredient ingredient) {
+        MaterialTree tree = RecipeTreeState.tree();
+        if (tree == null) {
             return false;
         }
-        PopupBounds bounds = popupBounds(current);
-        if (!bounds.contains(mouseX, mouseY)) {
-            return false;
-        }
-        int row = (int) ((mouseY - bounds.y() - 18) / 14);
-        if (row < 0) {
+        if (ingredient.variants().size() > 1) {
+            Variant target = autoResolveVariant(ingredient);
+            if (target == null) {
+                return false;
+            }
+            tree.addResolution(ingredient, TreeRecipe.resolution(runtime, ingredient, target));
             return true;
         }
-        if (row == 0) {
-            selections.remove(current.node().ingredient.key());
-        } else if (row <= current.node().alternatives.size()) {
-            selections.put(current.node().ingredient.key(), row - 1);
+        TreeRecipe recipe = preferredRecipe(ingredient);
+        if (recipe == null) {
+            return false;
         }
-        popup = null;
-        rebuild();
+        tree.addResolution(ingredient, recipe);
+        return true;
+    }
+
+    private void openRecipes(@Nullable TreeRecipe recipe, TreeIngredient ingredient) {
+        if (recipe != null && !recipe.isResolution() &&
+                recipe.category() != null && recipe.recipe() != null) {
+            showRecipe(recipe);
+        } else {
+            showRecipesFor(ingredient);
+        }
+    }
+
+    private void showRecipesFor(TreeIngredient ingredient) {
+        ITypedIngredient<?> typed = ingredient.displayTyped();
+        if (typed == null) {
+            return;
+        }
+        IFocus<?> focus = runtime.getJeiHelpers().getFocusFactory()
+                .createFocus(RecipeIngredientRole.OUTPUT, typed);
+        runtime.getRecipesGui().show(List.of(focus));
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private void showRecipe(TreeRecipe recipe) {
+        if (recipe.category() == null || recipe.recipe() == null) {
+            return;
+        }
+        runtime.getRecipesGui().showRecipes((IRecipeCategory) recipe.category(),
+                List.of(recipe.recipe()), List.of());
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        scrollAcc += delta;
+        int amount = (int) scrollAcc;
+        scrollAcc %= 1;
+        float scale = getScale();
+        int mx = (int) ((mouseX - width / 2.0) / scale - offX);
+        int my = (int) ((mouseY - height / 2.0) / scale - offY);
+        MaterialTree tree = RecipeTreeState.tree();
+        if (tree != null && batches.contains(mx, my)) {
+            long adjustment = amount;
+            if (Screen.hasShiftDown()) {
+                adjustment *= 16;
+            } else if (Screen.hasControlDown()) {
+                if (amount > 0) {
+                    adjustment = tree.batches;
+                } else {
+                    adjustment = -tree.batches / 2;
+                }
+            }
+            if (tree.batches == 1 && adjustment > 1) {
+                tree.batches = adjustment;
+            } else {
+                tree.batches += adjustment;
+            }
+            tree.batches = Math.max(1, tree.batches);
+            recalculateTree();
+            return true;
+        }
+        zoom += amount;
         return true;
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (dragging && (button == 0 || button == 2)) {
-            panX += dragX;
-            panY += dragY;
+        if (button == 0 || button == 2) {
+            float scale = getScale();
+            offX += dragX / scale;
+            offY += dragY / scale;
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -489,163 +722,65 @@ final class JeiRecipeTreeScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (popup != null) {
-            return true;
-        }
-        if (mouseY >= getCostTop()) {
-            int columns = costColumns();
-            int visibleRows = Math.max(1, (height - getCostTop() - 8) / 22);
-            int maxScroll = Math.max(0, (costs.entries().size() + columns - 1) / columns - visibleRows);
-            costScroll = Mth.clamp(costScroll - (int) Math.signum(delta), 0, maxScroll);
-            return true;
-        }
-        if (mouseY >= TREE_TOP && mouseY < getCostTop()) {
-            double worldX = (mouseX - width / 2.0 - panX) / zoom;
-            double worldY = (mouseY - TREE_TOP - panY) / zoom;
-            float oldZoom = zoom;
-            zoom = Mth.clamp(zoom * (delta > 0 ? 1.12F : 0.89F), 0.35F, 2.8F);
-            if (zoom != oldZoom) {
-                panX = mouseX - width / 2.0 - worldX * zoom;
-                panY = mouseY - TREE_TOP - worldY * zoom;
-            }
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, delta);
-    }
-
-    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_HOME) {
-            recenter();
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            onClose();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_R && Screen.hasControlDown()) {
-            showRecipes(root.ingredient);
+        if (minecraft != null && minecraft.options.keyInventory.matches(keyCode, scanCode)) {
+            onClose();
             return true;
         }
-        if (keyCode == GLFW.GLFW_KEY_EQUAL) {
-            adjustBatches(Screen.hasShiftDown() ? 16 : 1);
-            return true;
+        if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_R) {
+            TreeRecipe recipe = RecipeTreeLookup.randomRecipe(runtime);
+            if (recipe != null) {
+                RecipeTreeState.setGoal(recipe);
+                init();
+                return true;
+            }
         }
-        if (keyCode == GLFW.GLFW_KEY_MINUS) {
-            adjustBatches(Screen.hasShiftDown() ? -16 : -1);
+        if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_C) {
+            RecipeTreeState.clearTree();
+            init();
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    private void adjustBatches(long delta) {
-        batches = Math.max(1L, Math.min(1_000_000L, batches + delta));
-        popup = null;
-        rebuild();
-    }
-
-    private void showRecipes(IngredientStack ingredient) {
-        if (ingredient.typed() == null) {
-            return;
+    private void playClick() {
+        if (minecraft != null) {
+            minecraft.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance
+                    .forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
         }
-        popup = null;
-        showRecipesTyped(ingredient.typed());
     }
 
-    private <T> void showRecipesTyped(ITypedIngredient<T> typed) {
-        IFocus<T> focus = runtime.getJeiHelpers().getFocusFactory()
-                .createFocus(RecipeIngredientRole.OUTPUT, typed);
-        runtime.getRecipesGui().show(List.of(focus));
-    }
-
-    private LayoutNode nodeAt(double mouseX, double mouseY) {
-        if (mouseY < TREE_TOP || mouseY >= getCostTop()) {
-            return null;
+    private float getScale() {
+        zoom = Mth.clamp(zoom, -6, 4);
+        int scale = (int) (minecraft == null ? 2 : minecraft.getWindow().getGuiScale());
+        int desired = scale + zoom;
+        if (desired < 1) {
+            zoom -= desired - 1;
+            desired = 1;
         }
-        double worldX = (mouseX - width / 2.0 - panX) / zoom;
-        double worldY = (mouseY - TREE_TOP - panY) / zoom;
-        double radius = NODE_RADIUS + 7.0 / zoom;
-        for (LayoutNode node : layoutNodes) {
-            if (worldX >= node.x - radius && worldX <= node.x + radius &&
-                    worldY >= node.y - radius && worldY <= node.y + radius) {
-                return node;
-            }
-        }
-        return null;
+        return (float) desired / scale;
     }
 
-    private ButtonBounds resetButton() {
-        int buttonWidth = Math.max(64, font.width(
-                Component.translatable("gtlcore.jei.recipe_tree.reset")) + 12);
-        return new ButtonBounds(width - buttonWidth - 12, 7, buttonWidth, 16);
+    private int amountOverflow(Component amount) {
+        int width = font.width(amount);
+        return width > 14 ? width - 14 : 0;
     }
 
-    private ButtonBounds batchMinusButton() {
-        ButtonBounds plus = batchPlusButton();
-        return new ButtonBounds(plus.x() - 68, plus.y(), plus.width(), plus.height());
+    private static Component percent(float chance) {
+        return Component.literal(String.format("%.2f%%", chance * 100.0));
     }
 
-    private ButtonBounds batchPlusButton() {
-        ButtonBounds reset = resetButton();
-        return new ButtonBounds(reset.x() - 22, reset.y(), reset.width(), reset.height());
-    }
-
-    private List<LayoutNode> layoutTree(RecipeNode tree) {
-        List<LayoutNode> nodes = new ArrayList<>();
-        LayoutNode rootLayout = placeTree(tree, 0, 0, nodes);
-        int minX = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        for (LayoutNode node : nodes) {
-            minX = Math.min(minX, node.x);
-            maxX = Math.max(maxX, node.x);
-        }
-        int center = (minX + maxX) / 2;
-        for (LayoutNode node : nodes) {
-            node.x -= center;
-        }
-        return List.copyOf(nodes);
-    }
-
-    private LayoutNode placeTree(RecipeNode node, int depth, int startX, List<LayoutNode> nodes) {
-        LayoutNode layout = new LayoutNode(node, depth * NODE_SPACING_Y);
-        nodes.add(layout);
-        if (!node.children.isEmpty() && !node.collapsed) {
-            int nextX = startX;
-            for (RecipeNode child : node.children) {
-                LayoutNode childLayout = placeTree(child, depth + 1, nextX, nodes);
-                layout.children.add(childLayout);
-                nextX = childLayout.rightEdge + NODE_SPACING_X;
-            }
-            layout.x = (layout.children.get(0).x + layout.children.get(layout.children.size() - 1).x) / 2;
-            layout.rightEdge = Math.max(nextX - NODE_SPACING_X, layout.x + NODE_RADIUS);
+    @Override
+    public void onClose() {
+        if (minecraft != null) {
+            minecraft.setScreen(old);
         } else {
-            layout.x = startX;
-            layout.rightEdge = startX + NODE_RADIUS;
+            super.onClose();
         }
-        return layout;
-    }
-
-    private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height,
-                                  int fill, int border) {
-        graphics.fill(x, y, x + width, y + height, fill);
-        graphics.fill(x, y, x + width, y + 1, border);
-        graphics.fill(x, y + height - 1, x + width, y + height, border);
-        graphics.fill(x, y, x + 1, y + height, border);
-        graphics.fill(x + width - 1, y, x + width, y + height, border);
-    }
-
-    private static String compact(long amount) {
-        if (amount >= 1_000_000_000_000L) {
-            return String.format("%.2fT", amount / 1_000_000_000_000.0);
-        }
-        if (amount >= 1_000_000_000L) {
-            return String.format("%.2fB", amount / 1_000_000_000.0);
-        }
-        if (amount >= 1_000_000L) {
-            return String.format("%.2fM", amount / 1_000_000.0);
-        }
-        return Long.toString(amount);
-    }
-
-    private static long divideCeiling(long amount, long divisor) {
-        return amount / divisor + (amount % divisor == 0 ? 0 : 1);
     }
 
     @Override
@@ -653,63 +788,321 @@ final class JeiRecipeTreeScreen extends Screen {
         return false;
     }
 
-    @Override
-    public void onClose() {
-        if (minecraft != null) {
-            minecraft.setScreen(parent);
-        }
-    }
+    private class Cost {
 
-    private record ButtonBounds(int x, int y, int width, int height) {
+        final FlatMaterialCost cost;
+        int x;
+        final int y;
+        long alreadyDone;
+        final boolean remainder;
 
-        boolean contains(double mouseX, double mouseY) {
-            return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
-        }
-    }
-
-    private record PopupBounds(int x, int y, int width, int height) {
-
-        int right() {
-            return x + width;
-        }
-
-        int bottom() {
-            return y + height;
-        }
-
-        boolean contains(double mouseX, double mouseY) {
-            return mouseX >= x && mouseX < right() && mouseY >= y && mouseY < bottom();
-        }
-    }
-
-    private record CandidatePopup(RecipeNode node, int anchorX, int anchorY) {}
-
-    private record CostCell(CostEntry entry, int x, int y, int width, int height) {
-
-        int right() {
-            return x + width;
-        }
-
-        int bottom() {
-            return y + height;
-        }
-
-        boolean contains(double mouseX, double mouseY) {
-            return mouseX >= x && mouseX < right() && mouseY >= y && mouseY < bottom();
-        }
-    }
-
-    private static final class LayoutNode {
-
-        private final RecipeNode node;
-        private final List<LayoutNode> children = new ArrayList<>();
-        private int x;
-        private final int y;
-        private int rightEdge;
-
-        private LayoutNode(RecipeNode node, int y) {
-            this.node = node;
+        Cost(FlatMaterialCost cost, int x, int y, boolean remainder) {
+            this.cost = cost;
+            this.x = x;
             this.y = y;
+            this.remainder = remainder;
+        }
+
+        void render(GuiGraphics graphics) {
+            cost.ingredient.render(graphics, x, y);
+            Component text = amountText();
+            int tx = x + 17 - Math.min(14, font.width(text));
+            graphics.drawString(font, text, tx, y + 9, 0xFFFFFFFF, true);
+        }
+
+        Component amountText() {
+            long adjusted = cost.effectiveAmount();
+            Component total;
+            if (cost instanceof ChanceMaterialCost) {
+                total = TreeIngredient.amountComponent(cost.ingredient, adjusted, true);
+            } else {
+                total = TreeIngredient.amountComponent(cost.ingredient, adjusted, false);
+            }
+            if (!remainder && RecipeTreeState.craftingMode()) {
+                long amount = alreadyDone;
+                if (amount < adjusted) {
+                    Component done = Component.literal(AMOUNT_FORMAT.format(amount))
+                            .withStyle(ChatFormatting.RED);
+                    return Component.empty().append(done).append(Component.literal("/")).append(total);
+                }
+            }
+            return total;
+        }
+    }
+
+    private class Hover {
+
+        final @Nullable TreeIngredient stack;
+        final @Nullable MaterialNode node;
+        final @Nullable MaterialNode resolve;
+        final @Nullable IRecipeCategory<?> category;
+
+        Hover(TreeIngredient stack) {
+            this(stack, null, null, null);
+        }
+
+        Hover(IRecipeCategory<?> category, MaterialNode node) {
+            this(null, node, null, category);
+        }
+
+        Hover(MaterialNode node) {
+            this(null, node, null, null);
+        }
+
+        Hover(@Nullable TreeIngredient stack,
+              @Nullable MaterialNode node,
+              @Nullable MaterialNode resolve) {
+            this(stack, node, resolve, null);
+        }
+
+        Hover(@Nullable TreeIngredient stack,
+              @Nullable MaterialNode node,
+              @Nullable MaterialNode resolve,
+              @Nullable IRecipeCategory<?> category) {
+            this.stack = stack;
+            this.node = node;
+            this.resolve = resolve;
+            this.category = category;
+        }
+    }
+
+    private class Node {
+
+        @Nullable
+        Node parent;
+        @Nullable
+        MaterialNode resolution;
+        final MaterialNode node;
+        int width;
+        int x;
+        int y;
+        final int midOffset;
+        final long amount;
+        final ChanceState chance;
+
+        Node(MaterialNode node, long amount, int x, int y, ChanceState chance) {
+            this.node = node;
+            this.width = node.recipe != null ? 42 : 16;
+            this.amount = amount;
+            this.x = x;
+            this.y = y;
+            this.chance = chance;
+            int over = amountOverflow(amountText());
+            this.width += over;
+            this.midOffset = over / -2;
+        }
+
+        void render(GuiGraphics graphics, int mouseX, int mouseY) {
+            if (parent != null) {
+                int color = colorFor(parent.node,
+                        node.consumeChance != 1 ||
+                                (resolution != null && resolution.consumeChance != 1),
+                        false);
+                int nx = x;
+                int ny = y;
+                int px = parent.x;
+                int py = parent.y;
+                int off = NODE_VERTICAL_SPACING - 1;
+                if (resolution != null) {
+                    drawResolutionMarker(graphics, x - 3, y - 19);
+                    drawLine(graphics, nx, y - 12, nx, ny - 11, color);
+                    drawLine(graphics, nx, py + off, nx, y - 19, color);
+                } else {
+                    drawLine(graphics, nx, ny - 11, nx, py + off, color);
+                }
+                color = colorFor(parent.node, false, false);
+                drawLine(graphics, px, py + off, nx, py + off, color);
+            }
+            int xo = 0;
+            if (node.recipe != null) {
+                int lx = x - width / 2;
+                int ly = y - 11;
+                int hx = x + width / 2;
+                int hy = y + 10;
+                int color = colorFor(node, node.produceChance != 1, false);
+                if (node.state != FoldState.EXPANDED) {
+                    drawLine(graphics, x, hy + 1, x, hy + 3, color);
+                } else {
+                    drawLine(graphics, x, hy + 1, x, hy + 8, color);
+                }
+
+                boolean hovered = mouseX >= lx && mouseY >= ly && mouseX <= hx && mouseY <= hy;
+                color = colorFor(node, node.produceChance != 1, hovered);
+                drawPanel(graphics, lx, ly, hx - lx + 1, hy - ly + 1, 0xF018212C, color);
+
+                IRecipeCategory<?> category = node.recipe.category();
+                if (category != null && category.getIcon() != null) {
+                    IDrawable icon = category.getIcon();
+                    icon.draw(graphics, x - 18 + midOffset, y - 8);
+                }
+                xo = 11;
+            } else {
+                int panelX = x - 10 + midOffset;
+                boolean hovered = mouseX >= panelX - 3 && mouseX <= panelX + 23 &&
+                        mouseY >= y - 13 && mouseY <= y + 11;
+                drawPanel(graphics, panelX, y - 10, 20, 20, 0x9918212C,
+                        colorFor(node, false, hovered));
+            }
+            node.ingredient.render(graphics, x + xo - 8 + midOffset, y - 8);
+            Component text = amountText();
+            int tx = x + xo - 8 + midOffset + 17 - Math.min(14, font.width(text));
+            graphics.drawString(font, text, tx, y - 8 + 9, 0xFFFFFFFF, true);
+        }
+
+        private void drawResolutionMarker(GuiGraphics graphics, int x, int y) {
+            int color = 0xFF7FD1AE;
+            drawPanel(graphics, x, y, 7, 7, 0xFF22303B, color);
+            graphics.fill(x + 2, y + 2, x + 5, y + 3, color);
+            graphics.fill(x + 2, y + 4, x + 5, y + 5, color);
+        }
+
+        private int colorFor(MaterialNode node, boolean chanced, boolean hovered) {
+            int color = 0xFF55708D;
+            if (chanced) {
+                color = 0xFFCC9919;
+            }
+            if (RecipeTreeState.craftingMode()) {
+                if (node.progress == ProgressState.COMPLETED) {
+                    color = 0xFF1ACC80;
+                } else if (node.progress == ProgressState.PARTIAL) {
+                    color = 0xFFCC33E6;
+                }
+            }
+            if (hovered) {
+                color = 0xFFFFD36A;
+            }
+            return color;
+        }
+
+        Component amountText() {
+            if (chance.chanced()) {
+                long adjusted = Math.round(amount * chance.chance());
+                adjusted = Math.max(adjusted, node.amount);
+                return TreeIngredient.amountComponent(node.ingredient, adjusted, true);
+            }
+            return TreeIngredient.amountComponent(node.ingredient, amount, false);
+        }
+
+        @Nullable
+        Hover getHover(int mouseX, int mouseY) {
+            if (resolution != null &&
+                    mouseX >= x - 4 && mouseX < x + 4 &&
+                    mouseY >= y - 19 && mouseY < y - 11) {
+                return new Hover(resolution.ingredient, resolution, null);
+            }
+            int ingredientMouseX = mouseX;
+            if (node.recipe != null) {
+                if (mouseX >= x - 18 + midOffset && mouseX < x - 2 + midOffset &&
+                        mouseY >= y - 8 && mouseY < y + 8) {
+                    return new Hover(node.recipe.category(), node);
+                }
+                ingredientMouseX -= 11;
+            }
+            if (ingredientMouseX >= x - 8 + midOffset && ingredientMouseX < x + 8 + midOffset &&
+                    mouseY >= y - 8 && mouseY < y + 8) {
+                return new Hover(node.ingredient, node, resolution, null);
+            }
+            int lx = x - width / 2;
+            int ly = y - 11;
+            int hx = x + width / 2;
+            int hy = y + 10;
+            if (mouseX >= lx && mouseY >= ly && mouseX <= hx && mouseY <= hy) {
+                return new Hover(node);
+            }
+            return null;
+        }
+    }
+
+    private class TreeVolume {
+
+        final List<Width> widths = new ArrayList<>();
+        final List<Node> nodes = new ArrayList<>();
+
+        TreeVolume(MaterialNode node, long amount, int y, ChanceState chance) {
+            Node head = new Node(node, amount, 0, y, chance);
+            int left = head.width / 2;
+            widths.add(new Width(-left, head.width - left));
+            nodes.add(head);
+        }
+
+        void addHead(MaterialNode node, long amount, int y, ChanceState chance) {
+            int x = (getLeft(0) + getRight(0)) / 2;
+            Node newNode = new Node(node, amount, x, y, chance);
+            for (Node nodeInVolume : nodes) {
+                if (nodeInVolume.parent == null) {
+                    nodeInVolume.parent = newNode;
+                }
+                nodeInVolume.y += NODE_VERTICAL_SPACING;
+            }
+            int left = newNode.width / 2;
+            widths.add(0, new Width(x - left, x + newNode.width - left));
+            nodes.add(0, newNode);
+        }
+
+        int getDepth() {
+            return widths.size();
+        }
+
+        int minLeft() {
+            int minimum = getLeft(0);
+            for (int i = 1; i < getDepth(); i++) {
+                minimum = Math.min(minimum, getLeft(i));
+            }
+            return minimum;
+        }
+
+        int maxRight() {
+            int maximum = getRight(0);
+            for (int i = 1; i < getDepth(); i++) {
+                maximum = Math.max(maximum, getRight(i));
+            }
+            return maximum;
+        }
+
+        int getLeft(int depth) {
+            return widths.get(depth).left;
+        }
+
+        int getRight(int depth) {
+            return widths.get(depth).right;
+        }
+
+        void addToRight(TreeVolume other) {
+            int rightOffset = getRight(0) - other.getLeft(0) + NODE_HORIZONTAL_SPACING;
+            for (int i = 1; i < getDepth() && i < other.getDepth(); i++) {
+                rightOffset = Math.max(rightOffset,
+                        getRight(i) - other.getLeft(i) + NODE_HORIZONTAL_SPACING);
+            }
+            for (int i = 0; i < other.getDepth(); i++) {
+                if (i < getDepth()) {
+                    widths.get(i).right = other.getRight(i) + rightOffset;
+                } else {
+                    widths.add(new Width(other.getLeft(i) + rightOffset,
+                            other.getRight(i) + rightOffset));
+                }
+            }
+            for (Node node : other.nodes) {
+                node.x += rightOffset;
+                nodes.add(node);
+            }
+        }
+
+        private static class Width {
+
+            int left;
+            int right;
+
+            Width(int left, int right) {
+                this.left = left;
+                this.right = right;
+            }
+        }
+    }
+
+    record Bounds(int x, int y, int width, int height) {
+
+        boolean contains(int mouseX, int mouseY) {
+            return mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
         }
     }
 }

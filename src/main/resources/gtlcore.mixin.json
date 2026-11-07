@@ -27,6 +27,7 @@
     "ae2ct.CraftingTreeWidgetMixin",
     "gtm.client.PreviewShapesMixin",
     "gtm.client.QuantumTankRendererMixin",
+    "ftbchunks.ChunkScreenMixin",
     "gtm.client.WorldPreviewAccessor",
     "gtm.client.WorldPreviewPerformanceMixin",
     "jei.client.PreviewHeaderBoundsMixin",

@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.jei.tree;
 
+import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.integration.jei.tree.TreeIngredient.Variant;
 
 import net.minecraft.ChatFormatting;
@@ -7,20 +8,16 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 
 import mezz.jei.api.constants.VanillaTypes;
-import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.recipe.IFocus;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
-import mezz.jei.api.recipe.transfer.IRecipeTransferError;
-import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.runtime.IJeiRuntime;
 import org.jetbrains.annotations.Nullable;
@@ -29,7 +26,6 @@ import org.lwjgl.glfw.GLFW;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,9 +34,12 @@ import java.util.Optional;
  * EMI's BoM (recipe tree) screen, ported to JEI.
  *
  * <p>
- * The layout, controls and cost/progress behaviour intentionally follow EMI's {@code BoMScreen}:
- * the same node boxes, total cost/leftovers rows, batch control, crafting-mode toggle, fold/resolve
- * interactions and inventory progress coloring.
+ * The layout, controls, textures and cost/progress behaviour follow EMI 1.21's {@code BoMScreen}
+ * verbatim: the same node boxes, total cost/leftovers rows, batch control, mode/help/resolution
+ * sprites, crafting-mode toggle, fold/resolve interactions and inventory progress coloring. Only the
+ * screen background is kept from the previous implementation. The former in-screen craft list was
+ * dropped because EMI does not have one; the remaining craft steps are shown by
+ * {@link RecipeTreeInventoryOverlay}, which mirrors EMI's synthetic favorites sidebar.
  * </p>
  */
 final class JeiRecipeTreeScreen extends Screen {
@@ -50,6 +49,11 @@ final class JeiRecipeTreeScreen extends Screen {
     private static final int NODE_VERTICAL_SPACING = 20;
     private static final int COST_HORIZONTAL_SPACING = 8;
     private static final DecimalFormat AMOUNT_FORMAT = new DecimalFormat("#,###.##");
+    /**
+     * EMI's widget sheet, copied verbatim so the tree screen uses the same mode/help/marker sprites.
+     * Only the screen background is kept from the previous implementation.
+     */
+    private static final ResourceLocation EMI_WIDGETS = new ResourceLocation(GTLCore.MOD_ID, "textures/gui/emi/widgets.png");
 
     private static int zoom = 0;
 
@@ -64,11 +68,6 @@ final class JeiRecipeTreeScreen extends Screen {
     private double offY;
     private List<Node> nodes = List.of();
     private List<Cost> costs = List.of();
-    private List<CraftEntry> craftEntries = List.of();
-    private List<CraftCell> craftCells = List.of();
-    private int craftScroll;
-    private @Nullable Bounds costBounds;
-    private @Nullable Bounds remainderBounds;
     private Map<String, TreeIngredient> playerInventory = Map.of();
     private final Map<String, Optional<TreeRecipe>> preferredRecipes = new HashMap<>();
     private boolean hasRemainders;
@@ -77,7 +76,6 @@ final class JeiRecipeTreeScreen extends Screen {
     private int lastMouseX;
     private int lastMouseY;
     private double scrollAcc;
-    private int craftRefreshTicks;
 
     JeiRecipeTreeScreen(@Nullable Screen old, IJeiRuntime runtime) {
         super(Component.translatable("gtlcore.jei.recipe_tree.title"));
@@ -109,11 +107,6 @@ final class JeiRecipeTreeScreen extends Screen {
         if (tree == null) {
             nodes = List.of();
             costs = List.of();
-            craftEntries = List.of();
-            craftCells = List.of();
-            craftScroll = 0;
-            costBounds = null;
-            remainderBounds = null;
             hasRemainders = false;
             return;
         }
@@ -135,15 +128,9 @@ final class JeiRecipeTreeScreen extends Screen {
         playerInventory = snapshotInventory();
 
         tree.calculateProgress(Map.of());
-        Map<TreeRecipe, RecipeCount> totalRecipes = new LinkedHashMap<>();
-        countRecipes(tree.goal, totalRecipes);
         tree.calculateCost();
-        Map<String, FlatMaterialCost> originalCosts = new HashMap<>(tree.cost.costs);
-        Map<String, ChanceMaterialCost> originalChanceCosts = new HashMap<>(tree.cost.chanceCosts);
 
         tree.calculateProgress(playerInventory);
-        Map<TreeRecipe, RecipeCount> remainingRecipes = new LinkedHashMap<>();
-        countRecipes(tree.goal, remainingRecipes);
 
         Map<String, FlatMaterialCost> progressCosts = new HashMap<>();
         for (FlatMaterialCost cost : tree.cost.costs.values()) {
@@ -153,8 +140,6 @@ final class JeiRecipeTreeScreen extends Screen {
         for (ChanceMaterialCost cost : tree.cost.chanceCosts.values()) {
             chanceProgressCosts.put(cost.ingredient.key(), cost);
         }
-        craftEntries = buildCraftEntries(remainingRecipes, totalRecipes, progressCosts,
-                chanceProgressCosts, originalCosts, originalChanceCosts);
 
         costs = new ArrayList<>();
         tree.calculateCost();
@@ -191,7 +176,6 @@ final class JeiRecipeTreeScreen extends Screen {
         for (Cost cost : costs) {
             cost.x -= costOffset;
         }
-        costBounds = rowBounds(costs, cy - 24, 32);
 
         int totalCostWidth = font.width(Component.translatable("gtlcore.jei.recipe_tree.total_cost"));
         mode = new Bounds(totalCostWidth / 2 + 4, cy - 20, 16, 16);
@@ -216,21 +200,7 @@ final class JeiRecipeTreeScreen extends Screen {
             cost.x -= costOffset;
         }
         costs.addAll(leftovers);
-        remainderBounds = rowBounds(leftovers, cy - 24, 32);
         hasRemainders = !leftovers.isEmpty();
-    }
-
-    private static @Nullable Bounds rowBounds(List<Cost> cells, int top, int height) {
-        if (cells.isEmpty()) {
-            return null;
-        }
-        int minimum = Integer.MAX_VALUE;
-        int maximum = Integer.MIN_VALUE;
-        for (Cost cell : cells) {
-            minimum = Math.min(minimum, cell.x);
-            maximum = Math.max(maximum, cell.x + 16);
-        }
-        return new Bounds(minimum - 10, top, maximum - minimum + 20, height);
     }
 
     private int compareCosts(FlatMaterialCost first, FlatMaterialCost second) {
@@ -282,137 +252,21 @@ final class JeiRecipeTreeScreen extends Screen {
         inventory.put(variant.uid(), TreeIngredient.single(variant).setAmount(amount));
     }
 
-    private static final class RecipeCount {
+    /**
+     * Same gold used by EMI autocraft to highlight the recipe the opened machine can run.
+     */
+    private static final int MACHINE_FILL_COLOR = 0xFFFFD700;
 
-        long batches;
-        long amount;
-    }
-
-    private static void countRecipes(MaterialNode node, Map<TreeRecipe, RecipeCount> counts) {
-        if (node.recipe != null && !node.recipe.isResolution()) {
-            RecipeCount count = counts.computeIfAbsent(node.recipe, key -> new RecipeCount());
-            count.batches += node.neededBatches;
-            count.amount += node.totalNeeded;
+    /**
+     * @return whether {@code recipe} can be transferred into the machine screen opened behind the
+     *         tree, matching EMI autocraft's focus highlight in the favorites sidebar.
+     */
+    private boolean machineFills(@Nullable TreeRecipe recipe) {
+        if (recipe == null || recipe.isResolution()) {
+            return false;
         }
-        if (node.recipe != null && node.recipe.isResolution()) {
-            if (node.children != null && !node.children.isEmpty()) {
-                countRecipes(node.children.get(0), counts);
-            }
-            return;
-        }
-        if (node.children != null) {
-            for (MaterialNode child : node.children) {
-                countRecipes(child, counts);
-            }
-        }
-    }
-
-    private List<CraftEntry> buildCraftEntries(Map<TreeRecipe, RecipeCount> remainingRecipes,
-                                               Map<TreeRecipe, RecipeCount> totalRecipes,
-                                               Map<String, FlatMaterialCost> remainingCosts,
-                                               Map<String, ChanceMaterialCost> remainingChanceCosts,
-                                               Map<String, FlatMaterialCost> originalCosts,
-                                               Map<String, ChanceMaterialCost> originalChanceCosts) {
-        List<CraftEntry> entries = new ArrayList<>();
-        for (Map.Entry<TreeRecipe, RecipeCount> entry : remainingRecipes.entrySet()) {
-            TreeRecipe recipe = entry.getKey();
-            RecipeCount count = entry.getValue();
-            if (count.amount <= 0) {
-                continue;
-            }
-            RecipeCount total = totalRecipes.getOrDefault(recipe, count);
-            int state = 0;
-            if (canCraft(recipe, count.batches)) {
-                state = 2;
-            } else if (canCraft(recipe, 1)) {
-                state = 1;
-            }
-            TreeIngredient icon = recipe.outputs().isEmpty() ?
-                    TreeIngredient.EMPTY : recipe.outputs().get(0);
-            entries.add(CraftEntry.ofRecipe(recipe, icon, count.amount, total.amount,
-                    count.batches, state));
-        }
-        if (entries.isEmpty()) {
-            return List.of();
-        }
-        for (FlatMaterialCost cost : remainingCosts.values()) {
-            if (cost.amount > 0) {
-                FlatMaterialCost original = originalCosts.getOrDefault(cost.ingredient.key(), cost);
-                entries.add(CraftEntry.ofMaterial(cost.ingredient, cost.amount, original.amount));
-            }
-        }
-        for (ChanceMaterialCost cost : remainingChanceCosts.values()) {
-            if (cost.effectiveAmount() <= 0) {
-                continue;
-            }
-            long needed = cost.effectiveAmount();
-            ChanceMaterialCost original = originalChanceCosts.get(cost.ingredient.key());
-            if (original != null) {
-                long done = (long) Math.ceil(
-                        original.amount * original.chance - cost.amount * cost.chance);
-                needed = original.effectiveAmount() - done;
-            }
-            if (needed > 0) {
-                entries.add(CraftEntry.ofMaterial(cost.ingredient, needed, needed));
-            }
-        }
-        return List.copyOf(entries);
-    }
-
-    private boolean canCraft(TreeRecipe recipe, long batches) {
-        if (batches <= 0) {
-            return true;
-        }
-        Map<String, Long> available = new HashMap<>();
-        playerInventory.forEach((key, stack) -> available.put(key, stack.amount()));
-        for (TreeIngredient input : recipe.inputs()) {
-            long need = Math.max(1, input.amount()) * batches;
-            boolean satisfied = false;
-            for (Variant variant : input.variants()) {
-                long have = available.getOrDefault(variant.uid(), 0L);
-                if (have >= need) {
-                    available.put(variant.uid(), have - need);
-                    satisfied = true;
-                    break;
-                }
-            }
-            if (!satisfied) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static final int CRAFT_CELL_SIZE = 20;
-    private static final int CRAFT_COLUMNS = 8;
-
-    private boolean craftGridVisible() {
-        return RecipeTreeState.craftingMode() && RecipeTreeState.tree() != null;
-    }
-
-    private int craftGridPanelHeight() {
-        if (craftEntries.isEmpty()) {
-            return 24;
-        }
-        int totalRows = (craftEntries.size() + CRAFT_COLUMNS - 1) / CRAFT_COLUMNS;
-        int visibleRows = Math.min(craftGridRowsVisible(), totalRows - craftScroll);
-        return Math.max(0, visibleRows) * CRAFT_CELL_SIZE + 8;
-    }
-
-    private int craftGridLeft() {
-        return 8;
-    }
-
-    private int craftGridTop() {
-        return 38;
-    }
-
-    private int craftGridWidth() {
-        return CRAFT_COLUMNS * CRAFT_CELL_SIZE + 8;
-    }
-
-    private int craftGridRowsVisible() {
-        return Math.max(1, (height - craftGridTop() - 10) / CRAFT_CELL_SIZE);
+        AbstractContainerScreen<?> screen = activeContainerScreen();
+        return screen != null && RecipeTreeCrafting.fillsMachine(screen, recipe);
     }
 
     private double treeCenterX() {
@@ -503,22 +357,14 @@ final class JeiRecipeTreeScreen extends Screen {
 
         MaterialTree tree = RecipeTreeState.tree();
         if (tree != null) {
-            if (costBounds != null) {
-                drawOutline(graphics, costBounds.x(), costBounds.y(), costBounds.width(),
-                        costBounds.height(), 0xFF41556B);
-            }
-            if (remainderBounds != null) {
-                drawOutline(graphics, remainderBounds.x(), remainderBounds.y(),
-                        remainderBounds.width(), remainderBounds.height(), 0xFF41556B);
-            }
             int cy = nodeHeight * NODE_VERTICAL_SPACING * 2;
             graphics.drawCenteredString(font,
                     Component.translatable("gtlcore.jei.recipe_tree.total_cost"), 0, cy - 16,
-                    0xFFFFD36A);
+                    0xFFFFFFFF);
             if (hasRemainders) {
                 graphics.drawCenteredString(font,
                         Component.translatable("gtlcore.jei.recipe_tree.leftovers"), 0, cy - 16 + 40,
-                        0xFFFFD36A);
+                        0xFFFFFFFF);
             }
             for (Cost cost : costs) {
                 cost.render(graphics);
@@ -526,7 +372,7 @@ final class JeiRecipeTreeScreen extends Screen {
             for (Node node : nodes) {
                 node.render(graphics, mx, my);
             }
-            int batchColor = batches.contains(mx, my) ? 0xFFFFF2B0 : 0xFFFFD36A;
+            int batchColor = batches.contains(mx, my) ? 0xFF8099FF : 0xFFFFFFFF;
             graphics.drawString(font, "x" + tree.batches, batches.x() + 6,
                     batches.y() + batches.height() / 2 - 4, batchColor, true);
 
@@ -535,34 +381,25 @@ final class JeiRecipeTreeScreen extends Screen {
         } else {
             graphics.drawCenteredString(font,
                     Component.translatable("gtlcore.jei.recipe_tree.empty.welcome"), 0, -72,
-                    0xFFFFD36A);
+                    0xFFFFFFFF);
             graphics.drawCenteredString(font,
                     Component.translatable("gtlcore.jei.recipe_tree.empty.no_tree"), 0, -48,
-                    0xFFE7EDF5);
+                    0xFFFFFFFF);
             graphics.drawCenteredString(font,
                     Component.translatable("gtlcore.jei.recipe_tree.empty.random_tree"), 0, -24,
-                    0xFF8E99A8);
+                    0xFFFFFFFF);
             graphics.drawCenteredString(font,
                     Component.translatable("gtlcore.jei.recipe_tree.empty.random_tree_input"), 0, 0,
-                    0xFF8E99A8);
+                    0xFFFFFFFF);
         }
 
         graphics.pose().popPose();
-
-        if (craftGridVisible()) {
-            drawCraftGrid(graphics, mouseX, mouseY);
-        } else {
-            craftCells = List.of();
-        }
 
         boolean helpHovered = help.contains(mouseX, mouseY);
         drawHelpIcon(graphics, help, helpHovered);
 
         Hover hover = getHoveredStack(mouseX, mouseY);
-        CraftCell craftHover = craftCellAt(mouseX, mouseY);
-        if (craftHover != null) {
-            drawCraftTooltip(graphics, craftHover, mouseX, mouseY);
-        } else if (hover != null) {
+        if (hover != null) {
             drawHoverTooltip(graphics, hover, mouseX, mouseY);
         } else if (tree != null && batches.contains(mx, my)) {
             List<Component> lines = new ArrayList<>();
@@ -602,138 +439,21 @@ final class JeiRecipeTreeScreen extends Screen {
                 12, 20, 0xFF8E99A8, false);
     }
 
-    private void drawCraftGrid(GuiGraphics graphics, int mouseX, int mouseY) {
-        int left = craftGridLeft();
-        int top = craftGridTop();
-        int columns = CRAFT_COLUMNS;
-        int cellSize = CRAFT_CELL_SIZE;
-        int panelWidth = craftGridWidth();
-        if (craftEntries.isEmpty()) {
-            drawOutline(graphics, left, top, panelWidth, 24, 0xFF41556B);
-            graphics.drawString(font,
-                    Component.translatable("gtlcore.jei.recipe_tree.craft.all_ready"),
-                    left + 8, top + 8, 0xFF8E99A8, false);
-            craftCells = List.of();
-            return;
-        }
-        int visibleRows = craftGridRowsVisible();
-        int totalRows = (craftEntries.size() + columns - 1) / columns;
-        int maxScroll = Math.max(0, totalRows - visibleRows);
-        craftScroll = Mth.clamp(craftScroll, 0, maxScroll);
-        int rows = Math.min(visibleRows, totalRows - craftScroll);
-        int panelHeight = rows * cellSize + 8;
-
-        drawOutline(graphics, left, top, panelWidth, panelHeight, 0xFF41556B);
-        List<CraftCell> cells = new ArrayList<>();
-        for (int row = 0; row < rows; row++) {
-            for (int column = 0; column < columns; column++) {
-                int index = (craftScroll + row) * columns + column;
-                if (index >= craftEntries.size()) {
-                    break;
-                }
-                int x = left + 4 + column * cellSize;
-                int y = top + 4 + row * cellSize;
-                CraftEntry entry = craftEntries.get(index);
-                CraftCell cell = new CraftCell(entry, x, y, cellSize, cellSize);
-                cells.add(cell);
-                if (cell.contains(mouseX, mouseY)) {
-                    drawOutline(graphics, x, y, cellSize, cellSize, 0xFFFFD36A);
-                }
-                entry.ingredient().render(graphics, x + 2, y + 2);
-                int color = CraftTextRenderer.stateColor(entry.state());
-                CraftTextRenderer.drawMicroAmount(graphics,
-                        CraftTextRenderer.amountText(entry.amount()), x + cellSize - 1,
-                        y + cellSize - 1, color);
-                graphics.fill(x + 3, y + cellSize - 1, x + cellSize - 3, y + cellSize, color);
-            }
-        }
-        craftCells = List.copyOf(cells);
-        if (totalRows > visibleRows) {
-            String scroll = Component.translatable("gtlcore.jei.recipe_tree.craft.scroll",
-                    craftScroll + 1, totalRows).getString();
-            graphics.drawString(font, scroll, left + 4, top + panelHeight + 2, 0xFF77899D, false);
-        }
-    }
-
-    private @Nullable CraftCell craftCellAt(double mouseX, double mouseY) {
-        for (CraftCell cell : craftCells) {
-            if (cell.contains(mouseX, mouseY)) {
-                return cell;
-            }
-        }
-        return null;
-    }
-
-    private void drawCraftTooltip(GuiGraphics graphics, CraftCell cell,
-                                  int mouseX, int mouseY) {
-        CraftEntry entry = cell.entry();
-        List<Component> lines = new ArrayList<>();
-        lines.add(Component.literal(entry.ingredient().displayVariant().name())
-                .withStyle(ChatFormatting.WHITE));
-        if (entry.recipe() != null) {
-            lines.add(entry.recipe().label().copy().withStyle(ChatFormatting.GREEN));
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.step.remaining",
-                    entry.amount()).withStyle(ChatFormatting.GRAY));
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.step.obtained",
-                    Math.max(0, entry.total() - entry.amount()), entry.total())
-                    .withStyle(ChatFormatting.GRAY));
-            if (entry.batches() != entry.amount()) {
-                lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.step.batches",
-                        entry.batches()).withStyle(ChatFormatting.GRAY));
-            }
-            switch (entry.state()) {
-                case 2 -> lines.add(Component.translatable(
-                        "gtlcore.jei.recipe_tree.craft.fully").withStyle(ChatFormatting.AQUA));
-                case 1 -> lines.add(Component.translatable(
-                        "gtlcore.jei.recipe_tree.craft.partially").withStyle(ChatFormatting.LIGHT_PURPLE));
-                default -> lines.add(Component.translatable(
-                        "gtlcore.jei.recipe_tree.craft.uncraftable").withStyle(ChatFormatting.GOLD));
-            }
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.click_chain")
-                    .withStyle(ChatFormatting.DARK_GRAY));
-            addKeyHint(lines, RecipeTreeKeyMappings.CRAFT_ONE_TO_INVENTORY,
-                    "gtlcore.jei.recipe_tree.craft.key.one_inv");
-            addKeyHint(lines, RecipeTreeKeyMappings.CRAFT_ALL_TO_INVENTORY,
-                    "gtlcore.jei.recipe_tree.craft.key.all_inv");
-            addKeyHint(lines, RecipeTreeKeyMappings.CRAFT_ONE_TO_CURSOR,
-                    "gtlcore.jei.recipe_tree.craft.key.one_cursor");
-            addKeyHint(lines, RecipeTreeKeyMappings.FILL_ONE,
-                    "gtlcore.jei.recipe_tree.craft.key.fill_one");
-            addKeyHint(lines, RecipeTreeKeyMappings.FILL_ALL,
-                    "gtlcore.jei.recipe_tree.craft.key.fill_all");
-            addKeyHint(lines, RecipeTreeKeyMappings.SHOW_RECIPE,
-                    "gtlcore.jei.recipe_tree.craft.key.show");
-        } else {
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.material.missing")
-                    .withStyle(ChatFormatting.RED));
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.step.remaining",
-                    entry.amount()).withStyle(ChatFormatting.GRAY));
-            lines.add(Component.translatable("gtlcore.jei.recipe_tree.craft.step.obtained",
-                    Math.max(0, entry.total() - entry.amount()), entry.total())
-                    .withStyle(ChatFormatting.GRAY));
-        }
-        lines.add(Component.empty());
-        lines.addAll(entry.ingredient().tooltip());
-        graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
-    }
-
     private void drawModeIcon(GuiGraphics graphics, Bounds bounds, boolean hovered) {
-        int border = hovered ? 0xFFFFD36A : 0xFF4A5B70;
-        drawOutline(graphics, bounds.x(), bounds.y(), 16, 16, border);
-        int color = RecipeTreeState.craftingMode() ? 0xFF69D79B : 0xFF7BB9E8;
-        graphics.fill(bounds.x() + 3, bounds.y() + 3, bounds.x() + 13, bounds.y() + 4, color);
-        graphics.fill(bounds.x() + 3, bounds.y() + 7, bounds.x() + 13, bounds.y() + 8, color);
-        graphics.fill(bounds.x() + 3, bounds.y() + 11, bounds.x() + 13, bounds.y() + 12, color);
-        if (RecipeTreeState.craftingMode()) {
-            graphics.fill(bounds.x() + 6, bounds.y() + 3, bounds.x() + 10, bounds.y() + 13, color);
+        if (hovered) {
+            graphics.setColor(0.5F, 0.6F, 1.0F, 1.0F);
         }
+        graphics.blit(EMI_WIDGETS, bounds.x(), bounds.y(),
+                RecipeTreeState.craftingMode() ? 16 : 0, 146, 16, 16);
+        graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private void drawHelpIcon(GuiGraphics graphics, Bounds bounds, boolean hovered) {
-        int border = hovered ? 0xFFFFD36A : 0xFF4A5B70;
-        drawOutline(graphics, bounds.x(), bounds.y(), 16, 16, border);
-        Component question = Component.literal("?");
-        graphics.drawString(font, question, bounds.x() + 6, bounds.y() + 4, 0xFFE7EDF5, true);
+        if (hovered) {
+            graphics.setColor(0.5F, 0.6F, 1.0F, 1.0F);
+        }
+        graphics.blit(EMI_WIDGETS, bounds.x(), bounds.y(), 0, 200, 16, 16);
+        graphics.setColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private void drawHoverTooltip(GuiGraphics graphics, Hover hover, int mouseX, int mouseY) {
@@ -883,37 +603,6 @@ final class JeiRecipeTreeScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        CraftCell craftCell = craftCellAt(mouseX, mouseY);
-        if (craftCell != null) {
-            if (button == 0) {
-                CraftEntry entry = craftCell.entry();
-                if (entry.recipe() != null) {
-                    AbstractContainerScreen<?> container = activeContainerScreen();
-                    MaterialTree tree = RecipeTreeState.tree();
-                    if (container == null || tree == null) {
-                        message("gtlcore.jei.recipe_tree.craft.no_container", ChatFormatting.RED);
-                    } else if (RecipeTreeCrafting.isRunning()) {
-                        message("gtlcore.jei.recipe_tree.craft.busy", ChatFormatting.RED);
-                    } else if (isFinalEntry(entry, tree)) {
-                        RecipeTreeCrafting.startChain(container, runtime, tree, Screen.hasShiftDown());
-                    } else {
-                        RecipeTreeCrafting.startOne(container, runtime, entry.recipe(),
-                                entry.ingredient(), Screen.hasShiftDown());
-                    }
-                } else {
-                    showRecipesFor(entry.ingredient());
-                }
-            }
-            return true;
-        }
-        if (craftGridVisible()) {
-            int panelBottom = craftGridTop() + craftGridPanelHeight();
-            if (mouseX >= craftGridLeft() &&
-                    mouseX < craftGridLeft() + craftGridWidth() &&
-                    mouseY >= craftGridTop() && mouseY < panelBottom) {
-                return true;
-            }
-        }
         Hover hover = getHoveredStack((int) mouseX, (int) mouseY);
         float scale = getScale();
         int mx = (int) ((mouseX - treeCenterX()) / scale - offX);
@@ -1027,17 +716,6 @@ final class JeiRecipeTreeScreen extends Screen {
         int mx = (int) ((mouseX - treeCenterX()) / scale - offX);
         int my = (int) ((mouseY - height / 2.0) / scale - offY);
         MaterialTree tree = RecipeTreeState.tree();
-        if (craftGridVisible()) {
-            int totalRows = (craftEntries.size() + CRAFT_COLUMNS - 1) / CRAFT_COLUMNS;
-            int panelBottom = craftGridTop() + craftGridPanelHeight();
-            if (mouseX >= craftGridLeft() &&
-                    mouseX < craftGridLeft() + craftGridWidth() &&
-                    mouseY >= craftGridTop() && mouseY < panelBottom) {
-                int maxScroll = Math.max(0, totalRows - craftGridRowsVisible());
-                craftScroll = Mth.clamp(craftScroll - (int) Math.signum(delta), 0, maxScroll);
-                return true;
-            }
-        }
         if (tree != null && batches.contains(mx, my)) {
             long adjustment = amount;
             if (Screen.hasShiftDown()) {
@@ -1089,51 +767,6 @@ final class JeiRecipeTreeScreen extends Screen {
             onClose();
             return true;
         }
-        CraftCell craftCell = craftCellAt(lastMouseX, lastMouseY);
-        if (craftCell != null) {
-            CraftEntry entry = craftCell.entry();
-            AbstractContainerScreen<?> container = activeContainerScreen();
-            MaterialTree tree = RecipeTreeState.tree();
-            if (RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.SHOW_RECIPE, keyCode, scanCode)) {
-                showRecipesFor(entry.ingredient());
-                return true;
-            }
-            if (entry.recipe() != null && container != null && tree != null) {
-                if (RecipeTreeCrafting.isRunning()) {
-                    message("gtlcore.jei.recipe_tree.craft.busy", ChatFormatting.RED);
-                    return true;
-                }
-                if (RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.CRAFT_ONE_TO_INVENTORY,
-                        keyCode, scanCode)) {
-                    RecipeTreeCrafting.startOne(container, runtime, entry.recipe(),
-                            entry.ingredient(), false);
-                    return true;
-                }
-                if (RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.CRAFT_ONE_TO_CURSOR,
-                        keyCode, scanCode)) {
-                    RecipeTreeCrafting.startOne(container, runtime, entry.recipe(),
-                            entry.ingredient(), true);
-                    return true;
-                }
-                if (RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.CRAFT_ALL_TO_INVENTORY,
-                        keyCode, scanCode)) {
-                    if (isFinalEntry(entry, tree)) {
-                        RecipeTreeCrafting.startChain(container, runtime, tree, false);
-                    } else {
-                        RecipeTreeCrafting.startStep(container, runtime, entry.recipe(),
-                                entry.ingredient(), entry.batches(), false);
-                    }
-                    return true;
-                }
-                if (RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.FILL_ONE, keyCode, scanCode) ||
-                        RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.FILL_ALL, keyCode, scanCode)) {
-                    boolean all = RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.FILL_ALL,
-                            keyCode, scanCode);
-                    fillRecipe(entry.recipe(), all, true);
-                    return true;
-                }
-            }
-        }
         if (Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_R) {
             TreeRecipe recipe = RecipeTreeLookup.randomRecipe(runtime);
             if (recipe != null) {
@@ -1148,38 +781,6 @@ final class JeiRecipeTreeScreen extends Screen {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    private static boolean isFinalEntry(CraftEntry entry, MaterialTree tree) {
-        if (entry.recipe() == null) {
-            return false;
-        }
-        if (entry.recipe().equals(tree.goal.recipe)) {
-            return true;
-        }
-        return entry.ingredient().key().equals(tree.goal.ingredient.key());
-    }
-
-    private void addKeyHint(List<Component> lines, net.minecraft.client.KeyMapping mapping,
-                            String translationKey) {
-        if (!mapping.isUnbound()) {
-            lines.add(Component.translatable(translationKey,
-                    mapping.getTranslatedKeyMessage().getString())
-                    .withStyle(ChatFormatting.DARK_GRAY));
-        }
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-        if (RecipeTreeCrafting.isRunning()) {
-            if (++craftRefreshTicks % 10 == 0) {
-                recalculateTree();
-            }
-        } else if (craftRefreshTicks > 0) {
-            craftRefreshTicks = 0;
-            recalculateTree();
-        }
     }
 
     private void playClick() {
@@ -1197,52 +798,6 @@ final class JeiRecipeTreeScreen extends Screen {
                 .filter(AbstractContainerScreen.class::isInstance)
                 .map(screen -> (AbstractContainerScreen<?>) screen)
                 .orElse(null);
-    }
-
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    private boolean fillRecipe(@Nullable TreeRecipe recipe, boolean maxTransfer, boolean feedback) {
-        Player player = minecraft == null ? null : minecraft.player;
-        AbstractContainerScreen<?> screen = activeContainerScreen();
-        if (recipe == null || recipe.isResolution() || recipe.category() == null ||
-                recipe.recipe() == null || player == null || screen == null) {
-            if (feedback) {
-                message("gtlcore.jei.recipe_tree.craft.no_container", ChatFormatting.RED);
-            }
-            return false;
-        }
-        AbstractContainerMenu menu = screen.getMenu();
-        IRecipeCategory<Object> category = recipe.category();
-        IRecipeTransferHandler handler = runtime.getRecipeTransferManager()
-                .getRecipeTransferHandler(menu, category)
-                .orElse(null);
-        if (handler == null) {
-            if (feedback) {
-                message("gtlcore.jei.recipe_tree.craft.unsupported", ChatFormatting.RED);
-            }
-            return false;
-        }
-        IRecipeLayoutDrawable<Object> layout = runtime.getRecipeManager()
-                .createRecipeLayoutDrawable(category, recipe.recipe(),
-                        runtime.getJeiHelpers().getFocusFactory().getEmptyFocusGroup())
-                .orElse(null);
-        if (layout == null) {
-            if (feedback) {
-                message("gtlcore.jei.recipe_tree.craft.unsupported", ChatFormatting.RED);
-            }
-            return false;
-        }
-        IRecipeTransferError error = handler.transferRecipe(menu, recipe.recipe(),
-                layout.getRecipeSlotsView(), player, maxTransfer, true);
-        if (error != null) {
-            if (feedback) {
-                message("gtlcore.jei.recipe_tree.craft.failed", ChatFormatting.RED);
-            }
-            return false;
-        }
-        if (feedback) {
-            message("gtlcore.jei.recipe_tree.craft.filled", ChatFormatting.GREEN);
-        }
-        return true;
     }
 
     private void message(String translationKey, ChatFormatting color) {
@@ -1432,6 +987,9 @@ final class JeiRecipeTreeScreen extends Screen {
 
                 boolean hovered = mouseX >= lx && mouseY >= ly && mouseX <= hx && mouseY <= hy;
                 color = colorFor(node, node.produceChance != 1, hovered);
+                if (!hovered && machineFills(node.recipe)) {
+                    color = MACHINE_FILL_COLOR;
+                }
                 drawOutline(graphics, lx, ly, hx - lx + 1, hy - ly + 1, color);
 
                 IRecipeCategory<?> category = node.recipe.category();
@@ -1458,14 +1016,11 @@ final class JeiRecipeTreeScreen extends Screen {
         }
 
         private void drawResolutionMarker(GuiGraphics graphics, int x, int y) {
-            int color = 0xFF7FD1AE;
-            drawOutline(graphics, x, y, 7, 7, color);
-            graphics.fill(x + 2, y + 2, x + 5, y + 3, color);
-            graphics.fill(x + 2, y + 4, x + 5, y + 5, color);
+            graphics.blit(EMI_WIDGETS, x, y, 9, 192, 7, 7);
         }
 
         private int colorFor(MaterialNode node, boolean chanced, boolean hovered) {
-            int color = 0xFF55708D;
+            int color = 0xFFFFFFFF;
             if (chanced) {
                 color = 0xFFCC9919;
             }
@@ -1477,7 +1032,7 @@ final class JeiRecipeTreeScreen extends Screen {
                 }
             }
             if (hovered) {
-                color = 0xFFFFD36A;
+                color = 0xFF8099FF;
             }
             return color;
         }
@@ -1604,34 +1159,6 @@ final class JeiRecipeTreeScreen extends Screen {
                 this.left = left;
                 this.right = right;
             }
-        }
-    }
-
-    private record CraftEntry(@Nullable TreeRecipe recipe,
-                              TreeIngredient ingredient,
-                              long amount,
-                              long total,
-                              long batches,
-                              int state) {
-
-        static CraftEntry ofRecipe(TreeRecipe recipe,
-                                   TreeIngredient ingredient,
-                                   long amount,
-                                   long total,
-                                   long batches,
-                                   int state) {
-            return new CraftEntry(recipe, ingredient, amount, total, batches, state);
-        }
-
-        static CraftEntry ofMaterial(TreeIngredient ingredient, long amount, long total) {
-            return new CraftEntry(null, ingredient, amount, total, 0, -1);
-        }
-    }
-
-    private record CraftCell(CraftEntry entry, int x, int y, int width, int height) {
-
-        boolean contains(double mouseX, double mouseY) {
-            return mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
         }
     }
 

@@ -28,6 +28,8 @@
     "gtm.client.PreviewShapesMixin",
     "gtm.client.QuantumTankRendererMixin",
     "ftbchunks.ChunkScreenMixin",
+    "ftbquests.FtbQuestsHighlightButtonMixin",
+    "ftbquests.FtbQuestsHighlightButtonRenderMixin",
     "gtm.client.WorldPreviewAccessor",
     "gtm.client.WorldPreviewPerformanceMixin",
     "jei.client.PreviewHeaderBoundsMixin",

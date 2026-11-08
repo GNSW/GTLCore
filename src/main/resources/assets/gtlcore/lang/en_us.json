@@ -1069,6 +1069,7 @@
   "minecraft.crafting": "Crafting Table",
   "minecraft.smithing": "Smithing Table",
   "minecraft.stonecutting": "Stonecutter",
+  "button.gtlcore.ftbquests.highlight_missing": "Highlight missing quests",
   "button.gtlcore.wireless_core.save": "Save Network Name",
   "button.gtlcore.wireless_target.connect": "Connect: %s",
   "button.gtlcore.wireless_target.connect_short": "Connect",

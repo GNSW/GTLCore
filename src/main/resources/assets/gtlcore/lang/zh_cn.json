@@ -1379,6 +1379,7 @@
   "gtlcore.jei.recipe_tree.craft.machine_fill": "左键：装填进当前机器（自动限制批次）",
   "gtlcore.jei.recipe_tree.craft.machine_done": "已装填进机器，等待机器合成",
   "gtlcore.jei.recipe_tree.craft.machine_no_batch": "机器装填失败：输入仓空间不足",
+  "gtlcore.jei.recipe_tree.autocraft.tab": "按 TAB 自动合成",
   "key.categories.gtlcore.recipe_tree": "GTLCore 合成树",
   "key.gtlcore.recipe_tree.craft_one_to_inventory": "合成一次至物品栏",
   "key.gtlcore.recipe_tree.craft_all_to_inventory": "链式合成全部至物品栏",

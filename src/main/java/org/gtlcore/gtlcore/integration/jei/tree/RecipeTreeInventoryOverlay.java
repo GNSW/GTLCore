@@ -252,6 +252,14 @@ public final class RecipeTreeInventoryOverlay {
         return entry.ingredient.key().equals(tree.goal.ingredient.key());
     }
 
+    /**
+     * Remaining tree steps for the opened container, in crafting order. Shared with the TAB
+     * autocraft so both show and act on the same focus.
+     */
+    static List<Entry> remainingSteps(IJeiRuntime runtime, AbstractContainerScreen<?> screen) {
+        return entries(runtime, screen);
+    }
+
     private static List<Entry> entries(IJeiRuntime runtime, AbstractContainerScreen<?> screen) {
         Minecraft minecraft = Minecraft.getInstance();
         long tick = minecraft.level == null ? 0 : minecraft.level.getGameTime();
@@ -509,9 +517,9 @@ public final class RecipeTreeInventoryOverlay {
         graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 
-    private record Entry(TreeIngredient ingredient,
-                         @Nullable TreeRecipe recipe,
-                         long amount,
-                         long batches,
-                         int state) {}
+    record Entry(TreeIngredient ingredient,
+                 @Nullable TreeRecipe recipe,
+                 long amount,
+                 long batches,
+                 int state) {}
 }

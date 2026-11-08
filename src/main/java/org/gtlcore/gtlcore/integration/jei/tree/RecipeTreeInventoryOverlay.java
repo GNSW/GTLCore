@@ -17,6 +17,7 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.ingredients.ITypedIngredient;
@@ -190,6 +191,19 @@ public final class RecipeTreeInventoryOverlay {
                     continue;
                 }
                 Entry entry = entries.get(index);
+                // JEI's own "show recipe / show uses" bindings, so the craft list behaves like
+                // every other ingredient on screen.
+                InputConstants.Key key = InputConstants.getKey(event.getKeyCode(), event.getScanCode());
+                if (runtime.getKeyMappings().getShowRecipe().isActiveAndMatches(key)) {
+                    showRecipes(runtime, entry.ingredient);
+                    event.setCanceled(true);
+                    return;
+                }
+                if (runtime.getKeyMappings().getShowUses().isActiveAndMatches(key)) {
+                    showUses(runtime, entry.ingredient);
+                    event.setCanceled(true);
+                    return;
+                }
                 if (RecipeTreeKeyMappings.matches(RecipeTreeKeyMappings.SHOW_RECIPE,
                         event.getKeyCode(), event.getScanCode())) {
                     showRecipes(runtime, entry.ingredient);
@@ -414,12 +428,22 @@ public final class RecipeTreeInventoryOverlay {
     }
 
     private static void showRecipes(IJeiRuntime runtime, TreeIngredient ingredient) {
+        showFocus(runtime, ingredient, RecipeIngredientRole.OUTPUT);
+    }
+
+    private static void showUses(IJeiRuntime runtime, TreeIngredient ingredient) {
+        showFocus(runtime, ingredient, RecipeIngredientRole.INPUT);
+    }
+
+    private static void showFocus(IJeiRuntime runtime,
+                                  TreeIngredient ingredient,
+                                  RecipeIngredientRole role) {
         ITypedIngredient<?> typed = ingredient.displayTyped();
         if (typed == null) {
             return;
         }
         IFocus<?> focus = runtime.getJeiHelpers().getFocusFactory()
-                .createFocus(RecipeIngredientRole.OUTPUT, typed);
+                .createFocus(role, typed);
         runtime.getRecipesGui().show(List.of(focus));
     }
 

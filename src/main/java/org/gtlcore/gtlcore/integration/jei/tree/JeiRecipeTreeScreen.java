@@ -860,7 +860,11 @@ final class JeiRecipeTreeScreen extends Screen {
             cost.ingredient.render(graphics, x, y);
             Component text = amountText();
             int tx = x + 17 - Math.min(14, font.width(text));
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(0, 0, 200);
             graphics.drawString(font, text, tx, y + 9, 0xFFFFFFFF, true);
+            pose.popPose();
         }
 
         Component amountText() {
@@ -1004,7 +1008,11 @@ final class JeiRecipeTreeScreen extends Screen {
             node.ingredient.render(graphics, x + xo - 8 + midOffset, y - 8);
             Component text = amountText();
             int tx = x + xo - 8 + midOffset + 17 - Math.min(14, font.width(text));
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(0, 0, 200);
             graphics.drawString(font, text, tx, y - 8 + 9, 0xFFFFFFFF, true);
+            pose.popPose();
         }
 
         private void drawResolutionMarker(GuiGraphics graphics, int x, int y) {

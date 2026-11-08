@@ -1069,6 +1069,7 @@
   "minecraft.crafting": "工作台",
   "minecraft.smithing": "锻造台",
   "minecraft.stonecutting": "切石机",
+  "button.gtlcore.ftbquests.highlight_missing": "高亮未完成任务",
   "button.gtlcore.wireless_core.save": "保存网络名称",
   "button.gtlcore.wireless_target.connect": "连接：%s",
   "button.gtlcore.wireless_target.connect_short": "连接",

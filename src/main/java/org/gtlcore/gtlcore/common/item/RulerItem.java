@@ -65,7 +65,7 @@ public class RulerItem extends Item {
 
         BlockPos start = BlockPos.of(tag.getLong(START));
         tag.putLong(END, pos.asLong());
-        double distance = Math.sqrt(start.distSqr(pos));
+        double distance = measure(start, pos);
         player.displayClientMessage(Component.translatable("message.gtlcore.ruler.measured",
                 String.format(Locale.ROOT, "%.2f", distance)).withStyle(ChatFormatting.GREEN), true);
         return InteractionResult.SUCCESS;
@@ -85,9 +85,16 @@ public class RulerItem extends Item {
         BlockPos end = BlockPos.of(tag.getLong(END));
         tooltip.add(Component.translatable("tooltip.gtlcore.ruler.end", format(end))
                 .withStyle(ChatFormatting.AQUA));
-        double distance = Math.sqrt(start.distSqr(end));
+        double distance = measure(start, end);
         tooltip.add(Component.translatable("tooltip.gtlcore.ruler.distance",
                 String.format(Locale.ROOT, "%.2f", distance)).withStyle(ChatFormatting.GREEN));
+    }
+
+    private static double measure(BlockPos start, BlockPos end) {
+        int dx = Math.max(0, Math.abs(end.getX() - start.getX()) - 1);
+        int dy = Math.max(0, Math.abs(end.getY() - start.getY()) - 1);
+        int dz = Math.max(0, Math.abs(end.getZ() - start.getZ()) - 1);
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     private static String format(BlockPos pos) {

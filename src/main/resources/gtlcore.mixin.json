@@ -23,6 +23,7 @@
     "bloom.SpriteSourceListAliasMixin",
 
     "mc.client.AnimationBufferSourceAccessor",
+    "mc.CustomHeadLayerMixin",
     "ae2.gui.CraftingVisualizationToolbarMixin",
     "ae2ct.CraftingTreeWidgetMixin",
     "gtm.client.PreviewShapesMixin",

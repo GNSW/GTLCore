@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.client.renderer.item;
 
 import org.gtlcore.gtlcore.common.data.GTLItems;
+import org.gtlcore.gtlcore.common.data.GTLPlushies;
+import org.gtlcore.gtlcore.common.plushie.PlushieItems;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
@@ -11,8 +13,10 @@ import net.minecraft.client.renderer.entity.layers.CustomHeadLayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.ZombieVillager;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import top.theillusivec4.curios.api.SlotContext;
@@ -26,6 +30,10 @@ public final class PlushieCurioRenderer implements ICurioRenderer {
         CuriosRendererRegistry.register(GTLItems.FISHBIG_TM.get(), PlushieCurioRenderer::new);
         CuriosRendererRegistry.register(GTLItems.PIG_PLUSHIE.get(), PlushieCurioRenderer::new);
         CuriosRendererRegistry.register(GTLItems.SLIM_PIG_PLUSHIE.get(), PlushieCurioRenderer::new);
+        Item extendedFishbig = ForgeRegistries.ITEMS.getValue(GTLPlushies.EXTENDED_FISHBIG_ID);
+        if (extendedFishbig != null) {
+            CuriosRendererRegistry.register(extendedFishbig, PlushieCurioRenderer::new);
+        }
     }
 
     @Override
@@ -45,6 +53,10 @@ public final class PlushieCurioRenderer implements ICurioRenderer {
         }
         model.getHead().translateAndRotate(poseStack);
         CustomHeadLayer.translateToHead(poseStack, wearer instanceof Villager || wearer instanceof ZombieVillager);
+        if (PlushieItems.isPlushie(stack)) {
+            PlushieHeadRender.applyPlacement(poseStack, stack);
+            PlushieHeadRender.applyBounce(poseStack, wearer, partialTicks);
+        }
         Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer()
                 .renderItem(wearer, stack, ItemDisplayContext.HEAD, false, poseStack, buffers, light);
         poseStack.popPose();

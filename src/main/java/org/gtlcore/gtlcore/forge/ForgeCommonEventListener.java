@@ -7,6 +7,7 @@ import org.gtlcore.gtlcore.common.data.GTLItems;
 import org.gtlcore.gtlcore.common.data.GTLPlushies;
 import org.gtlcore.gtlcore.common.item.PatternBoxBehavior;
 import org.gtlcore.gtlcore.common.machine.generator.WirelessChargingStationMachine;
+import org.gtlcore.gtlcore.common.plushie.PlushieHeadJump;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem;
@@ -125,6 +126,33 @@ public class ForgeCommonEventListener {
                 return;
             }
             event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || event.side != LogicalSide.SERVER) return;
+        if (!(event.player instanceof ServerPlayer player) || player.tickCount % 20 != 0) return;
+        if (!PlushieHeadJump.isJumping(player)) return;
+        if (!PlushieHeadJump.isWearingPlushie(player)) {
+            PlushieHeadJump.stop(player);
+            return;
+        }
+        PlushieHeadJump.sync(player);
+    }
+
+    @SubscribeEvent
+    public static void onStartTracking(PlayerEvent.StartTracking event) {
+        if (event.getTarget() instanceof ServerPlayer tracked && event.getEntity() instanceof ServerPlayer tracker &&
+                PlushieHeadJump.isJumping(tracked)) {
+            PlushieHeadJump.syncTo(tracked, tracker);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlushiePlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && PlushieHeadJump.isJumping(player)) {
+            PlushieHeadJump.sync(player);
         }
     }
 

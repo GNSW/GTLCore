@@ -78,7 +78,7 @@ public final class ManipulatorClient {
         @SubscribeEvent
         public static void keys(RegisterKeyMappingsEvent event) {
             menuKey = new KeyMapping("key.gtlcore.manipulator.menu", KeyConflictContext.IN_GAME,
-                    KeyModifier.NONE, InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_RIGHT,
+                    KeyModifier.NONE, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G,
                     "key.categories.gtlcore.manipulator");
             ManipulatorClient.keys = new KeyMapping[] {
                     key("copy", GLFW.GLFW_KEY_C), key("cut", GLFW.GLFW_KEY_X), key("paste", GLFW.GLFW_KEY_V), key("clear", GLFW.GLFW_KEY_Z)

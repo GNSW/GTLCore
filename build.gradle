@@ -176,7 +176,7 @@ dependencies {
 
     // ftb-chunk
     modImplementation("curse.maven:ftb-chunks-forge-314906:5378090"){ transitive = false }
-    modRuntimeOnly("curse.maven:ftb-library-forge-404465:5567591"){ transitive = false }
+    modImplementation("curse.maven:ftb-library-forge-404465:5567591"){ transitive = false }
     modRuntimeOnly("curse.maven:ftb-teams-forge-404468:5267190"){ transitive = false }
 
     // ftbu

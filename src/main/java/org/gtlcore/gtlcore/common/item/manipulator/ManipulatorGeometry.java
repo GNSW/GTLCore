@@ -152,7 +152,10 @@ public final class ManipulatorGeometry {
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     private static BlockState set(BlockState state, Property property, Comparable value) {
-        if (!property.getPossibleValues().contains(value)) throw new IllegalArgumentException("mm.error.rotation");
+        if (!property.getPossibleValues().contains(value)) {
+            if (property == com.gregtechceu.gtceu.api.block.IMachineBlock.UPWARDS_FACING_PROPERTY) return state;
+            throw new IllegalArgumentException("mm.error.rotation");
+        }
         return state.setValue(property, value);
     }
 }

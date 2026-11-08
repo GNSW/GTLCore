@@ -8,6 +8,7 @@ import org.gtlcore.gtlcore.common.data.GTLItems;
 import org.gtlcore.gtlcore.common.data.machines.MultiBlockMachineA;
 import org.gtlcore.gtlcore.common.recipe.PrankFishRecipe;
 import org.gtlcore.gtlcore.integration.jei.grouping.TagGroupOverlay;
+import org.gtlcore.gtlcore.integration.jei.tree.JeiRecipeTrees;
 
 import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.data.chemical.ChemicalHelper;
@@ -38,6 +39,7 @@ import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.ingredients.ITypedIngredient;
+import mezz.jei.api.registration.IAdvancedRegistration;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.ISubtypeRegistration;
@@ -134,8 +136,14 @@ public class GTLJEIPlugin implements IModPlugin {
     }
 
     @Override
+    public void registerAdvanced(@NotNull IAdvancedRegistration registration) {
+        JeiRecipeTrees.register(registration);
+    }
+
+    @Override
     public void onRuntimeAvailable(@NotNull IJeiRuntime runtime) {
         PreviewJeiTransfer.setRuntime(runtime);
+        JeiRecipeTrees.onRuntimeAvailable(runtime);
         JeiMeInventoryTooltip.onRuntimeAvailable(runtime);
         JeiMissingIngredientBookmarks.onRuntimeAvailable(runtime);
         hideUnobtainableOres(runtime);
@@ -154,6 +162,7 @@ public class GTLJEIPlugin implements IModPlugin {
     @Override
     public void onRuntimeUnavailable() {
         PreviewJeiTransfer.setRuntime(null);
+        JeiRecipeTrees.onRuntimeUnavailable();
         TagGroupOverlay.closeActive();
         JeiMeInventoryTooltip.onRuntimeUnavailable();
         JeiMissingIngredientBookmarks.onRuntimeUnavailable();

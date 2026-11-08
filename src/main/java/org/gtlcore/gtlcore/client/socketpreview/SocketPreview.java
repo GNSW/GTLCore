@@ -467,7 +467,8 @@ public final class SocketPreview {
                 up = Direction.NORTH;
             }
             try {
-                if (PatternSockets.contains(pattern, front, up, controller.isFlipped(),
+                if (PatternSockets.contains(pattern, front, up,
+                        isMirroredPlacement(controller, pattern, front, up),
                         controller.getPos(), lookPos)) {
                     // CONTROLLERS is sorted by distance, so this is the nearest owner.
                     lastResolvedLookPos = lookPos;
@@ -511,6 +512,7 @@ public final class SocketPreview {
                 up = Direction.NORTH;
             }
             BlockPos controllerPos = controller.getPos();
+            boolean mirrored = isMirroredPlacement(controller, pattern, front, up);
             BlockPos playerPos = player.blockPosition();
             int baseX = (playerPos.getX() >> 4) - (controllerPos.getX() >> 4);
             int baseY = (playerPos.getY() >> 4) - (controllerPos.getY() >> 4);
@@ -518,7 +520,7 @@ public final class SocketPreview {
             int sectionRadius = Math.max(1, (renderRange + 15) >> 4);
             double renderRangeSq = (double) renderRange * renderRange;
             Map<Long, List<PatternSockets.Cell>> sections = PatternSockets.sectionCellsFor(
-                    pattern, front, up, controller.isFlipped());
+                    pattern, front, up, mirrored);
 
             for (int sx = -sectionRadius; sx <= sectionRadius; sx++) {
                 for (int sy = -sectionRadius; sy <= sectionRadius; sy++) {
@@ -598,6 +600,42 @@ public final class SocketPreview {
         if (BOXES.size() > MAX_BOXES) {
             BOXES.subList(MAX_BOXES, BOXES.size()).clear();
         }
+    }
+
+    /**
+     * Uses the controller's synced state first and falls back to the actual part positions when
+     * that state is unavailable or stale on the client.
+     */
+    private static boolean isMirroredPlacement(MultiblockControllerMachine controller,
+                                               BlockPattern pattern, Direction front, Direction up) {
+        if (controller.isFlipped()) {
+            return true;
+        }
+        BlockPos[] partPositions;
+        try {
+            partPositions = controller.getPartPositions();
+        } catch (Throwable ignored) {
+            return false;
+        }
+        if (partPositions == null || partPositions.length == 0) {
+            return false;
+        }
+
+        BlockPos controllerPos = controller.getPos();
+        int normalMatches = 0;
+        int mirroredMatches = 0;
+        for (BlockPos partPos : partPositions) {
+            if (partPos == null || partPos.equals(controllerPos)) {
+                continue;
+            }
+            if (PatternSockets.contains(pattern, front, up, false, controllerPos, partPos)) {
+                normalMatches++;
+            }
+            if (PatternSockets.contains(pattern, front, up, true, controllerPos, partPos)) {
+                mirroredMatches++;
+            }
+        }
+        return mirroredMatches > normalMatches;
     }
 
     /**

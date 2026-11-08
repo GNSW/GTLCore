@@ -102,7 +102,11 @@ public final class RecipeTreeInventoryOverlay {
                 if (mouseInside(event.getScreen(), x, y, CELL, CELL)) {
                     drawOutline(graphics, x, y, CELL, CELL, 0xFFFFD36A);
                     drawTooltip(graphics, entry, screen);
-                }
+                } else if (entry.recipe != null &&
+                        RecipeTreeCrafting.fillsMachine(screen, entry.recipe)) {
+                            // EMI autocraft highlights the focused recipe the opened machine can run.
+                            drawOutline(graphics, x, y, CELL, CELL, 0xFFFFD700);
+                        }
             }
         }
     }

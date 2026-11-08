@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.network;
 
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.network.packet.CSetNoClip;
+import org.gtlcore.gtlcore.network.packet.CStructureDetect;
 import org.gtlcore.gtlcore.network.packet.SSetNoClip;
 import org.gtlcore.gtlcore.network.packet.SStructureDetectHighlight;
 
@@ -17,6 +18,7 @@ public class GTLNetworkHandler extends NetworkHandler {
 
     public void init() {
         registerPacket(CSetNoClip.class, CSetNoClip::new);
+        registerPacket(CStructureDetect.class, CStructureDetect::new);
         registerPacket(SSetNoClip.class, SSetNoClip::new);
         registerPacket(SStructureDetectHighlight.class, SStructureDetectHighlight::new);
     }

@@ -50,8 +50,6 @@ public class Misc {
     public static void init(Consumer<FinishedRecipe> provider) {
         VanillaRecipeHelper.addShapelessRecipe(provider, "programmed_circuit", IntCircuitBehaviour.stack(0),
                 "A", CustomTags.LV_CIRCUITS);
-        VanillaRecipeHelper.addShapelessRecipe(provider, "structure_detect", GTLItems.STRUCTURE_DETECT.asStack(),
-                "A", Items.PAPER);
         VanillaRecipeHelper.addShapelessRecipe(provider, GTLCore.id("me_pattern_buffer_copy"),
                 GTLItems.ME_PATTERN_BUFFER_COPY.asStack(),
                 "A", AEItems.MEMORY_CARD);

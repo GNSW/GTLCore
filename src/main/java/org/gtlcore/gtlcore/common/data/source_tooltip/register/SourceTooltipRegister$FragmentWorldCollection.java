@@ -161,6 +161,15 @@ public class SourceTooltipRegister$FragmentWorldCollection {
         of_fwc(event.register$item("minecraft:raw_gold"), as_fwc(0, " [ 16 ]"), as_fwc(6, " [ 9 ]"), as_fwc(7, " [ 4 ]"), as_fwc(13, " [ 2 ]"), as_fwc(14, " [ 9 ]"));
         of_fwc(event.register$item("minecraft:raw_iron"), as_fwc(0, " [ 6 ]"));
         of_fwc(event.register$item("minecraft:ancient_debris"), as_fwc(6, " [ 0 ]"));
+        of_fwc(event.register$item("minecraft:dragon_egg"), as_fwc(13, " [ 0 ]"));
+        of_fwc(event.register$item("minecraft:dragon_head"), as_fwc(13, " [ 0 ]"));
+        of_fwc(event.register$item("minecraft:dragon_breath"), as_fwc(13, " [ 0 ]"));
+        of_fwc(event.register$item("minecraft:chorus_fruit"), as_fwc(13, " [ 0 ]"));
+        of_fwc(event.register$item("minecraft:chorus_flower"), as_fwc(13, " [ 0 ]"));
+        of_fwc(event.register$item("kubejs:glacio_spirit"), as_fwc(14, " [ 0 ]"));
+        of_fwc(event.register$item("ad_astra:ice_shard"), as_fwc(14, " [ 0 ]"));
+        of_fwc(event.register$item("kubejs:barnarda_log"), as_fwc(15, " [ 0 ]"));
+        of_fwc(event.register$item("kubejs:barnarda_leaves"), as_fwc(15, " [ 0 ]"));
 
         of_fwc(event.register$fluid("gtceu:benzene"), as_fwc(12, " [ 5 ]"));
         of_fwc(event.register$fluid("gtceu:chlorine"), as_fwc(11, " [ 4 ]"));
@@ -190,7 +199,7 @@ public class SourceTooltipRegister$FragmentWorldCollection {
 
         String[] worlds = { "overworld", "reactor", "moon", "mars", "venus", "mercury", "nether", "ceres", "io", "ganymede", "pluto", "enceladus", "titan", "end", "glacio", "barnarda" };
         String[][] keys_fluid = {
-                { "material.gtceu.salt_water", "material.gtceu.oil_heavy", "material.gtceu.oil_medium", "material.gtceu.oil_heavy", "material.gtceu.oil_light", "material.gtceu.natural_gas", "material.gtceu.lava" },
+                { "material.gtceu.salt_water", "material.gtceu.oil_heavy", "material.gtceu.oil_medium", "material.gtceu.oil", "material.gtceu.oil_light", "material.gtceu.natural_gas", "material.gtceu.lava" },
                 {},
                 { "material.gtceu.helium_3", "material.gtceu.helium" },
                 { "material.gtceu.radon" },

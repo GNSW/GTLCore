@@ -88,6 +88,32 @@ public final class CuriosCompat {
     }
 
     @SuppressWarnings("unchecked")
+    public static @Nullable CurioSlot findCurio(Player player, String identifier, Predicate<ItemStack> predicate) {
+        if (!isLoaded()) {
+            return null;
+        }
+
+        try {
+            Object helper = getCuriosHelperMethod.invoke(null);
+            List<Object> results = (List<Object>) findCuriosMethod.invoke(helper, player, predicate);
+            for (Object result : results) {
+                Object slotContext = slotResultSlotContextMethod.invoke(result);
+                String resultIdentifier = (String) slotContextIdentifierMethod.invoke(slotContext);
+                if (!identifier.equals(resultIdentifier)) {
+                    continue;
+                }
+                ItemStack stack = (ItemStack) slotResultStackMethod.invoke(result);
+                if (!stack.isEmpty()) {
+                    return new CurioSlot(stack, resultIdentifier, (int) slotContextIndexMethod.invoke(slotContext));
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // Curios may be unavailable or incompatible.
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
     public static List<CurioSlot> getCurioSlots(Player player) {
         if (!isLoaded()) return List.of();
         try {

@@ -18,11 +18,9 @@ import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-import com.mojang.blaze3d.platform.InputConstants;
-import org.lwjgl.glfw.GLFW;
-
 /**
- * Ctrl + right-click with the ultimate terminal runs the structure detection instead of opening the build settings.
+ * Sprint key + right-click with the ultimate terminal runs the structure detection instead of opening the build
+ * settings.
  */
 @Mod.EventBusSubscriber(modid = GTLCore.MOD_ID, value = Dist.CLIENT)
 @OnlyIn(Dist.CLIENT)
@@ -46,8 +44,6 @@ public final class StructureDetectClient {
     }
 
     private static boolean isControlDown(Minecraft mc) {
-        long window = mc.getWindow().getWindow();
-        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL) ||
-                InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+        return mc.options.keySprint.isDown();
     }
 }

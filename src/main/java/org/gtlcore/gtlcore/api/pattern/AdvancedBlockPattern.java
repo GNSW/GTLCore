@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.api.pattern;
 
 import org.gtlcore.gtlcore.common.item.UltimateTerminalBehavior;
 import org.gtlcore.gtlcore.integration.ae2.WirelessTerminalGridResolver;
+import org.gtlcore.gtlcore.integration.ae2.wireless.CuriosCompat;
 import org.gtlcore.gtlcore.integration.terminal.StableBlockCandidates;
 import org.gtlcore.gtlcore.mixin.gtm.api.machine.IMultiblockStateInvoker;
 
@@ -615,9 +616,12 @@ public class AdvancedBlockPattern extends BlockPattern {
     private boolean extractFluidFromPlayerRecursively(Player player, net.minecraft.world.level.material.Fluid fluid) {
         if (player.isCreative()) return true;
         LazyOptional<IItemHandler> cap = player.getCapability(ForgeCapabilities.ITEM_HANDLER);
-        if (!cap.isPresent()) return false;
+        if (cap.isPresent() && extractFluidRecursive(cap.resolve().orElse(null), fluid)) return true;
 
-        return extractFluidRecursive(cap.resolve().orElse(null), fluid);
+        for (IItemHandler curioHandler : curioItemHandlers(player)) {
+            if (extractFluidRecursive(curioHandler, fluid)) return true;
+        }
+        return false;
     }
 
     private boolean extractFluidRecursive(IItemHandler handler, net.minecraft.world.level.material.Fluid fluid) {
@@ -698,7 +702,11 @@ public class AdvancedBlockPattern extends BlockPattern {
     private ItemStack insertIntoNestedItemHandler(Player player, ItemStack stack) {
         LazyOptional<IItemHandler> cap = player.getCapability(ForgeCapabilities.ITEM_HANDLER);
         if (cap.isPresent()) {
-            return insertIntoNestedItemHandlerRecursion(cap.resolve().orElse(null), stack);
+            stack = insertIntoNestedItemHandlerRecursion(cap.resolve().orElse(null), stack);
+        }
+        for (IItemHandler curioHandler : curioItemHandlers(player)) {
+            if (stack.isEmpty()) break;
+            stack = insertIntoNestedItemHandlerRecursion(curioHandler, stack);
         }
         return stack;
     }
@@ -736,6 +744,13 @@ public class AdvancedBlockPattern extends BlockPattern {
         if (!player.isCreative()) {
             var foundHandler = getMatchStackWithHandler(candidates,
                     player.getCapability(ForgeCapabilities.ITEM_HANDLER), test);
+            if (foundHandler == null) {
+                for (IItemHandler curioHandler : curioItemHandlers(player)) {
+                    foundHandler = getMatchStackWithHandler(candidates,
+                            LazyOptional.of(() -> curioHandler), test);
+                    if (foundHandler != null) break;
+                }
+            }
             if (foundHandler != null) {
                 foundSlot = foundHandler.firstInt();
                 handler = foundHandler.second();
@@ -755,8 +770,21 @@ public class AdvancedBlockPattern extends BlockPattern {
         if (!player.isCreative()) {
             var r = findFirstSlot(player.getCapability(ForgeCapabilities.ITEM_HANDLER), coilItemStack);
             if (r != null) return r;
+            for (IItemHandler curioHandler : curioItemHandlers(player)) {
+                r = findFirstSlot(LazyOptional.of(() -> curioHandler), coilItemStack);
+                if (r != null) return r;
+            }
         }
         return ObjectIntPair.of(null, -1);
+    }
+
+    private static List<IItemHandler> curioItemHandlers(Player player) {
+        List<IItemHandler> handlers = new ArrayList<>();
+        if (player.level().isClientSide) return handlers;
+        for (CuriosCompat.CurioSlot slot : CuriosCompat.getCurioSlots(player)) {
+            slot.stack().getCapability(ForgeCapabilities.ITEM_HANDLER).ifPresent(handlers::add);
+        }
+        return handlers;
     }
 
     private ObjectIntPair<IItemHandler> findFirstSlot(LazyOptional<IItemHandler> cap, ItemStack stack) {

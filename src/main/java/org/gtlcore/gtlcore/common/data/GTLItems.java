@@ -443,6 +443,7 @@ public class GTLItems {
             .onRegister(GTItems.attach(new UltimateTerminalBehavior(), new TooltipBehavior(lines -> {
                 lines.add(Component.translatable("gtlcore.item.ultimate_terminal.tooltip.0").withStyle(ChatFormatting.GRAY));
                 lines.add(Component.translatable("gtlcore.item.ultimate_terminal.tooltip.1").withStyle(ChatFormatting.GRAY));
+                lines.add(Component.translatable("gtlcore.item.ultimate_terminal.tooltip.2").withStyle(ChatFormatting.GRAY));
             })))
             .register();
 

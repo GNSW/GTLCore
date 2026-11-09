@@ -11,7 +11,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -44,6 +46,12 @@ public final class WirelessNetworkBindingToolItem extends Item {
         tag.putString(TAG_NETWORK_NAME, networkName);
         player.inventoryMenu.broadcastChanges();
         return message(player, "message.gtlcore.wireless_binding_tool.saved", networkName);
+    }
+
+    /** Network currently stored in the tool, or {@code null} when nothing is saved yet. */
+    public static UUID savedNetwork(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag != null && tag.hasUUID(TAG_NETWORK) ? tag.getUUID(TAG_NETWORK) : null;
     }
 
     public static void openNetworkTab(ServerPlayer player, IUIMachine machine, BlockHitResult hit) {
@@ -87,6 +95,33 @@ public final class WirelessNetworkBindingToolItem extends Item {
         }
         player.inventoryMenu.broadcastChanges();
         message(player, "message.gtlcore.wireless_binding_tool.cleared");
+    }
+
+    /**
+     * Applies a pick from {@link WirelessNetworkPickerMenu}: stores the network, or clears the saved
+     * one when it is picked again.
+     */
+    public static void applyPickerChoice(ServerPlayer player, UUID frequency) {
+        ItemStack stack = player.getMainHandItem();
+        if (!(stack.getItem() instanceof WirelessNetworkBindingToolItem)) {
+            return;
+        }
+        if (!player.containerMenu.stillValid(player) || !player.mayBuild()) {
+            return;
+        }
+        if (frequency.equals(savedNetwork(stack))) {
+            clearSavedNetwork(player);
+            return;
+        }
+        if (!WirelessAeNetworkRuntime.canAccessNetwork(player, frequency)) {
+            message(player, "message.gtlcore.wireless_binding_tool.no_access");
+            return;
+        }
+        if (WirelessAeSavedData.get(player.server).getCore(frequency) == null) {
+            message(player, "message.gtlcore.wireless_target.missing_core");
+            return;
+        }
+        saveNetwork(player, stack, frequency);
     }
 
     @Override
@@ -165,6 +200,29 @@ public final class WirelessNetworkBindingToolItem extends Item {
                 "message.gtlcore.wireless_target.linked_target_pending", data.getNetworkName(frequency));
     }
 
+    /**
+     * Right-clicking the air opens the network picker.
+     * Right-clicking a block never reaches here because {@link #onItemUseFirst} consumes it first.
+     */
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (hand != InteractionHand.MAIN_HAND) {
+            return InteractionResultHolder.pass(stack);
+        }
+        if (level.isClientSide) {
+            return InteractionResultHolder.success(stack);
+        }
+        if (!(player instanceof ServerPlayer serverPlayer)) {
+            return InteractionResultHolder.pass(stack);
+        }
+        if (!player.mayBuild()) {
+            return InteractionResultHolder.fail(stack);
+        }
+        WirelessNetworkPickerMenu.open(serverPlayer);
+        return InteractionResultHolder.success(stack);
+    }
+
     private static InteractionResult message(ServerPlayer player, String key, Object... args) {
         player.displayClientMessage(Component.translatable(key, args), true);
         return InteractionResult.CONSUME;
@@ -206,6 +264,7 @@ public final class WirelessNetworkBindingToolItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(Component.translatable("tooltip.gtlcore.wireless_binding_tool.select").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.translatable("tooltip.gtlcore.wireless_binding_tool.pick").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.gtlcore.wireless_binding_tool.bind").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.gtlcore.wireless_binding_tool.rebind").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("tooltip.gtlcore.wireless_binding_tool.offhand").withStyle(ChatFormatting.GRAY));

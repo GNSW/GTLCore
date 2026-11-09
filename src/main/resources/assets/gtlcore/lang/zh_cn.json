@@ -440,6 +440,8 @@
   "config.gtlcore.option.ae2GraphDiagnosticLogging.comment": "记录图合成的规划耗时和任务下发汇总耗时，用于比较性能与排查卡顿；不会为每个物品单独记录日志。",
   "item.gtlcore.wireless_network_binding_tool": "无线ME网络绑定工具",
   "tooltip.gtlcore.wireless_binding_tool.select": "Shift + 右键无线ME网络核心：保存该网络",
+  "tooltip.gtlcore.wireless_binding_tool.pick": "主手持有时右键空气：从已有无线ME网络中选择要保存的网络",
+  "screen.gtlcore.wireless_binding_picker": "选择无线ME网络",
   "tooltip.gtlcore.wireless_binding_tool.bind": "主手持有时右键未绑定的ME仓室或端口：绑定到已保存的网络",
   "tooltip.gtlcore.wireless_binding_tool.rebind": "主手持有时 Shift + 右键ME仓室或端口：改绑到已保存的无线网络",
   "tooltip.gtlcore.wireless_binding_tool.offhand": "副手持有时右键ME仓室：直接打开仓室的无线网络页签",

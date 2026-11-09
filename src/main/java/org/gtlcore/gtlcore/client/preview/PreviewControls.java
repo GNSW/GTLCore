@@ -460,13 +460,15 @@ public final class PreviewControls {
         if (fullscreen) {
             graphics.renderItem(titleItem, WINDOW_MARGIN + 5, TOOLBAR_TOP - 1);
             int textX = WINDOW_MARGIN + 24;
-            graphics.drawString(font, font.plainSubstrByWidth(title.getString(), Math.max(0, toolbarLeft - textX - 4)),
+            var titleLine = title.getString() + "  " + dimensionsText().getString();
+            graphics.drawString(font, font.plainSubstrByWidth(titleLine, Math.max(0, toolbarLeft - textX - 4)),
                     textX, TOOLBAR_TOP + (BUTTON_SIZE - font.lineHeight) / 2, ChatFormatting.DARK_GRAY.getColor(), false);
             return;
         }
         int available = widget.getSizeWidth();
         var text = heightText();
         var lines = new java.util.ArrayList<>(font.split(text, available));
+        lines.addAll(font.split(dimensionsText(), available));
         int y = widget.getPositionY() - 5 - lines.size() * font.lineHeight;
         int center = widget.getPositionX() + widget.getSizeWidth() / 2;
         if (Minecraft.getInstance().screen instanceof PreviewHeaderBounds header) {

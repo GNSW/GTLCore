@@ -4,7 +4,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
+import appeng.client.gui.style.Blitter;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.buttons.IButtonState;
@@ -28,11 +30,58 @@ import java.util.Objects;
  */
 public final class JeiRecipeTrees {
 
-    private static final IDrawable TREE_ICON = new TreeIcon();
-    private static final IDrawable STAR_EMPTY = new StarIcon(0);
-    private static final IDrawable STAR_PARTIAL = new StarIcon(1);
-    private static final IDrawable STAR_FULL = new StarIcon(2);
+    private static final IDrawable TREE_ICON = new WrappedIcon(
+            new ResourceLocation("gtlcore", "textures/gui/recipe_tree.png"),
+            0, 0, 16, 16, 16, 16);
+    private static final IDrawable WRENCH_OFF = aeWrench(false);
+    private static final IDrawable WRENCH_ON = aeWrench(true);
     private static @Nullable IJeiRuntime runtime;
+
+    private static IDrawable aeWrench(boolean active) {
+        Blitter blitter = (active ? appeng.client.gui.Icon.WRENCH : appeng.client.gui.Icon.WRENCH_DISABLED)
+                .getBlitter();
+        return new WrappedIcon(
+                new ResourceLocation("ae2", "textures/guis/states.png"),
+                blitter.getSrcX(), blitter.getSrcY(), blitter.getSrcWidth(), blitter.getSrcHeight(),
+                256, 256);
+    }
+
+    private static final class WrappedIcon implements IDrawable {
+
+        private final ResourceLocation texture;
+        private final int u;
+        private final int v;
+        private final int uWidth;
+        private final int vHeight;
+        private final int textureWidth;
+        private final int textureHeight;
+
+        private WrappedIcon(ResourceLocation texture, int u, int v, int uWidth, int vHeight, int textureWidth,
+                            int textureHeight) {
+            this.texture = texture;
+            this.u = u;
+            this.v = v;
+            this.uWidth = uWidth;
+            this.vHeight = vHeight;
+            this.textureWidth = textureWidth;
+            this.textureHeight = textureHeight;
+        }
+
+        @Override
+        public int getWidth() {
+            return 16;
+        }
+
+        @Override
+        public int getHeight() {
+            return 16;
+        }
+
+        @Override
+        public void draw(GuiGraphics graphics, int xOffset, int yOffset) {
+            graphics.blit(texture, xOffset, yOffset, 16, 16, u, v, uWidth, vHeight, textureWidth, textureHeight);
+        }
+    }
 
     private JeiRecipeTrees() {}
 
@@ -177,9 +226,8 @@ public final class JeiRecipeTrees {
             resolve();
             RecipeTreeState.DefaultStatus status = status();
             state.setIcon(switch (status) {
-                case EMPTY -> STAR_EMPTY;
-                case PARTIAL -> STAR_PARTIAL;
-                case FULL -> STAR_FULL;
+                case EMPTY, PARTIAL -> WRENCH_OFF;
+                case FULL -> WRENCH_ON;
             });
             state.setForcePressed(status == RecipeTreeState.DefaultStatus.FULL);
         }

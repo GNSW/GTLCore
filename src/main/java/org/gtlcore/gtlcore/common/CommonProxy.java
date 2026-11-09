@@ -51,6 +51,8 @@ public class CommonProxy {
         WirelessAePackets.register();
         org.gtlcore.gtlcore.network.ManipulatorPackets.register();
         InfiniteSprayCanPackets.register();
+        org.gtlcore.gtlcore.network.PlushieHeadPackets.register();
+        MinecraftForge.EVENT_BUS.addListener(org.gtlcore.gtlcore.common.command.WineJumpCommand::register);
         org.gtlcore.gtlcore.integration.ftbquests.QuestTranslationNetwork.register();
         CuriosTerminalLocator.register();
         eventBus.addListener(this::commonSetup);

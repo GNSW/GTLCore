@@ -3,6 +3,16 @@ package org.gtlcore.gtlcore.integration.jei.tree;
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 
+import com.gregtechceu.gtceu.api.machine.IMachineBlockEntity;
+import com.gregtechceu.gtceu.api.machine.MetaMachine;
+import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
+import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
+import com.gregtechceu.gtceu.api.machine.multiblock.part.MultiblockPartMachine;
+import com.gregtechceu.gtceu.api.recipe.GTRecipeType;
+import com.gregtechceu.gtceu.integration.jei.recipe.GTRecipeWrapper;
+
+import com.lowdragmc.lowdraglib.gui.modular.ModularUIContainer;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -15,6 +25,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -38,7 +49,9 @@ import java.util.Optional;
  * <p>
  * Intermediates are crafted into the player inventory, then the final step is either moved into the
  * inventory or left on the cursor, matching EMI's "craft to inventory / craft to cursor" actions.
- * Only containers with a result slot (crafting tables) can be driven automatically.
+ * Steps that belong to a GT machine whose screen is open are transferred into that machine instead
+ * (the JEI port of EMI autocraft's machine autocraft), and the chain continues immediately because
+ * the machine keeps running the recipe on its own.
  * </p>
  */
 @Mod.EventBusSubscriber(modid = GTLCore.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -46,6 +59,10 @@ public final class RecipeTreeCrafting {
 
     private static final int MAX_CRAFT_ACTIONS = 512;
     private static @Nullable Sequence active;
+    /**
+     * The machine whose screen was opened last, used to route tree steps into it.
+     */
+    private static @Nullable MetaMachine openedMachine;
 
     private RecipeTreeCrafting() {}
 
@@ -146,9 +163,20 @@ public final class RecipeTreeCrafting {
             return;
         }
         if (sequence.needsFill) {
-            if (!fill(sequence.screen, sequence.runtime, sequence.currentStep().recipe)) {
-                message("gtlcore.jei.recipe_tree.craft.insufficient", ChatFormatting.RED);
+            boolean machine = fillsMachine(sequence.screen, sequence.currentStep().recipe());
+            if (!fill(sequence.screen, sequence.runtime, sequence.currentStep().recipe(), machine)) {
+                message(machine ? "gtlcore.jei.recipe_tree.craft.machine_no_batch" :
+                        "gtlcore.jei.recipe_tree.craft.insufficient", ChatFormatting.RED);
                 active = null;
+                return;
+            }
+            if (machine) {
+                // A machine runs the recipe on its own: hand the ingredients over and go on with the
+                // next step instead of waiting for a result slot, like EMI autocraft does.
+                message("gtlcore.jei.recipe_tree.craft.machine_done", ChatFormatting.GREEN);
+                if (!sequence.prepareNextStep()) {
+                    active = null;
+                }
                 return;
             }
             sequence.needsFill = false;
@@ -205,7 +233,8 @@ public final class RecipeTreeCrafting {
 
     private static boolean fill(AbstractContainerScreen<?> screen,
                                 IJeiRuntime runtime,
-                                TreeRecipe recipe) {
+                                TreeRecipe recipe,
+                                boolean maxTransfer) {
         Player player = Minecraft.getInstance().player;
         if (player == null || recipe.category() == null || recipe.recipe() == null) {
             return false;
@@ -225,8 +254,64 @@ public final class RecipeTreeCrafting {
         if (layout == null) {
             return false;
         }
-        IRecipeTransferError error = transfer(handler, menu, recipe.recipe(), layout, player);
+        IRecipeTransferError error = transfer(handler, menu, recipe.recipe(), layout, player, maxTransfer);
         return error == null;
+    }
+
+    /**
+     * Mirrors EMI autocraft's {@code AutocraftScreen.GT}: a step is filled into the opened machine
+     * when the container is a machine screen and the machine either is the one that was opened or
+     * cannot be identified, and the recipe is a GT recipe.
+     */
+    static boolean fillsMachine(AbstractContainerScreen<?> screen, TreeRecipe recipe) {
+        if (!(screen.getMenu() instanceof ModularUIContainer)) {
+            return false;
+        }
+        if (!(recipe.recipe() instanceof GTRecipeWrapper wrapper) || wrapper.recipe == null ||
+                wrapper.recipe.recipeType == null) {
+            return false;
+        }
+        MetaMachine machine = openedMachine;
+        return machine == null || machineCanRun(machine, wrapper.recipe.recipeType);
+    }
+
+    private static boolean machineCanRun(MetaMachine machine, GTRecipeType recipeType) {
+        for (GTRecipeType supported : machine.getDefinition().getRecipeTypes()) {
+            if (supported != recipeType) {
+                continue;
+            }
+            if (machine instanceof IRecipeLogicMachine logicMachine) {
+                return logicMachine.getRecipeType() == recipeType;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Tracks the machine whose screen the player opened, so tree steps can be told apart from
+     * plain crafting-table steps. Mirrors EMI autocraft's {@code openedMachine}.
+     */
+    @SubscribeEvent
+    public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        if (!event.getLevel().isClientSide) {
+            return;
+        }
+        if (event.getLevel().getBlockEntity(event.getPos()) instanceof IMachineBlockEntity machineBlockEntity) {
+            openedMachine = resolveController(machineBlockEntity.getMetaMachine());
+        } else {
+            openedMachine = null;
+        }
+    }
+
+    private static MetaMachine resolveController(MetaMachine machine) {
+        if (machine instanceof MultiblockPartMachine partMachine && partMachine.isFormed()) {
+            List<IMultiController> controllers = partMachine.getControllers();
+            if (!controllers.isEmpty()) {
+                return controllers.get(0).self();
+            }
+        }
+        return machine;
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -234,8 +319,9 @@ public final class RecipeTreeCrafting {
                                                  AbstractContainerMenu menu,
                                                  Object recipe,
                                                  IRecipeLayoutDrawable<Object> layout,
-                                                 Player player) {
-        return handler.transferRecipe(menu, recipe, layout.getRecipeSlotsView(), player, false, true);
+                                                 Player player,
+                                                 boolean maxTransfer) {
+        return handler.transferRecipe(menu, recipe, layout.getRecipeSlotsView(), player, maxTransfer, true);
     }
 
     private static @Nullable Slot findResultSlot(Sequence sequence) {

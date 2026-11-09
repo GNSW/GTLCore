@@ -323,13 +323,6 @@ public class GTLItems {
             .model(NonNullBiConsumer.noop())
             .register();
 
-    public static ItemEntry<ComponentItem> STRUCTURE_DETECT = REGISTRATE
-            .item("structure_detect", ComponentItem::create)
-            .properties(stack -> stack.stacksTo(1))
-            .onRegister(attach(StructureDetectBehavior.INSTANCE))
-            .model(NonNullBiConsumer.noop())
-            .register();
-
     public static ItemEntry<ComponentItem> ME_PATTERN_BUFFER_COPY = REGISTRATE
             .item("me_pattern_buffer_copy", ComponentItem::create)
             .properties(stack -> stack.stacksTo(1))
@@ -447,7 +440,11 @@ public class GTLItems {
     public static ItemEntry<ComponentItem> ULTIMATE_TERMINAL = REGISTRATE
             .item("ultimate_terminal", ComponentItem::create)
             .properties((p) -> p.stacksTo(1))
-            .onRegister(GTItems.attach(new UltimateTerminalBehavior()))
+            .onRegister(GTItems.attach(new UltimateTerminalBehavior(), new TooltipBehavior(lines -> {
+                lines.add(Component.translatable("gtlcore.item.ultimate_terminal.tooltip.0").withStyle(ChatFormatting.GRAY));
+                lines.add(Component.translatable("gtlcore.item.ultimate_terminal.tooltip.1").withStyle(ChatFormatting.GRAY));
+                lines.add(Component.translatable("gtlcore.item.ultimate_terminal.tooltip.2").withStyle(ChatFormatting.GRAY));
+            })))
             .register();
 
     public static ItemEntry<Item> WORLD_FRAGMENTS_OVERWORLD = register("world_fragments_overworld", true);

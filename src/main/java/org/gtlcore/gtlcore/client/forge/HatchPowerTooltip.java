@@ -104,6 +104,7 @@ public final class HatchPowerTooltip {
         int underscore = path.indexOf('_');
         String tier = underscore < 0 ? path : path.substring(0, underscore);
         return switch (tier) {
+            case "ulv" -> GTValues.ULV;
             case "lv" -> GTValues.LV;
             case "mv" -> GTValues.MV;
             case "hv" -> GTValues.HV;

@@ -3978,7 +3978,7 @@ public class MaterialBuilder {
         TerephthaloylChloride = new Material.Builder(GTCEu.id("terephthaloyl_chloride"))
                 .dust()
                 .color(0x00e60b)
-                .components(Carbon, 8, Hydrogen, 4, Chlorine, 2, Nitrogen, 2)
+                .components(Carbon, 8, Hydrogen, 4, Chlorine, 2, Oxygen, 2)
                 .iconSet(DULL)
                 .buildAndRegister();
 

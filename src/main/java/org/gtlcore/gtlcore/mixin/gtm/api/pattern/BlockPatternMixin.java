@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.pattern.BlockPatternAccessor;
 import org.gtlcore.gtlcore.api.pattern.FixedPatternLayout;
 import org.gtlcore.gtlcore.api.pattern.PatternLayoutSearch;
 import org.gtlcore.gtlcore.api.pattern.PreviewMatcherTiming;
+import org.gtlcore.gtlcore.api.pattern.StructureDetectionScope;
 import org.gtlcore.gtlcore.api.pattern.WorldPatternMatcher;
 import org.gtlcore.gtlcore.api.pattern.WorldPatternTiming;
 import org.gtlcore.gtlcore.mixin.gtm.api.machine.IMultiblockStateInvoker;
@@ -101,9 +102,11 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
     @Unique
     private boolean gtlcore$checkPatternAt(MultiblockState worldState, BlockPos centerPos, Direction frontFacing,
                                            Direction upwardsFacing, boolean isFlipped, boolean savePredicate) {
-        int[] fixedRepetitions = (PreviewMatcherTiming.useFixedLayout(worldState) ||
-                WorldPatternMatcher.useFixedLayout(worldState)) ?
-                        FixedPatternLayout.repetitions(this.aisleRepetitions) : null;
+        int[] fixedRepetitions = StructureDetectionScope.configuredRepetitions(worldState, this.aisleRepetitions);
+        if (fixedRepetitions == null && (PreviewMatcherTiming.useFixedLayout(worldState) ||
+                WorldPatternMatcher.useFixedLayout(worldState))) {
+            fixedRepetitions = FixedPatternLayout.repetitions(this.aisleRepetitions);
+        }
         if (fixedRepetitions != null && fixedRepetitions.length != this.fingerLength) fixedRepetitions = null;
         boolean incremental = fixedRepetitions == null && PreviewMatcherTiming.useIncrementalSearch(worldState) &&
                 PatternLayoutSearch.supports(this.aisleRepetitions, this.fingerLength);

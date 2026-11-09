@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.gui.ExtendLabelWidget;
 import org.gtlcore.gtlcore.api.pattern.AdvancedBlockPattern;
 
 import com.gregtechceu.gtceu.api.gui.GuiTextures;
+import com.gregtechceu.gtceu.api.item.ComponentItem;
 import com.gregtechceu.gtceu.api.item.component.IItemUIFactory;
 import com.gregtechceu.gtceu.api.machine.IMachineBlockEntity;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
@@ -287,14 +288,25 @@ public class UltimateTerminalBehavior implements IItemUIFactory {
         return false;
     }
 
-    private static int getRepeatCount(ItemStack itemStack) {
-        CompoundTag tag = itemStack.getOrCreateTag();
-        return !tag.isEmpty() ? tag.getInt("RepeatCount") : 0;
+    /**
+     * @return whether the stack is an ultimate terminal, used by the structure detection trigger
+     */
+    public static boolean isUltimateTerminal(ItemStack itemStack) {
+        if (itemStack.isEmpty() || !(itemStack.getItem() instanceof ComponentItem componentItem)) return false;
+        for (var component : componentItem.getComponents()) {
+            if (component instanceof UltimateTerminalBehavior) return true;
+        }
+        return false;
     }
 
-    private static boolean getIsFlip(ItemStack itemStack) {
-        CompoundTag tag = itemStack.getOrCreateTag();
-        return !tag.isEmpty() && tag.getBoolean("IsFlipped");
+    public static int getRepeatCount(ItemStack itemStack) {
+        CompoundTag tag = itemStack.getTag();
+        return tag != null ? tag.getInt("RepeatCount") : 0;
+    }
+
+    public static boolean getIsFlip(ItemStack itemStack) {
+        CompoundTag tag = itemStack.getTag();
+        return tag != null && tag.getBoolean("IsFlipped");
     }
 
     private static boolean getDismantleMode(ItemStack itemStack) {

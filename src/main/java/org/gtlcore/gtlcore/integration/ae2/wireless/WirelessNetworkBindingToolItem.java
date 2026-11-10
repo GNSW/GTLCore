@@ -86,6 +86,11 @@ public final class WirelessNetworkBindingToolItem extends Item {
     public static void clearSavedNetwork(ServerPlayer player) {
         ItemStack stack = player.getMainHandItem();
         if (!(stack.getItem() instanceof WirelessNetworkBindingToolItem)) return;
+        clearSavedNetwork(player, stack);
+    }
+
+    /** Clears the saved network from the given tool stack, wherever it is carried. */
+    public static void clearSavedNetwork(ServerPlayer player, ItemStack stack) {
         CompoundTag tag = stack.getTag();
         if (tag == null || !tag.hasUUID(TAG_NETWORK)) return;
         if (tag != null) {
@@ -97,20 +102,29 @@ public final class WirelessNetworkBindingToolItem extends Item {
         message(player, "message.gtlcore.wireless_binding_tool.cleared");
     }
 
+    /** Opens the picker for the tool the player carries, wherever that is. */
+    public static void openPickerFor(ServerPlayer player) {
+        ItemStack stack = WirelessBindingToolLocator.find(player);
+        if (stack.isEmpty()) {
+            return;
+        }
+        WirelessNetworkPickerMenu.open(player, stack);
+    }
+
     /**
      * Applies a pick from {@link WirelessNetworkPickerMenu}: stores the network, or clears the saved
      * one when it is picked again.
      */
     public static void applyPickerChoice(ServerPlayer player, UUID frequency) {
-        ItemStack stack = player.getMainHandItem();
-        if (!(stack.getItem() instanceof WirelessNetworkBindingToolItem)) {
+        ItemStack stack = WirelessBindingToolLocator.find(player);
+        if (stack.isEmpty()) {
             return;
         }
         if (!player.containerMenu.stillValid(player) || !player.mayBuild()) {
             return;
         }
         if (frequency.equals(savedNetwork(stack))) {
-            clearSavedNetwork(player);
+            clearSavedNetwork(player, stack);
             return;
         }
         if (!WirelessAeNetworkRuntime.canAccessNetwork(player, frequency)) {

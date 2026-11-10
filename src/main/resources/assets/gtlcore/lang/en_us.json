@@ -195,6 +195,7 @@
   "mm.error.refund": "Return task escrow before starting another task.",
   "mm.error.access_point": "Use the tool on an ME wireless access point to bind.",
   "key.categories.gtlcore.manipulator": "GTLCore Matter Manipulator",
+  "key.gtlcore.wireless_binding_picker": "Open wireless network picker",
   "key.gtlcore.manipulator.menu": "Open radial menu",
   "key.gtlcore.manipulator.copy": "Copy selection",
   "key.gtlcore.manipulator.cut": "Move selection",

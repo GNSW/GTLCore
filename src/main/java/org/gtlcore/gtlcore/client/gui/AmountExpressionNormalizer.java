@@ -5,14 +5,29 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Expands quantity suffixes and uppercase-E scientific notation before handing an expression to AE2's parser.
- * For example, {@code 1.5k + 2m} becomes {@code 1500 + 2000000}, and {@code 1E10} becomes
- * {@code 10000000000}. A suffix without an exponent, such as {@code 1e}, denotes Exa.
+ * Expands quantity suffixes and scientific notation before handing an expression to a parser.
+ * For example, {@code 1.5k + 2m} becomes {@code 1500 + 2000000}, {@code 1e6} becomes
+ * {@code 1000000}, and {@code 1e3k} becomes {@code 1000000}.
+ * <p>
+ * An {@code e}/{@code E} that is not followed by an exponent is treated as the Exa suffix
+ * ({@code 1e} becomes {@code 1000000000000000000}).
  */
 public final class AmountExpressionNormalizer {
 
+    /**
+     * Matches one numeric literal, optionally followed by either a scientific exponent
+     * (with an optional unit after it) or a quantity suffix.
+     */
     private static final Pattern AMOUNT_LITERAL = Pattern.compile(
-            "(?<![\\w.])((?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:E[+-]?\\d+)?)([kKmMgGtTpPeEzZ]?)(?![\\w.])");
+            "(?<![\\w.])((?:\\d+(?:\\.\\d*)?|\\.\\d+))" +
+                    "(?:[eE]([+-]?\\d+)([kKmMgGtTpPeEzZ]?)|([kKmMgGtTpPeEzZ]?))" +
+                    "(?![\\w.])");
+
+    /**
+     * Limits expansion so a malformed input cannot allocate an arbitrarily large decimal string.
+     * Long values only need exponents up to 19, so this is already far beyond practical inputs.
+     */
+    private static final int MAX_EXPONENT = 1_000;
 
     private AmountExpressionNormalizer() {}
 
@@ -25,17 +40,41 @@ public final class AmountExpressionNormalizer {
         StringBuilder expanded = null;
         int previousEnd = 0;
         while (matcher.find()) {
-            String number = matcher.group(1);
-            String unit = matcher.group(2);
-            if (unit.isEmpty() && !hasExponent(number)) {
+            String mantissa = matcher.group(1);
+            String exponent = matcher.group(2);
+            String unit = exponent != null ? matcher.group(3) : matcher.group(4);
+            boolean scientific = exponent != null;
+            boolean hasUnit = unit != null && !unit.isEmpty();
+            if (!scientific && !hasUnit) {
+                continue;
+            }
+            if (!scientific && hasUnit && isExa(unit.charAt(0)) && isIncompleteExponent(expression, matcher.end())) {
+                // "1e-"/"1e+" is the beginning of scientific notation, not the Exa suffix.
+                continue;
+            }
+
+            int scale = 0;
+            if (scientific) {
+                try {
+                    scale = Integer.parseInt(exponent);
+                } catch (NumberFormatException ignored) {
+                    continue;
+                }
+            }
+            if (hasUnit) {
+                scale += unitExponent(unit.charAt(0));
+            }
+            if (Math.abs(scale) > MAX_EXPONENT) {
                 continue;
             }
 
             String replacement;
             try {
-                BigDecimal amount = new BigDecimal(number);
-                replacement = amount.scaleByPowerOfTen(unit.isEmpty() ? 0 : unitExponent(unit.charAt(0)))
-                        .toPlainString();
+                BigDecimal amount = new BigDecimal(mantissa);
+                if (scale != 0) {
+                    amount = amount.scaleByPowerOfTen(scale);
+                }
+                replacement = amount.toPlainString();
             } catch (ArithmeticException | NumberFormatException ignored) {
                 continue;
             }
@@ -54,8 +93,16 @@ public final class AmountExpressionNormalizer {
         return expanded.append(expression, previousEnd, expression.length()).toString();
     }
 
-    private static boolean hasExponent(String number) {
-        return number.indexOf('E') >= 0;
+    private static boolean isExa(char unit) {
+        return unit == 'e' || unit == 'E';
+    }
+
+    private static boolean isIncompleteExponent(String expression, int end) {
+        if (end >= expression.length()) {
+            return false;
+        }
+        char next = expression.charAt(end);
+        return next == '+' || next == '-';
     }
 
     private static int unitExponent(char unit) {
@@ -67,7 +114,7 @@ public final class AmountExpressionNormalizer {
             case 'p' -> 15;
             case 'e' -> 18;
             case 'z' -> 21;
-            default -> throw new IllegalArgumentException("Unsupported quantity unit: " + unit);
+            default -> 0;
         };
     }
 }

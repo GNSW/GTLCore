@@ -146,6 +146,10 @@ public final class GTLWirelessAeContent {
             "wireless_network_bookmark",
             () -> IForgeMenuType.create(WirelessNetworkBookmarkMenu::new));
 
+    public static final RegistryObject<MenuType<WirelessNetworkPickerMenu>> WIRELESS_NETWORK_PICKER_MENU = MENU_TYPES.register(
+            "wireless_network_picker",
+            () -> IForgeMenuType.create(WirelessNetworkPickerMenu::new));
+
     public static final RegistryObject<MenuType<WirelessAeTargetMenu>> WIRELESS_AE_TARGET_MENU = MENU_TYPES.register(
             "wireless_ae_target",
             () -> IForgeMenuType.create(WirelessAeTargetMenu::new));

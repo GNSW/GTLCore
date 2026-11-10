@@ -51,7 +51,14 @@ public class WirelessNetworkPickerMenu extends AbstractContainerMenu {
     }
 
     public static void open(ServerPlayer player) {
-        ItemStack stack = player.getMainHandItem();
+        ItemStack stack = WirelessBindingToolLocator.find(player);
+        if (stack.isEmpty()) {
+            return;
+        }
+        open(player, stack);
+    }
+
+    public static void open(ServerPlayer player, ItemStack stack) {
         if (!(stack.getItem() instanceof WirelessNetworkBindingToolItem)) {
             return;
         }
@@ -113,7 +120,7 @@ public class WirelessNetworkPickerMenu extends AbstractContainerMenu {
         if (player.level().isClientSide) {
             return true;
         }
-        if (!(player.getMainHandItem().getItem() instanceof WirelessNetworkBindingToolItem)) {
+        if (WirelessBindingToolLocator.find(player).isEmpty()) {
             return false;
         }
         return player.distanceToSqr(

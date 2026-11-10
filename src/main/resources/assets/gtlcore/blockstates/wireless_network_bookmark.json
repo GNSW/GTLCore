@@ -1,8 +1,0 @@
-{
-  "variants": {
-    "facing=north": { "model": "gtlcore:block/wireless_network_bookmark" },
-    "facing=east": { "model": "gtlcore:block/wireless_network_bookmark", "y": 90 },
-    "facing=south": { "model": "gtlcore:block/wireless_network_bookmark", "y": 180 },
-    "facing=west": { "model": "gtlcore:block/wireless_network_bookmark", "y": 270 }
-  }
-}

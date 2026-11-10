@@ -1,10 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.wireless;
 
-import com.gregtechceu.gtceu.api.gui.factory.MachineUIFactory;
-import com.gregtechceu.gtceu.api.machine.feature.IUIMachine;
-
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -14,26 +10,21 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.BlockHitResult;
 
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.WeakHashMap;
 
 public final class WirelessNetworkBindingToolItem extends Item {
 
     private static final String TAG_NETWORK = "WirelessNetworkId";
     private static final String TAG_NETWORK_NAME = "WirelessNetworkName";
-    private static final Map<AbstractContainerMenu, BindingToolMenu> BINDING_TOOL_MENUS = new WeakHashMap<>();
 
     public WirelessNetworkBindingToolItem() {
         super(new Properties().stacksTo(1));
@@ -54,38 +45,14 @@ public final class WirelessNetworkBindingToolItem extends Item {
         return tag != null && tag.hasUUID(TAG_NETWORK) ? tag.getUUID(TAG_NETWORK) : null;
     }
 
-    public static void openNetworkTab(ServerPlayer player, IUIMachine machine, BlockHitResult hit) {
-        if (!machine.shouldOpenUI(player, InteractionHand.OFF_HAND, hit) ||
-                !MachineUIFactory.INSTANCE.openUI(machine.self(), player)) {
-            return;
-        }
-        AbstractContainerMenu menu = player.containerMenu;
-        BINDING_TOOL_MENUS.put(menu, new BindingToolMenu(player.getOffhandItem(), hit.getBlockPos()));
-    }
-
-    public static void saveNetworkFromMenu(ServerPlayer player, UUID frequency) {
-        BindingToolMenu binding = BINDING_TOOL_MENUS.get(player.containerMenu);
-        if (binding == null || !player.containerMenu.stillValid(player) || !player.mayBuild() ||
-                !player.canReach(binding.originPos(), 0) || !player.level().mayInteract(player, binding.originPos()) ||
-                player.getOffhandItem() != binding.stack()) {
-            return;
-        }
-        if (!WirelessAeNetworkRuntime.canAccessNetwork(player, frequency)) {
-            message(player, "message.gtlcore.wireless_binding_tool.no_access");
-            return;
-        }
-        if (WirelessAeSavedData.get(player.server).getCore(frequency) == null) {
-            message(player, "message.gtlcore.wireless_target.missing_core");
-            return;
-        }
-        saveNetwork(player, binding.stack(), frequency);
-    }
-
-    private record BindingToolMenu(ItemStack stack, BlockPos originPos) {}
-
     public static void clearSavedNetwork(ServerPlayer player) {
         ItemStack stack = player.getMainHandItem();
         if (!(stack.getItem() instanceof WirelessNetworkBindingToolItem)) return;
+        clearSavedNetwork(player, stack);
+    }
+
+    /** Clears the saved network from the given tool stack, wherever it is carried. */
+    public static void clearSavedNetwork(ServerPlayer player, ItemStack stack) {
         CompoundTag tag = stack.getTag();
         if (tag == null || !tag.hasUUID(TAG_NETWORK)) return;
         if (tag != null) {
@@ -97,20 +64,29 @@ public final class WirelessNetworkBindingToolItem extends Item {
         message(player, "message.gtlcore.wireless_binding_tool.cleared");
     }
 
+    /** Opens the picker for the tool the player carries, wherever that is. */
+    public static void openPickerFor(ServerPlayer player) {
+        ItemStack stack = WirelessBindingToolLocator.find(player);
+        if (stack.isEmpty()) {
+            return;
+        }
+        WirelessNetworkPickerMenu.open(player, stack);
+    }
+
     /**
      * Applies a pick from {@link WirelessNetworkPickerMenu}: stores the network, or clears the saved
      * one when it is picked again.
      */
     public static void applyPickerChoice(ServerPlayer player, UUID frequency) {
-        ItemStack stack = player.getMainHandItem();
-        if (!(stack.getItem() instanceof WirelessNetworkBindingToolItem)) {
+        ItemStack stack = WirelessBindingToolLocator.find(player);
+        if (stack.isEmpty()) {
             return;
         }
         if (!player.containerMenu.stillValid(player) || !player.mayBuild()) {
             return;
         }
         if (frequency.equals(savedNetwork(stack))) {
-            clearSavedNetwork(player);
+            clearSavedNetwork(player, stack);
             return;
         }
         if (!WirelessAeNetworkRuntime.canAccessNetwork(player, frequency)) {
@@ -166,27 +142,38 @@ public final class WirelessNetworkBindingToolItem extends Item {
         if (!WirelessAeNetworkRuntime.canBindAsWirelessTarget(serverPlayer.serverLevel(), target.blockPos(), target.side())) {
             return message(serverPlayer, "message.gtlcore.wireless_target.invalid_target");
         }
+        return bindTo(serverPlayer, target, frequency, serverPlayer.isShiftKeyDown());
+    }
+
+    /**
+     * Binds an already resolved target to {@code frequency}. Shared by the tool's right-click path and
+     * by sneak-placing a target, which cannot go through {@link #onItemUseFirst}.
+     */
+    static InteractionResult bindTo(ServerPlayer player, WirelessAeSavedData.MemberKey target, UUID frequency,
+                                    boolean replace) {
+        var server = player.server;
+        var data = WirelessAeSavedData.get(server);
         UUID currentNetwork = data.getMemberNetwork(target);
         UUID wiredNetwork = WirelessAeNetworkRuntime.findWiredNetworkFrequency(server, target);
         UUID connectedNetwork = wiredNetwork == null ? WirelessAeNetworkRuntime.findConnectedNetworkFrequency(server, target) : wiredNetwork;
         // Persisted bindings count even when the core is offline or reconnection is pending.
-        if (!player.isShiftKeyDown() && (currentNetwork != null || connectedNetwork != null)) {
-            return message(serverPlayer, "message.gtlcore.wireless_binding_tool.already_bound");
+        if (!replace && (currentNetwork != null || connectedNetwork != null)) {
+            return message(player, "message.gtlcore.wireless_binding_tool.already_bound");
         }
         if (wiredNetwork != null || (connectedNetwork != null &&
                 (!connectedNetwork.equals(currentNetwork) || !WirelessAeNetworkRuntime.hasWirelessConnection(connectedNetwork, target)))) {
-            return message(serverPlayer, "message.gtlcore.wireless_binding_tool.existing_connection");
+            return message(player, "message.gtlcore.wireless_binding_tool.existing_connection");
         }
-        if (currentNetwork != null && !WirelessAeNetworkRuntime.canAccessNetwork(serverPlayer, currentNetwork)) {
-            return message(serverPlayer, "message.gtlcore.wireless_binding_tool.no_access");
+        if (currentNetwork != null && !WirelessAeNetworkRuntime.canAccessNetwork(player, currentNetwork)) {
+            return message(player, "message.gtlcore.wireless_binding_tool.no_access");
         }
         var core = WirelessAeNetworkRuntime.getLoadedCore(server, frequency);
-        if (core == null) return message(serverPlayer, "message.gtlcore.wireless_target.missing_core");
+        if (core == null) return message(player, "message.gtlcore.wireless_target.missing_core");
         if (!core.isLinkedToAeNetwork()) {
-            return message(serverPlayer, "message.gtlcore.wireless_target.core_not_connected");
+            return message(player, "message.gtlcore.wireless_target.core_not_connected");
         }
         if (frequency.equals(currentNetwork) && WirelessAeNetworkRuntime.hasWirelessConnection(frequency, target)) {
-            return message(serverPlayer, "message.gtlcore.wireless_target.linked_target", data.getNetworkName(frequency));
+            return message(player, "message.gtlcore.wireless_target.linked_target", data.getNetworkName(frequency));
         }
         for (UUID removedNetwork : data.removeMembersAt(target.pos())) {
             WirelessAeNetworkRuntime.disconnectMembersAt(removedNetwork, target.pos());
@@ -196,7 +183,7 @@ public final class WirelessNetworkBindingToolItem extends Item {
         WirelessAeNetworkRuntime.requestReconnect(frequency);
         boolean connected = result == WirelessAeNetworkRuntime.ConnectionResult.CONNECTED ||
                 result == WirelessAeNetworkRuntime.ConnectionResult.ALREADY_CONNECTED;
-        return message(serverPlayer, connected ? "message.gtlcore.wireless_target.linked_target" :
+        return message(player, connected ? "message.gtlcore.wireless_target.linked_target" :
                 "message.gtlcore.wireless_target.linked_target_pending", data.getNetworkName(frequency));
     }
 

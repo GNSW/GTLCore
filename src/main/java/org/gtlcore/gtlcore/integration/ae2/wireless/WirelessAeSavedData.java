@@ -38,8 +38,6 @@ public class WirelessAeSavedData extends SavedData {
     private static final String DATA_NAME = "gtlcore_wireless_ae_networks";
     private static final String TAG_PLAYER_DATA = "gtlcore_wireless_ae";
     private static final String TAG_NETWORKS = "networks";
-    private static final String TAG_FAVORITE_NETWORK = "favorite_network";
-    private static final String TAG_LEGACY_FAVORITE_MIGRATED = "legacy_favorite_migrated";
     private static final String TAG_FREQUENCY = "frequency";
     private static final String TAG_CORE = "core";
     private static final String TAG_OWNER = "owner";
@@ -55,7 +53,6 @@ public class WirelessAeSavedData extends SavedData {
     private final Map<UUID, NetworkRecord> networks = new HashMap<>();
     private final Map<MemberKey, UUID> memberNetworks = new HashMap<>();
     private long memberRevision;
-    private UUID legacyFavoriteNetwork;
 
     public static WirelessAeSavedData get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(
@@ -66,10 +63,6 @@ public class WirelessAeSavedData extends SavedData {
 
     public static WirelessAeSavedData load(CompoundTag tag) {
         WirelessAeSavedData data = new WirelessAeSavedData();
-        if (tag.hasUUID(TAG_FAVORITE_NETWORK)) {
-            data.legacyFavoriteNetwork = tag.getUUID(TAG_FAVORITE_NETWORK);
-        }
-
         ListTag networksTag = tag.getList(TAG_NETWORKS, Tag.TAG_COMPOUND);
         for (int i = 0; i < networksTag.size(); i++) {
             CompoundTag networkTag = networksTag.getCompound(i);
@@ -101,10 +94,6 @@ public class WirelessAeSavedData extends SavedData {
             data.setDirty();
         }
         data.rebuildMemberIndex();
-        if (data.legacyFavoriteNetwork != null && !data.networks.containsKey(data.legacyFavoriteNetwork)) {
-            data.legacyFavoriteNetwork = null;
-            data.setDirty();
-        }
         return data;
     }
 
@@ -132,12 +121,6 @@ public class WirelessAeSavedData extends SavedData {
 
     @Override
     public @NotNull CompoundTag save(@NotNull CompoundTag tag) {
-        if (this.legacyFavoriteNetwork != null && this.networks.containsKey(this.legacyFavoriteNetwork)) {
-            tag.putUUID(TAG_FAVORITE_NETWORK, this.legacyFavoriteNetwork);
-        } else {
-            tag.remove(TAG_FAVORITE_NETWORK);
-        }
-
         ListTag networksTag = new ListTag();
         for (Map.Entry<UUID, NetworkRecord> entry : this.networks.entrySet()) {
             NetworkRecord record = entry.getValue();
@@ -186,7 +169,6 @@ public class WirelessAeSavedData extends SavedData {
         record.members.stream().map(WirelessAeSavedData::writeMemberKey)
                 .sorted(Comparator.comparing(CompoundTag::toString)).forEach(members::add);
         tag.put(TAG_MEMBERS, members);
-        tag.putBoolean("LegacyFavorite", frequency.equals(legacyFavoriteNetwork));
         return tag;
     }
 
@@ -210,7 +192,6 @@ public class WirelessAeSavedData extends SavedData {
             record.owner = tag.hasUUID(TAG_OWNER) ? tag.getUUID(TAG_OWNER) : null;
             record.name = tag.getString(TAG_NAME);
             for (Tag value : tag.getList(TAG_MEMBERS, Tag.TAG_COMPOUND)) addMember(frequency, readMemberKey((CompoundTag) value));
-            if (tag.getBoolean("LegacyFavorite")) legacyFavoriteNetwork = frequency;
         }
         memberRevision++;
         setDirty();
@@ -265,27 +246,6 @@ public class WirelessAeSavedData extends SavedData {
     public List<NetworkInfo> getNetworkInfo(MinecraftServer server) {
         pruneMissingCoreNetworks(server);
         return getNetworkInfo();
-    }
-
-    public UUID getFavoriteNetwork(ServerPlayer player) {
-        UUID favoriteNetwork = readPlayerFavoriteNetwork(player);
-        if (favoriteNetwork != null) {
-            if (this.networks.containsKey(favoriteNetwork)) {
-                return favoriteNetwork;
-            }
-            writePlayerFavoriteNetwork(player, null);
-        }
-        return migrateLegacyFavoriteNetwork(player);
-    }
-
-    public boolean setFavoriteNetwork(ServerPlayer player, UUID frequency) {
-        UUID updated = frequency != null && this.networks.containsKey(frequency) ? frequency : null;
-        if (java.util.Objects.equals(getFavoriteNetwork(player), updated)) {
-            return false;
-        }
-        markLegacyFavoriteMigrated(player);
-        writePlayerFavoriteNetwork(player, updated);
-        return true;
     }
 
     public UUID getMemberNetwork(GlobalPos member) {
@@ -496,9 +456,6 @@ public class WirelessAeSavedData extends SavedData {
         });
         if (!removed.isEmpty()) {
             this.memberNetworks.entrySet().removeIf(entry -> removed.contains(entry.getValue()));
-            if (removed.contains(this.legacyFavoriteNetwork)) {
-                this.legacyFavoriteNetwork = null;
-            }
             setDirty();
         }
         return removed;
@@ -507,9 +464,6 @@ public class WirelessAeSavedData extends SavedData {
     public void removeNetwork(UUID frequency) {
         this.memberNetworks.entrySet().removeIf(entry -> entry.getValue().equals(frequency));
         if (this.networks.remove(frequency) != null) {
-            if (frequency.equals(this.legacyFavoriteNetwork)) {
-                this.legacyFavoriteNetwork = null;
-            }
             setDirty();
         }
     }
@@ -535,58 +489,8 @@ public class WirelessAeSavedData extends SavedData {
         });
         this.memberNetworks.entrySet().removeIf(entry -> removed.contains(entry.getValue()));
         if (!removed.isEmpty()) {
-            if (removed.contains(this.legacyFavoriteNetwork)) {
-                this.legacyFavoriteNetwork = null;
-            }
             setDirty();
         }
-    }
-
-    private UUID migrateLegacyFavoriteNetwork(ServerPlayer player) {
-        if (this.legacyFavoriteNetwork == null || hasMigratedLegacyFavorite(player)) {
-            return null;
-        }
-        if (!WirelessAeNetworkRuntime.canAccessNetwork(player, this.legacyFavoriteNetwork)) {
-            return null;
-        }
-
-        UUID migrated = this.legacyFavoriteNetwork;
-        writePlayerFavoriteNetwork(player, migrated);
-        markLegacyFavoriteMigrated(player);
-        return migrated;
-    }
-
-    private static boolean hasMigratedLegacyFavorite(ServerPlayer player) {
-        CompoundTag persisted = player.getPersistentData().getCompound(Player.PERSISTED_NBT_TAG);
-        return persisted.getCompound(TAG_PLAYER_DATA).getBoolean(TAG_LEGACY_FAVORITE_MIGRATED);
-    }
-
-    private static void markLegacyFavoriteMigrated(ServerPlayer player) {
-        CompoundTag entityData = player.getPersistentData();
-        CompoundTag persisted = entityData.getCompound(Player.PERSISTED_NBT_TAG);
-        CompoundTag wirelessData = persisted.getCompound(TAG_PLAYER_DATA);
-        wirelessData.putBoolean(TAG_LEGACY_FAVORITE_MIGRATED, true);
-        persisted.put(TAG_PLAYER_DATA, wirelessData);
-        entityData.put(Player.PERSISTED_NBT_TAG, persisted);
-    }
-
-    private static UUID readPlayerFavoriteNetwork(ServerPlayer player) {
-        CompoundTag persisted = player.getPersistentData().getCompound(Player.PERSISTED_NBT_TAG);
-        CompoundTag wirelessData = persisted.getCompound(TAG_PLAYER_DATA);
-        return wirelessData.hasUUID(TAG_FAVORITE_NETWORK) ? wirelessData.getUUID(TAG_FAVORITE_NETWORK) : null;
-    }
-
-    private static void writePlayerFavoriteNetwork(ServerPlayer player, UUID frequency) {
-        CompoundTag entityData = player.getPersistentData();
-        CompoundTag persisted = entityData.getCompound(Player.PERSISTED_NBT_TAG);
-        CompoundTag wirelessData = persisted.getCompound(TAG_PLAYER_DATA);
-        if (frequency == null) {
-            wirelessData.remove(TAG_FAVORITE_NETWORK);
-        } else {
-            wirelessData.putUUID(TAG_FAVORITE_NETWORK, frequency);
-        }
-        persisted.put(TAG_PLAYER_DATA, wirelessData);
-        entityData.put(Player.PERSISTED_NBT_TAG, persisted);
     }
 
     private NetworkRecord network(UUID frequency) {

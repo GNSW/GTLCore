@@ -10,7 +10,6 @@ import org.gtlcore.gtlcore.common.machine.generator.WirelessChargingStationMachi
 import org.gtlcore.gtlcore.common.plushie.PlushieHeadJump;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
-import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessNetworkBindingToolItem;
 import org.gtlcore.gtlcore.utils.Registries;
 
 import com.gregtechceu.gtceu.api.capability.GTCapabilityHelper;
@@ -19,7 +18,6 @@ import com.gregtechceu.gtceu.api.cover.CoverBehavior;
 import com.gregtechceu.gtceu.api.cover.IUICover;
 import com.gregtechceu.gtceu.api.gui.factory.CoverUIFactory;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
-import com.gregtechceu.gtceu.api.machine.feature.IUIMachine;
 import com.gregtechceu.gtceu.common.data.GTItems;
 
 import net.minecraft.network.chat.Component;
@@ -84,20 +82,6 @@ public class ForgeCommonEventListener {
             if (!event.getLevel().isClientSide && !event.getEntity().isSpectator() &&
                     event.getLevel().getBlockEntity(event.getPos()) instanceof PlushieBlockEntity plushie) {
                 plushie.togglePlaying();
-            }
-            return;
-        }
-        if (event.getEntity().getOffhandItem().getItem() instanceof WirelessNetworkBindingToolItem &&
-                WirelessAeNetworkRuntime.canOpenWirelessTargetMenu(event.getLevel(), event.getPos()) &&
-                MetaMachine.getMachine(event.getLevel(), event.getPos()) instanceof IUIMachine machine) {
-            event.setCanceled(true);
-            if (!event.getEntity().mayBuild() || !event.getLevel().mayInteract(event.getEntity(), event.getPos())) {
-                event.setCancellationResult(InteractionResult.FAIL);
-                return;
-            }
-            event.setCancellationResult(InteractionResult.SUCCESS);
-            if (event.getEntity() instanceof ServerPlayer player) {
-                WirelessNetworkBindingToolItem.openNetworkTab(player, machine, event.getHitVec());
             }
             return;
         }

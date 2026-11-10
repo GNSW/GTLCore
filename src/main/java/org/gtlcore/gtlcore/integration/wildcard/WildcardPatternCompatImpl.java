@@ -46,7 +46,6 @@ public class WildcardPatternCompatImpl {
                 .tooltips(
                         Component.translatable("block.gtceu.pattern_buffer.desc.0"),
                         Component.translatable("gtceu.machine.me_wildcard_pattern_buffer.desc.0"),
-                        Component.translatable("tooltip.gtlcore.wireless_bookmark.quick_connect"),
                         Component.translatable("gtceu.machine.me_pattern_buffer.desc.3"),
                         Component.translatable("gtceu.machine.me_pattern_buffer.desc.5"),
                         Component.translatable("block.gtceu.pattern_buffer.desc.2"),
@@ -66,7 +65,6 @@ public class WildcardPatternCompatImpl {
                         Component.translatable("gtceu.machine.me_wildcard_pattern_buffer.desc.0"),
                         Component.translatable("gtlcore.machine.me_stocking_pattern_buffer.desc.0"),
                         Component.translatable("gtlcore.machine.me_stocking_pattern_buffer.desc.1"),
-                        Component.translatable("tooltip.gtlcore.wireless_bookmark.quick_connect"),
                         Component.translatable("gtceu.machine.me_pattern_buffer.desc.3"),
                         Component.translatable("gtceu.machine.me_pattern_buffer.desc.5"),
                         Component.translatable("block.gtceu.pattern_buffer.desc.2"),

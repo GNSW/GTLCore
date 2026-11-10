@@ -54,11 +54,9 @@ public final class WirelessAeNetworkRuntime {
     private static final int MAX_SCAN_MEMBERS_PER_NETWORK = 32;
     private static final int MAX_SCAN_NETWORKS_PER_TICK = 32;
     private static final int MAX_WIRED_NODES_PER_SEARCH = 4096;
-    private static final int FAVORITE_BIND_RETRY_TICKS = 80;
     private static final int WIRED_RECHECK_INTERVAL_TICKS = 100;
 
     private static final Map<UUID, Map<WirelessAeSavedData.MemberKey, IGridConnection>> CONNECTIONS = new HashMap<>();
-    private static final Map<GlobalPos, PendingFavoriteBind> PENDING_FAVORITE_BINDS = new HashMap<>();
     private static final Map<Class<?>, WirelessTargetClassInfo> WIRELESS_TARGET_CLASS_CACHE = new ConcurrentHashMap<>();
     private static final Map<RuntimeReflectionKey, Optional<Method>> RUNTIME_METHOD_CACHE = new ConcurrentHashMap<>();
     private static final Map<WirelessAeSavedData.MemberKey, Integer> NEXT_WIRED_RECHECK_TICKS = new HashMap<>();
@@ -132,18 +130,6 @@ public final class WirelessAeNetworkRuntime {
             "me_extended_async_export_buffer",
             "me_molecular_assembler_io",
             "me_wildcard_pattern_buffer");
-    private static final Set<String> QUICK_CONNECT_TOOLTIP_TARGET_IDS = Set.of(
-            "me_input_bus",
-            "me_stocking_input_bus",
-            "me_output_bus",
-            "me_input_hatch",
-            "me_input_assembly",
-            "me_stocking_input_hatch",
-            "me_output_hatch",
-            "me_crafting_cpu_interface",
-            "tag_filter_me_stock_bus_part_machine",
-            "tag_filter_me_stock_hatch_part_machine",
-            "me_dual_hatch_stock_part_machine");
 
     public enum ConnectionResult {
         CONNECTED,
@@ -152,20 +138,6 @@ public final class WirelessAeNetworkRuntime {
         CORE_NOT_CONNECTED,
         TARGET_MISSING,
         FAILED
-    }
-
-    private enum FavoriteBindResult {
-        BOUND,
-        TARGET_NOT_READY,
-        CORE_UNAVAILABLE,
-        INVALID_TARGET
-    }
-
-    private record PendingFavoriteBind(UUID frequency, UUID playerId, int age) {
-
-        private PendingFavoriteBind nextTick() {
-            return new PendingFavoriteBind(this.frequency, this.playerId, this.age + 1);
-        }
     }
 
     private record WirelessTargetClassInfo(boolean knownTarget, boolean compatibleGridTarget,
@@ -206,7 +178,6 @@ public final class WirelessAeNetworkRuntime {
     private static void onServerStopped(net.minecraftforge.event.server.ServerStoppedEvent event) {
         // No node references or deadlines may survive into another integrated server.
         CONNECTIONS.clear();
-        PENDING_FAVORITE_BINDS.clear();
         NEXT_WIRED_RECHECK_TICKS.clear();
         LAST_EXPANDED_REVISION.clear();
         FULL_SCAN_REQUESTS.clear();
@@ -236,7 +207,6 @@ public final class WirelessAeNetworkRuntime {
             invalidateTopology();
             COMPONENT_SNAPSHOTS.clear();
             clearMemberBinding(serverLevel, event.getPos());
-            requestFavoriteNetworkBindOnSneakPlace(serverLevel, event);
         }
     }
 
@@ -250,7 +220,6 @@ public final class WirelessAeNetworkRuntime {
         beginTickCaches();
         try {
             applyPendingTopologyInvalidation();
-            processPendingFavoriteBinds(event.getServer());
             scheduleMaintenance(event.getServer());
             maintainNetworks(event.getServer());
 
@@ -746,8 +715,6 @@ public final class WirelessAeNetworkRuntime {
         for (var entry : CONNECTIONS.entrySet()) {
             if (entry.getValue().keySet().stream().anyMatch(key -> key.pos().equals(member))) frequencies.add(entry.getKey());
         }
-        PendingFavoriteBind pending = PENDING_FAVORITE_BINDS.get(member);
-        if (pending != null) frequencies.add(pending.frequency());
         if (frequencies.stream().anyMatch(frequency -> !canAccessNetwork(player, frequency))) {
             player.displayClientMessage(Component.translatable("message.gtlcore.wireless_binding_tool.no_access"), true);
             return;
@@ -763,112 +730,12 @@ public final class WirelessAeNetworkRuntime {
     private static void clearMemberBinding(ServerLevel level, BlockPos pos) {
         GlobalPos member = GlobalPos.of(level.dimension(), pos);
         clearMemberRetries(key -> key.pos().equals(member));
-        PENDING_FAVORITE_BINDS.remove(member);
         forgetWiredConnectionChecksAt(member);
         TICK_TARGET_NODE_CACHE.keySet().removeIf(key -> key.pos().equals(member));
         WirelessAeSavedData data = WirelessAeSavedData.get(level.getServer());
         for (UUID frequency : data.removeMembersAt(member)) {
             disconnectMembersAt(frequency, member);
         }
-    }
-
-    private static void requestFavoriteNetworkBindOnSneakPlace(ServerLevel level, BlockEvent.EntityPlaceEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || !player.isShiftKeyDown()) {
-            return;
-        }
-
-        WirelessAeSavedData data = WirelessAeSavedData.get(level.getServer());
-        UUID favoriteNetwork = data.getFavoriteNetwork(player);
-        if (favoriteNetwork == null || !canAccessNetwork(player, favoriteNetwork)) {
-            return;
-        }
-
-        BlockPos pos = event.getPos();
-        if (!isWirelessMeTarget(level, pos) && !isWirelessMeTargetId(ForgeRegistries.BLOCKS.getKey(event.getPlacedBlock().getBlock()))) {
-            return;
-        }
-
-        FavoriteBindResult result = bindFavoriteNetwork(level, pos, favoriteNetwork, player, true);
-        if (result == FavoriteBindResult.TARGET_NOT_READY) {
-            queuePendingFavoriteBind(level, pos, favoriteNetwork, player);
-        }
-    }
-
-    private static void processPendingFavoriteBinds(MinecraftServer server) {
-        Iterator<Map.Entry<GlobalPos, PendingFavoriteBind>> iterator = PENDING_FAVORITE_BINDS.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<GlobalPos, PendingFavoriteBind> entry = iterator.next();
-            GlobalPos pos = entry.getKey();
-            PendingFavoriteBind pending = entry.getValue();
-            if (WirelessAeSavedData.get(server).getCore(pending.frequency()) == null) {
-                iterator.remove();
-                continue;
-            }
-            ServerLevel level = server.getLevel(pos.dimension());
-            if (level == null || !level.hasChunkAt(pos.pos())) {
-                iterator.remove();
-                continue;
-            }
-
-            ServerPlayer player = server.getPlayerList().getPlayer(pending.playerId());
-            FavoriteBindResult result = bindFavoriteNetwork(level, pos.pos(), pending.frequency(), player, true);
-            if (result == FavoriteBindResult.BOUND || result == FavoriteBindResult.INVALID_TARGET || result == FavoriteBindResult.CORE_UNAVAILABLE) {
-                iterator.remove();
-                continue;
-            }
-
-            if (pending.age() >= FAVORITE_BIND_RETRY_TICKS) {
-                iterator.remove();
-            } else {
-                entry.setValue(pending.nextTick());
-            }
-        }
-    }
-
-    private static void queuePendingFavoriteBind(ServerLevel level, BlockPos pos, UUID favoriteNetwork, Player player) {
-        PENDING_FAVORITE_BINDS.put(
-                GlobalPos.of(level.dimension(), pos),
-                new PendingFavoriteBind(favoriteNetwork, player.getUUID(), 0));
-    }
-
-    private static FavoriteBindResult bindFavoriteNetwork(ServerLevel level, BlockPos pos, UUID favoriteNetwork,
-                                                          Player player, boolean notify) {
-        WirelessAeSavedData.MemberKey target = resolveWirelessTarget(level, pos, null);
-        if (!isWirelessMeTarget(level, target.blockPos())) {
-            return FavoriteBindResult.INVALID_TARGET;
-        }
-        if (findTargetNode(level.getServer(), target) == null) {
-            return FavoriteBindResult.TARGET_NOT_READY;
-        }
-
-        WirelessAeSavedData data = WirelessAeSavedData.get(level.getServer());
-        WirelessNetworkCoreBlockEntity core = getLoadedCore(level.getServer(), favoriteNetwork);
-        if (core == null || !core.isLinkedToAeNetwork()) {
-            if (notify && player != null) {
-                player.displayClientMessage(
-                        Component.translatable("message.gtlcore.wireless_bookmark.favorite_unavailable"),
-                        true);
-            }
-            return FavoriteBindResult.CORE_UNAVAILABLE;
-        }
-
-        for (UUID removedNetwork : data.removeMembersAt(target.pos())) {
-            disconnectMembersAt(removedNetwork, target.pos());
-        }
-
-        ConnectionResult result = connectMemberNow(level.getServer(), favoriteNetwork, target);
-        data.addMember(favoriteNetwork, target);
-        requestReconnect(favoriteNetwork);
-
-        boolean pending = result == ConnectionResult.TARGET_MISSING || result == ConnectionResult.FAILED;
-        if (notify && player != null) {
-            player.displayClientMessage(
-                    Component.translatable(
-                            pending ? "message.gtlcore.wireless_target.linked_target_pending" : "message.gtlcore.wireless_target.linked_target",
-                            data.getNetworkName(favoriteNetwork)),
-                    true);
-        }
-        return pending ? FavoriteBindResult.TARGET_NOT_READY : FavoriteBindResult.BOUND;
     }
 
     public static void disconnectMembersAt(UUID frequency, GlobalPos member) {
@@ -1537,10 +1404,6 @@ public final class WirelessAeNetworkRuntime {
         String path = blockId.getPath();
         return WIRELESS_ME_TARGET_IDS.contains(path) ||
                 ("gtmthings".equals(namespace) && isGtmthingsMeLikePath(path));
-    }
-
-    public static boolean shouldShowQuickConnectTooltip(ResourceLocation itemId) {
-        return itemId != null && QUICK_CONNECT_TOOLTIP_TARGET_IDS.contains(itemId.getPath());
     }
 
     private static boolean isGtmthingsMeLikePath(String path) {

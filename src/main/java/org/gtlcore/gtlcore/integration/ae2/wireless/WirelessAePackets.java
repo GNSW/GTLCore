@@ -47,7 +47,7 @@ import java.util.function.Supplier;
 
 public final class WirelessAePackets {
 
-    private static final String PROTOCOL_VERSION = "30";
+    private static final String PROTOCOL_VERSION = "31";
     private static final MeInventoryRequestLimiter<ServerPlayer> TARGET_REQUEST_LIMITER = new MeInventoryRequestLimiter<>(8, 20);
     private static int nextPacketId;
 
@@ -64,14 +64,12 @@ public final class WirelessAePackets {
                 buffer -> new UnbindWithToolPacket(buffer.readBlockPos()), UnbindWithToolPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(ClearBindingToolPacket.class, (packet, buffer) -> {}, buffer -> new ClearBindingToolPacket(),
                 ClearBindingToolPacket::handle, NetworkDirection.PLAY_TO_SERVER);
-        registerPacket(SaveBindingToolNetworkPacket.class, SaveBindingToolNetworkPacket::encode,
-                SaveBindingToolNetworkPacket::decode, SaveBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(PickBindingToolNetworkPacket.class, PickBindingToolNetworkPacket::encode,
                 PickBindingToolNetworkPacket::decode, PickBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
+        registerPacket(OpenBindingPickerPacket.class, (packet, buffer) -> {}, buffer -> new OpenBindingPickerPacket(),
+                OpenBindingPickerPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(RenameNetworkPacket.class, RenameNetworkPacket::encode, RenameNetworkPacket::decode,
                 RenameNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
-        registerPacket(SetFavoriteNetworkPacket.class, SetFavoriteNetworkPacket::encode, SetFavoriteNetworkPacket::decode,
-                SetFavoriteNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(ConnectTargetPacket.class, ConnectTargetPacket::encode, ConnectTargetPacket::decode,
                 ConnectTargetPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(OpenTargetMenuPacket.class, OpenTargetMenuPacket::encode, OpenTargetMenuPacket::decode,
@@ -152,23 +150,15 @@ public final class WirelessAePackets {
         }
     }
 
-    public record SaveBindingToolNetworkPacket(int containerId, UUID frequency) {
+    /** Sent by the picker key bind so the tool can be used from a Curios slot. */
+    public record OpenBindingPickerPacket() {
 
-        private static void encode(SaveBindingToolNetworkPacket packet, FriendlyByteBuf buffer) {
-            buffer.writeVarInt(packet.containerId);
-            buffer.writeUUID(packet.frequency);
-        }
-
-        private static SaveBindingToolNetworkPacket decode(FriendlyByteBuf buffer) {
-            return new SaveBindingToolNetworkPacket(buffer.readVarInt(), buffer.readUUID());
-        }
-
-        private static void handle(SaveBindingToolNetworkPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
+        private static void handle(OpenBindingPickerPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
             var context = contextSupplier.get();
             context.enqueueWork(() -> {
                 ServerPlayer player = context.getSender();
-                if (player != null && player.containerMenu.containerId == packet.containerId) {
-                    WirelessNetworkBindingToolItem.saveNetworkFromMenu(player, packet.frequency);
+                if (player != null) {
+                    WirelessNetworkBindingToolItem.openPickerFor(player);
                 }
             });
             context.setPacketHandled(true);
@@ -259,49 +249,6 @@ public final class WirelessAePackets {
                 WirelessAeNetworkRuntime.requestReconnect(frequency);
                 player.displayClientMessage(
                         Component.translatable("message.gtlcore.wireless_core.name_saved", data.getNetworkName(frequency)),
-                        true);
-            });
-            context.setPacketHandled(true);
-        }
-    }
-
-    public record SetFavoriteNetworkPacket(BlockPos bookmarkPos, UUID frequency) {
-
-        private static void encode(SetFavoriteNetworkPacket packet, FriendlyByteBuf buffer) {
-            buffer.writeBlockPos(packet.bookmarkPos);
-            buffer.writeUUID(packet.frequency);
-        }
-
-        private static SetFavoriteNetworkPacket decode(FriendlyByteBuf buffer) {
-            return new SetFavoriteNetworkPacket(buffer.readBlockPos(), buffer.readUUID());
-        }
-
-        private static void handle(SetFavoriteNetworkPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
-            NetworkEvent.Context context = contextSupplier.get();
-            context.enqueueWork(() -> {
-                ServerPlayer player = context.getSender();
-                if (player == null || isCloseEnough(player, packet.bookmarkPos)) {
-                    return;
-                }
-
-                ServerLevel level = player.serverLevel();
-                if (!(level.getBlockEntity(packet.bookmarkPos) instanceof WirelessNetworkBookmarkBlockEntity)) {
-                    return;
-                }
-
-                WirelessAeSavedData data = WirelessAeSavedData.get(level.getServer());
-                if (!data.getFrequencies().contains(packet.frequency) || !WirelessAeNetworkRuntime.canAccessNetwork(player, packet.frequency)) {
-                    return;
-                }
-                boolean removeFavorite = packet.frequency.equals(data.getFavoriteNetwork(player));
-                String networkName = data.getNetworkName(packet.frequency);
-                data.setFavoriteNetwork(player, removeFavorite ? null : packet.frequency);
-                player.displayClientMessage(
-                        Component.translatable(
-                                removeFavorite ?
-                                        "message.gtlcore.wireless_bookmark.favorite_removed" :
-                                        "message.gtlcore.wireless_bookmark.saved",
-                                networkName),
                         true);
             });
             context.setPacketHandled(true);

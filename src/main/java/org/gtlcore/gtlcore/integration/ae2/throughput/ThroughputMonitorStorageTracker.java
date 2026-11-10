@@ -24,6 +24,7 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.api.storage.MEStorage;
 import appeng.hooks.ticking.TickHandler;
+import appeng.me.storage.NetworkStorage;
 import appeng.parts.AEBasePart;
 import jdk.jfr.Category;
 import jdk.jfr.Event;
@@ -258,6 +259,14 @@ public final class ThroughputMonitorStorageTracker {
             Collection<MEStorage> children = childStorages(parent);
             for (MEStorage child : children) {
                 if (child == null || child == parent) {
+                    continue;
+                }
+
+                // A storage bus may expose another grid through an interface. Do not subscribe
+                // to that grid's independent IO, even when it handles the same resource.
+                // Successful cross-grid operations still reach the caller through the active
+                // operation stack, after the storage bus has applied its access/filter rules.
+                if (child instanceof NetworkStorage) {
                     continue;
                 }
 

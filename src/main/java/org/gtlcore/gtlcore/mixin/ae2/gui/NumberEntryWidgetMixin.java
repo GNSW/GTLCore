@@ -9,6 +9,8 @@ import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 
 import appeng.client.Point;
+import appeng.client.gui.MathExpressionParser;
+import appeng.client.gui.widgets.ConfirmableTextField;
 import appeng.client.gui.widgets.NumberEntryWidget;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,8 +20,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.math.BigDecimal;
+import java.text.DecimalFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.regex.Pattern;
 
 @Mixin(NumberEntryWidget.class)
 public abstract class NumberEntryWidgetMixin implements IShiftAmountOperations {
@@ -57,6 +63,23 @@ public abstract class NumberEntryWidgetMixin implements IShiftAmountOperations {
 
     @Shadow(remap = false)
     private List<Button> buttons;
+
+    @Shadow(remap = false)
+    @Final
+    private ConfirmableTextField textField;
+
+    @Shadow(remap = false)
+    @Final
+    private DecimalFormat decimalFormat;
+
+    @Unique
+    private static final Pattern GTLCORE$PLAIN_NUMBER = Pattern.compile("[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)");
+
+    @Unique
+    private String gtlcore$pendingExpression;
+
+    @Unique
+    private BigDecimal gtlcore$pendingExpressionValue;
 
     @Shadow(remap = false)
     private long maxValue;
@@ -154,5 +177,52 @@ public abstract class NumberEntryWidgetMixin implements IShiftAmountOperations {
     private void gtlcore$add(long currentValue, long increment) {
         long result = currentValue > this.maxValue - increment ? this.maxValue : currentValue + increment;
         this.setLongValue(result);
+    }
+
+    /**
+     * Some AE2 screens push a value back into the text field (for example after confirming an amount).
+     * When that value is exactly what the player's expression already evaluates to, keep the expression
+     * visible instead of replacing it with the expanded number.
+     */
+    @Inject(method = "setLongValue", at = @At("HEAD"), remap = false)
+    private void gtlcore$captureAmountExpression(long value, CallbackInfo ci) {
+        this.gtlcore$pendingExpression = null;
+        this.gtlcore$pendingExpressionValue = null;
+        if (this.textField == null) {
+            return;
+        }
+        String text = this.textField.getValue();
+        if (text == null || text.isEmpty() || GTLCORE$PLAIN_NUMBER.matcher(text.trim()).matches()) {
+            return;
+        }
+        try {
+            Optional<BigDecimal> parsed = MathExpressionParser.parse(text, this.decimalFormat);
+            if (parsed.isPresent()) {
+                this.gtlcore$pendingExpression = text;
+                this.gtlcore$pendingExpressionValue = parsed.get();
+            }
+        } catch (ArithmeticException | NumberFormatException ignored) {
+            // Keep the normal numeric display.
+        }
+    }
+
+    @Inject(method = "setLongValue", at = @At("TAIL"), remap = false)
+    private void gtlcore$restoreAmountExpression(long value, CallbackInfo ci) {
+        String expression = this.gtlcore$pendingExpression;
+        BigDecimal expected = this.gtlcore$pendingExpressionValue;
+        this.gtlcore$pendingExpression = null;
+        this.gtlcore$pendingExpressionValue = null;
+        if (expression == null || expected == null || this.textField == null) {
+            return;
+        }
+        try {
+            BigDecimal actual = new BigDecimal(this.textField.getValue().trim());
+            if (actual.compareTo(expected) == 0) {
+                this.textField.setValue(expression);
+                this.textField.setCursorPosition(expression.length());
+            }
+        } catch (NumberFormatException ignored) {
+            // The screen wrote a different text; leave it alone.
+        }
     }
 }

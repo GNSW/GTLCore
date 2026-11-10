@@ -196,6 +196,7 @@
   "mm.error.access_point": "请对 ME 无线访问节点使用工具完成绑定。",
   "key.categories.gtlcore.manipulator": "GTLCore 物质操纵者",
   "key.gtlcore.wireless_binding_picker": "打开无线ME网络选择",
+  "curios.identifier.wireless_connector": "无线连接器",
   "key.gtlcore.manipulator.menu": "打开轮盘",
   "key.gtlcore.manipulator.copy": "复制选区",
   "key.gtlcore.manipulator.cut": "移动选区",

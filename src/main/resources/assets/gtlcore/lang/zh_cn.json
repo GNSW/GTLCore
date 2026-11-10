@@ -1083,7 +1083,6 @@
   "tooltip.gtlcore.wireless_target.connect": "左键：将仓室连接到此网络",
   "tooltip.gtlcore.wireless_target.already_connected": "仓室当前已连接到此网络",
   "tooltip.gtlcore.wireless_target.connection_locked": "仓室已有有线或共享ME连接，请先断开后再连接其他网络",
-  "tooltip.gtlcore.wireless_target.save_to_tool": "右键：将连接器保存的网络替换为此网络，不改变仓室连接",
   "tooltip.gtlcore.wireless_target.disconnect": "左键：断开仓室当前的无线网络连接",
   "tooltip.gtlcore.wireless_target.back": "返回机器界面",
   "label.gtlcore.wireless_core.ae_connected": "状态：已接入ME网络",

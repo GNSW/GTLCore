@@ -598,11 +598,7 @@ final class WirelessAeScreenHooks {
         for (int i = 0; i < rows; i++) {
             int rowY = listY + i * NETWORK_ROW_HEIGHT;
             if (isInsideRect(mouseX, mouseY, contentX, rowY, rowWidth, 20)) {
-                if (button == 1) {
-                    WirelessAePackets.CHANNEL.sendToServer(
-                            new WirelessAePackets.SaveBindingToolNetworkPacket(
-                                    bindingToolScreen.getMenu().containerId,
-                                    embeddedEntries.get(embeddedScrollOffset + i).frequency()));
+                if (button != 0) {
                     return;
                 }
                 if (lockedByCableConnection) {
@@ -643,9 +639,6 @@ final class WirelessAeScreenHooks {
                         isLockedByCableConnection() ? "tooltip.gtlcore.wireless_target.connection_locked" :
                                 "tooltip.gtlcore.wireless_target.connect";
                 tooltip.add(Component.translatable(leftClickKey).withStyle(ChatFormatting.GRAY));
-                if (bindingToolScreen == embeddedScreen) {
-                    tooltip.add(Component.translatable("tooltip.gtlcore.wireless_target.save_to_tool").withStyle(ChatFormatting.AQUA));
-                }
                 return tooltip;
             }
         }

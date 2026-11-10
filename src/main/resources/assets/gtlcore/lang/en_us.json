@@ -1083,7 +1083,6 @@
   "tooltip.gtlcore.wireless_target.connect": "Left-click to connect this hatch to this network",
   "tooltip.gtlcore.wireless_target.already_connected": "This hatch is already connected to this network",
   "tooltip.gtlcore.wireless_target.connection_locked": "Disconnect the hatch's wired or shared ME connection before connecting to another network",
-  "tooltip.gtlcore.wireless_target.save_to_tool": "Right-click to replace the connector's saved network with this one; the hatch connection stays unchanged",
   "tooltip.gtlcore.wireless_target.disconnect": "Left-click to disconnect the hatch's current wireless network",
   "tooltip.gtlcore.wireless_target.back": "Back to Machine UI",
   "label.gtlcore.wireless_core.ae_connected": "Status: attached to an ME network",

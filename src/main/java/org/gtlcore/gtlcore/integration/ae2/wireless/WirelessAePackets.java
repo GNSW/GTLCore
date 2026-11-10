@@ -47,7 +47,7 @@ import java.util.function.Supplier;
 
 public final class WirelessAePackets {
 
-    private static final String PROTOCOL_VERSION = "29";
+    private static final String PROTOCOL_VERSION = "30";
     private static final MeInventoryRequestLimiter<ServerPlayer> TARGET_REQUEST_LIMITER = new MeInventoryRequestLimiter<>(8, 20);
     private static int nextPacketId;
 
@@ -66,6 +66,8 @@ public final class WirelessAePackets {
                 ClearBindingToolPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(SaveBindingToolNetworkPacket.class, SaveBindingToolNetworkPacket::encode,
                 SaveBindingToolNetworkPacket::decode, SaveBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
+        registerPacket(PickBindingToolNetworkPacket.class, PickBindingToolNetworkPacket::encode,
+                PickBindingToolNetworkPacket::decode, PickBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(RenameNetworkPacket.class, RenameNetworkPacket::encode, RenameNetworkPacket::decode,
                 RenameNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(SetFavoriteNetworkPacket.class, SetFavoriteNetworkPacket::encode, SetFavoriteNetworkPacket::decode,
@@ -167,6 +169,29 @@ public final class WirelessAePackets {
                 ServerPlayer player = context.getSender();
                 if (player != null && player.containerMenu.containerId == packet.containerId) {
                     WirelessNetworkBindingToolItem.saveNetworkFromMenu(player, packet.frequency);
+                }
+            });
+            context.setPacketHandled(true);
+        }
+    }
+
+    public record PickBindingToolNetworkPacket(int containerId, UUID frequency) {
+
+        private static void encode(PickBindingToolNetworkPacket packet, FriendlyByteBuf buffer) {
+            buffer.writeVarInt(packet.containerId);
+            buffer.writeUUID(packet.frequency);
+        }
+
+        private static PickBindingToolNetworkPacket decode(FriendlyByteBuf buffer) {
+            return new PickBindingToolNetworkPacket(buffer.readVarInt(), buffer.readUUID());
+        }
+
+        private static void handle(PickBindingToolNetworkPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
+            var context = contextSupplier.get();
+            context.enqueueWork(() -> {
+                ServerPlayer player = context.getSender();
+                if (player != null && player.containerMenu.containerId == packet.containerId) {
+                    WirelessNetworkBindingToolItem.applyPickerChoice(player, packet.frequency());
                 }
             });
             context.setPacketHandled(true);

@@ -440,6 +440,8 @@
   "config.gtlcore.option.ae2GraphDiagnosticLogging.comment": "Log graph planning and aggregated dispatch timings for performance comparisons and stall diagnosis. Does not log each item individually.",
   "item.gtlcore.wireless_network_binding_tool": "Wireless ME Network Binding Tool",
   "tooltip.gtlcore.wireless_binding_tool.select": "Shift + right-click a Wireless ME Network Core to save its network",
+  "tooltip.gtlcore.wireless_binding_tool.pick": "In the main hand, right-click the air to pick an existing wireless ME network",
+  "screen.gtlcore.wireless_binding_picker": "Select Wireless ME Network",
   "tooltip.gtlcore.wireless_binding_tool.bind": "In the main hand, right-click an unbound ME hatch or port to bind it to the saved network",
   "tooltip.gtlcore.wireless_binding_tool.rebind": "In the main hand, Shift + right-click an ME hatch or port to replace its wireless binding with the saved network",
   "tooltip.gtlcore.wireless_binding_tool.offhand": "In the off hand, right-click an ME hatch to open its wireless network tab directly",

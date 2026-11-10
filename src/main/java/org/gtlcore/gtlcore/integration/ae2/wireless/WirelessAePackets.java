@@ -47,7 +47,7 @@ import java.util.function.Supplier;
 
 public final class WirelessAePackets {
 
-    private static final String PROTOCOL_VERSION = "30";
+    private static final String PROTOCOL_VERSION = "31";
     private static final MeInventoryRequestLimiter<ServerPlayer> TARGET_REQUEST_LIMITER = new MeInventoryRequestLimiter<>(8, 20);
     private static int nextPacketId;
 
@@ -68,6 +68,8 @@ public final class WirelessAePackets {
                 SaveBindingToolNetworkPacket::decode, SaveBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(PickBindingToolNetworkPacket.class, PickBindingToolNetworkPacket::encode,
                 PickBindingToolNetworkPacket::decode, PickBindingToolNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
+        registerPacket(OpenBindingPickerPacket.class, (packet, buffer) -> {}, buffer -> new OpenBindingPickerPacket(),
+                OpenBindingPickerPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(RenameNetworkPacket.class, RenameNetworkPacket::encode, RenameNetworkPacket::decode,
                 RenameNetworkPacket::handle, NetworkDirection.PLAY_TO_SERVER);
         registerPacket(SetFavoriteNetworkPacket.class, SetFavoriteNetworkPacket::encode, SetFavoriteNetworkPacket::decode,
@@ -169,6 +171,21 @@ public final class WirelessAePackets {
                 ServerPlayer player = context.getSender();
                 if (player != null && player.containerMenu.containerId == packet.containerId) {
                     WirelessNetworkBindingToolItem.saveNetworkFromMenu(player, packet.frequency);
+                }
+            });
+            context.setPacketHandled(true);
+        }
+    }
+
+    /** Sent by the picker key bind so the tool can be used from a Curios slot. */
+    public record OpenBindingPickerPacket() {
+
+        private static void handle(OpenBindingPickerPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
+            var context = contextSupplier.get();
+            context.enqueueWork(() -> {
+                ServerPlayer player = context.getSender();
+                if (player != null) {
+                    WirelessNetworkBindingToolItem.openPickerFor(player);
                 }
             });
             context.setPacketHandled(true);

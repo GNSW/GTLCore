@@ -1,13 +1,11 @@
 package org.gtlcore.gtlcore.mixin.gtm.client;
 
 import org.gtlcore.gtlcore.common.data.source_tooltip.SourceTooltip;
-import org.gtlcore.gtlcore.integration.ae2.wireless.WirelessAeNetworkRuntime;
 
 import com.gregtechceu.gtceu.client.TooltipsHandler;
 import com.gregtechceu.gtceu.common.data.GTItems;
 import com.gregtechceu.gtceu.utils.FormattingUtil;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
@@ -29,7 +27,6 @@ import java.util.function.Consumer;
 public abstract class TooltipsHandlerMixin {
 
     private static final ResourceLocation ME_PATTERN_BUFFER_ID = new ResourceLocation("gtceu", "me_pattern_buffer");
-    private static final String QUICK_CONNECT_TOOLTIP_KEY = "tooltip.gtlcore.wireless_bookmark.quick_connect";
     private static final Set<String> MULTIBLOCK_SHARING_TOOLTIP_KEYS = Set.of(
             "gtceu.universal.enabled",
             "gtceu.universal.disabled",
@@ -52,16 +49,6 @@ public abstract class TooltipsHandlerMixin {
         }
         if (ME_PATTERN_BUFFER_ID.equals(ForgeRegistries.ITEMS.getKey(stack.getItem()))) {
             tooltips.add(Component.translatable("gtlcore.machine.pattern_quick_upload.tooltip"));
-        }
-    }
-
-    @Inject(method = "appendTooltips",
-            at = @At("RETURN"),
-            remap = false)
-    private static void appendWirelessQuickConnectTooltip(ItemStack stack, TooltipFlag flag, List<Component> tooltips, CallbackInfo ci) {
-        if (WirelessAeNetworkRuntime.shouldShowQuickConnectTooltip(ForgeRegistries.ITEMS.getKey(stack.getItem()))) {
-            tooltips.add(findMultiblockSharingTooltipIndex(tooltips),
-                    Component.translatable(QUICK_CONNECT_TOOLTIP_KEY).withStyle(ChatFormatting.GOLD));
         }
     }
 

@@ -927,15 +927,6 @@ public class MachineRecipe {
                 .outputItems(WIRELESS_NETWORK_CORE)
                 .duration(400).EUt(VA[EV]).save(provider);
 
-        ASSEMBLER_RECIPES.recipeBuilder("wireless_network_bookmark")
-                .inputItems(GTMachines.HULL[4])
-                .inputItems(WIRELESS_TOOL.asItem())
-                .inputItems(CIRCUIT.getIngredient(EV), 2)
-                .inputItems(wireFine, TungstenSteel, 16)
-                .inputItems(EMITTER_EV, 4)
-                .outputItems(WIRELESS_NETWORK_BOOKMARK)
-                .duration(400).EUt(VA[EV]).save(provider);
-
         ASSEMBLER_RECIPES.recipeBuilder("wireless_network_binding_tool")
                 .circuitMeta(1)
                 .inputItems(WIRELESS_TOOL.asItem())

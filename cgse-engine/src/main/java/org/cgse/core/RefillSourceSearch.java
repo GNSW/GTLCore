@@ -49,10 +49,12 @@ final class RefillSourceSearch<K> implements AutoCloseable {
     private PlanVerification<K> verification;
     private RefillProducerOrder<K> order;
     private MissingMaterialExpansion<K> expansion;
+    private RefillPairCounts.Choice<K> trialPair;
     private RefillFrontier.Comparison<K> comparison;
     private boolean ranked, allocated;
     private boolean baselineTried;
     private boolean ordinaryWord = true, normalizing;
+    private boolean completeTargetTrial, mixedTrialAccepted;
     private long memory;
 
     RefillSourceSearch(GraphCompiler<K> compiler, GraphPlan<K> original, Map<K, Long> stock,
@@ -111,6 +113,10 @@ final class RefillSourceSearch<K> implements AutoCloseable {
                 // Net production cannot certify a low-net forced-craft proof.
                 // Keep that existing witness rather than weakening its contract.
                 if (force && credit.compareTo(BigInteger.valueOf(original.amount())) < 0) { declined = true; return finish(); }
+                // A replacement owes the requested production, not incidental
+                // overproduction of the old batch sizes. Final reserves are
+                // still part of the independently verified physical goal.
+                if (force) credit = credit.min(BigInteger.valueOf(original.amount()));
                 initial = new LinkedHashMap<>(); missing = new LinkedHashMap<>();
                 entries = original.seeds().entrySet().iterator(); phase = Phase.GOALS; return false;
             }
@@ -250,6 +256,7 @@ final class RefillSourceSearch<K> implements AutoCloseable {
                 if (joint) {
                     var pair = nextPair();
                     if (pair == null) return finish();
+                    trialPair = pair;
                     next++;
                     expansion = MissingMaterialExpansion.jointAlternative(compiler, boundary, stock, external, excluded,
                             force, ignoreTargetStock, budget, order, credit, pair);
@@ -288,16 +295,33 @@ final class RefillSourceSearch<K> implements AutoCloseable {
     }
 
     private void endTrial(boolean accept) {
+        boolean tryCompleteTarget = !completeTargetTrial && expansion.preferredTargetPlateau();
         if (choice == null && baselineTried) normalizing = false;
         if (accept) {
             result = candidate; accepted++;
             // The retained word still owns its builders after the child closes.
             memory += expansion.takeResultCharge();
-        } else if (!reallocate && !joint && choice != null) {
+        }
+        if (tryCompleteTarget) {
+            // The ordinary stock mixture remains the incumbent. Only an
+            // observed loss of a complete preferred target proposal earns a
+            // second version of this same bounded, physically checked trial.
+            mixedTrialAccepted = accept;
+            expansion.close();
+            expansion = (joint ? MissingMaterialExpansion.jointAlternative(compiler, boundary, stock, external, excluded,
+                    force, ignoreTargetStock, budget, order, credit, trialPair) :
+                    MissingMaterialExpansion.sourceAlternative(compiler, boundary, stock, external, excluded,
+                    force, ignoreTargetStock, budget, order, credit, preferred)).preferCompleteTarget();
+            candidate = null; comparison = null; completeTargetTrial = true; phase = Phase.EXPAND;
+            return;
+        }
+        if (!accept && !mixedTrialAccepted && !reallocate && !joint && choice != null) {
             if (previousPreference == null) preferred.remove(choice.key());
             else preferred.put(choice.key(), previousPreference);
         }
         expansion.close(); expansion = null; candidate = null; comparison = null;
+        completeTargetTrial = mixedTrialAccepted = false;
+        trialPair = null;
         phase = Phase.TRIAL;
     }
 
@@ -347,10 +371,10 @@ final class RefillSourceSearch<K> implements AutoCloseable {
         return true;
     }
     GraphPlan<K> result() { return result; }
-    /** Only complete discovery can decline the old-bound-source follow-up.
-     * Recipes added by successful unused-source trials need not immediately
-     * repeat those same choices. A truncated scan must remain inconclusive. */
-    boolean mayReallocate() { return !declined && (!scanComplete || boundChoicesSeen); }
+    /** Discovery describes the old word. An accepted replacement may bind a
+     * second producer, so its existing reallocation pass must recheck that
+     * derived eligibility. A truncated scan also remains inconclusive. */
+    boolean mayReallocate() { return !declined && (!scanComplete || boundChoicesSeen || accepted > 0); }
     boolean mayJoint() { return !declined && jointChoicesSeen; }
     RefillProducerOrder<K> completedOrder() { return ranked ? order : null; }
     private void reserve(long bytes) { budget.reserve(bytes); memory += bytes; }

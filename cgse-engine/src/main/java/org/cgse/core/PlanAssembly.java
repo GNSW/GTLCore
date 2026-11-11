@@ -17,6 +17,7 @@ final class PlanAssembly<K> implements AutoCloseable {
     private final K target;
     private final long amount, started;
     private final boolean preserve;
+    private final GraphMode mode;
     private final PlanStep steps;
     private final Map<String, GraphRecipe<K>> recipes;
     private Collection<GraphRecipe<K>> startupRecipes;
@@ -45,12 +46,18 @@ final class PlanAssembly<K> implements AutoCloseable {
 
     PlanAssembly(K target, long amount, boolean preserve, PlanStep steps, Map<String, GraphRecipe<K>> recipes,
                  Map<K, Long> seeds, Map<K, Long> stock, Set<K> external, GraphCompiler.Compiled<K> graph, PlanningBudget budget, long started, CatalystPolicy catalystPolicy) {
+        this(target, amount, preserve, steps, recipes, seeds, stock, external, graph, budget, started, catalystPolicy, GraphMode.FULL);
+    }
+
+    PlanAssembly(K target, long amount, boolean preserve, PlanStep steps, Map<String, GraphRecipe<K>> recipes,
+                 Map<K, Long> seeds, Map<K, Long> stock, Set<K> external, GraphCompiler.Compiled<K> graph, PlanningBudget budget, long started, CatalystPolicy catalystPolicy, GraphMode mode) {
         try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
+            this.mode = mode;
             this.target = target;
             this.amount = amount;
             this.preserve = preserve;
             this.steps = PlanFlowPruning.optimize(PlanEGraph.optimize(steps, budget), recipes, budget,
-                    target, amount, seeds, preserve);
+                    target, amount, seeds, preserve, mode);
             this.recipes = recipes;
             startupRecipes = recipes.values();
             this.seeds = new LinkedHashMap<>(seeds);
@@ -177,7 +184,7 @@ final class PlanAssembly<K> implements AutoCloseable {
                 }
             }
             case 6 -> {
-                if (preserve && (!deferMissingStartup || missing.isEmpty())) {
+                if (mode == GraphMode.FULL && preserve && (!deferMissingStartup || missing.isEmpty())) {
                     if (startup == null) startup = new SeedStartupGuard<>(startupRecipes, startupExcluded, summary, stock, seeds,
                             external, target, amount, budget);
                     if (!startup.step()) return false;

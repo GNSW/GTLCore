@@ -9,6 +9,9 @@ import java.util.*;
 final class GraphRecipeCatalog<K> extends AbstractList<GraphRecipe<K>> implements RandomAccess {
     private static final long MAX_STARTUP_BYTES = 16L << 20;
     private final List<GraphRecipe<K>> recipes;
+    // Borrow the owning compiler's immutable physical-output index. No second
+    // per-key hash table or unbudgeted recipe scan is needed for boundaries.
+    private Set<K> producedKeys;
     record Startup<K>(Map<K, List<GraphRecipe<K>>> growing, Map<K, List<GraphRecipe<K>>> returned) {}
     private volatile Startup<K> startup;
     private long startupBytes;
@@ -16,6 +19,15 @@ final class GraphRecipeCatalog<K> extends AbstractList<GraphRecipe<K>> implement
     GraphRecipeCatalog(List<GraphRecipe<K>> recipes) { this.recipes = List.copyOf(recipes); }
     @Override public GraphRecipe<K> get(int index) { return recipes.get(index); }
     @Override public int size() { return recipes.size(); }
+
+    /** Attach exactly once, before the owning compiler is published. */
+    void producedKeys(Set<K> keys) {
+        if (producedKeys != null) throw new IllegalStateException("Producer keys already attached");
+        producedKeys = Collections.unmodifiableSet(keys);
+    }
+
+    boolean producerIndexAvailable() { return producedKeys != null; }
+    boolean hasProducer(Object key) { return producedKeys != null && producedKeys.contains(key); }
 
     Startup<K> startup() { return startup; }
 

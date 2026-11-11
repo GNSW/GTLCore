@@ -406,9 +406,24 @@ public final class PlanningBudget {
     public void checkpoint() {
         if (Thread.currentThread().isInterrupted() || cancelRequested.get() || cancelled.getAsBoolean())
             throw new CancellationException("Graph planning cancelled");
+        checkDeadline();
+    }
+
+    private void checkDeadline() {
         start();
         if (timeoutNanos != 0 && clock.getAsLong() - started.get() >= timeoutNanos)
             throw exhausted(Limit.TIMEOUT, "active_wall_ms=" + runningWallNanos() / 1_000_000L + "/" + timeoutNanos / 1_000_000L);
+    }
+
+    /** A second independent solve uses the same configured limits. Only player
+     * cancellation and the global memory account cross this boundary; spent
+     * work, an expired phase deadline and internal sibling cancellation do not. */
+    PlanningBudget independentSolve(BooleanSupplier requestCancelled) {
+        var next = new PlanningBudget(timeoutNanos / 1_000_000L, maxNodes, maxCompilationNodes,
+                maxCachePreparationTicks / WORK_SCALE, maxBytes,
+                () -> requestCancelled.getAsBoolean() || cancelled.getAsBoolean(), clock).shareMemory(this);
+        if (metricsEnabled()) next.enableMetrics();
+        return next;
     }
 
     public void reserve(long bytes) {

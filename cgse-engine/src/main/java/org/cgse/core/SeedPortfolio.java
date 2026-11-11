@@ -40,6 +40,7 @@ final class SeedPortfolio<K> implements AutoCloseable {
             this.force = force;
             this.budget = budget;
             frontier.add(plan);
+            if (compiler.mode() == GraphMode.ACYCLIC) { complete = true; return; }
             search = new SeedOptimization<>(compiler, plan, stock, mandatory, external, excluded, force, budget);
         }
     }
@@ -67,7 +68,7 @@ final class SeedPortfolio<K> implements AutoCloseable {
             if (word != null)
                 assembling = new AllocationSearch.Candidate<>(word, best.recipes(), best.target(), best.amount(), stock,
                         mandatory, external, best.preserveSeeds(), force, true, budget, System.nanoTime())
-                        .startupCatalog(compiler.catalog(), excluded);
+                        .startupCatalog(compiler.verificationCatalog(), excluded);
             else if (!probeTried && !multipleTerminals && terminalProbe != null &&
                     !best.missingExact().containsKey(terminalProbe) && rescheduleWork < rescheduleAllowance) {
                 // A finite one-unit terminal hypothesis retains the old nested

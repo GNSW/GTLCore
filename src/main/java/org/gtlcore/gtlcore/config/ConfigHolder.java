@@ -361,7 +361,7 @@ public class ConfigHolder {
         @Configurable
         @Configurable.Range(min = 0, max = 86400000)
         @Configurable.Comment("config.gtlcore.option.ae2GraphFallbackTimeoutMs.comment")
-        public int ae2GraphFallbackTimeoutMs = 250;
+        public int ae2GraphFallbackTimeoutMs = 0;
 
         @Configurable
         @Configurable.Range(min = 1, max = Integer.MAX_VALUE)

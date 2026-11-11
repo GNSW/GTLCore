@@ -19,6 +19,7 @@ public final class GraphPlan<K> {
     private final Map<K, Long> seeds;
     private final Result result;
     private final SeedOptimality seedOptimality;
+    private boolean netProductionVerified;
     private MissingSource defaultMissingSource = MissingSource.UNASSESSED;
     private Map<K, MissingSource> missingSources = Map.of();
     private java.util.List<java.util.List<GraphRecipe<K>>> refillCycles = java.util.List.of();
@@ -121,6 +122,7 @@ public final class GraphPlan<K> {
         seeds = original.seeds; missing = original.missing; result = original.result;
         searchNodes = original.searchNodes; planningNanos = original.planningNanos;
         seedOptimality = original.seedOptimality; alternatives = original.alternatives;
+        netProductionVerified = original.netProductionVerified;
         initialView = original.initialView; missingView = original.missingView; exactTimes = original.exactTimes;
         executionDependencies = original.executionDependencies;
         withMissingSourcesFrom(original);
@@ -170,6 +172,7 @@ public final class GraphPlan<K> {
         GraphPlan<K> copy = new GraphPlan<>(target, amount, preserveSeeds, steps, recipes, initial, seeds, missing, result,
                 searchNodes, planningNanos, proof);
         copy.alternatives = alternatives;
+        copy.netProductionVerified = netProductionVerified;
         return copy.withMissingSourcesFrom(this);
     }
 
@@ -264,7 +267,16 @@ public final class GraphPlan<K> {
         this.seedOptimality = null;
         this.searchNodes = searchNodes;
         this.planningNanos = original.planningNanos;
+        // Only a pure result/deficit annotation keeps the physical proof.
+        // A changed word, bindings or funded prefix must be checked anew.
+        this.netProductionVerified = original.netProductionVerified && steps == original.steps &&
+                recipes == original.recipes && initial == original.initial;
     }
+
+    /** Owner-only certificate after funded physical/startup verification and
+     * summary.delta(target) >= amount. It certifies this main word, not options. */
+    void markNetProductionVerified() { netProductionVerified = true; }
+    boolean netProductionVerified() { return netProductionVerified; }
 
     /**
      * Verified execution after supplying this plan's deficits, without a proof

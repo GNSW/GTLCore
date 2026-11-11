@@ -452,7 +452,7 @@ final class SeedOptimization<K> implements AutoCloseable {
                 if (raw.containsKey(key) && !mandatory.containsKey(key)) return null;
             }
         }
-        try (var startup = new SeedStartupGuard<>(recipes.values(), value, stock, seeds, external,
+        try (var startup = new SeedStartupGuard<>(compiler.verificationCatalog(), excluded, value, stock, seeds, external,
                 original.target(), original.amount(), budget)) {
             while (!startup.step()) {}
             startup.lost().forEach((key, amount) -> seeds.merge(key, amount, Math::max));

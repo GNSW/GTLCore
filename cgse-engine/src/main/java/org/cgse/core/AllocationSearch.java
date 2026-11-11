@@ -428,7 +428,7 @@ final class AllocationSearch<K> {
 
     private Candidate<K> candidate(PlanStep witness) {
         return new Candidate<>(macros == null ? witness : macros.expand(witness), relevant, target, amount, stock,
-                requiredSeeds, external, preserve, force, false, budget, started);
+                requiredSeeds, external, preserve, force, false, budget, started, compiler.mode()).startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded);
     }
 
     private boolean provenResourceConflict() {
@@ -510,6 +510,7 @@ final class AllocationSearch<K> {
         Map<K, Long> productionSeeds;
         final Set<K> external;
         final boolean preserve, force, preview;
+        final GraphMode mode;
         final PlanningBudget budget;
 
         final PlanStep witness;
@@ -553,9 +554,16 @@ final class AllocationSearch<K> {
         Candidate(PlanStep witness, Map<String, GraphRecipe<K>> relevant, K target, long amount, Map<K, Long> stock,
                   Map<K, Long> requiredSeeds, Set<K> external, boolean preserve, boolean force, boolean preview,
                   PlanningBudget budget, long started) {
+            this(witness, relevant, target, amount, stock, requiredSeeds, external, preserve, force, preview, budget, started, GraphMode.FULL);
+        }
+
+        Candidate(PlanStep witness, Map<String, GraphRecipe<K>> relevant, K target, long amount, Map<K, Long> stock,
+                  Map<K, Long> requiredSeeds, Set<K> external, boolean preserve, boolean force, boolean preview,
+                  PlanningBudget budget, long started, GraphMode mode) {
             try (var costs = budget.trace(PlanningCostTrace.Stage.ASSEMBLE)) {
+                this.mode = mode;
                 this.witness = PlanFlowPruning.optimize(PlanEGraph.optimize(witness, budget), relevant, budget,
-                        target, amount, requiredSeeds, preserve);
+                        target, amount, requiredSeeds, preserve, mode);
                 this.relevant = relevant;
                 startupRecipes = relevant.values();
                 this.target = target;
@@ -637,7 +645,7 @@ final class AllocationSearch<K> {
                 keys = summary.required().keySet().iterator();
                 stage = 2;
             } else if (stage == 2) {
-                if (!preserve) {
+                if (!preserve || mode == GraphMode.ACYCLIC) {
                     stage = 3;
                     return false;
                 }
@@ -704,6 +712,7 @@ final class AllocationSearch<K> {
                         stage = 5;
                         return false;
                     }
+                    if (summary.delta(target).compareTo(BigInteger.valueOf(amount)) >= 0) proposed.markNetProductionVerified();
                     plan = proposed;
                     return true;
                 }

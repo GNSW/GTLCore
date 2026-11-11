@@ -1697,7 +1697,8 @@ final class IntegerCountBranch<K> implements AutoCloseable {
         Map<String, GraphRecipe<K>> recipes = new LinkedHashMap<>();
         model.recipes.forEach(recipe -> recipes.put(recipe.id(), recipe));
         assembling = new AllocationSearch.Candidate<>(witness, recipes, target, amount, stock, seeds, external,
-                preserve, force, false, budget, started);
+                preserve, force, false, budget, started, model.graphMode);
+        if (model.verificationRecipes != null) assembling.startupCatalog(model.verificationRecipes, model.verificationExcluded);
         assembling.sharedSummaries = scheduleContinuations.programs;
     }
 

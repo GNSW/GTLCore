@@ -26,6 +26,7 @@ final class GraphSolve<K> implements AutoCloseable {
     private final Map<K, Long> requiredSeeds;
     private final Set<K> external;
     private final boolean preserve, forceCraft;
+    private final GraphMode mode;
     private final PlanningBudget budget;
     private final Map<K, BigInteger> demand = new LinkedHashMap<>();
     private final Map<K, Long> seeds = new LinkedHashMap<>();
@@ -53,6 +54,12 @@ final class GraphSolve<K> implements AutoCloseable {
 
     GraphSolve(GraphCompiler.Compiled<K> graph, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
                boolean preserve, boolean forceCraft, PlanningBudget budget, long started, CatalystPolicy catalystPolicy, Map<K, Long> catalystStock) {
+        this(graph, target, amount, stock, external, requiredSeeds, preserve, forceCraft, budget, started, catalystPolicy, catalystStock, GraphMode.FULL);
+    }
+
+    GraphSolve(GraphCompiler.Compiled<K> graph, K target, long amount, Map<K, Long> stock, Set<K> external, Map<K, Long> requiredSeeds,
+               boolean preserve, boolean forceCraft, PlanningBudget budget, long started, CatalystPolicy catalystPolicy, Map<K, Long> catalystStock, GraphMode mode) {
+        this.mode = mode;
         this.graph = graph;
         startupRecipes = graph.recipes().values();
         this.target = target;
@@ -169,6 +176,8 @@ final class GraphSolve<K> implements AutoCloseable {
         }
         if (regionIndex < graph.regions().size()) {
             var region = graph.regions().get(regionIndex++);
+            if (mode == GraphMode.ACYCLIC && region.cyclic())
+                throw new IllegalArgumentException("ACYCLIC solve cannot execute a production cycle");
             if (!region.cyclic() && region.recipes().size() == 1 &&
                     Collections.disjoint(region.recipes().get(0).inputs().keySet(), region.recipes().get(0).outputs().keySet())) {
                 ordinary = region.recipes().get(0);
@@ -178,7 +187,7 @@ final class GraphSolve<K> implements AutoCloseable {
                 ordinaryCount = BigInteger.ZERO;
                 ordinaryPhase = 0;
             } else selection = new RegionSelection<>(region, demand, stock, target, amount,
-                    preserve, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock)
+                    preserve && mode == GraphMode.FULL, forceCraft && !targetProduced, external, budget, catalystPolicy, catalystStock)
                     .allowTargetSeedConsumption(consumeTargetSeed).seedCredits(requiredSeeds).scoutRegions(regionScout);
         } else if (!targetProduced) {
             budget.note("selected_graph", "target_not_produced; target=" + target + "; recipes=" + graph.recipes().size() + "; force_craft=" + forceCraft);
@@ -186,7 +195,7 @@ final class GraphSolve<K> implements AutoCloseable {
         } else {
             Collections.reverse(reversed);
             assembly = new PlanAssembly<>(target, amount, preserve, new PlanStep.Sequence(reversed), graph.recipes(),
-                    seeds, stock, external, graph, budget, started, catalystPolicy).startupCatalog(startupRecipes, startupExcluded)
+                    seeds, stock, external, graph, budget, started, catalystPolicy, mode).startupCatalog(startupRecipes, startupExcluded)
                     .deferMissingStartup(deferMissingStartup);
         }
         return result != null;

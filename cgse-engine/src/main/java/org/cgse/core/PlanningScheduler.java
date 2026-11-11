@@ -32,6 +32,9 @@ public final class PlanningScheduler implements AutoCloseable {
             return null;
         }
 
+        /** A staged request may change its solve account without changing admission. */
+        default PlanningBudget activeBudget() { return null; }
+
         default T limited(PlanningBudget.Exhausted limit) {
             throw limit;
         }
@@ -116,13 +119,29 @@ public final class PlanningScheduler implements AutoCloseable {
     public final class Slice {
 
         private final Job<?> owner;
-        private final long deadline = System.nanoTime() + nanosPerSlice;
+        private final PlanningBudget account;
+        private final long deadline;
         private final long workStarted;
         private int steps;
 
         private Slice(Job<?> owner) {
             this.owner = owner;
-            workStarted = owner.budget.threadWork();
+            var active = owner.work.activeBudget();
+            this.account = active == null ? owner.budget : active;
+            deadline = System.nanoTime() + nanosPerSlice;
+            workStarted = account.threadWork();
+        }
+
+        private Slice(Slice parent, PlanningBudget account) {
+            this.owner = parent.owner;
+            this.account = account;
+            deadline = parent.deadline;
+            workStarted = account.threadWork();
+        }
+
+        /** Same queued request and cancellation ownership, independent solve account. */
+        Slice withBudget(PlanningBudget account) {
+            return this.account == account ? this : new Slice(this, account);
         }
 
         /** At least one bounded operation per slice; no tick gate or artificial sleep. */
@@ -147,18 +166,19 @@ public final class PlanningScheduler implements AutoCloseable {
             // An advance can perform many charged arithmetic operations. Count
             // their deterministic effort as well as continuation calls, so one
             // expensive order yields even before its wall-time slice expires.
-            if (steps != 0 && (steps >= stepsPerSlice || owner.budget.threadWork() - workStarted >= stepsPerSlice ||
+            if (steps != 0 && (steps >= stepsPerSlice || account.threadWork() - workStarted >= stepsPerSlice ||
                     System.nanoTime() - deadline >= 0))
                 return false;
-            if (!charge) owner.budget.checkpoint();
-            else if (compilation) owner.budget.compilationCheck();
-            else owner.budget.check();
+            if (owner.future.isDone()) throw new java.util.concurrent.CancellationException();
+            if (!charge) account.checkpoint();
+            else if (compilation) account.compilationCheck();
+            else account.check();
             steps++;
             return true;
         }
 
         public PlanningBudget budget() {
-            return owner.budget;
+            return account;
         }
 
         public int parallelism() {
@@ -173,7 +193,7 @@ public final class PlanningScheduler implements AutoCloseable {
         public <R> CompletableFuture<List<R>> fork(PlanningBudget.Phase phase, List<? extends Supplier<R>> partitions) {
             if (partitions.size() > workers) throw new IllegalArgumentException("Too many parallel partitions");
             // Only immutable labels cross workers, never an active timing scope.
-            var context = owner.budget.traceContext();
+            var context = account.traceContext();
             var children = new ArrayList<CompletableFuture<R>>();
             for (Supplier<R> partition : partitions) {
                 CompletableFuture<R> child = new CompletableFuture<>();
@@ -186,9 +206,9 @@ public final class PlanningScheduler implements AutoCloseable {
                             long start = enter();
                             try {
                                 R value;
-                                try (var timing = owner.budget.work(phase); var costs = owner.budget.trace(context)) {
+                                try (var timing = account.work(phase); var costs = account.trace(context)) {
                                     if (owner.future.isDone()) throw new java.util.concurrent.CancellationException();
-                                    owner.budget.checkpoint();
+                                    account.checkpoint();
                                     value = partition.get();
                                 }
                                 // A completed partition must have published its exclusive costs.
@@ -225,7 +245,7 @@ public final class PlanningScheduler implements AutoCloseable {
                 int id;
                 while ((id = next.getAndIncrement()) < partitions.size()) {
                     try {
-                        owner.budget.checkpoint();
+                        account.checkpoint();
                         outputs.set(id, partitions.get(id).get());
                     } catch (Throwable stopped) {
                         failure.compareAndSet(null, stopped);
@@ -292,7 +312,9 @@ public final class PlanningScheduler implements AutoCloseable {
             T result = null;
             Throwable terminalFailure = null;
             CompletableFuture<?> waiting = null;
-            try (var timing = budget.work(budget.phase())) {
+            var activeAccount = work.activeBudget();
+            if (activeAccount == null) activeAccount = budget;
+            try (var timing = activeAccount.work(activeAccount.phase())) {
                 if (work.advance(new Slice(this))) {
                     result = work.result();
                     terminal = true;

@@ -1,0 +1,14 @@
+{
+	icon: "minecraft:axolotl_bucket"
+	id: "01778F6BAF0AD6FD"
+	loot_size: 1
+	order_index: 12
+	rewards: [
+		{ count: 32, item: "minecraft:cod_bucket" }
+		{ count: 32, item: "minecraft:salmon_bucket" }
+		{ count: 32, item: "minecraft:tropical_fish_bucket" }
+		{ count: 32, item: "minecraft:pufferfish_bucket" }
+		{ count: 2, item: "minecraft:axolotl_bucket" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.01778f6baf0ad6fd.title}"
+}

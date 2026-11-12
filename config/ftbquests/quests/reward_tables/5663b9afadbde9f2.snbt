@@ -1,0 +1,45 @@
+{
+	icon: "gtceu:doge_coin"
+	id: "5663B9AFADBDE9F2"
+	loot_size: 1
+	order_index: 1
+	rewards: [
+		{ count: 16, item: "gtceu:doge_coin", random_bonus: 48, weight: 25.0f }
+		{ count: 2, item: "gtceu:neutronium_credit", random_bonus: 1, weight: 0.4f }
+		{ count: 4, item: "gtceu:naquadah_credit", random_bonus: 3 }
+		{ count: 8, item: "gtceu:osmium_credit", random_bonus: 6, weight: 2.0f }
+		{ count: 15, item: "gtceu:platinum_credit", random_bonus: 10, weight: 4.0f }
+		{ count: 25, item: "gtceu:gold_credit", random_bonus: 13, weight: 8.0f }
+		{ count: 80, item: "gtceu:copper_credit", random_bonus: 28, weight: 20.0f }
+		{ count: 56, item: "gtceu:cupronickel_credit", random_bonus: 24, weight: 15.0f }
+		{ count: 38, item: "gtceu:silver_credit", random_bonus: 18, weight: 10.0f }
+		{ count: 16, item: "gtceu:chocolate_coin", random_bonus: 48, weight: 25.0f }
+		{
+			item: {
+				Count: 1
+				id: "ae2:facade"
+				tag: {
+					item: "expatternprovider:fishbig"
+				}
+			}
+			weight: 2.0f
+		}
+		{ item: "gtceu:overworld_marker" }
+		{ item: "gtceu:the_nether_marker" }
+		{ item: "gtceu:the_end_marker" }
+		{ item: "gtlcore:brevibacterium_petri_dish" }
+		{ item: "gtlcore:bifidobacteriumm_petri_dish" }
+		{ item: "gtlcore:eschericia_petri_dish" }
+		{ item: "gtlcore:streptococcus_petri_dish" }
+		{ item: "gtlcore:cupriavidus_petri_dish" }
+		{ item: "gtlcore:shewanella_petri_dish" }
+		{ item: "ae2:not_so_mysterious_cube" }
+		{ item: "ad_astra:glacio_globe" }
+		{ item: "ad_astra:moon_globe" }
+		{ item: "ad_astra:mars_globe" }
+		{ item: "ad_astra:mercury_globe" }
+		{ item: "ad_astra:venus_globe" }
+		{ item: "ad_astra:earth_globe" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.5663b9afadbde9f2.title}"
+}

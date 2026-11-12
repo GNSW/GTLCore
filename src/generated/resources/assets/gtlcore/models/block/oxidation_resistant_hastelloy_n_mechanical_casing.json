@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "gtlcore:block/casings/oxidation_resistant_hastelloy_n_mechanical_casing"
-  }
-}

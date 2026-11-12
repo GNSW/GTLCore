@@ -1,9 +1,0 @@
-{
-  "flip_v": true,
-  "loader": "forge:obj",
-  "model": "gtlcore:models/obj/star.obj",
-  "textures": {
-    "texture0": "gtceu:block/dim_markers/overworld/west",
-    "particle":"gtceu:block/dim_markers/overworld/west"
-  }
-}

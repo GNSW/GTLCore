@@ -1,1 +1,0 @@
-org.gtlcore.gtlcore.integration.kjs.GTLKubejsPlugin

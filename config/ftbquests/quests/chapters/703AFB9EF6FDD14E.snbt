@@ -1,0 +1,493 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "703AFB9EF6FDD14E"
+	group: "24F4987B35ABEE82"
+	hide_quest_details_until_startable: true
+	hide_quest_until_deps_complete: true
+	icon: "gtlcore:miracle_crystal"
+	id: "703AFB9EF6FDD14E"
+	order_index: 7
+	quest_links: [{
+		id: "792A4930F282D16A"
+		linked_quest: "0F4AFDE98CEA87B1"
+		x: 0.0d
+		y: 1.5d
+	}]
+	quests: [
+		{
+			dependencies: ["516AA655EF6CBBF0"]
+			hide_until_deps_visible: false
+			id: "0F04364907145AF1"
+			optional: true
+			rewards: [{
+				id: "2ECD0C260CE78B1D"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0f04364907145af1.subtitle}"
+			tasks: [{
+				id: "2642F05E062ABFE7"
+				item: "gtlcore:mining_crystal"
+				type: "item"
+			}]
+			x: 3.0d
+			y: -1.5d
+		}
+		{
+			dependencies: ["516AA655EF6CBBF0"]
+			hide_until_deps_visible: false
+			id: "14B8DFAE3AA43497"
+			optional: true
+			rewards: [{
+				id: "00CDC7052E4078DA"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.14b8dfae3aa43497.subtitle}"
+			tasks: [{
+				id: "1502A8F3E92F8A9A"
+				item: "gtlcore:treasures_crystal"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 1.5d
+		}
+		{
+			dependencies: ["0F4AFDE98CEA87B1"]
+			description: [
+				"{gtlcore.quest.gtl.quest.516aa655ef6cbbf0.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.516aa655ef6cbbf0.description.0002}"
+			]
+			icon: "minecraft:diamond_ore"
+			id: "516AA655EF6CBBF0"
+			optional: true
+			rewards: [
+				{
+					id: "4B811EA659C3E344"
+					item: "gtceu:ulv_fragment_world_collection_machine"
+					type: "item"
+				}
+				{
+					id: "0C673F89F25E302D"
+					item: "gtceu:ulv_solar_panel"
+					type: "item"
+				}
+			]
+			tasks: [{
+				id: "0ABA4D223034D5A2"
+				title: "{gtlcore.quest.gtl.task.0aba4d223034d5a2.title}"
+				type: "checkmark"
+			}]
+			x: 1.5d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"0F04364907145AF1"
+				"14B8DFAE3AA43497"
+			]
+			hide_until_deps_visible: false
+			id: "1B664763E9558755"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "336B2D64B4F0036A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3BF94313D79C5A2E"
+				item: "gtceu:ulv_fragment_world_collection_machine"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1b664763e9558755.title}"
+			x: 4.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["1B664763E9558755"]
+			description: ["{gtlcore.quest.gtl.quest.72fb1a140facfa76.description.0000}"]
+			hide_until_deps_visible: false
+			id: "72FB1A140FACFA76"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5EA6AACBFC533A87"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.72fb1a140facfa76.subtitle}"
+			tasks: [{
+				id: "3FF19BC6685E0941"
+				item: "gtceu:large_fragment_world_collection_machine"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["0F4AFDE98CEA87B1"]
+			description: ["{gtlcore.quest.gtl.quest.2dd0ad4ddba7bfd0.description.0000}"]
+			id: "2DD0AD4DDBA7BFD0"
+			optional: true
+			rewards: [{
+				id: "3DF6CF1997E498F4"
+				item: "gtlcore:world_fragments_overworld"
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2dd0ad4ddba7bfd0.subtitle}"
+			tasks: [{
+				id: "059A7D5CE5C83430"
+				item: "gtlcore:world_fragments_reactor"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2dd0ad4ddba7bfd0.title}"
+			x: 1.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["7F78340CB4A8EC59"]
+			hide_until_deps_visible: false
+			id: "7C24D5FD2C008BD4"
+			optional: true
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "5EA057EA19F5D87B"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "301EF6E52D9A2FAB"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "0FE22BDF54F1E6DD"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "07BF3CD9B81EB94B"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "0E1E577F0DA026C6"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.7c24d5fd2c008bd4.subtitle}"
+			tasks: [
+				{
+					count: 16L
+					id: "0BAE3168422F5761"
+					item: { Count: 16, id: "gtlcore:world_fragments_overworld" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "79CB92FDE6BEB9FC"
+					item: "gtlcore:world_fragments_nether"
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "496C01B52C6DBD8C"
+					item: "gtlcore:world_fragments_end"
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "0A104EFE5E9E683F"
+					item: { Count: 16, id: "gtlcore:world_fragments_reactor" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "7C6E1B1A4D7D8554"
+					item: { Count: 16, id: "gtlcore:world_fragments_moon" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "1F6039B168CA9470"
+					item: { Count: 15, id: "gtlcore:world_fragments_mars" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "27C6DAABD89164E3"
+					item: { Count: 16, id: "gtlcore:world_fragments_venus" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "44C8227E8791D2D9"
+					item: { Count: 16, id: "gtlcore:world_fragments_mercury" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "170E82CDF45615F7"
+					item: { Count: 16, id: "gtlcore:world_fragments_ceres" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "09039A9DF31C12E4"
+					item: { Count: 16, id: "gtlcore:world_fragments_io" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "3C28D03EB3041A1E"
+					item: { Count: 16, id: "gtlcore:world_fragments_ganymede" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "70181E6CF015F973"
+					item: { Count: 16, id: "gtlcore:world_fragments_pluto" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "23E1BE677D4714EB"
+					item: { Count: 16, id: "gtlcore:world_fragments_enceladus" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "4D997304A419732E"
+					item: { Count: 16, id: "gtlcore:world_fragments_titan" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "72641DCCB8B3FF0B"
+					item: { Count: 16, id: "gtlcore:world_fragments_glacio" }
+					type: "item"
+				}
+				{
+					count: 16L
+					id: "26076428CEFF5CFC"
+					item: { Count: 16, id: "gtlcore:world_fragments_barnarda" }
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7c24d5fd2c008bd4.title}"
+			x: 4.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["2DD0AD4DDBA7BFD0"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7f78340cb4a8ec59.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7f78340cb4a8ec59.description.0002}"
+			]
+			hide_until_deps_visible: false
+			icon: {
+				Count: 1
+				id: "ad_astra:tier_1_rocket"
+				tag: { }
+			}
+			id: "7F78340CB4A8EC59"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0EA0AC24642EC505"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7f78340cb4a8ec59.subtitle}"
+			tasks: [
+				{
+					id: "3199CC797450EAEB"
+					item: {
+						Count: 1
+						id: "ad_astra:tier_1_rocket"
+						tag: { }
+					}
+					type: "item"
+				}
+				{
+					id: "5B9D40351A69AA3B"
+					item: "gtlcore:world_fragments_moon"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7f78340cb4a8ec59.title}"
+			x: 3.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["7C24D5FD2C008BD4"]
+			description: ["{gtlcore.quest.gtl.quest.5f403c7ae4b5486c.description.0000}"]
+			hide_until_deps_visible: false
+			id: "5F403C7AE4B5486C"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3C84F822038A0FC3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				count: 3L
+				id: "198616959D137813"
+				item: "gtlcore:miracle_crystal"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5f403c7ae4b5486c.title}"
+			x: 6.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["5F403C7AE4B5486C"]
+			description: ["{\"underlined\":\"true\",\"italic\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"1416EAE88C9030C8\"},\"translate\":\"gtlcore.quest.gtl.quest.14e8d6ff37930a06.description.0000.text.0000\"}"]
+			hide_until_deps_visible: false
+			icon: "minecraft:bedrock"
+			id: "14E8D6FF37930A06"
+			optional: true
+			tasks: [{
+				id: "1F5DC856A1D6FB99"
+				title: "{gtlcore.quest.gtl.task.1f5dc856a1d6fb99.title}"
+				type: "checkmark"
+			}]
+			x: 7.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["0F4AFDE98CEA87B1"]
+			icon: "minecraft:oak_sapling"
+			id: "66C8E56877EB2C27"
+			rewards: [
+				{
+					id: "1A114E870FCE0EA5"
+					item: "minecraft:oak_sapling"
+					type: "item"
+				}
+				{
+					id: "3EC45E3DE133EC2D"
+					item: "minecraft:spruce_sapling"
+					type: "item"
+				}
+				{
+					id: "57D6E06AE3BB3F3B"
+					item: "minecraft:birch_sapling"
+					type: "item"
+				}
+				{
+					id: "7F92C4560AD4D06A"
+					item: "minecraft:jungle_sapling"
+					type: "item"
+				}
+				{
+					id: "2730EB7D64BEDAA2"
+					item: "minecraft:acacia_sapling"
+					type: "item"
+				}
+				{
+					id: "28D0AEAB246DB69D"
+					item: "minecraft:dark_oak_sapling"
+					type: "item"
+				}
+				{
+					id: "011077EBC9980E6F"
+					item: "minecraft:cherry_sapling"
+					type: "item"
+				}
+				{
+					id: "16C7B2949F32DC4F"
+					item: "minecraft:mangrove_propagule"
+					type: "item"
+				}
+			]
+			tasks: [{
+				id: "57B247D17151F041"
+				title: "{gtlcore.quest.gtl.task.57b247d17151f041.title}"
+				type: "checkmark"
+			}]
+			x: 1.5d
+			y: 1.5d
+		}
+		{
+			dependencies: ["0F4AFDE98CEA87B1"]
+			description: ["{gtlcore.quest.gtl.quest.14de79edcda4a6be.description.0000}"]
+			hide_dependency_lines: true
+			hide_until_deps_visible: true
+			id: "14DE79EDCDA4A6BE"
+			optional: true
+			subtitle: "{gtlcore.quest.gtl.quest.14de79edcda4a6be.subtitle}"
+			tasks: [
+				{
+					id: "64B3B0797EB6093C"
+					item: "gtceu:steel_drill_head"
+					type: "item"
+				}
+				{
+					id: "2769B4E620B8346D"
+					item: "gtceu:titanium_drill_head"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6E4828AEC92E63DD"
+					item: "gtceu:naquadah_alloy_drill_head"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4EF772A26D3D63C2"
+					item: "gtceu:neutronium_drill_head"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7B928F468B3C1ACB"
+					item: "kubejs:machine_casing_grinding_head"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.14de79edcda4a6be.title}"
+			x: 4.5d
+			y: 1.5d
+		}
+		{
+			dependencies: ["0F4AFDE98CEA87B1"]
+			description: [
+				"{gtlcore.quest.gtl.quest.04fd30292cfc4889.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.04fd30292cfc4889.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.04fd30292cfc4889.description.0004}"
+				"{gtlcore.quest.gtl.quest.04fd30292cfc4889.description.0005}"
+				"{gtlcore.quest.gtl.quest.04fd30292cfc4889.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.04fd30292cfc4889.description.0008}"
+			]
+			hide_dependency_lines: true
+			icon: "gtceu:nan_certificate"
+			id: "04FD30292CFC4889"
+			optional: true
+			tasks: [{
+				id: "71526259CED898FC"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.04fd30292cfc4889.title}"
+			x: 6.0d
+			y: 1.5d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.703afb9ef6fdd14e.title}"
+}

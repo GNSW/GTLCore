@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "gtlcore:item/microfocus_x_ray_tube"
-  }
-}

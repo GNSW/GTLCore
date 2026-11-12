@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "gtlcore:item/item_storage_cell_256m"
-  }
-}

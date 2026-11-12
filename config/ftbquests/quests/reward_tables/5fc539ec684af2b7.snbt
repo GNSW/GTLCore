@@ -1,0 +1,11 @@
+{
+	id: "5FC539EC684AF2B7"
+	loot_size: 1
+	order_index: 13
+	rewards: [
+		{ item: "minecraft:sweet_berries" }
+		{ item: "minecraft:cocoa_beans" }
+		{ item: "minecraft:glow_berries" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.5fc539ec684af2b7.title}"
+}

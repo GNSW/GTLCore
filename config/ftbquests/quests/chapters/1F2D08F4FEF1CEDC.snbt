@@ -1,0 +1,218 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "1F2D08F4FEF1CEDC"
+	group: "24F4987B35ABEE82"
+	icon: "gtceu:lv_sodium_battery"
+	id: "1F2D08F4FEF1CEDC"
+	order_index: 2
+	quest_links: [ ]
+	quests: [
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0004}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0005}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0006}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0007}"
+				""
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0009}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0010}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0011}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0012}"
+				"{gtlcore.quest.gtl.quest.7f97bed1b9552e5e.description.0013}"
+			]
+			icon: "gtceu:lv_battery_buffer_4x"
+			id: "7F97BED1B9552E5E"
+			rewards: [{
+				id: "21A127B9A78F381C"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "7B797503EA800D59"
+				title: "{gtlcore.quest.gtl.task.7b797503ea800d59.title}"
+				type: "checkmark"
+			}]
+			x: 1.0d
+			y: -4.5d
+		}
+		{
+			dependency_requirement: "one_completed"
+			description: [
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0010}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0012}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0014}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0016}"
+				""
+				"{gtlcore.quest.gtl.quest.0cc922b821305906.description.0018}"
+			]
+			icon: "gtceu:lv_transformer_1a"
+			id: "0CC922B821305906"
+			rewards: [{
+				id: "6AACFA4A99B6EF47"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "34D8E6B118290930"
+				title: "{gtlcore.quest.gtl.task.34d8e6b118290930.title}"
+				type: "checkmark"
+			}]
+			x: 5.0d
+			y: -4.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.4a7e19ef14d3c072.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4a7e19ef14d3c072.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4a7e19ef14d3c072.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.4a7e19ef14d3c072.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.4a7e19ef14d3c072.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.4a7e19ef14d3c072.description.0010}"
+			]
+			icon: "gtceu:tin_single_cable"
+			id: "4A7E19EF14D3C072"
+			rewards: [{
+				id: "0742E14D9F82B5DA"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "6C551BD24A83AB3F"
+				title: "{gtlcore.quest.gtl.task.6c551bd24a83ab3f.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: -4.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0010}"
+				""
+				"{gtlcore.quest.gtl.quest.4f7a3702787f86a7.description.0012}"
+			]
+			icon: "gtceu:lv_diode"
+			id: "4F7A3702787F86A7"
+			rewards: [{
+				id: "12DB6E7A8A385246"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "007D09C6CE7CB00B"
+				title: "{gtlcore.quest.gtl.task.007d09c6ce7cb00b.title}"
+				type: "checkmark"
+			}]
+			x: 1.0d
+			y: -2.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.5535934109a12b5d.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5535934109a12b5d.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.5535934109a12b5d.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.5535934109a12b5d.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.5535934109a12b5d.description.0008}"
+			]
+			icon: "minecraft:clock"
+			id: "5535934109A12B5D"
+			rewards: [{
+				id: "31ED6CE96AA0C0E8"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "4DB7B7FC0312D572"
+				title: "{gtlcore.quest.gtl.task.4db7b7fc0312d572.title}"
+				type: "checkmark"
+			}]
+			x: 5.0d
+			y: -2.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.010cf028448c17a9.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.010cf028448c17a9.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.010cf028448c17a9.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.010cf028448c17a9.description.0006}"
+			]
+			icon: "gtceu:active_transformer"
+			id: "010CF028448C17A9"
+			rewards: [{
+				id: "7C3F436CBD1BBB13"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "311562AB006A065E"
+				title: "{gtlcore.quest.gtl.task.311562ab006a065e.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: -2.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.1d4874ca93b567a3.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.1d4874ca93b567a3.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.1d4874ca93b567a3.description.0004}"
+			]
+			icon: "gtmthings:wireless_energy_monitor"
+			id: "1D4874CA93B567A3"
+			rewards: [{
+				id: "1AA63229CC142EBE"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "673111C64F7BABA2"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1d4874ca93b567a3.title}"
+			x: 3.0d
+			y: -0.5d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.1f2d08f4fef1cedc.title}"
+}

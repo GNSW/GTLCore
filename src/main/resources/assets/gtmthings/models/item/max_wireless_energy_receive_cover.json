@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "gtmthings:item/max_wireless_energy_receive_cover"
-  }
-}

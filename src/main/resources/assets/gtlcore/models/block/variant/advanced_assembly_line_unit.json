@@ -1,6 +1,0 @@
-{
-  "parent": "gtceu:block/cube/all",
-  "textures": {
-    "all": "gtlcore:block/advanced_assembly_line_unit"
-  }
-}

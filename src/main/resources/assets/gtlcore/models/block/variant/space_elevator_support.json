@@ -1,8 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "gtlcore:block/support",
-    "up": "gtlcore:block/structure",
-    "down": "gtlcore:block/structure"
-  }
-}

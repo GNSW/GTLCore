@@ -1,0 +1,13 @@
+{
+	id: "5715FCEEF2D8BB4D"
+	loot_size: 1
+	order_index: 6
+	rewards: [
+		{ count: 2560, item: "ae2:fluix_smart_cable" }
+		{ count: 2560, item: "ae2:fluix_covered_cable" }
+		{ count: 2560, item: "ae2:fluix_glass_cable" }
+		{ count: 2560, item: "ae2:fluix_covered_dense_cable" }
+		{ count: 2560, item: "ae2:fluix_smart_dense_cable" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.5715fceef2d8bb4d.title}"
+}

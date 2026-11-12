@@ -1,0 +1,28 @@
+{
+	id: "22C6FABC91E0609F"
+	loot_size: 1
+	order_index: 9
+	rewards: [
+		{
+			item: {
+				Count: 1
+				id: "ae2:certus_quartz_cutting_knife"
+				tag: {
+					Damage: 0
+					Unbreakable: 1b
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "ae2:nether_quartz_cutting_knife"
+				tag: {
+					Damage: 0
+					Unbreakable: 1b
+				}
+			}
+		}
+	]
+	title: "{gtlcore.quest.gtl.reward_table.22c6fabc91e0609f.title}"
+}

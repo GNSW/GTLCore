@@ -1,0 +1,1790 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "77F8039ACE718C6C"
+	group: "68CBF1606D696C68"
+	icon: "gtlcore:primitive_robot_arm"
+	id: "77F8039ACE718C6C"
+	order_index: 0
+	quest_links: [{
+		id: "4E8ED4704A82F154"
+		linked_quest: "376F6857ABEF60BF"
+		x: -2.0d
+		y: 4.0d
+	}]
+	quests: [
+		{
+			dependencies: ["46F82A0A3D57C225"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5f5f348e3a34827e.description.0000}"
+				"{gtlcore.quest.gtl.quest.5f5f348e3a34827e.description.0001}"
+			]
+			id: "5F5F348E3A34827E"
+			rewards: [{
+				id: "41A3ACD4F54D9969"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			shape: "gear"
+			size: 2.0d
+			tasks: [{
+				id: "47D6C464DF34C115"
+				item: "gtceu:bronze_ingot"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5f5f348e3a34827e.title}"
+			x: 0.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["12E605EC5CFDE71A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4e96a08cf12d496a.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4e96a08cf12d496a.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4e96a08cf12d496a.description.0004}"
+			]
+			id: "4E96A08CF12D496A"
+			rewards: [{
+				id: "0EF18EDF382FF874"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "229E6CD8C1F311CF"
+					item: "gtceu:primitive_pump"
+					type: "item"
+				}
+				{
+					id: "032BCE4DA9E399A5"
+					item: "gtceu:pump_hatch"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4e96a08cf12d496a.title}"
+			x: 0.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2B9D62FB6BF39201"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4bfc342697bde75a.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4bfc342697bde75a.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4bfc342697bde75a.description.0004}"
+			]
+			id: "4BFC342697BDE75A"
+			rewards: [{
+				count: 64
+				id: "5EB3FB5E5FAF9235"
+				item: {
+					Count: 1
+					id: "sophisticatedstorage:netherite_shulker_box"
+					tag: {
+						accentColor: 16383998
+						mainColor: 16383998
+					}
+				}
+				type: "item"
+			}]
+			tasks: [{
+				id: "70DE0442DB10C914"
+				item: "gtceu:lp_steam_solid_boiler"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4bfc342697bde75a.title}"
+			x: 2.0d
+			y: -2.0d
+		}
+		{
+			can_repeat: true
+			dependencies: ["5F5F348E3A34827E"]
+			description: [
+				"{gtlcore.quest.gtl.quest.781417a4fa36101d.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.781417a4fa36101d.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.781417a4fa36101d.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.781417a4fa36101d.description.0006}"
+			]
+			icon: "gtceu:spacetime_tiny_fluid_pipe"
+			id: "781417A4FA36101D"
+			optional: true
+			rewards: [{
+				count: 64
+				id: "6CF397F913CDAA81"
+				item: "gtceu:spacetime_tiny_fluid_pipe"
+				type: "item"
+			}]
+			tasks: [{
+				id: "02A2DDC03475574B"
+				title: "{gtlcore.quest.gtl.task.02a2ddc03475574b.title}"
+				type: "checkmark"
+			}]
+			x: -2.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["36A49197309D1F09"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5ce50ddc960340d8.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5ce50ddc960340d8.description.0002}"
+			]
+			icon: "gtceu:primitive_blast_furnace"
+			icon_scale: 2.0d
+			id: "5CE50DDC960340D8"
+			rewards: [
+				{
+					id: "2D8761085E458691"
+					item: "gtceu:primitive_blast_furnace"
+					type: "item"
+				}
+				{
+					count: 40
+					id: "6BF8F26BE81E1228"
+					item: "gtceu:firebricks"
+					type: "item"
+				}
+			]
+			shape: "rsquare"
+			tasks: [
+				{
+					id: "6649B915F2C7704F"
+					item: "gtceu:primitive_blast_furnace"
+					type: "item"
+				}
+				{
+					count: 12L
+					id: "42BD89429E9AAD22"
+					item: { Count: 12, id: "gtceu:firebricks" }
+					type: "item"
+				}
+			]
+			x: 8.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["2B9D62FB6BF39201"]
+			description: ["{gtlcore.quest.gtl.quest.5c936ef307594737.description.0000}"]
+			id: "5C936EF307594737"
+			rewards: [{
+				id: "704DF16EECC15BD8"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "00E7B6F2A5F20C06"
+				item: "gtceu:lp_steam_compressor"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["5C936EF307594737"]
+			description: ["{gtlcore.quest.gtl.quest.36a49197309d1f09.description.0000}"]
+			icon: "gtceu:fireclay_dust"
+			id: "36A49197309D1F09"
+			rewards: [{
+				id: "777E0B3B0A58DE1A"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "35AB6D0569B73FB7"
+					item: "gtceu:brick_dust"
+					type: "item"
+				}
+				{
+					id: "3F0F3F0437100ADB"
+					item: "gtceu:clay_dust"
+					type: "item"
+				}
+				{
+					id: "3AC2D6A0AAB107FA"
+					item: "gtceu:fireclay_dust"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.36a49197309d1f09.title}"
+			x: 6.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["5C936EF307594737"]
+			description: ["{gtlcore.quest.gtl.quest.79e81cc078f246c0.description.0000}"]
+			hide_dependency_lines: false
+			hide_dependent_lines: true
+			id: "79E81CC078F246C0"
+			rewards: [{
+				count: 128
+				id: "289E9D4B6242976B"
+				item: "gtceu:sticky_resin"
+				type: "item"
+			}]
+			tasks: [{
+				id: "0A519A3A397BBD45"
+				item: "gtceu:rubber_plate"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.79e81cc078f246c0.title}"
+			x: 6.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["5CE50DDC960340D8"]
+			id: "388BD32463FA905D"
+			rewards: [{
+				id: "57B2E9912F4375C3"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "5ADD8EEFE40F5663"
+				item: "gtceu:steel_ingot"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.388bd32463fa905d.title}"
+			x: 10.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"02375F5D54E5F347"
+				"43DE0784E5D32B46"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.7cb85061f0822830.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7cb85061f0822830.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "7CB85061F0822830"
+			rewards: [{
+				id: "0D14C938E01BD29D"
+				item: "gtceu:silver_credit"
+				type: "item"
+			}]
+			shape: "hexagon"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7cb85061f0822830.subtitle}"
+			tasks: [{
+				id: "6500863B6A64DE2F"
+				item: "gtceu:lv_machine_hull"
+				type: "item"
+			}]
+			x: 14.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2B9D62FB6BF39201"]
+			description: ["{gtlcore.quest.gtl.quest.30f031cd02425ed7.description.0000}"]
+			id: "30F031CD02425ED7"
+			rewards: [{
+				count: 64
+				id: "4FB6BBE01DEAFC93"
+				item: "minecraft:gunpowder"
+				type: "item"
+			}]
+			tasks: [{
+				id: "7D7E7EBAB75A2F8D"
+				item: "gtceu:lp_steam_alloy_smelter"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["00579BDA1FA1BEC6"]
+			description: [
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3FFD20E53A9DF62A\"},\"translate\":\"gtlcore.quest.gtl.quest.335ed39019fc62e7.description.0000.text.0000\"}"
+				""
+				"{gtlcore.quest.gtl.quest.335ed39019fc62e7.description.0002}"
+			]
+			icon: "kubejs:reactor_core"
+			icon_scale: 2.0d
+			id: "335ED39019FC62E7"
+			rewards: [
+				{
+					id: "0AB3A8A039EB840F"
+					item: "gtceu:gold_credit"
+					type: "item"
+				}
+				{
+					id: "120C3F2CEC94168B"
+					item: {
+						Count: 1
+						id: "gtceu:nanomuscle_helmet"
+						tag: { }
+					}
+					type: "item"
+				}
+				{
+					id: "1436494559DCBE1B"
+					item: {
+						Count: 1
+						id: "gtceu:avanced_nanomuscle_chestplate"
+						tag: { }
+					}
+					type: "item"
+				}
+				{
+					id: "542A36C70B6D39A1"
+					item: "gtceu:nanomuscle_leggings"
+					type: "item"
+				}
+				{
+					id: "4A5E920CBD312AF2"
+					item: "gtceu:nanomuscle_boots"
+					type: "item"
+				}
+			]
+			tasks: [
+				{
+					dimension: "kubejs:ancient_world"
+					id: "7B798A358D3DA56B"
+					optional_task: true
+					title: "{gtlcore.quest.gtl.task.7b798a358d3da56b.title}"
+					type: "dimension"
+				}
+				{
+					id: "5570EF3E7801BFD4"
+					type: "checkmark"
+				}
+			]
+			x: 10.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["30F031CD02425ED7"]
+			description: ["{gtlcore.quest.gtl.quest.3d65d9712dfb63d9.description.0000}"]
+			id: "3D65D9712DFB63D9"
+			rewards: [{
+				id: "7FAA57A862B018AE"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "4DE17D3F21E3C195"
+				item: "gtceu:pulsating_alloy_ingot"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["3D65D9712DFB63D9"]
+			description: [
+				"{gtlcore.quest.gtl.quest.00579bda1fa1bec6.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.00579bda1fa1bec6.description.0002}"
+				"{gtlcore.quest.gtl.quest.00579bda1fa1bec6.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.00579bda1fa1bec6.description.0005}"
+				""
+				"{gtlcore.quest.gtl.quest.00579bda1fa1bec6.description.0007}"
+			]
+			icon: "kubejs:reactor_core"
+			id: "00579BDA1FA1BEC6"
+			rewards: [
+				{
+					id: "51AF08C499E8329A"
+					item: "gtceu:silver_credit"
+					type: "item"
+				}
+				{
+					id: "20A6866ADD102503"
+					item: "ae2:meteorite_compass"
+					type: "item"
+				}
+			]
+			tasks: [
+				{
+					id: "3C71CBD9FE0DC224"
+					item: "kubejs:reactor_core"
+					type: "item"
+				}
+				{
+					count: 4L
+					id: "1CB49FF2229A3D77"
+					item: { Count: 4, id: "gtceu:steel_block" }
+					type: "item"
+				}
+				{
+					count: 4L
+					id: "3542128803577207"
+					item: { Count: 4, id: "minecraft:diamond_block" }
+					type: "item"
+				}
+			]
+			x: 7.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["2B9D62FB6BF39201"]
+			description: [
+				"{gtlcore.quest.gtl.quest.6525c9de2a276238.description.0000}"
+				""
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"4877DB6020D6BFBC\"},\"translate\":\"gtlcore.quest.gtl.quest.6525c9de2a276238.description.0002.text.0000\"}"
+			]
+			hide_dependency_lines: true
+			id: "6525C9DE2A276238"
+			rewards: [{
+				id: "6B3DEE9FC411E85C"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "31BB0DC594040BE2"
+				item: "gtceu:lp_steam_forge_hammer"
+				type: "item"
+			}]
+			x: 10.0d
+			y: -2.0d
+		}
+		{
+			dependencies: [
+				"6525C9DE2A276238"
+				"388BD32463FA905D"
+			]
+			description: ["{gtlcore.quest.gtl.quest.02375f5d54e5f347.description.0000}"]
+			id: "02375F5D54E5F347"
+			rewards: [{
+				id: "1A0B2145C6BEAD5B"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "78729EFD5CE8CD48"
+				item: "gtceu:steel_plate"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["79E81CC078F246C0"]
+			id: "43DE0784E5D32B46"
+			rewards: [{
+				id: "61C758028D9C9DB9"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "6B8D0D8D101E1641"
+				item: "gtceu:tin_single_cable"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.43de0784e5d32b46.title}"
+			x: 12.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["30F031CD02425ED7"]
+			id: "707E5114B7979898"
+			rewards: [{
+				id: "255AB427616C13EB"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "61CD30ADFD9B58AE"
+				item: "gtceu:glass_tube"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"707E5114B7979898"
+				"388BD32463FA905D"
+			]
+			description: ["{gtlcore.quest.gtl.quest.5cd26decb937fc71.description.0000}"]
+			hide_dependent_lines: true
+			icon_scale: 2.0d
+			id: "5CD26DECB937FC71"
+			rewards: [{
+				id: "327EC9AD42261D00"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "16EA9C62F6D609A0"
+				item: "gtceu:vacuum_tube"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["30F031CD02425ED7"]
+			description: ["{gtlcore.quest.gtl.quest.3c91e284a9a03b1b.description.0000}"]
+			id: "3C91E284A9A03B1B"
+			rewards: [{
+				id: "08462119775B14A3"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "15717008A6B7F20E"
+				item: "gtceu:red_alloy_ingot"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["5C936EF307594737"]
+			description: ["{gtlcore.quest.gtl.quest.1fab9ef48d8d9258.description.0000}"]
+			id: "1FAB9EF48D8D9258"
+			rewards: [{
+				count: 128
+				id: "6333E0136E33F27A"
+				item: "gtceu:wood_dust"
+				type: "item"
+			}]
+			tasks: [{
+				id: "5F9E85F4FF39EB70"
+				item: "gtceu:wood_plate"
+				type: "item"
+			}]
+			x: 4.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["335ED39019FC62E7"]
+			description: [
+				"{gtlcore.quest.gtl.quest.12fe2b59fa86381c.description.0000}"
+				"{gtlcore.quest.gtl.quest.12fe2b59fa86381c.description.0001}"
+			]
+			id: "12FE2B59FA86381C"
+			rewards: [
+				{
+					id: "0D834802BFD2366F"
+					item: {
+						Count: 1
+						id: "avaritia:crystal_pickaxe"
+						tag: {
+							Damage: 0
+						}
+					}
+					type: "item"
+				}
+				{
+					id: "33B6A4577EB69E5A"
+					item: "gtceu:cupronickel_credit"
+					type: "item"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.12fe2b59fa86381c.subtitle}"
+			tasks: [
+				{
+					id: "456D397A52A6D291"
+					item: "gtceu:certus_quartz_gem"
+					type: "item"
+				}
+				{
+					id: "5E645191AA6CD3ED"
+					item: "minecraft:quartz"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.12fe2b59fa86381c.title}"
+			x: 12.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"12FE2B59FA86381C"
+				"664C46D5C12E7255"
+				"5CD26DECB937FC71"
+			]
+			description: ["{gtlcore.quest.gtl.quest.3c071c0542cf935d.description.0000}"]
+			id: "3C071C0542CF935D"
+			rewards: [{
+				id: "4304D0C677F66D9B"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "5738459D5168A55F"
+				item: "ae2:molecular_assembler"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["3C071C0542CF935D"]
+			description: ["{gtlcore.quest.gtl.quest.34fcfa114e75d770.description.0000}"]
+			icon_scale: 2.0d
+			id: "34FCFA114E75D770"
+			rewards: [{
+				id: "0C0731B2ACDDCE0D"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			shape: "rsquare"
+			tasks: [{
+				id: "6255EA9A7B4B58EC"
+				item: "gtceu:large_steam_circuit_assembler"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["5F5F348E3A34827E"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5276ca8fa5262c9b.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5276ca8fa5262c9b.description.0002}"
+				""
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"40405034AE9D9945\"},\"translate\":\"gtlcore.quest.gtl.quest.5276ca8fa5262c9b.description.0004.text.0000\"}"
+			]
+			hide_dependent_lines: true
+			id: "5276CA8FA5262C9B"
+			rewards: [{
+				id: "7A6E4F26CB4EC8FB"
+				item: "gtceu:silver_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "72CA64283A8A3E34"
+				item: "kubejs:precision_steam_mechanism"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"5276CA8FA5262C9B"
+				"38CC43F7A6A39BB4"
+			]
+			description: ["{gtlcore.quest.gtl.quest.2585418910b6798a.description.0000}"]
+			icon_scale: 2.0d
+			id: "2585418910B6798A"
+			rewards: [{
+				id: "372783FB309C5A6A"
+				item: "gtceu:silver_credit"
+				type: "item"
+			}]
+			shape: "rsquare"
+			tasks: [{
+				id: "5F47C1E28CF33F84"
+				item: "gtceu:large_steam_centrifuge"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["7CB85061F0822830"]
+			description: [
+				"{gtlcore.quest.gtl.quest.38cc43f7a6a39bb4.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.38cc43f7a6a39bb4.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.38cc43f7a6a39bb4.description.0004}"
+			]
+			hide_dependent_lines: true
+			id: "38CC43F7A6A39BB4"
+			rewards: [{
+				id: "3354D072C3B1F387"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.38cc43f7a6a39bb4.subtitle}"
+			tasks: [{
+				id: "6FF18125E551DB42"
+				item: "gtceu:lv_muffler_hatch"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"5CD26DECB937FC71"
+				"740C2D1F3F420480"
+				"6D729450ED86BDAF"
+				"3C91E284A9A03B1B"
+			]
+			dependency_requirement: "one_completed"
+			description: [
+				"{gtlcore.quest.gtl.quest.5065bedc95ae564e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5065bedc95ae564e.description.0002}"
+			]
+			icon_scale: 2.0d
+			id: "5065BEDC95AE564E"
+			min_required_dependencies: 2
+			rewards: [{
+				id: "58F5C373D0AE0142"
+				item: "gtceu:silver_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "011218464BCA60AC"
+				item: "gtceu:basic_electronic_circuit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5065bedc95ae564e.title}"
+			x: 4.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["79D4AD9908A4578A"]
+			description: ["{gtlcore.quest.gtl.quest.77a1011f608079c9.description.0000}"]
+			id: "77A1011F608079C9"
+			rewards: [{
+				id: "11D6ADD9CE28FA57"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "36895A43C9C125F4"
+				item: "minecraft:paper"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["77A1011F608079C9"]
+			description: ["{gtlcore.quest.gtl.quest.6d729450ed86bdaf.description.0000}"]
+			id: "6D729450ED86BDAF"
+			rewards: [{
+				id: "108CAF7D675F876A"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "72F7066EE104AACE"
+				item: "gtceu:resistor"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["1FAB9EF48D8D9258"]
+			hide_dependency_lines: true
+			id: "051710FFC9907807"
+			rewards: [{
+				id: "765C29DBBBD61E54"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "2B8641531625E4B7"
+				item: "gtceu:resin_circuit_board"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["051710FFC9907807"]
+			id: "740C2D1F3F420480"
+			rewards: [{
+				id: "0C13652D6A0B6866"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "6354CE91F0CF6378"
+				item: "gtceu:resin_printed_circuit_board"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["2585418910B6798A"]
+			description: ["{gtlcore.quest.gtl.quest.06285be2396ab639.description.0000}"]
+			id: "06285BE2396AB639"
+			rewards: [{
+				id: "2AEAC8B8E1C1EBB2"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "48597AE64D4B6F49"
+				item: "gtceu:glue_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.06285be2396ab639.title}"
+			x: 8.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"34FCFA114E75D770"
+				"06285BE2396AB639"
+			]
+			description: ["{gtlcore.quest.gtl.quest.08b7d8f835dfe214.description.0000}"]
+			icon_scale: 2.0d
+			id: "08B7D8F835DFE214"
+			size: 1.0d
+			tasks: [{
+				id: "344BB3250C20E4FB"
+				item: "kubejs:basic_control_circuit"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"08B7D8F835DFE214"
+				"5065BEDC95AE564E"
+			]
+			description: ["{gtlcore.quest.gtl.quest.553b2d61416792dc.description.0000}"]
+			icon_scale: 2.0d
+			id: "553B2D61416792DC"
+			shape: "diamond"
+			size: 1.0d
+			tasks: [{
+				id: "41CA550B62F920A6"
+				item: "kubejs:advanced_control_circuit"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["12FE2B59FA86381C"]
+			description: [
+				"{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.description.0010}"
+			]
+			icon: "ae2:guide"
+			id: "6E69F45AEA66D5ED"
+			rewards: [
+				{
+					id: "5C30500B7291441C"
+					item: "gtceu:cupronickel_credit"
+					type: "item"
+				}
+				{
+					id: "6CE1DC92795F5890"
+					item: "ae2:guide"
+					type: "item"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "31A932E5D9F650C0"
+					table_id: 2505965930486456479L
+					type: "choice"
+				}
+				{
+					id: "1D99840CFCD12862"
+					item: "ae2:network_tool"
+					type: "item"
+				}
+				{
+					id: "1DFA26133A6F203D"
+					item: {
+						Count: 1
+						id: "ae2:memory_card"
+						tag: { }
+					}
+					type: "item"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.6e69f45aea66d5ed.subtitle}"
+			tasks: [{
+				id: "76E9DDCCC307F224"
+				title: "{gtlcore.quest.gtl.task.76e9ddccc307f224.title}"
+				type: "checkmark"
+			}]
+			x: 14.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["553B2D61416792DC"]
+			description: [
+				"{gtlcore.quest.gtl.quest.328d5cf265fccca3.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.328d5cf265fccca3.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.328d5cf265fccca3.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.328d5cf265fccca3.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.328d5cf265fccca3.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.328d5cf265fccca3.description.0010}"
+			]
+			icon_scale: 2.0d
+			id: "328D5CF265FCCCA3"
+			rewards: [
+				{
+					id: "02EE5681EA132E6A"
+					item: "avaritia:star_fuel"
+					type: "item"
+				}
+				{
+					id: "38F3639A0D9D9BBB"
+					item: "kubejs:diamond_compressed_block"
+					type: "item"
+				}
+			]
+			shape: "rsquare"
+			tasks: [{
+				id: "31B3E7B10BBA0EDD"
+				item: "gtceu:bronze_large_boiler"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["5F5F348E3A34827E"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7736f74aebcb914e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7736f74aebcb914e.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.7736f74aebcb914e.description.0004}"
+			]
+			icon: "gtceu:lp_steam_rock_crusher"
+			id: "7736F74AEBCB914E"
+			rewards: [{
+				id: "25A3A90A72A7835D"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "1FF020A8688728E6"
+				title: "{gtlcore.quest.gtl.task.1ff020a8688728e6.title}"
+				type: "checkmark"
+			}]
+			x: -2.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["5CE50DDC960340D8"]
+			description: [
+				"{gtlcore.quest.gtl.quest.0662e205d1783d31.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0662e205d1783d31.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.0662e205d1783d31.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.0662e205d1783d31.description.0006}"
+			]
+			icon_scale: 1.3d
+			id: "0662E205D1783D31"
+			rewards: [
+				{
+					count: 2100
+					id: "739BBFD8B3216A13"
+					item: "minecraft:stone_bricks"
+					type: "item"
+				}
+				{
+					count: 1200
+					id: "2898894E21E5801A"
+					item: "minecraft:bricks"
+					type: "item"
+				}
+				{
+					id: "315AFCCED70ADF27"
+					item: "gtceu:ancient_gold_coin"
+					type: "item"
+				}
+			]
+			shape: "hexagon"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.0662e205d1783d31.subtitle}"
+			tasks: [{
+				id: "2BE6A835D6EF790C"
+				item: "gtceu:dimensionally_transcendent_dirt_forge"
+				type: "item"
+			}]
+			x: 8.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["1AB03D24332B722E"]
+			description: [
+				"{gtlcore.quest.gtl.quest.0532330b52d98469.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0532330b52d98469.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.0532330b52d98469.description.0004}"
+			]
+			icon_scale: 1.3d
+			id: "0532330B52D98469"
+			rewards: [{
+				id: "142C72A3F57D1D8C"
+				item: "gtceu:ancient_gold_coin"
+				type: "item"
+			}]
+			shape: "hexagon"
+			size: 2.0d
+			tasks: [{
+				id: "5AC94C8C8DEF4A0E"
+				item: "gtceu:dimensionally_transcendent_steam_oven"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["5F5F348E3A34827E"]
+			description: ["{gtlcore.quest.gtl.quest.10750deb64b4bf89.description.0000}"]
+			hide_dependency_lines: true
+			id: "10750DEB64B4BF89"
+			rewards: [{
+				id: "5931B37625BB11BB"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "12742633AB7C6E1F"
+				item: "gtceu:lp_steam_furnace"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["10750DEB64B4BF89"]
+			description: ["{gtlcore.quest.gtl.quest.1ab03d24332b722e.description.0000}"]
+			id: "1AB03D24332B722E"
+			rewards: [{
+				id: "26F40D0C80FD0D34"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "1AE97C5270D5F402"
+				item: "gtceu:steam_oven"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"5F5F348E3A34827E"
+				"4E96A08CF12D496A"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.2b9d62fb6bf39201.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.2b9d62fb6bf39201.description.0005}"
+				""
+				"{gtlcore.quest.gtl.quest.2b9d62fb6bf39201.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.2b9d62fb6bf39201.description.0004}"
+			]
+			icon: "gtceu:steam_bucket"
+			id: "2B9D62FB6BF39201"
+			rewards: [{
+				id: "7E1DBDCD0B82F6E6"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "61D5BA33A860F807"
+				title: "{gtlcore.quest.gtl.task.61d5ba33a860f807.title}"
+				type: "checkmark"
+			}]
+			x: 2.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["5F5F348E3A34827E"]
+			description: [
+				"{gtlcore.quest.gtl.quest.05bb1e1e38478f26.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.05bb1e1e38478f26.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.05bb1e1e38478f26.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.05bb1e1e38478f26.description.0006}"
+				""
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3E6BC2F76ED6F531\"},\"translate\":\"gtlcore.quest.gtl.quest.05bb1e1e38478f26.description.0008.text.0000\"}"
+				""
+				"{gtlcore.quest.gtl.quest.05bb1e1e38478f26.description.0010}"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:steam_piston_hammer"
+			icon_scale: 2.0d
+			id: "05BB1E1E38478F26"
+			rewards: [
+				{
+					id: "2D8751AF3B8B1D6A"
+					item: "gtceu:steam_input_bus"
+					type: "item"
+				}
+				{
+					id: "3BC641A02C9D4998"
+					item: "gtceu:steam_output_bus"
+					type: "item"
+				}
+				{
+					id: "38DB793439A26752"
+					item: "gtceu:steam_input_hatch"
+					type: "item"
+				}
+				{
+					id: "58C24B68D0260EBD"
+					item: "gtceu:lv_input_hatch"
+					type: "item"
+				}
+				{
+					id: "5C377797179ABF3E"
+					item: "gtceu:lv_output_hatch"
+					type: "item"
+				}
+				{
+					id: "08E592312C7CBF11"
+					item: "gtceu:lv_input_bus"
+					type: "item"
+				}
+			]
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.05bb1e1e38478f26.subtitle}"
+			tasks: [{
+				id: "6ACDB1E4B636D7F0"
+				title: "{gtlcore.quest.gtl.task.6acdb1e4b636d7f0.title}"
+				type: "checkmark"
+			}]
+			x: -2.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["12FE2B59FA86381C"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0010}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0012}"
+				""
+				"{gtlcore.quest.gtl.quest.7b38a7c2643c6766.description.0014}"
+			]
+			icon: "laserio:laser_wrench"
+			id: "7B38A7C2643C6766"
+			optional: true
+			rewards: [
+				{
+					id: "42242771F67681FC"
+					item: "gtceu:cupronickel_credit"
+					type: "item"
+				}
+				{
+					id: "58583204BED26590"
+					item: "laserio:card_cloner"
+					type: "item"
+				}
+				{
+					id: "3413625607E9471E"
+					item: "laserio:card_holder"
+					type: "item"
+				}
+				{
+					count: 4
+					id: "0B7F433768CE2A64"
+					item: "laserio:overclocker_card"
+					type: "item"
+				}
+				{
+					count: 8
+					id: "60EB885295924B29"
+					item: "laserio:overclocker_node"
+					type: "item"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.7b38a7c2643c6766.subtitle}"
+			tasks: [
+				{
+					id: "1B1773B40FB9AB2F"
+					item: "laserio:laser_connector"
+					type: "item"
+				}
+				{
+					id: "2D87329069B3E34F"
+					item: "laserio:laser_node"
+					type: "item"
+				}
+				{
+					id: "5B2CA5034DD7A34B"
+					item: "laserio:laser_wrench"
+					type: "item"
+				}
+				{
+					id: "184937C5AEE643FD"
+					item: "laserio:laser_connector_advanced"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7b38a7c2643c6766.title}"
+			x: 12.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["2C6F506ADD78F277"]
+			description: [
+				"{gtlcore.quest.gtl.quest.664c46d5c12e7255.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.664c46d5c12e7255.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.664c46d5c12e7255.description.0004}"
+			]
+			id: "664C46D5C12E7255"
+			rewards: [
+				{
+					id: "3753CAA23389F755"
+					item: "gtceu:cupronickel_credit"
+					type: "item"
+				}
+				{
+					count: 64
+					id: "4293BEFEC83DEFB3"
+					item: "ae2:speed_card"
+					type: "item"
+				}
+			]
+			tasks: [{
+				id: "46DB998969DFD278"
+				item: "ae2:inscriber"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["6E69F45AEA66D5ED"]
+			description: [
+				"{gtlcore.quest.gtl.quest.007bbb3d4e349869.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.007bbb3d4e349869.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.007bbb3d4e349869.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.007bbb3d4e349869.description.0006}"
+			]
+			icon: "ae2:drive"
+			id: "007BBB3D4E349869"
+			optional: true
+			rewards: [
+				{
+					id: "6B14C1D1A61EFD20"
+					item: "ae2:drive"
+					type: "item"
+				}
+				{
+					id: "27C330BF86FCD4DA"
+					item: "ae2:energy_acceptor"
+					type: "item"
+				}
+				{
+					count: 6
+					id: "52A2B395450AF309"
+					item: {
+						Count: 1
+						id: "ae2:item_storage_cell_64k"
+						tag: { }
+					}
+					type: "item"
+				}
+				{
+					count: 16
+					id: "28C68B3244898F58"
+					item: "ae2:fluix_covered_cable"
+					type: "item"
+				}
+				{
+					id: "0A4B9AC78642D6A8"
+					item: "expatternprovider:ex_crafting_terminal"
+					type: "item"
+				}
+				{
+					id: "1A7FA662F18A00CA"
+					item: {
+						Count: 1
+						id: "ae2:energy_cell"
+						tag: { }
+					}
+					type: "item"
+				}
+				{
+					count: 4
+					id: "307806F3D4DEE9BE"
+					item: {
+						Count: 1
+						id: "ae2:fluid_storage_cell_64k"
+						tag: { }
+					}
+					type: "item"
+				}
+				{
+					id: "49539E3D27493D9F"
+					item: "ae2:crystal_resonance_generator"
+					type: "item"
+				}
+				{
+					id: "07F17172D1EB66D0"
+					item: "ae2:vibration_chamber"
+					type: "item"
+				}
+			]
+			shape: "rsquare"
+			size: 1.0d
+			tasks: [{
+				consume_items: true
+				id: "34FA7A3FDCEEFF9C"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.007bbb3d4e349869.title}"
+			x: 14.0d
+			y: 6.0d
+		}
+		{
+			can_repeat: true
+			dependencies: ["6E69F45AEA66D5ED"]
+			icon: "ae2:fluix_crystal"
+			id: "3C4577BA6C01FD37"
+			optional: true
+			rewards: [{
+				auto: "no_toast"
+				count: 16
+				id: "4D53D6781FE064EF"
+				item: "ae2:fluix_crystal"
+				type: "item"
+			}]
+			shape: "square"
+			size: 0.5d
+			tasks: [{
+				consume_items: true
+				id: "3ECB4C0EB5E8F595"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3c4577ba6c01fd37.title}"
+			x: 13.75d
+			y: 2.75d
+		}
+		{
+			can_repeat: true
+			dependencies: ["6E69F45AEA66D5ED"]
+			icon: "ae2:logic_processor"
+			id: "54A70F547E4F87C2"
+			optional: true
+			rewards: [{
+				auto: "no_toast"
+				count: 16
+				id: "15293996D8FA5F0C"
+				item: "ae2:logic_processor"
+				type: "item"
+			}]
+			shape: "square"
+			size: 0.5d
+			tasks: [{
+				consume_items: true
+				id: "29ED502848D5ECAA"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.54a70f547e4f87c2.title}"
+			x: 14.25d
+			y: 2.75d
+		}
+		{
+			can_repeat: true
+			dependencies: ["6E69F45AEA66D5ED"]
+			icon: "ae2:calculation_processor"
+			id: "3D4B2ED043BAF8E4"
+			optional: true
+			rewards: [{
+				auto: "no_toast"
+				count: 16
+				id: "25D2B5A2963C5701"
+				item: "ae2:calculation_processor"
+				type: "item"
+			}]
+			shape: "square"
+			size: 0.5d
+			tasks: [{
+				consume_items: true
+				id: "52F04A057F457538"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3d4b2ed043baf8e4.title}"
+			x: 13.75d
+			y: 3.25d
+		}
+		{
+			can_repeat: true
+			dependencies: ["6E69F45AEA66D5ED"]
+			icon: "ae2:engineering_processor"
+			id: "49265178B29A2A51"
+			optional: true
+			rewards: [{
+				auto: "no_toast"
+				count: 16
+				id: "6887FB040E263E04"
+				item: "ae2:engineering_processor"
+				type: "item"
+			}]
+			shape: "square"
+			size: 0.5d
+			tasks: [{
+				consume_items: true
+				id: "7734AD7C5393BBC4"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.49265178b29a2a51.title}"
+			x: 14.25d
+			y: 3.25d
+		}
+		{
+			dependencies: ["6E69F45AEA66D5ED"]
+			description: ["{gtlcore.quest.gtl.quest.144ac3bc2aa25e63.description.0000}"]
+			id: "144AC3BC2AA25E63"
+			optional: true
+			rewards: [{
+				id: "037A6AECE7DF8FF6"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "3450B32B0DB406C7"
+				item: "ae2:condenser"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.144ac3bc2aa25e63.title}"
+			x: 14.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["08B7D8F835DFE214"]
+			description: [
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3A726EDBF7AC5E5B\"},\"translate\":\"gtlcore.quest.gtl.quest.205b11e482ddf464.description.0000.text.0000\"}"
+				""
+				"{gtlcore.quest.gtl.quest.205b11e482ddf464.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.205b11e482ddf464.description.0004}"
+			]
+			hide_dependency_lines: true
+			id: "205B11E482DDF464"
+			optional: true
+			rewards: [{
+				id: "5C0BF363979378F9"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.205b11e482ddf464.subtitle}"
+			tasks: [
+				{
+					id: "08A0A7ABDCC61BFB"
+					item: "gtlcore:primitive_robot_arm"
+					type: "item"
+				}
+				{
+					id: "31170C895B9A9E5C"
+					item: "gtlcore:primitive_fluid_regulator"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.205b11e482ddf464.title}"
+			x: -2.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["6E69F45AEA66D5ED"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4b66fab975b2c7d2.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4b66fab975b2c7d2.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4b66fab975b2c7d2.description.0004}"
+			]
+			hide_dependency_lines: true
+			icon: "mae2:eu_p2p_tunnel"
+			id: "4B66FAB975B2C7D2"
+			optional: true
+			rewards: [{
+				id: "2CC3618D4DDD6383"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "0A2F1ED90BB8F670"
+					item: "mae2:eu_p2p_tunnel"
+					type: "item"
+				}
+				{
+					id: "7A2181B89E5C7ADD"
+					item: "mae2:eu_multi_p2p_tunnel"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4b66fab975b2c7d2.title}"
+			x: 14.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["02375F5D54E5F347"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7aac7ab5f406c812.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7aac7ab5f406c812.description.0002}"
+			]
+			icon: "gtceu:credit_casting_mold"
+			id: "7AAC7AB5F406C812"
+			optional: true
+			rewards: [
+				{
+					id: "10D25AF5C250664F"
+					item: "gtceu:plate_casting_mold"
+					type: "item"
+				}
+				{
+					id: "3960AE52ED06BEF4"
+					item: "gtceu:gear_casting_mold"
+					type: "item"
+				}
+				{
+					id: "0F02EAFFB25199B7"
+					item: "gtceu:credit_casting_mold"
+					type: "item"
+				}
+				{
+					id: "19912E483BC3B8F5"
+					item: "gtceu:bottle_casting_mold"
+					type: "item"
+				}
+				{
+					id: "43FF29BE17FF3127"
+					item: "gtceu:ingot_casting_mold"
+					type: "item"
+				}
+				{
+					id: "60CCE9C975A89524"
+					item: "gtceu:ball_casting_mold"
+					type: "item"
+				}
+				{
+					id: "4A96D40A67FD144C"
+					item: "gtceu:block_casting_mold"
+					type: "item"
+				}
+				{
+					id: "22373C1DC9868666"
+					item: "gtceu:nugget_casting_mold"
+					type: "item"
+				}
+				{
+					id: "3161B7DDAB2832AA"
+					item: "gtceu:cylinder_casting_mold"
+					type: "item"
+				}
+				{
+					id: "5D3BEA454BCA5A08"
+					item: "gtceu:anvil_casting_mold"
+					type: "item"
+				}
+				{
+					id: "414AA40FF2A79254"
+					item: "gtceu:name_casting_mold"
+					type: "item"
+				}
+				{
+					id: "355AF34191458924"
+					item: "gtceu:small_gear_casting_mold"
+					type: "item"
+				}
+				{
+					id: "746D7FC6EE9B9291"
+					item: "gtceu:rotor_casting_mold"
+					type: "item"
+				}
+				{
+					id: "7775EF23FA550F52"
+					item: "gtceu:pill_casting_mold"
+					type: "item"
+				}
+				{
+					id: "1468A31CE65F0332"
+					item: "gtceu:plate_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "613BF7E5D7CC81C3"
+					item: "gtceu:rod_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "58E4D4F4C75B21AC"
+					item: "gtceu:bolt_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "7ABB058135BD5D9B"
+					item: "gtceu:ring_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "5BB2CA9CAD0D26C3"
+					item: "gtceu:cell_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "243B0109EED4F30B"
+					item: "gtceu:ingot_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "15A841A413A36177"
+					item: "gtceu:wire_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "6F1CE5E56C3FAE5C"
+					item: "gtceu:tiny_pipe_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "71A4038C282B39C3"
+					item: "gtceu:small_pipe_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "5A850610656A7D4E"
+					item: "gtceu:normal_pipe_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "023A1691F70CBB1C"
+					item: "gtceu:large_pipe_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "4B1D3F0A320970F1"
+					item: "gtceu:huge_pipe_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "31BA9869E7DD2139"
+					item: "gtceu:block_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "5BB7A858F948BC5C"
+					item: "gtceu:gear_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "51B04924B3B591CD"
+					item: "gtceu:bottle_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "7F43025B1FB60FDA"
+					item: "gtceu:foil_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "500E483FC12BC04A"
+					item: "gtceu:small_gear_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "5A5A6B872BB2651F"
+					item: "gtceu:long_rod_extruder_mold"
+					type: "item"
+				}
+				{
+					id: "6D4894B2A8AF5CAF"
+					item: "gtceu:rotor_extruder_mold"
+					type: "item"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.7aac7ab5f406c812.subtitle}"
+			tasks: [{
+				id: "7BE713D4B18B2691"
+				title: "{gtlcore.quest.gtl.task.7be713d4b18b2691.title}"
+				type: "checkmark"
+			}]
+			x: 13.0d
+			y: 1.0d
+		}
+		{
+			dependencies: [
+				"51B9A72C19F84F0E"
+				"516AA655EF6CBBF0"
+			]
+			dependency_requirement: "one_started"
+			description: [
+				"{gtlcore.quest.gtl.quest.51a6b6cdc90d7e76.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.51a6b6cdc90d7e76.description.0002}"
+			]
+			hide_dependency_lines: true
+			icon: {
+				Count: 1
+				id: "gtceu:programmed_circuit"
+				tag: {
+					Configuration: 0
+				}
+			}
+			icon_scale: 2.0d
+			id: "51A6B6CDC90D7E76"
+			min_required_dependencies: 1
+			rewards: [{
+				id: "7AFF24BD5E9724BE"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			shape: "rsquare"
+			tasks: [{
+				id: "7A6B0453CD49843F"
+				title: "{gtlcore.quest.gtl.task.7a6b0453cd49843f.title}"
+				type: "checkmark"
+			}]
+			x: -2.0d
+			y: 8.0d
+		}
+	]
+	subtitle: ["{gtlcore.quest.gtl.chapter.77f8039ace718c6c.subtitle.0000}"]
+	title: "{gtlcore.quest.gtl.chapter.77f8039ace718c6c.title}"
+}

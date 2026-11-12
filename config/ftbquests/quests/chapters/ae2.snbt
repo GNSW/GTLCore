@@ -1,0 +1,413 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "ae2"
+	group: "24F4987B35ABEE82"
+	icon: "ae2:controller"
+	id: "6980669C5265DA02"
+	order_index: 0
+	quest_links: [ ]
+	quests: [
+		{
+			description: ["{gtlcore.quest.gtl.quest.225fc6f6f3626c53.description.0000}"]
+			icon: "merequester:requester"
+			id: "225FC6F6F3626C53"
+			rewards: [{
+				id: "65093F52636EB9D4"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "0C01B0FEAADE8281"
+				title: "{gtlcore.quest.gtl.task.0c01b0feaade8281.title}"
+				type: "checkmark"
+			}]
+			x: -1.0d
+			y: -3.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.0259eeeae6f3c3cb.description.0000}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.0259eeeae6f3c3cb.description.0002}"
+			]
+			icon: "ae2:fluix_glass_cable"
+			id: "0259EEEAE6F3C3CB"
+			rewards: [{
+				id: "28E44D4CB84273F4"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0259eeeae6f3c3cb.subtitle}"
+			tasks: [{
+				id: "777CFBC4F54FBCE9"
+				title: "{gtlcore.quest.gtl.task.777cfbc4f54fbce9.title}"
+				type: "checkmark"
+			}]
+			x: -3.0d
+			y: -3.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.4e1e59dd41aeec17.description.0000}"]
+			icon: "expatternprovider:ex_io_port"
+			id: "4E1E59DD41AEEC17"
+			rewards: [{
+				id: "1B45E4F32729CBAA"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "2CF437FD2CAA4A4C"
+				title: "{gtlcore.quest.gtl.task.2cf437fd2caa4a4c.title}"
+				type: "checkmark"
+			}]
+			x: 1.0d
+			y: -3.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.5ab25b6a1a96fff1.description.0000}"
+				"{gtlcore.quest.gtl.quest.5ab25b6a1a96fff1.description.0001}"
+				"{gtlcore.quest.gtl.quest.5ab25b6a1a96fff1.description.0002}"
+				"{gtlcore.quest.gtl.quest.5ab25b6a1a96fff1.description.0003}"
+				"{gtlcore.quest.gtl.quest.5ab25b6a1a96fff1.description.0004}"
+			]
+			icon: "ae2:controller"
+			id: "5AB25B6A1A96FFF1"
+			rewards: [{
+				id: "7BAB47A6F79DA3F0"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "50E327F3A46D8F21"
+				title: "{gtlcore.quest.gtl.task.50e327f3a46d8f21.title}"
+				type: "checkmark"
+			}]
+			x: -1.0d
+			y: -1.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.324f420032fb9112.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.324f420032fb9112.description.0002}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.324f420032fb9112.description.0004}"
+			]
+			icon: "expatternprovider:infinity_cell"
+			id: "324F420032FB9112"
+			rewards: [{
+				id: "0063B8E8FAFA7D3F"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "2B2777F734BD4F5C"
+				title: "{gtlcore.quest.gtl.task.2b2777f734bd4f5c.title}"
+				type: "checkmark"
+			}]
+			x: 1.0d
+			y: -1.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.772e4bc43e9c3a09.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.772e4bc43e9c3a09.description.0002}"
+			]
+			icon: {
+				Count: 1
+				id: "ae2:item_storage_cell_1k"
+				tag: { }
+			}
+			id: "772E4BC43E9C3A09"
+			rewards: [{
+				id: "5D236A4D2FF670E5"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "550042261D7CDFD8"
+				title: "{gtlcore.quest.gtl.task.550042261d7cdfd8.title}"
+				type: "checkmark"
+			}]
+			x: 1.0d
+			y: 1.5d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.6b5fd34433f96957.description.0000}"]
+			icon: "expatternprovider:ex_pattern_provider"
+			id: "6B5FD34433F96957"
+			rewards: [{
+				id: "5E1211C813682438"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "5E27D16F8CFDACB4"
+				title: "{gtlcore.quest.gtl.task.5e27d16f8cfdacb4.title}"
+				type: "checkmark"
+			}]
+			x: -1.0d
+			y: 1.5d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.3d2e392fd1c7a858.description.0000}"]
+			icon: "ae2:interface"
+			id: "3D2E392FD1C7A858"
+			rewards: [{
+				id: "18A0469DB87BA283"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "042A7D3DB05154B7"
+				title: "{gtlcore.quest.gtl.task.042a7d3db05154b7.title}"
+				type: "checkmark"
+			}]
+			x: -3.0d
+			y: 0.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.5bf2ff86a30ef30c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5bf2ff86a30ef30c.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.5bf2ff86a30ef30c.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.5bf2ff86a30ef30c.description.0006}"
+			]
+			icon: "ae2:pattern_encoding_terminal"
+			id: "5BF2FF86A30EF30C"
+			rewards: [{
+				id: "1F4ED17AAA95E860"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "11AFFE5DA6C9DF13"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5bf2ff86a30ef30c.title}"
+			x: -3.0d
+			y: 1.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0010}"
+				""
+				"{gtlcore.quest.gtl.quest.60d25fee107a7a63.description.0012}"
+			]
+			icon: "ae2:1k_crafting_storage"
+			id: "60D25FEE107A7A63"
+			rewards: [{
+				id: "203D454048007BE3"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "0E2E7DAA9A528870"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.60d25fee107a7a63.title}"
+			x: 1.0d
+			y: 0.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.1c946343173c3305.description.0000}"]
+			icon: {
+				Count: 1
+				id: "ae2:memory_card"
+				tag: { }
+			}
+			id: "1C946343173C3305"
+			rewards: [{
+				id: "175C056C2B366EB9"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "09AAC20666177441"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1c946343173c3305.title}"
+			x: -3.0d
+			y: -1.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.3075a0ca139250ed.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.3075a0ca139250ed.description.0002}"
+			]
+			icon: {
+				Count: 1
+				id: "ae2wtlib:wireless_universal_terminal"
+				tag: {
+					accessPoint: {
+						dimension: "minecraft:overworld"
+						pos: [I;
+							21
+							68
+							9
+						]
+					}
+					blankPattern: [{
+						Count: 24b
+						Slot: 0
+						id: "ae2:blank_pattern"
+					}]
+					craft_if_missing: 1b
+					crafting: 1b
+					currentTerminal: "pattern_encoding"
+					emitter_manager: 1b
+					encodedInputs: [
+						{
+							"#": 2L
+							"#c": "ae2:i"
+							id: "gtceu:copper_single_cable"
+						}
+						{
+							"#": 3L
+							"#c": "ae2:i"
+							id: "gtceu:battery_alloy_plate"
+						}
+						{
+							"#": 432L
+							"#c": "ae2:f"
+							id: "gtceu:polyethylene"
+						}
+					]
+					encodedOutputs: [{
+						"#": 1L
+						"#c": "ae2:i"
+						id: "gtceu:mv_battery_hull"
+					}]
+					ex_pattern_access: 1b
+					filter_type: "ALL"
+					internalCurrentPower: 0
+					internalMaxPower: 1.92E7d
+					magnet_settings: 0b
+					me_chamber_manager: 1b
+					mode: "PROCESSING"
+					pattern_encoding: 1b
+					pick_block: 1b
+					restock: 0b
+					show_pattern_providers: "VISIBLE"
+					singularity: [{
+						Count: 1b
+						Slot: 0
+						id: "ae2:quantum_entangled_singularity"
+						tag: {
+							freq: 175862367440505L
+						}
+					}]
+					sort_by: "AMOUNT"
+					sort_direction: "DESCENDING"
+					stonecuttingRecipeId: "ae2:block_cutter/walls/smooth_sky_stone_wall"
+					substitute: 0b
+					substituteFluids: 1b
+					throughput_monitor: 1b
+					upgrades: [
+						{
+							Count: 1b
+							Slot: 0
+							id: "ae2wtlib:quantum_bridge_card"
+						}
+						{
+							Count: 1b
+							Slot: 1
+							id: "ae2wtlib:magnet_card"
+						}
+						{
+							Count: 1b
+							Slot: 2
+							id: "ae2:energy_card"
+						}
+						{
+							Count: 1b
+							Slot: 3
+							id: "ae2:energy_card"
+						}
+						{
+							Count: 1b
+							Slot: 4
+							id: "ae2:energy_card"
+						}
+						{
+							Count: 1b
+							Slot: 5
+							id: "ae2:energy_card"
+						}
+						{
+							Count: 1b
+							Slot: 6
+							id: "ae2:energy_card"
+						}
+						{
+							Count: 1b
+							Slot: 7
+							id: "ae2:energy_card"
+						}
+					]
+					view_mode: "ALL"
+					viewcells: [{
+						Count: 1b
+						Slot: 0
+						id: "ae2:view_cell"
+						tag: {
+							list: [
+								{
+									"#": 0L
+									"#c": "ae2:f"
+									id: "gtceu:grade_1_purified_water"
+								}
+								{
+									"#": 0L
+									"#c": "ae2:f"
+									id: "gtceu:grade_2_purified_water"
+								}
+								{
+									"#": 0L
+									"#c": "ae2:f"
+									id: "gtceu:grade_3_purified_water"
+								}
+							]
+							upgrades: [{
+								Count: 1b
+								Slot: 0
+								id: "ae2:inverter_card"
+							}]
+						}
+					}]
+				}
+			}
+			id: "3075A0CA139250ED"
+			rewards: [{
+				id: "2F3A75BD1FB5B0D6"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "3AF0650B2BDA3B30"
+				title: "{gtlcore.quest.gtl.task.3af0650b2bda3b30.title}"
+				type: "checkmark"
+			}]
+			x: -1.0d
+			y: 0.0d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.6980669c5265da02.title}"
+}

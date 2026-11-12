@@ -1,7 +1,0 @@
-{
-  "parent": "gtceu:block/cube_2_layer/all",
-  "textures": {
-    "bot_all": "gtlcore:block/compressed_fusion_coil",
-    "top_all": "gtlcore:block/fusion_coil_bloom"
-  }
-}

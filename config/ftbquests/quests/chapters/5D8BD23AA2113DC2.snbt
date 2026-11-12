@@ -1,0 +1,2277 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "5D8BD23AA2113DC2"
+	group: "0ACE46048A3F93ED"
+	id: "5D8BD23AA2113DC2"
+	order_index: 1
+	quest_links: [
+		{
+			id: "4BB5BF98E5C3C2EA"
+			linked_quest: "6E6E8E4BA9B4D2FC"
+			x: -3.5d
+			y: 3.5d
+		}
+		{
+			id: "77F30CD8E0CF8C54"
+			linked_quest: "1279431AB8DAAF72"
+			x: -3.5d
+			y: 5.0d
+		}
+	]
+	quests: [
+		{
+			id: "23E60BBE7A49F66E"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "591E0D53CF007136"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "74443EC2CF88C915"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "224B0C3CBE635301"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.23e60bbe7a49f66e.subtitle}"
+			tasks: [
+				{
+					id: "64BD29568F7DCDDD"
+					item: "gtceu:hydrogen_bucket"
+					type: "item"
+				}
+				{
+					id: "2B18F68F6D2DF71A"
+					item: "gtceu:deuterium_bucket"
+					type: "item"
+				}
+				{
+					id: "32FBEDF26C9DEF37"
+					item: "gtceu:tritium_bucket"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.23e60bbe7a49f66e.title}"
+			x: -6.5d
+			y: -4.0d
+		}
+		{
+			id: "66E89322DE8499A3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "22B16D3ECC39B059"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.66e89322de8499a3.subtitle}"
+			tasks: [{
+				id: "245E46A98F4BE08E"
+				item: "gtceu:lithium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.66e89322de8499a3.title}"
+			x: -6.5d
+			y: -2.5d
+		}
+		{
+			id: "4AA21A9C5A278CC4"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2480FF33120DEC56"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.4aa21a9c5a278cc4.subtitle}"
+			tasks: [{
+				id: "35B23FB95C0D5279"
+				item: "gtceu:sodium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4aa21a9c5a278cc4.title}"
+			x: -6.5d
+			y: -1.0d
+		}
+		{
+			id: "671E4EEAF14E346E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1172976DCAB6D1A9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.671e4eeaf14e346e.subtitle}"
+			tasks: [{
+				id: "09025A8F6D5C607C"
+				item: "gtceu:potassium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.671e4eeaf14e346e.title}"
+			x: -6.5d
+			y: 0.5d
+		}
+		{
+			id: "304768BE78AF1694"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "48F392F79691EB06"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.304768be78af1694.subtitle}"
+			tasks: [{
+				id: "48BA61FFFD85BE1A"
+				item: "gtceu:caesium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.304768be78af1694.title}"
+			x: -6.5d
+			y: 3.5d
+		}
+		{
+			id: "5F26FD1606A292EC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "55EA9911921FE7B0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5f26fd1606a292ec.subtitle}"
+			tasks: [{
+				id: "66C2087051D0206F"
+				item: "gtceu:beryllium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5f26fd1606a292ec.title}"
+			x: -5.0d
+			y: -2.5d
+		}
+		{
+			id: "1F6BF130122C29D3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7F0544FD1728A91F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1f6bf130122c29d3.subtitle}"
+			tasks: [{
+				id: "7ACB9ABED284B512"
+				item: "gtceu:magnesium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1f6bf130122c29d3.title}"
+			x: -5.0d
+			y: -1.0d
+		}
+		{
+			id: "73A17775CC109EE7"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "66D5FBF1A01125D5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.73a17775cc109ee7.subtitle}"
+			tasks: [{
+				id: "035BC5BAB4272EB7"
+				item: "gtceu:calcium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.73a17775cc109ee7.title}"
+			x: -5.0d
+			y: 0.5d
+		}
+		{
+			id: "102A2EA1E9DDFBED"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4C92F14799C858E5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.102a2ea1e9ddfbed.subtitle}"
+			tasks: [{
+				id: "17C2FC97EE150FF9"
+				item: "gtceu:barium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.102a2ea1e9ddfbed.title}"
+			x: -5.0d
+			y: 3.5d
+		}
+		{
+			id: "14209D80FDC6E345"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "227932A89EA5ADB0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.14209d80fdc6e345.subtitle}"
+			tasks: [{
+				id: "2B3F28347CCD30C3"
+				item: "gtceu:scandium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.14209d80fdc6e345.title}"
+			x: -3.5d
+			y: 0.5d
+		}
+		{
+			id: "357E591730EEF669"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4CD4AC201EC77E06"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.357e591730eef669.subtitle}"
+			tasks: [{
+				id: "26B66993E8078558"
+				item: "gtceu:yttrium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.357e591730eef669.title}"
+			x: -3.5d
+			y: 2.0d
+		}
+		{
+			id: "0F6EA19F6B0DC63C"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "21B6257F3F4CF9F0"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "04EEB4DD284392D9"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.0f6ea19f6b0dc63c.subtitle}"
+			tasks: [
+				{
+					id: "4AA5700E930A0EC4"
+					item: "gtceu:titanium_dust"
+					type: "item"
+				}
+				{
+					id: "7F7E45A9C613B985"
+					item: "gtceu:titanium_50_dust"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0f6ea19f6b0dc63c.title}"
+			x: -2.0d
+			y: 0.5d
+		}
+		{
+			id: "0FC87CDA8E35C80A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2A6004350460EE13"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0fc87cda8e35c80a.subtitle}"
+			tasks: [{
+				id: "3046E38363098EBF"
+				item: "gtceu:hafnium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.0fc87cda8e35c80a.title}"
+			x: -2.0d
+			y: 3.5d
+		}
+		{
+			id: "28C02C653778213E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4F1E7EF72DA9DE83"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.28c02c653778213e.subtitle}"
+			tasks: [{
+				id: "0D0709DB0CFE3175"
+				item: "gtceu:vanadium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.28c02c653778213e.title}"
+			x: -0.5d
+			y: 0.5d
+		}
+		{
+			id: "5F2DF2D061B23F36"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3C1C07887F3C325E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5f2df2d061b23f36.subtitle}"
+			tasks: [{
+				id: "3F1E601378A7F027"
+				item: "gtceu:niobium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5f2df2d061b23f36.title}"
+			x: -0.5d
+			y: 2.0d
+		}
+		{
+			id: "56434432FA06CFC2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "251E9579AB036435"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.56434432fa06cfc2.subtitle}"
+			tasks: [{
+				id: "1918D9C9A0D2D987"
+				item: "gtceu:tantalum_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.56434432fa06cfc2.title}"
+			x: -0.5d
+			y: 3.5d
+		}
+		{
+			id: "3DBB80C962155D93"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7A450E32102EECED"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3dbb80c962155d93.subtitle}"
+			tasks: [{
+				id: "6F8A37747B89644A"
+				item: "gtceu:dubnium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3dbb80c962155d93.title}"
+			x: -0.5d
+			y: 5.0d
+		}
+		{
+			id: "4F283D47CF47C762"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6492D755DAB5926D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.4f283d47cf47c762.subtitle}"
+			tasks: [{
+				id: "5009E7B8D01257BA"
+				item: "gtceu:chromium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4f283d47cf47c762.title}"
+			x: 1.0d
+			y: 0.5d
+		}
+		{
+			id: "5D53CAFEB23F8221"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3639186F7CEB4F6A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5d53cafeb23f8221.subtitle}"
+			tasks: [{
+				id: "275E53C964772AB0"
+				item: "gtceu:molybdenum_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5d53cafeb23f8221.title}"
+			x: 1.0d
+			y: 2.0d
+		}
+		{
+			id: "500DC1BBB3B73460"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1FDA83110641D9CE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.500dc1bbb3b73460.subtitle}"
+			tasks: [{
+				id: "591293B37B1027BD"
+				item: "gtceu:tungsten_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.500dc1bbb3b73460.title}"
+			x: 1.0d
+			y: 3.5d
+		}
+		{
+			id: "593B755081C07046"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5EAB815A844A1D57"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.593b755081c07046.subtitle}"
+			tasks: [{
+				id: "33406953EE8352DB"
+				item: "gtceu:seaborgium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.593b755081c07046.title}"
+			x: 1.0d
+			y: 5.0d
+		}
+		{
+			id: "5CEB31063057232E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5E79FEBEB906AC50"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5ceb31063057232e.subtitle}"
+			tasks: [{
+				id: "25DEA56BCB73DD4A"
+				item: "gtceu:manganese_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5ceb31063057232e.title}"
+			x: 2.5d
+			y: 0.5d
+		}
+		{
+			id: "44A5D6AC59C63BDD"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "46078AEC3EF0FC48"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.44a5d6ac59c63bdd.subtitle}"
+			tasks: [{
+				id: "24E91EDFE5B69E05"
+				item: "gtceu:rhenium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.44a5d6ac59c63bdd.title}"
+			x: 2.5d
+			y: 3.5d
+		}
+		{
+			id: "60E8908833FD2617"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "38BD9CE466ED06F0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.60e8908833fd2617.subtitle}"
+			tasks: [{
+				id: "431ABAC084CD896C"
+				item: "gtceu:iron_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.60e8908833fd2617.title}"
+			x: 4.0d
+			y: 0.5d
+		}
+		{
+			id: "4F9D64A186E69027"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "46B412E17A177DC9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.4f9d64a186e69027.subtitle}"
+			tasks: [{
+				id: "67F35E68FB0E43D9"
+				item: "gtceu:ruthenium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4f9d64a186e69027.title}"
+			x: 4.0d
+			y: 2.0d
+		}
+		{
+			id: "3C8A25BEDB43E1D8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2F91F6FEBF89F570"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3c8a25bedb43e1d8.subtitle}"
+			tasks: [{
+				id: "3CC2B23C4692BA39"
+				item: "gtceu:osmium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3c8a25bedb43e1d8.title}"
+			x: 4.0d
+			y: 3.5d
+		}
+		{
+			id: "582F58DF0D45E692"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2074FDDFB598C1AB"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.582f58df0d45e692.subtitle}"
+			tasks: [{
+				id: "701B47AB3329B38A"
+				item: "gtceu:hassium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.582f58df0d45e692.title}"
+			x: 4.0d
+			y: 5.0d
+		}
+		{
+			id: "07C88B6FB9070D49"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5FB2E22DFA61AAF7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.07c88b6fb9070d49.subtitle}"
+			tasks: [{
+				id: "4AD942AA379753F9"
+				item: "gtceu:cobalt_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.07c88b6fb9070d49.title}"
+			x: 5.5d
+			y: 0.5d
+		}
+		{
+			id: "2FB24483F1DBEF98"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6165D08E497E2DFB"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2fb24483f1dbef98.subtitle}"
+			tasks: [{
+				id: "3EEA00AEB1729CAF"
+				item: "gtceu:rhodium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2fb24483f1dbef98.title}"
+			x: 5.5d
+			y: 2.0d
+		}
+		{
+			id: "1A41E1B38E5115DD"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2A7793FC5370EC19"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1a41e1b38e5115dd.subtitle}"
+			tasks: [{
+				id: "06B4619779EBF5DF"
+				item: "gtceu:iridium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1a41e1b38e5115dd.title}"
+			x: 5.5d
+			y: 3.5d
+		}
+		{
+			id: "44F3E3AAB87E4455"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "204A529C7D8CAA10"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.44f3e3aab87e4455.subtitle}"
+			tasks: [{
+				id: "7757A544F75D34C7"
+				item: "gtceu:nickel_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.44f3e3aab87e4455.title}"
+			x: 7.0d
+			y: 0.5d
+		}
+		{
+			id: "7F78F562A54FF119"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7DB19CCA78E1D892"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7f78f562a54ff119.subtitle}"
+			tasks: [{
+				id: "0B17DD1A6D51893E"
+				item: "gtceu:palladium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7f78f562a54ff119.title}"
+			x: 7.0d
+			y: 2.0d
+		}
+		{
+			id: "2A15B2382E64B032"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0949153F8D0FDABF"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2a15b2382e64b032.subtitle}"
+			tasks: [{
+				id: "7B53A8A2BE9915B4"
+				item: "gtceu:platinum_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2a15b2382e64b032.title}"
+			x: 7.0d
+			y: 3.5d
+		}
+		{
+			id: "0768046561126935"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "713F5F00E67BF5FC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0768046561126935.subtitle}"
+			tasks: [{
+				id: "4FB824265FE37E93"
+				item: "gtceu:darmstadtium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.0768046561126935.title}"
+			x: 7.0d
+			y: 5.0d
+		}
+		{
+			id: "79BA775A0F489F66"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "29D3FF06CB3EA610"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "2DD43306EA08DCA0"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.79ba775a0f489f66.subtitle}"
+			tasks: [
+				{
+					id: "58B39C938575FB83"
+					item: "gtceu:copper_dust"
+					type: "item"
+				}
+				{
+					id: "577FB987EBB5E0A5"
+					item: "gtceu:copper76_dust"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.79ba775a0f489f66.title}"
+			x: 8.5d
+			y: 0.5d
+		}
+		{
+			id: "32B6D521ABE588C7"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2ACE83A03AE8C483"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.32b6d521abe588c7.subtitle}"
+			tasks: [{
+				id: "7F9CCB5E9E3E643A"
+				item: "gtceu:silver_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.32b6d521abe588c7.title}"
+			x: 8.5d
+			y: 2.0d
+		}
+		{
+			id: "237A5D3B829D0B71"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0C41410FE47B3440"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.237a5d3b829d0b71.subtitle}"
+			tasks: [{
+				id: "20106D3EF775CC3C"
+				item: "gtceu:gold_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.237a5d3b829d0b71.title}"
+			x: 8.5d
+			y: 3.5d
+		}
+		{
+			id: "542A7BCE87C8D07A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "503992A23C38F6E5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.542a7bce87c8d07a.subtitle}"
+			tasks: [{
+				id: "789C0F0A487247CA"
+				item: "gtceu:gallium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.542a7bce87c8d07a.title}"
+			x: 11.5d
+			y: 0.5d
+		}
+		{
+			id: "351A935C9FE87158"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2C2D93DCE583394D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.351a935c9fe87158.subtitle}"
+			tasks: [{
+				id: "0433A6F3A85B90DE"
+				item: "gtceu:aluminium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.351a935c9fe87158.title}"
+			x: 11.5d
+			y: -1.0d
+		}
+		{
+			id: "723C6ABDD486B3DD"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1D513D989F5F84FA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.723c6abdd486b3dd.subtitle}"
+			tasks: [{
+				id: "73AC3FF87389B3CC"
+				item: "gtceu:boron_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.723c6abdd486b3dd.title}"
+			x: 11.5d
+			y: -2.5d
+		}
+		{
+			id: "5AFCFC25A6B6FEFD"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "430F6969A7A46FB7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5afcfc25a6b6fefd.subtitle}"
+			tasks: [{
+				id: "04FDD26B8E5BCA67"
+				item: "gtceu:indium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5afcfc25a6b6fefd.title}"
+			x: 11.5d
+			y: 2.0d
+		}
+		{
+			id: "3CD5120CCE1CB83C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "437B9B352D69A300"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3cd5120cce1cb83c.subtitle}"
+			tasks: [{
+				id: "7AB1AC67A50E079D"
+				item: "gtceu:carbon_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3cd5120cce1cb83c.title}"
+			x: 13.0d
+			y: -2.5d
+		}
+		{
+			id: "143560C9D73EAA9F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0775F25B11FB7884"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.143560c9d73eaa9f.subtitle}"
+			tasks: [{
+				id: "65BB5ECFAADACF49"
+				item: "gtceu:silicon_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.143560c9d73eaa9f.title}"
+			x: 13.0d
+			y: -1.0d
+		}
+		{
+			id: "309EED143032AA97"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7818C3FFAACBFE1B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.309eed143032aa97.subtitle}"
+			tasks: [{
+				id: "31AFE094EC8C2F36"
+				item: "gtceu:germanium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.309eed143032aa97.title}"
+			x: 13.0d
+			y: 0.5d
+		}
+		{
+			id: "05842D8E522354BE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "26B2F173B1E642DC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.05842d8e522354be.subtitle}"
+			tasks: [{
+				id: "61DC5D11D6313FEC"
+				item: "gtceu:tin_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.05842d8e522354be.title}"
+			x: 13.0d
+			y: 2.0d
+		}
+		{
+			id: "4452E6B235E44F58"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2CAA6A99EC341D6B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.4452e6b235e44f58.subtitle}"
+			tasks: [{
+				id: "77F856966375CB99"
+				item: "gtceu:lead_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4452e6b235e44f58.title}"
+			x: 13.0d
+			y: 3.5d
+		}
+		{
+			icon: "gtceu:nitrogen_bucket"
+			id: "3C39CB34F4926E03"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "695F1ABAA0B5E9C6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3c39cb34f4926e03.subtitle}"
+			tasks: [{
+				id: "51A046FB04873983"
+				item: "gtceu:nitrogen_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3c39cb34f4926e03.title}"
+			x: 14.5d
+			y: -2.5d
+		}
+		{
+			id: "39150F96CB9FA8CE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2DC1DA6CC3E9A77D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.39150f96cb9fa8ce.subtitle}"
+			tasks: [{
+				id: "7CFD727024C745B5"
+				item: "gtceu:phosphorus_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.39150f96cb9fa8ce.title}"
+			x: 14.5d
+			y: -1.0d
+		}
+		{
+			id: "0FFCEBB251738553"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0A0635F17E4B66D5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0ffcebb251738553.subtitle}"
+			tasks: [{
+				id: "0D1B031854B1C1C8"
+				item: "gtceu:arsenic_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.0ffcebb251738553.title}"
+			x: 14.5d
+			y: 0.5d
+		}
+		{
+			id: "487EC16C05255B7C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2BA17E7A050E9C81"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.487ec16c05255b7c.subtitle}"
+			tasks: [{
+				id: "792FAA9D5DC8DCB3"
+				item: "gtceu:antimony_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.487ec16c05255b7c.title}"
+			x: 14.5d
+			y: 2.0d
+		}
+		{
+			id: "72203B014AE62E33"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "35C3A34704CE0085"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.72203b014ae62e33.subtitle}"
+			tasks: [{
+				id: "78028E7583CDF9AB"
+				item: "gtceu:bismuth_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.72203b014ae62e33.title}"
+			x: 14.5d
+			y: 3.5d
+		}
+		{
+			icon: "gtceu:oxygen_bucket"
+			id: "034D7244E46B496D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "681A357BDF888DAC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.034d7244e46b496d.subtitle}"
+			tasks: [{
+				id: "66EF743706B27328"
+				item: "gtceu:oxygen_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.034d7244e46b496d.title}"
+			x: 16.0d
+			y: -2.5d
+		}
+		{
+			id: "72D99F355C164297"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6DB74E033289EAED"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.72d99f355c164297.subtitle}"
+			tasks: [{
+				id: "1B51C134D8AC4304"
+				item: "gtceu:sulfur_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.72d99f355c164297.title}"
+			x: 16.0d
+			y: -1.0d
+		}
+		{
+			id: "2AB2A94A8CF0D2F1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "62C5FE6085F22127"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2ab2a94a8cf0d2f1.subtitle}"
+			tasks: [{
+				id: "7F924702B34F3E4C"
+				item: "gtceu:selenium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2ab2a94a8cf0d2f1.title}"
+			x: 16.0d
+			y: 0.5d
+		}
+		{
+			id: "72C3142FD00BD233"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "18D5D5A8D57FC2A9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.72c3142fd00bd233.subtitle}"
+			tasks: [{
+				id: "46A1627C5749E725"
+				item: "gtceu:tellurium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.72c3142fd00bd233.title}"
+			x: 16.0d
+			y: 2.0d
+		}
+		{
+			id: "67E6150716FDD844"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4393843B7537F286"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.67e6150716fdd844.subtitle}"
+			tasks: [{
+				id: "30A4D869FBBD2AA3"
+				item: "gtceu:polonium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.67e6150716fdd844.title}"
+			x: 16.0d
+			y: 3.5d
+		}
+		{
+			icon: "gtceu:fluorine_bucket"
+			id: "1BAB6994F7CDA875"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "122B07676B7139B5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1bab6994f7cda875.subtitle}"
+			tasks: [{
+				id: "3EEA84015A71A12C"
+				item: "gtceu:fluorine_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1bab6994f7cda875.title}"
+			x: 17.5d
+			y: -2.5d
+		}
+		{
+			icon: "gtceu:chlorine_bucket"
+			id: "36AD002B13FC8FF4"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4CF84BFFD31D4C76"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.36ad002b13fc8ff4.subtitle}"
+			tasks: [{
+				id: "791D4F7956A3DDCE"
+				item: "gtceu:chlorine_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.36ad002b13fc8ff4.title}"
+			x: 17.5d
+			y: -1.0d
+		}
+		{
+			id: "1B19C13BC2E4D93C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7E7B52F0102BAF14"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1b19c13bc2e4d93c.subtitle}"
+			tasks: [{
+				id: "6E8D2E1843C9030E"
+				item: "gtceu:iodine_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1b19c13bc2e4d93c.title}"
+			x: 17.5d
+			y: 2.0d
+		}
+		{
+			icon: "gtceu:helium_bucket"
+			id: "4475B95DD62610E3"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "4E590B34C0D42D56"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "3D06937800D49BC9"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.4475b95dd62610e3.subtitle}"
+			tasks: [
+				{
+					id: "5C60B4763C810ABF"
+					item: "gtceu:helium_bucket"
+					type: "item"
+				}
+				{
+					id: "39C1CF9BF4BE589A"
+					item: "gtceu:helium_3_bucket"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4475b95dd62610e3.title}"
+			x: 19.0d
+			y: -4.0d
+		}
+		{
+			icon: "gtceu:neon_bucket"
+			id: "0663F0E8A333D0B0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5B967E091F80AB66"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0663f0e8a333d0b0.subtitle}"
+			tasks: [{
+				id: "7389CFDC9E3B69F4"
+				item: "gtceu:neon_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.0663f0e8a333d0b0.title}"
+			x: 19.0d
+			y: -2.5d
+		}
+		{
+			icon: "gtceu:argon_bucket"
+			id: "25AF3EE8AA0D911A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "169E4F441634DE3D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.25af3ee8aa0d911a.subtitle}"
+			tasks: [{
+				id: "61C9958CE8334B8F"
+				item: "gtceu:argon_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.25af3ee8aa0d911a.title}"
+			x: 19.0d
+			y: -1.0d
+		}
+		{
+			icon: "gtceu:krypton_bucket"
+			id: "20FC6A47343C6693"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6E7DB621CB42D979"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.20fc6a47343c6693.subtitle}"
+			tasks: [{
+				id: "7E063AEADE4ED00A"
+				item: "gtceu:krypton_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.20fc6a47343c6693.title}"
+			x: 19.0d
+			y: 0.5d
+		}
+		{
+			icon: "gtceu:xenon_bucket"
+			id: "567280FEC8C193A3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "162859F629C1DDC4"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.567280fec8c193a3.subtitle}"
+			tasks: [{
+				id: "7340DB47483DE4EE"
+				item: "gtceu:xenon_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.567280fec8c193a3.title}"
+			x: 19.0d
+			y: 2.0d
+		}
+		{
+			icon: "gtceu:radon_bucket"
+			id: "2E5422B5D3EE5049"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "088DE69D8A11D1CF"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2e5422b5d3ee5049.subtitle}"
+			tasks: [{
+				id: "5E0DF2BFBD623745"
+				item: "gtceu:radon_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2e5422b5d3ee5049.title}"
+			x: 19.0d
+			y: 3.5d
+		}
+		{
+			id: "69CF407EFA06623F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "51DFF3BD2DBD2FCE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.69cf407efa06623f.subtitle}"
+			tasks: [{
+				id: "10C4BB37727AC8C0"
+				item: "gtceu:oganesson_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.69cf407efa06623f.title}"
+			x: 19.0d
+			y: 5.0d
+		}
+		{
+			id: "6E6E8E4BA9B4D2FC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "44D0B30C908088DE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.6e6e8e4ba9b4d2fc.subtitle}"
+			tasks: [{
+				id: "6353159F1BE09F91"
+				item: "gtceu:lanthanum_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.6e6e8e4ba9b4d2fc.title}"
+			x: -2.0d
+			y: 7.0d
+		}
+		{
+			id: "6012A721DE562E33"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "22B02DAFD8299D10"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.6012a721de562e33.subtitle}"
+			tasks: [{
+				id: "6360C13B7BC45030"
+				item: "gtceu:cerium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.6012a721de562e33.title}"
+			x: -0.5d
+			y: 7.0d
+		}
+		{
+			id: "7FA5B4B37DBD17E1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "25B20D45F3CCCF95"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7fa5b4b37dbd17e1.subtitle}"
+			tasks: [{
+				id: "69780680E0A29568"
+				item: "gtceu:praseodymium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7fa5b4b37dbd17e1.title}"
+			x: 1.0d
+			y: 7.0d
+		}
+		{
+			id: "7B2AE1A057BDAF61"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2128D12F994E80B5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7b2ae1a057bdaf61.subtitle}"
+			tasks: [{
+				id: "01027846D401B038"
+				item: "gtceu:neodymium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7b2ae1a057bdaf61.title}"
+			x: 2.5d
+			y: 7.0d
+		}
+		{
+			id: "7A9C60EEDED45CBA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1F5D9AA46F2C99BD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7a9c60eeded45cba.subtitle}"
+			tasks: [{
+				id: "766DE7F3E5EFE929"
+				item: "gtceu:promethium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7a9c60eeded45cba.title}"
+			x: 4.0d
+			y: 7.0d
+		}
+		{
+			id: "08590C23037082C7"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2F09473539B216DD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.08590c23037082c7.subtitle}"
+			tasks: [{
+				id: "251FBD911A301D82"
+				item: "gtceu:samarium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.08590c23037082c7.title}"
+			x: 5.5d
+			y: 7.0d
+		}
+		{
+			id: "7C987499F3053EAF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7FBA0B0AA47EED16"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7c987499f3053eaf.subtitle}"
+			tasks: [{
+				id: "2EDA1136622D8FEB"
+				item: "gtceu:europium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7c987499f3053eaf.title}"
+			x: 7.0d
+			y: 7.0d
+		}
+		{
+			id: "10BF78266769747C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "03D42DDA1667EBF3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.10bf78266769747c.subtitle}"
+			tasks: [{
+				id: "69B4E74F35A2B290"
+				item: "gtceu:gadolinium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.10bf78266769747c.title}"
+			x: 8.5d
+			y: 7.0d
+		}
+		{
+			id: "019291D84838C9A3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "65D79C91A043A4C5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.019291d84838c9a3.subtitle}"
+			tasks: [{
+				id: "5CC8D79D98E29969"
+				item: "gtceu:terbium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.019291d84838c9a3.title}"
+			x: 10.0d
+			y: 7.0d
+		}
+		{
+			id: "3B39D2A095E1BA5E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4ED7A725AB3EEA1B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3b39d2a095e1ba5e.subtitle}"
+			tasks: [{
+				id: "42C75E65012625B3"
+				item: "gtceu:dysprosium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3b39d2a095e1ba5e.title}"
+			x: 11.5d
+			y: 7.0d
+		}
+		{
+			id: "48CD478DD3970936"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6558635B78C1F6C0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.48cd478dd3970936.subtitle}"
+			tasks: [{
+				id: "3B8AA40A11582986"
+				item: "gtceu:holmium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.48cd478dd3970936.title}"
+			x: 13.0d
+			y: 7.0d
+		}
+		{
+			id: "3317F83B1732E4AC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "60ECF2CFA400CF1D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3317f83b1732e4ac.subtitle}"
+			tasks: [{
+				id: "38AEB110A4C4F2D5"
+				item: "gtceu:erbium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3317f83b1732e4ac.title}"
+			x: 14.5d
+			y: 7.0d
+		}
+		{
+			id: "5F1359C22F22B279"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7F9A60823E8B6CD9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5f1359c22f22b279.subtitle}"
+			tasks: [{
+				id: "1AD0DE58F7C1C8F7"
+				item: "gtceu:thulium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5f1359c22f22b279.title}"
+			x: 16.0d
+			y: 7.0d
+		}
+		{
+			id: "3F158342137E0E14"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "25F8CE9E0AF10237"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "0AEE0FAD01E71652"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.3f158342137e0e14.subtitle}"
+			tasks: [
+				{
+					id: "6EC91139E43FEEB1"
+					item: "gtceu:ytterbium_dust"
+					type: "item"
+				}
+				{
+					id: "3AE3CD01DE321F9B"
+					item: "gtceu:ytterbium_178_bucket"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3f158342137e0e14.title}"
+			x: 17.5d
+			y: 7.0d
+		}
+		{
+			id: "7EE8C65B66A0B8BF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5081EED027DE29F3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7ee8c65b66a0b8bf.subtitle}"
+			tasks: [{
+				id: "11B0FE50DA6D1603"
+				item: "gtceu:lutetium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7ee8c65b66a0b8bf.title}"
+			x: 19.0d
+			y: 7.0d
+		}
+		{
+			id: "39C323C33A2766A0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "28790BABA1FFA1F9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.39c323c33a2766a0.subtitle}"
+			tasks: [{
+				id: "4E747E0A727216F5"
+				item: "gtceu:thorium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.39c323c33a2766a0.title}"
+			x: -0.5d
+			y: 8.5d
+		}
+		{
+			id: "48844BC45AF9F2E4"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "703541DA62BCFAFF"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.48844bc45af9f2e4.subtitle}"
+			tasks: [{
+				id: "5A21CF89D8E842A7"
+				item: "gtceu:protactinium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.48844bc45af9f2e4.title}"
+			x: 1.0d
+			y: 8.5d
+		}
+		{
+			id: "3F2C1E6F17D633C4"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "086E22045C80A13C"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "70A22F680969A351"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.3f2c1e6f17d633c4.subtitle}"
+			tasks: [
+				{
+					id: "26BF5A2FE017AC59"
+					item: "gtceu:uranium_dust"
+					type: "item"
+				}
+				{
+					id: "2DB07476CD41C0C2"
+					item: "gtceu:uranium_235_dust"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3f2c1e6f17d633c4.title}"
+			x: 2.5d
+			y: 8.5d
+		}
+		{
+			id: "486F7548A4E5AEA5"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "626EDF305A0A0CFB"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.486f7548a4e5aea5.subtitle}"
+			tasks: [{
+				id: "06AA631586A78F82"
+				item: "gtceu:neptunium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.486f7548a4e5aea5.title}"
+			x: 4.0d
+			y: 8.5d
+		}
+		{
+			id: "4D4C2D9868463365"
+			rewards: [
+				{
+					exclude_from_claim_all: true
+					id: "41D06755666E1B5B"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+				{
+					exclude_from_claim_all: true
+					id: "25D3CBC124C9D91E"
+					table_id: 6225023274141477362L
+					type: "random"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.4d4c2d9868463365.subtitle}"
+			tasks: [
+				{
+					id: "3720267C1BCCED9D"
+					item: "gtceu:plutonium_dust"
+					type: "item"
+				}
+				{
+					id: "6DCD4A3FABD5FD70"
+					item: "gtceu:plutonium_241_dust"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4d4c2d9868463365.title}"
+			x: 5.5d
+			y: 8.5d
+		}
+		{
+			id: "2B5B7F87CF0FC74D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6D73D4A1A2186BA3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2b5b7f87cf0fc74d.subtitle}"
+			tasks: [{
+				id: "267E7017A90EA8BB"
+				item: "gtceu:americium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2b5b7f87cf0fc74d.title}"
+			x: 7.0d
+			y: 8.5d
+		}
+		{
+			id: "7A9573B334AFF1F6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "100F3F8052ECFFD7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7a9573b334aff1f6.subtitle}"
+			tasks: [{
+				id: "74515E27315B5503"
+				item: "gtceu:curium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7a9573b334aff1f6.title}"
+			x: 8.5d
+			y: 8.5d
+		}
+		{
+			id: "3930E1A669B84732"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "14C0C8D8B73243BC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3930e1a669b84732.subtitle}"
+			tasks: [{
+				id: "639CB4A7B9C842CC"
+				item: "gtceu:berkelium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3930e1a669b84732.title}"
+			x: 10.0d
+			y: 8.5d
+		}
+		{
+			id: "55E8C6477C3437BF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "35561600C5D60A45"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.55e8c6477c3437bf.subtitle}"
+			tasks: [{
+				id: "3860CB88CC9637D9"
+				item: "gtceu:californium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.55e8c6477c3437bf.title}"
+			x: 11.5d
+			y: 8.5d
+		}
+		{
+			id: "0FF3D867B37F343B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "283AA238A8BDF3CA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.0ff3d867b37f343b.subtitle}"
+			tasks: [{
+				id: "3F8891A21A89ABAC"
+				item: "gtceu:einsteinium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.0ff3d867b37f343b.title}"
+			x: 13.0d
+			y: 8.5d
+		}
+		{
+			id: "7D8BF33BF634A3C1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "53B9CBBC4242F92A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7d8bf33bf634a3c1.subtitle}"
+			tasks: [{
+				id: "49E6FE816E39E873"
+				item: "gtceu:fermium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7d8bf33bf634a3c1.title}"
+			x: 14.5d
+			y: 8.5d
+		}
+		{
+			id: "1B14EBE61D69F7A6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7C1E1FC417DE4E7B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1b14ebe61d69f7a6.subtitle}"
+			tasks: [{
+				id: "147C2199D74ADD69"
+				item: "gtceu:mendelevium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1b14ebe61d69f7a6.title}"
+			x: 16.0d
+			y: 8.5d
+		}
+		{
+			id: "40F3F08084CA76B3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7AD844F20E64FDB1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.40f3f08084ca76b3.subtitle}"
+			tasks: [{
+				id: "3B1BE76E83DAEC09"
+				item: "gtceu:rubidium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.40f3f08084ca76b3.title}"
+			x: -6.5d
+			y: 2.0d
+		}
+		{
+			id: "44BF685B3D715510"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6292B253D4DF7945"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.44bf685b3d715510.subtitle}"
+			tasks: [{
+				id: "28043528E4F4D5F9"
+				item: "gtceu:francium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.44bf685b3d715510.title}"
+			x: -6.5d
+			y: 5.0d
+		}
+		{
+			id: "64D763FB1724446E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6C366D70A7741223"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.64d763fb1724446e.subtitle}"
+			tasks: [{
+				id: "7079899B54FE9028"
+				item: "gtceu:strontium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.64d763fb1724446e.title}"
+			x: -5.0d
+			y: 2.0d
+		}
+		{
+			id: "57B6DC1C5674CA9C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5B7005CFCB41565B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.57b6dc1c5674ca9c.subtitle}"
+			tasks: [{
+				id: "590122A92DB32EE0"
+				item: "gtceu:radium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.57b6dc1c5674ca9c.title}"
+			x: -5.0d
+			y: 5.0d
+		}
+		{
+			id: "6270D72E3541A694"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "32BDB0803BD6073C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.6270d72e3541a694.subtitle}"
+			tasks: [{
+				id: "488FC193C2A8A0DA"
+				item: "gtceu:zinc_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.6270d72e3541a694.title}"
+			x: 10.0d
+			y: 0.5d
+		}
+		{
+			id: "2C5900C05A39327D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "548648A75C320611"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2c5900c05a39327d.subtitle}"
+			tasks: [{
+				id: "71CF39BD97BEC272"
+				item: "gtceu:cadmium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2c5900c05a39327d.title}"
+			x: 10.0d
+			y: 2.0d
+		}
+		{
+			icon: "gtceu:mercury_bucket"
+			id: "75E298F072865214"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6F8283CA10EBA3B0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.75e298f072865214.subtitle}"
+			tasks: [{
+				id: "68725133128E05C1"
+				item: "gtceu:mercury_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.75e298f072865214.title}"
+			x: 10.0d
+			y: 3.5d
+		}
+		{
+			id: "53D0B2B73387C7CE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4E6F0AB35224D534"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.53d0b2b73387c7ce.subtitle}"
+			tasks: [{
+				id: "17688D1A6E5B205F"
+				item: "gtceu:zirconium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.53d0b2b73387c7ce.title}"
+			x: -2.0d
+			y: 2.0d
+		}
+		{
+			id: "62ACA88483DB9C19"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0C217CDE748322EF"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.62aca88483db9c19.subtitle}"
+			tasks: [{
+				id: "21E9D53885B47B54"
+				item: "gtceu:rutherfordium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.62aca88483db9c19.title}"
+			x: -2.0d
+			y: 5.0d
+		}
+		{
+			id: "5AE8FF21F500C22E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2B72020B62C273C1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5ae8ff21f500c22e.subtitle}"
+			tasks: [{
+				id: "70D089D9F7DBF4AD"
+				item: "gtceu:technetium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5ae8ff21f500c22e.title}"
+			x: 2.5d
+			y: 2.0d
+		}
+		{
+			id: "3FC74739A184B53E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4CB86007E2D8C11F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.3fc74739a184b53e.subtitle}"
+			tasks: [{
+				id: "7196D5E9D0F375F8"
+				item: "gtceu:bohrium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3fc74739a184b53e.title}"
+			x: 2.5d
+			y: 5.0d
+		}
+		{
+			id: "1603ECE4F3AECB15"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "346C42CE073D7A9C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1603ece4f3aecb15.subtitle}"
+			tasks: [{
+				id: "29D44BE2E0BDA326"
+				item: "gtceu:meitnerium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1603ece4f3aecb15.title}"
+			x: 5.5d
+			y: 5.0d
+		}
+		{
+			id: "6E7604BC1DB4D4F9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "100D886D54A5E231"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.6e7604bc1db4d4f9.subtitle}"
+			tasks: [{
+				id: "16B783B89F430ABD"
+				item: "gtceu:roentgenium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.6e7604bc1db4d4f9.title}"
+			x: 8.5d
+			y: 5.0d
+		}
+		{
+			id: "147938007D385445"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "152C48FF0EF6D3AD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.147938007d385445.subtitle}"
+			tasks: [{
+				id: "05DD5D87CCCCDF75"
+				item: "gtceu:copernicium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.147938007d385445.title}"
+			x: 10.0d
+			y: 5.0d
+		}
+		{
+			id: "466F72C3EE02110B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "05240A41C9343D8C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.466f72c3ee02110b.subtitle}"
+			tasks: [{
+				id: "76F06D885F3598AE"
+				item: "gtceu:thallium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.466f72c3ee02110b.title}"
+			x: 11.5d
+			y: 3.5d
+		}
+		{
+			id: "29EA97F635871FF0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5F194570FD996BB0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.29ea97f635871ff0.subtitle}"
+			tasks: [{
+				id: "66B83540882E5C32"
+				item: "gtceu:nihonium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.29ea97f635871ff0.title}"
+			x: 11.5d
+			y: 5.0d
+		}
+		{
+			id: "7E70F6E1F7A9CFD0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "25CD23C74BEF0E98"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7e70f6e1f7a9cfd0.subtitle}"
+			tasks: [{
+				id: "62204ED3A788F4A2"
+				item: "gtceu:flerovium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7e70f6e1f7a9cfd0.title}"
+			x: 13.0d
+			y: 5.0d
+		}
+		{
+			id: "785493F3B1066C3D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4B6CFCA18B184CB9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.785493f3b1066c3d.subtitle}"
+			tasks: [{
+				id: "004071DC573133B4"
+				item: "gtceu:moscovium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.785493f3b1066c3d.title}"
+			x: 14.5d
+			y: 5.0d
+		}
+		{
+			id: "28CC4DAD7502BFCE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7A58DD628E876A8A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.28cc4dad7502bfce.subtitle}"
+			tasks: [{
+				id: "5033B74559DFFC4D"
+				item: "gtceu:livermorium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.28cc4dad7502bfce.title}"
+			x: 16.0d
+			y: 5.0d
+		}
+		{
+			id: "1F385DE4549EB16D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7DCD45410521C2F6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1f385de4549eb16d.subtitle}"
+			tasks: [{
+				id: "2F41D0EA0D7FDC59"
+				item: "gtceu:tennessine_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1f385de4549eb16d.title}"
+			x: 17.5d
+			y: 5.0d
+		}
+		{
+			id: "1279431AB8DAAF72"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5E9BD3D8F021E1F2"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1279431ab8daaf72.subtitle}"
+			tasks: [{
+				id: "46882305DFE0922E"
+				item: "gtceu:actinium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1279431ab8daaf72.title}"
+			x: -2.0d
+			y: 8.5d
+		}
+		{
+			icon: "gtceu:bromine_bucket"
+			id: "052DDE864EDC3DDF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "661CF26DD096B238"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.052dde864edc3ddf.subtitle}"
+			tasks: [{
+				id: "3A068D0F5FBD022C"
+				item: "gtceu:bromine_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.052dde864edc3ddf.title}"
+			x: 17.5d
+			y: 0.5d
+		}
+		{
+			id: "55B6423CC74CA428"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4BD082EC1FBD981C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.55b6423cc74ca428.subtitle}"
+			tasks: [{
+				id: "5DB22AFCE1AFA3E6"
+				item: "gtceu:astatine_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.55b6423cc74ca428.title}"
+			x: 17.5d
+			y: 3.5d
+		}
+		{
+			id: "68723CD7F84E5C33"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "36466B67D0422C20"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.68723cd7f84e5c33.subtitle}"
+			tasks: [{
+				id: "6B92471018A0DC7F"
+				item: "gtceu:nobelium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.68723cd7f84e5c33.title}"
+			x: 17.5d
+			y: 8.5d
+		}
+		{
+			id: "5F64B231DCBB09B0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4E3FC227D71F181F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.5f64b231dcbb09b0.subtitle}"
+			tasks: [{
+				id: "2CF705F1C3964948"
+				item: "gtceu:lawrencium_dust"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.5f64b231dcbb09b0.title}"
+			x: 19.0d
+			y: 8.5d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.5d8bd23aa2113dc2.title}"
+}

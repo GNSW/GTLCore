@@ -1,0 +1,244 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "367D3E683D1387D0"
+	group: "24F4987B35ABEE82"
+	icon: "gtceu:lv_bender"
+	id: "367D3E683D1387D0"
+	order_index: 3
+	quest_links: [ ]
+	quests: [
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0000}"
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0001}"
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0002}"
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0003}"
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0004}"
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0005}"
+				"{gtlcore.quest.gtl.quest.498cb29fa7447c46.description.0006}"
+			]
+			icon: "gtceu:maintenance_hatch"
+			id: "498CB29FA7447C46"
+			rewards: [{
+				id: "6F0F202CEF4CCFD7"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "44CA2F43F475CFD9"
+				title: "{gtlcore.quest.gtl.task.44ca2f43f475cfd9.title}"
+				type: "checkmark"
+			}]
+			x: 7.5d
+			y: -4.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.2205c5f410b9c4db.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.2205c5f410b9c4db.description.0002}"
+			]
+			icon: "kubejs:uruium_coil_block"
+			id: "2205C5F410B9C4DB"
+			rewards: [{
+				id: "67F6BBF7159FD130"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "50F636D9BF4F6025"
+				title: "{gtlcore.quest.gtl.task.50f636d9bf4f6025.title}"
+				type: "checkmark"
+			}]
+			x: 3.5d
+			y: -4.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.0badecf30ac0bac4.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0badecf30ac0bac4.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.0badecf30ac0bac4.description.0004}"
+				"{gtlcore.quest.gtl.quest.0badecf30ac0bac4.description.0005}"
+			]
+			icon: "gtceu:lv_energy_input_hatch"
+			id: "0BADECF30AC0BAC4"
+			rewards: [{
+				id: "74229AAB3C2222DD"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "23E71635D04A5A77"
+				title: "{gtlcore.quest.gtl.task.23e71635d04a5a77.title}"
+				type: "checkmark"
+			}]
+			x: 3.5d
+			y: -2.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.5db8be71b3733c36.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5db8be71b3733c36.description.0002}"
+			]
+			icon: "gtceu:lv_input_bus"
+			id: "5DB8BE71B3733C36"
+			rewards: [{
+				id: "7B4ECA8505F078B1"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "35761A42191E549C"
+				title: "{gtlcore.quest.gtl.task.35761a42191e549c.title}"
+				type: "checkmark"
+			}]
+			x: 7.5d
+			y: -2.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0002}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0010}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0012}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0019}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0014}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0016}"
+				""
+				"{gtlcore.quest.gtl.quest.6f503441c24abd5b.description.0018}"
+			]
+			icon: "gtceu:iv_parallel_hatch"
+			id: "6F503441C24ABD5B"
+			rewards: [{
+				id: "749E6E378FFF375B"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "6B1CC517916931AB"
+				title: "{gtlcore.quest.gtl.task.6b1cc517916931ab.title}"
+				type: "checkmark"
+			}]
+			x: 3.5d
+			y: -0.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.2b1992e2158e63a2.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.2b1992e2158e63a2.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.2b1992e2158e63a2.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.2b1992e2158e63a2.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.2b1992e2158e63a2.description.0008}"
+			]
+			icon: "minecraft:hopper"
+			id: "2B1992E2158E63A2"
+			rewards: [{
+				id: "0908FF95BE82979B"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "3A68620AD827B0E5"
+				title: "{gtlcore.quest.gtl.task.3a68620ad827b0e5.title}"
+				type: "checkmark"
+			}]
+			x: 5.5d
+			y: -4.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.662fe1772cf9b5ed.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.662fe1772cf9b5ed.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.662fe1772cf9b5ed.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.662fe1772cf9b5ed.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.662fe1772cf9b5ed.description.0008}"
+				"{@pagebreak}"
+			]
+			icon: "gtceu:large_assembler"
+			id: "662FE1772CF9B5ED"
+			rewards: [{
+				id: "0697DFBA0B8FB11C"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "4807FB6A36F025EC"
+				title: "{gtlcore.quest.gtl.task.4807fb6a36f025ec.title}"
+				type: "checkmark"
+			}]
+			x: 7.5d
+			y: -0.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.518692429d15516b.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.518692429d15516b.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.518692429d15516b.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.518692429d15516b.description.0006}"
+			]
+			icon: "gtceu:electric_blast_furnace"
+			id: "518692429D15516B"
+			rewards: [{
+				id: "2C3F176B6959398C"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "68C7BAA24FDE4220"
+				title: "{gtlcore.quest.gtl.task.68c7baa24fde4220.title}"
+				type: "checkmark"
+			}]
+			x: 5.5d
+			y: -0.5d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.7ce50c6425020dd4.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7ce50c6425020dd4.description.0002}"
+			]
+			icon: "gtceu:research_station"
+			id: "7CE50C6425020DD4"
+			rewards: [{
+				id: "0FAE5682D1F17331"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "04392C750C2B36C5"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.7ce50c6425020dd4.title}"
+			x: 5.5d
+			y: -2.5d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.367d3e683d1387d0.title}"
+}

@@ -1,0 +1,8399 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "ziyuan"
+	group: "45061620BBCB7E0B"
+	icon: "gtceu:raw_cooperite"
+	id: "0EF94FA5D02096D9"
+	order_index: 0
+	progression_mode: "flexible"
+	quest_links: [
+		{
+			id: "7B48C8E3436ACBE9"
+			linked_quest: "51A1A2397AF521D9"
+			shape: "hexagon"
+			x: 5.5d
+			y: 10.0d
+		}
+		{
+			id: "3F5C30DFF3D0FDF4"
+			linked_quest: "7AE52BAD2043947A"
+			shape: "hexagon"
+			x: 7.0d
+			y: 10.0d
+		}
+		{
+			id: "780EC89D7470726F"
+			linked_quest: "4D7B7F0FA6962066"
+			shape: "hexagon"
+			x: 7.0d
+			y: 13.0d
+		}
+		{
+			id: "393D39E1CE9624F2"
+			linked_quest: "7FF9045E4B4B2459"
+			shape: "hexagon"
+			x: 5.5d
+			y: 11.5d
+		}
+		{
+			id: "3782B3E83339975F"
+			linked_quest: "63EC74F3B67B9E2E"
+			shape: "hexagon"
+			x: 5.5d
+			y: 13.0d
+		}
+		{
+			id: "349EE447BB398ADF"
+			linked_quest: "4877DB6020D6BFBC"
+			shape: "hexagon"
+			x: 7.0d
+			y: 11.5d
+		}
+		{
+			id: "158D158B959F5A38"
+			linked_quest: "40F426C73BC0D0B1"
+			shape: "hexagon"
+			x: 9.0d
+			y: 10.0d
+		}
+		{
+			id: "1D7DAC59712C5DE3"
+			linked_quest: "4C3AEBDFC6EABF1C"
+			shape: "hexagon"
+			x: 10.5d
+			y: 10.0d
+		}
+		{
+			id: "2064495B4809E3BA"
+			linked_quest: "575ED5E8BFF4C4DA"
+			shape: "hexagon"
+			x: 12.0d
+			y: 10.0d
+		}
+		{
+			id: "11881F1AA42D90EF"
+			linked_quest: "733F780D21B24299"
+			shape: "hexagon"
+			x: 9.0d
+			y: 11.5d
+		}
+		{
+			id: "273BE6C71D85D971"
+			linked_quest: "2B84B8AF004A3E30"
+			shape: "hexagon"
+			x: 10.5d
+			y: 11.5d
+		}
+		{
+			id: "5B8A3ECA17A9B5D5"
+			linked_quest: "61631D86D47D54F6"
+			shape: "hexagon"
+			x: 14.0d
+			y: 10.0d
+		}
+		{
+			id: "698481D49A25390A"
+			linked_quest: "2E4A5A581F9FCAF9"
+			shape: "hexagon"
+			x: 14.0d
+			y: 11.5d
+		}
+		{
+			id: "73CD0D48F1F8DCAA"
+			linked_quest: "4868C061C42E207D"
+			shape: "hexagon"
+			x: 9.0d
+			y: 13.0d
+		}
+		{
+			id: "4A808EFED3BB5B82"
+			linked_quest: "768F3D85ABCE3640"
+			shape: "hexagon"
+			x: 10.5d
+			y: 13.0d
+		}
+		{
+			id: "0F4D1C95709673ED"
+			linked_quest: "4FB562E42CFEE64D"
+			shape: "hexagon"
+			x: 12.0d
+			y: 13.0d
+		}
+		{
+			id: "350C498929DFCEF4"
+			linked_quest: "68231575D1C914D3"
+			shape: "hexagon"
+			x: 12.0d
+			y: 11.5d
+		}
+		{
+			id: "1D273AA9A708D1F1"
+			linked_quest: "1D247D35BFB55469"
+			shape: "pentagon"
+			x: 4.5d
+			y: 17.0d
+		}
+		{
+			id: "1AAA41B4E666E4F8"
+			linked_quest: "365298DB6520227A"
+			shape: "hexagon"
+			x: 6.0d
+			y: 26.5d
+		}
+		{
+			id: "7A88320065F3B0AF"
+			linked_quest: "766D051A40AB5324"
+			shape: "rsquare"
+			x: 21.5d
+			y: 21.5d
+		}
+		{
+			id: "0ECBDB2DBAEE5867"
+			linked_quest: "4059A907154E2865"
+			shape: "rsquare"
+			x: 21.5d
+			y: 15.0d
+		}
+		{
+			id: "32F3A99C86513A6D"
+			linked_quest: "4AF1D57BE5C49B3E"
+			x: 46.5d
+			y: 3.0d
+		}
+		{
+			id: "65EAF830486C2661"
+			linked_quest: "06D1ABE453F52DF1"
+			x: 46.5d
+			y: 4.0d
+		}
+		{
+			id: "7B9EC5B4BFB7B972"
+			linked_quest: "5C12FB74BE35FBFE"
+			shape: "hexagon"
+			x: 15.5d
+			y: 10.0d
+		}
+		{
+			id: "60F651DEB4FEA7B7"
+			linked_quest: "58CCDA50B0673DB3"
+			shape: "hexagon"
+			x: 15.5d
+			y: 11.5d
+		}
+		{
+			id: "22DC5BB47426C3A4"
+			linked_quest: "4C4D21DAF791BD04"
+			shape: "hexagon"
+			x: 14.0d
+			y: 13.0d
+		}
+	]
+	quests: [
+		{
+			dependencies: ["075D368E91231337"]
+			id: "0BFF08842D22B72C"
+			tasks: [{
+				id: "327415F83D02B65E"
+				title: "{gtlcore.quest.gtl.task.327415f83d02b65e.title}"
+				type: "checkmark"
+			}]
+			x: 0.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["0BFF08842D22B72C"]
+			id: "68765386EA084EC0"
+			tasks: [{
+				id: "3F8107D325CEA1B4"
+				title: "{gtlcore.quest.gtl.task.3f8107d325cea1b4.title}"
+				type: "checkmark"
+			}]
+			x: 1.5d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"68765386EA084EC0"
+				"40C39645B1DE2488"
+			]
+			description: ["{gtlcore.quest.gtl.quest.6693a00751424e19.description.0000}"]
+			id: "6693A00751424E19"
+			optional: true
+			tasks: [
+				{
+					id: "53911D9F862BE840"
+					item: "gtmthings:lv_digital_miner"
+					type: "item"
+				}
+				{
+					id: "036F86F0546C44A7"
+					item: "gtmthings:mv_digital_miner"
+					type: "item"
+				}
+				{
+					id: "2E1CFA9882F8A1BB"
+					item: "gtmthings:hv_digital_miner"
+					type: "item"
+				}
+			]
+			x: 3.0d
+			y: -1.0d
+		}
+		{
+			dependencies: [
+				"411628D717089480"
+				"4DDFAAF4A8E0622A"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1999b90b73bab11f.description.0000}"]
+			id: "1999B90B73BAB11F"
+			optional: true
+			tasks: [{
+				id: "5F6FCED2FDC49E27"
+				item: "gtceu:void_miner"
+				type: "item"
+			}]
+			x: 7.5d
+			y: -2.0d
+		}
+		{
+			dependencies: [
+				"68765386EA084EC0"
+				"51B9A72C19F84F0E"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1e1e0437e8e241ab.description.0000}"]
+			id: "1E1E0437E8E241AB"
+			optional: true
+			tasks: [
+				{
+					id: "214FE4A5B7B84B76"
+					item: "gtceu:lv_pump"
+					type: "item"
+				}
+				{
+					id: "7602E8FCB16466AB"
+					item: "gtceu:mv_pump"
+					type: "item"
+				}
+				{
+					id: "106A9676316F6ABB"
+					item: "gtceu:hv_pump"
+					type: "item"
+				}
+				{
+					id: "0DEF9EADEFD1DFC7"
+					item: "gtceu:ev_pump"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1e1e0437e8e241ab.title}"
+			x: 3.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"68765386EA084EC0"
+				"7296C57805F5DC96"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1809019dac0e3c2a.description.0000}"]
+			id: "1809019DAC0E3C2A"
+			optional: true
+			tasks: [
+				{
+					id: "33205F2D84E92227"
+					item: "gtceu:mv_fluid_drilling_rig"
+					type: "item"
+				}
+				{
+					id: "7491A7DA4ABA41FE"
+					item: "gtceu:hv_fluid_drilling_rig"
+					type: "item"
+				}
+				{
+					id: "4C0CB78A0EBDC2E8"
+					item: "gtceu:ev_fluid_drilling_rig"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1809019dac0e3c2a.title}"
+			x: 4.5d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"1809019DAC0E3C2A"
+				"52DF531AFB3A07CE"
+			]
+			description: ["{gtlcore.quest.gtl.quest.7fc5f639f89c2c22.description.0000}"]
+			id: "7FC5F639F89C2C22"
+			optional: true
+			tasks: [{
+				id: "0E5FFAD6CB1DEA66"
+				item: "gtceu:void_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: 7.5d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"1809019DAC0E3C2A"
+				"035C470213E8B4DB"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1d4903b520e37bfe.description.0000}"]
+			id: "1D4903B520E37BFE"
+			optional: true
+			tasks: [{
+				id: "1BECEBDF82F70D8D"
+				item: "gtceu:zpm_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: 9.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"1E7344C133C99565"
+				"411628D717089480"
+			]
+			description: ["{gtlcore.quest.gtl.quest.74d0577ca2f540f1.description.0000}"]
+			id: "74D0577CA2F540F1"
+			optional: true
+			tasks: [
+				{
+					id: "5D6C802756A68BD2"
+					item: "gtceu:ev_large_miner"
+					type: "item"
+				}
+				{
+					id: "2978751D830B806E"
+					item: "gtceu:iv_large_miner"
+					type: "item"
+				}
+				{
+					id: "267BC8D6F759B7A6"
+					item: "gtceu:luv_large_miner"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.74d0577ca2f540f1.title}"
+			x: 7.5d
+			y: -1.0d
+		}
+		{
+			dependencies: [
+				"74D0577CA2F540F1"
+				"233CA36D529EC3FB"
+				"1999B90B73BAB11F"
+			]
+			description: ["{gtlcore.quest.gtl.quest.214b86b97ed9c962.description.0000}"]
+			id: "214B86B97ED9C962"
+			optional: true
+			tasks: [{
+				id: "3D891933F417EA28"
+				item: "gtceu:large_void_miner"
+				type: "item"
+			}]
+			x: 9.0d
+			y: -2.0d
+		}
+		{
+			can_repeat: false
+			dependencies: [
+				"68765386EA084EC0"
+				"7296C57805F5DC96"
+			]
+			description: ["{gtlcore.quest.gtl.quest.17c967508ddcbb87.description.0000}"]
+			id: "17C967508DDCBB87"
+			optional: true
+			tasks: [
+				{
+					id: "1CD178D1B843DEAE"
+					item: "gtceu:greenhouse"
+					type: "item"
+				}
+				{
+					id: "6BBF45A1B7D97E8A"
+					item: "gtceu:large_greenhouse"
+					type: "item"
+				}
+			]
+			x: 4.5d
+			y: 1.0d
+		}
+		{
+			dependencies: [
+				"68765386EA084EC0"
+				"1A48D2DB936FF632"
+			]
+			description: ["{gtlcore.quest.gtl.quest.04a1d335d69e9779.description.0000}"]
+			id: "04A1D335D69E9779"
+			optional: true
+			tasks: [{
+				id: "0678FE1D3BE5D1DA"
+				item: "gtceu:fishing_ground"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 1.0d
+		}
+		{
+			dependencies: [
+				"68765386EA084EC0"
+				"51B9A72C19F84F0E"
+			]
+			description: ["{gtlcore.quest.gtl.quest.57886739347d6809.description.0000}"]
+			id: "57886739347D6809"
+			optional: true
+			tasks: [{
+				id: "6EDFCC68188C1227"
+				item: "gtceu:slaughterhouse"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 1.0d
+		}
+		{
+			dependencies: [
+				"0375D068023B13D7"
+				"68765386EA084EC0"
+			]
+			description: ["{gtlcore.quest.gtl.quest.6e9e740aaeb580e0.description.0000}"]
+			id: "6E9E740AAEB580E0"
+			optional: true
+			tasks: [{
+				id: "65C060C8B2F3400A"
+				item: "gtceu:large_gas_collector"
+				type: "item"
+			}]
+			x: 7.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["7E436D979AF67921"]
+			description: ["{gtlcore.quest.gtl.quest.7979c5acf9a0c8d2.description.0000}"]
+			id: "7979C5ACF9A0C8D2"
+			subtitle: "{gtlcore.quest.gtl.quest.7979c5acf9a0c8d2.subtitle}"
+			tasks: [{
+				id: "54A100B30D3F4C53"
+				title: "{gtlcore.quest.gtl.task.54a100b30d3f4c53.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: 5.0d
+		}
+		{
+			dependencies: ["7979C5ACF9A0C8D2"]
+			description: ["{gtlcore.quest.gtl.quest.7db63df889dddef4.description.0000}"]
+			icon: "minecraft:raw_iron"
+			id: "7DB63DF889DDDEF4"
+			subtitle: "{gtlcore.quest.gtl.quest.7db63df889dddef4.subtitle}"
+			tasks: [
+				{
+					id: "12386DFE17521548"
+					title: "{gtlcore.quest.gtl.task.12386dfe17521548.title}"
+					type: "checkmark"
+				}
+				{
+					id: "243CAA04566A300A"
+					item: "minecraft:raw_iron"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 5.5d
+			y: 5.0d
+		}
+		{
+			dependencies: ["7979C5ACF9A0C8D2"]
+			description: ["{gtlcore.quest.gtl.quest.703eeb941f0c745c.description.0000}"]
+			icon: "gtceu:iron_ore"
+			id: "703EEB941F0C745C"
+			subtitle: "{gtlcore.quest.gtl.quest.703eeb941f0c745c.subtitle}"
+			tasks: [
+				{
+					id: "0CE5AC66DD215BE1"
+					title: "{gtlcore.quest.gtl.task.0ce5ac66dd215be1.title}"
+					type: "checkmark"
+				}
+				{
+					id: "05C8B4EE289ED2C9"
+					item: "gtceu:iron_ore"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 5.5d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"7DB63DF889DDDEF4"
+				"703EEB941F0C745C"
+			]
+			dependency_requirement: "one_completed"
+			description: ["{gtlcore.quest.gtl.quest.6596611dd4cb5a60.description.0000}"]
+			icon: "gtceu:crushed_iron_ore"
+			id: "6596611DD4CB5A60"
+			min_required_dependencies: 1
+			subtitle: "{gtlcore.quest.gtl.quest.6596611dd4cb5a60.subtitle}"
+			tasks: [
+				{
+					id: "45B29F9F7327A305"
+					title: "{gtlcore.quest.gtl.task.45b29f9f7327a305.title}"
+					type: "checkmark"
+				}
+				{
+					id: "7C9FD22CF1F9381E"
+					item: "gtceu:crushed_iron_ore"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 7.5d
+			y: 5.0d
+		}
+		{
+			dependencies: ["6596611DD4CB5A60"]
+			description: ["{gtlcore.quest.gtl.quest.05046054f7d65653.description.0000}"]
+			icon: "gtceu:impure_iron_dust"
+			id: "05046054F7D65653"
+			subtitle: "{gtlcore.quest.gtl.quest.05046054f7d65653.subtitle}"
+			tasks: [
+				{
+					id: "0624FA85DAAB27B4"
+					title: "{gtlcore.quest.gtl.task.0624fa85daab27b4.title}"
+					type: "checkmark"
+				}
+				{
+					id: "5DD7786DB05A68EA"
+					item: "gtceu:impure_iron_dust"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 9.5d
+			y: 6.0d
+		}
+		{
+			dependencies: ["6596611DD4CB5A60"]
+			description: [
+				"{gtlcore.quest.gtl.quest.14ee67044597e62a.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.14ee67044597e62a.description.0002}"
+			]
+			icon: "gtceu:purified_iron_ore"
+			id: "14EE67044597E62A"
+			subtitle: "{gtlcore.quest.gtl.quest.14ee67044597e62a.subtitle}"
+			tasks: [
+				{
+					id: "512D19B265445F64"
+					title: "{gtlcore.quest.gtl.task.512d19b265445f64.title}"
+					type: "checkmark"
+				}
+				{
+					id: "4C31A8B183EF4730"
+					item: "gtceu:purified_iron_ore"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 9.5d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"6596611DD4CB5A60"
+				"14EE67044597E62A"
+			]
+			dependency_requirement: "one_completed"
+			description: ["{gtlcore.quest.gtl.quest.56c020b4f1f7d8d1.description.0000}"]
+			icon: "gtceu:refined_iron_ore"
+			id: "56C020B4F1F7D8D1"
+			subtitle: "{gtlcore.quest.gtl.quest.56c020b4f1f7d8d1.subtitle}"
+			tasks: [
+				{
+					id: "5822D0C2DAE09A76"
+					title: "{gtlcore.quest.gtl.task.5822d0c2dae09a76.title}"
+					type: "checkmark"
+				}
+				{
+					id: "4A118334D2377798"
+					item: "gtceu:refined_iron_ore"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 11.5d
+			y: 5.0d
+		}
+		{
+			dependencies: [
+				"05046054F7D65653"
+				"56C020B4F1F7D8D1"
+				"79B98F942F1D8EDC"
+				"0FAFE44EBD813FBA"
+			]
+			dependency_requirement: "one_completed"
+			description: [
+				"{gtlcore.quest.gtl.quest.5aee74dd9b0d511c.description.0000}"
+				"{gtlcore.quest.gtl.quest.5aee74dd9b0d511c.description.0001}"
+				""
+				"{gtlcore.quest.gtl.quest.5aee74dd9b0d511c.description.0003}"
+			]
+			icon: "gtceu:iron_dust"
+			id: "5AEE74DD9B0D511C"
+			subtitle: "{gtlcore.quest.gtl.quest.5aee74dd9b0d511c.subtitle}"
+			tasks: [
+				{
+					id: "7D58F9B03FA71A1D"
+					title: "{gtlcore.quest.gtl.task.7d58f9b03fa71a1d.title}"
+					type: "checkmark"
+				}
+				{
+					id: "6E1058A98ED43D59"
+					item: "gtceu:iron_dust"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 13.5d
+			y: 5.0d
+		}
+		{
+			dependencies: ["14EE67044597E62A"]
+			description: ["{gtlcore.quest.gtl.quest.79b98f942f1d8edc.description.0000}"]
+			icon: "gtceu:pure_iron_dust"
+			id: "79B98F942F1D8EDC"
+			subtitle: "{gtlcore.quest.gtl.quest.79b98f942f1d8edc.subtitle}"
+			tasks: [
+				{
+					id: "0ACEBC9DEDFB3044"
+					title: "{gtlcore.quest.gtl.task.0acebc9dedfb3044.title}"
+					type: "checkmark"
+				}
+				{
+					id: "62E542B061FAF07B"
+					item: "gtceu:pure_iron_dust"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.79b98f942f1d8edc.title}"
+			x: 11.5d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"7DB63DF889DDDEF4"
+				"703EEB941F0C745C"
+			]
+			description: ["{gtlcore.quest.gtl.quest.3c2b4b80e425a9ad.description.0000}"]
+			icon: "gtceu:milled_pyrope"
+			id: "3C2B4B80E425A9AD"
+			subtitle: "{gtlcore.quest.gtl.quest.3c2b4b80e425a9ad.subtitle}"
+			tasks: [
+				{
+					id: "3DF923CA2FF25E4D"
+					title: "{gtlcore.quest.gtl.task.3df923ca2ff25e4d.title}"
+					type: "checkmark"
+				}
+				{
+					id: "42F3CB4519478BEB"
+					item: "gtceu:milled_pyrope"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3c2b4b80e425a9ad.title}"
+			x: 9.5d
+			y: 7.0d
+		}
+		{
+			dependencies: ["3C2B4B80E425A9AD"]
+			icon: "gtceu:pyrope_front_bucket"
+			id: "0FAFE44EBD813FBA"
+			subtitle: "{gtlcore.quest.gtl.quest.0fafe44ebd813fba.subtitle}"
+			tasks: [
+				{
+					id: "4C799DC47F6C6B79"
+					title: "{gtlcore.quest.gtl.task.4c799dc47f6c6b79.title}"
+					type: "checkmark"
+				}
+				{
+					id: "79442F59F7045706"
+					item: "gtceu:pyrope_front_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 11.5d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"68765386EA084EC0"
+				"1FA9E56114BFABF5"
+			]
+			description: ["{gtlcore.quest.gtl.quest.7da6da0780f3dda3.description.0000}"]
+			id: "7DA6DA0780F3DDA3"
+			optional: true
+			tasks: [
+				{
+					id: "4A80029952946E9F"
+					item: "gtceu:space_elevator"
+					type: "item"
+				}
+				{
+					id: "248D35719EDF2137"
+					item: "gtceu:resource_collection"
+					type: "item"
+				}
+			]
+			x: 9.0d
+			y: 1.0d
+		}
+		{
+			dependencies: ["14EE67044597E62A"]
+			description: ["{gtlcore.quest.gtl.quest.621c664a94b042c0.description.0000}"]
+			icon: "gtceu:flawless_emerald_gem"
+			id: "621C664A94B042C0"
+			subtitle: "{gtlcore.quest.gtl.quest.621c664a94b042c0.subtitle}"
+			tasks: [
+				{
+					id: "7059009E6175E5EC"
+					title: "{gtlcore.quest.gtl.task.7059009e6175e5ec.title}"
+					type: "checkmark"
+				}
+				{
+					id: "692659EE758CDEEC"
+					item: "gtceu:flawless_emerald_gem"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 11.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["7979C5ACF9A0C8D2"]
+			id: "2C1986BE10F10708"
+			tasks: [{
+				id: "58C28BBB64C73B88"
+				title: "{gtlcore.quest.gtl.task.58c28bbb64c73b88.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["2C1986BE10F10708"]
+			id: "45D1E65DFC2DEF6F"
+			tasks: [{
+				id: "3B3DCF9C88A9F45F"
+				title: "{gtlcore.quest.gtl.task.3b3dcf9c88a9f45f.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["45D1E65DFC2DEF6F"]
+			description: ["{gtlcore.quest.gtl.quest.184ce47d10a10c84.description.0000}"]
+			id: "184CE47D10A10C84"
+			tasks: [{
+				id: "27CDD5B1DB6728DF"
+				title: "{gtlcore.quest.gtl.task.27cdd5b1db6728df.title}"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.184ce47d10a10c84.title}"
+			x: 5.5d
+			y: 15.0d
+		}
+		{
+			dependencies: ["68765386EA084EC0"]
+			id: "41B15E107F6501C9"
+			tasks: [{
+				id: "5B924FE02BA17DB0"
+				title: "{gtlcore.quest.gtl.task.5b924fe02ba17db0.title}"
+				type: "checkmark"
+			}]
+			x: 1.5d
+			y: 2.0d
+		}
+		{
+			dependencies: ["41B15E107F6501C9"]
+			id: "7E436D979AF67921"
+			tasks: [{
+				id: "417B3C624E888811"
+				title: "{gtlcore.quest.gtl.task.417b3c624e888811.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["5AEE74DD9B0D511C"]
+			description: [
+				"{gtlcore.quest.gtl.quest.192a144adac186ba.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.192a144adac186ba.description.0002}"
+				"{gtlcore.quest.gtl.quest.192a144adac186ba.description.0003}"
+			]
+			id: "192A144ADAC186BA"
+			tasks: [{
+				id: "389CC682DEEC0AE7"
+				title: "{gtlcore.quest.gtl.task.389cc682deec0ae7.title}"
+				type: "checkmark"
+			}]
+			x: 15.5d
+			y: 5.0d
+		}
+		{
+			dependencies: ["06D1ABE453F52DF1"]
+			icon: "gtceu:coal_gas_bucket"
+			icon_scale: 2.0d
+			id: "1EBBA5A10A8A48DB"
+			tasks: [
+				{
+					id: "4902C15F4020348D"
+					item: "gtceu:biomass_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0DDD4FEF0A92C5BD"
+					item: "gtceu:fermented_biomass_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "615692B475A3F760"
+					item: "gtceu:charcoal_byproducts_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0392DF1F714A7B13"
+					item: "gtceu:wood_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41513D2F7BE22436"
+					item: "gtceu:wood_vinegar_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "34DB3997C2DB6C20"
+					item: "gtceu:wood_tar_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "63B36588D80E8240"
+					item: "gtceu:coal_tar_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "578EA3ED0A7075F6"
+					item: "gtceu:coal_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2544708ACE8F201F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1ebba5a10a8a48db.title}"
+			x: 48.0d
+			y: 4.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.6deaa19092fbcf99.description.0000}"]
+			hide_dependency_lines: true
+			icon: "gtceu:lv_pump"
+			id: "6DEAA19092FBCF99"
+			rewards: [{
+				id: "61884E75889139DF"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "42E23ED61B2417CC"
+				item: "gtceu:lv_pump"
+				type: "item"
+			}]
+			x: 43.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["6DEAA19092FBCF99"]
+			icon: "gtceu:oil_medium_bucket"
+			icon_scale: 2.0d
+			id: "2451D79084562C67"
+			tasks: [
+				{
+					id: "2410E462E07D486C"
+					item: "gtceu:oil_medium_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4D7349FA195D7B65"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2451d79084562c67.title}"
+			x: 45.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["4AF1D57BE5C49B3E"]
+			icon: "gtceu:natural_gas_bucket"
+			icon_scale: 2.0d
+			id: "445FA314F08B0F0C"
+			tasks: [
+				{
+					id: "07EF26FD4ED24C9A"
+					item: "gtceu:oil_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "028146424BDA896C"
+					item: "gtceu:oil_medium_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "12FECA2985000CC4"
+					item: "gtceu:oil_heavy_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41E4608897A131B8"
+					item: "gtceu:oil_light_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7F8CFEF35E38D08B"
+					item: "gtceu:salt_water_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0DC74A24840F6434"
+					item: "gtceu:natural_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7D6B27486BE765BC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.445fa314f08b0f0c.title}"
+			x: 48.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["3940A3FA8CD3C04D"]
+			icon: "gtceu:oil_heavy_bucket"
+			icon_scale: 2.0d
+			id: "5CECDCDB3DFFDF6B"
+			subtitle: "{gtlcore.quest.gtl.quest.5cecdcdb3dffdf6b.subtitle}"
+			tasks: [
+				{
+					id: "7F52AE8148CC8670"
+					item: "gtceu:oil_heavy_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "479BEED60230FB8A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5cecdcdb3dffdf6b.title}"
+			x: 45.0d
+			y: 3.0d
+		}
+		{
+			icon: "gtceu:raw_oilsands"
+			id: "3940A3FA8CD3C04D"
+			tasks: [
+				{
+					id: "2DC831E01D85A452"
+					item: "gtceu:raw_oilsands"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "45878EE3BDF75173"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3940a3fa8cd3c04d.title}"
+			x: 43.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["184CE47D10A10C84"]
+			description: [
+				"{gtlcore.quest.gtl.quest.0a24f26d2efe2822.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0a24f26d2efe2822.description.0002}"
+			]
+			id: "0A24F26D2EFE2822"
+			tasks: [{
+				id: "3FDED6E55897AD8D"
+				title: "{gtlcore.quest.gtl.task.3fded6e55897ad8d.title}"
+				type: "checkmark"
+			}]
+			x: 8.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["0A24F26D2EFE2822"]
+			description: ["{gtlcore.quest.gtl.quest.726a61cd2c9d9495.description.0000}"]
+			id: "726A61CD2C9D9495"
+			tasks: [{
+				id: "3767ADB65635488D"
+				title: "{gtlcore.quest.gtl.task.3767adb65635488d.title}"
+				type: "checkmark"
+			}]
+			x: 10.5d
+			y: 15.0d
+		}
+		{
+			dependencies: [
+				"7979C5ACF9A0C8D2"
+				"1D247D35BFB55469"
+			]
+			dependency_requirement: "one_completed"
+			description: [
+				"{gtlcore.quest.gtl.quest.3cb16b36a5aa2a10.description.0000}"
+				"{gtlcore.quest.gtl.quest.3cb16b36a5aa2a10.description.0001}"
+				""
+				"{gtlcore.quest.gtl.quest.3cb16b36a5aa2a10.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.3cb16b36a5aa2a10.description.0005}"
+				""
+				"{gtlcore.quest.gtl.quest.3cb16b36a5aa2a10.description.0007}"
+			]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			id: "3CB16B36A5AA2A10"
+			subtitle: "{gtlcore.quest.gtl.quest.3cb16b36a5aa2a10.subtitle}"
+			tasks: [{
+				id: "61B56D54AB271C8A"
+				title: "{gtlcore.quest.gtl.task.61b56d54ab271c8a.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: 17.0d
+		}
+		{
+			dependencies: [
+				"1D247D35BFB55469"
+				"0AE7E19DC4FD17B2"
+			]
+			description: ["{gtlcore.quest.gtl.quest.01a1a06a3963d3be.description.0000}"]
+			hide_dependent_lines: true
+			icon: "gtceu:platinum_group_sludge_dust"
+			id: "01A1A06A3963D3BE"
+			tasks: [
+				{
+					id: "69BA892CBCBEBB1B"
+					item: "gtceu:platinum_group_sludge_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "60BF0D14C892FA4E"
+					type: "checkmark"
+				}
+			]
+			x: 6.0d
+			y: 17.0d
+		}
+		{
+			dependencies: ["01A1A06A3963D3BE"]
+			icon: "gtceu:platinum_slag_dust"
+			id: "1AEB6A36DD3F8408"
+			tasks: [
+				{
+					id: "2AE0A2D76BE61F24"
+					item: "gtceu:platinum_slag_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3D38287CA9284E92"
+					type: "checkmark"
+				}
+			]
+			x: 4.5d
+			y: 18.5d
+		}
+		{
+			dependencies: ["01A1A06A3963D3BE"]
+			icon: "gtceu:palladium_raw_dust"
+			id: "41A9E381A0326997"
+			tasks: [
+				{
+					id: "2F7946196BA328BF"
+					item: "gtceu:palladium_raw_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "270B772B6433DB31"
+					item: "gtceu:platinum_raw_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "47B3CDB28BCC7018"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.41a9e381a0326997.title}"
+			x: 4.5d
+			y: 21.0d
+		}
+		{
+			dependencies: ["01A1A06A3963D3BE"]
+			icon: "gtceu:platinum_sludge_residue_dust"
+			id: "4BD741311E61665C"
+			subtitle: "{gtlcore.quest.gtl.quest.4bd741311e61665c.subtitle}"
+			tasks: [
+				{
+					id: "17772738EAECA5DD"
+					item: "gtceu:platinum_sludge_residue_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0902E64570F10899"
+					type: "checkmark"
+				}
+			]
+			x: 7.5d
+			y: 22.0d
+		}
+		{
+			dependencies: ["01A1A06A3963D3BE"]
+			icon: "gtceu:inert_metal_mixture_dust"
+			id: "46435121E3AE44EF"
+			subtitle: "{gtlcore.quest.gtl.quest.46435121e3ae44ef.subtitle}"
+			tasks: [
+				{
+					id: "077A2ADE5E3735A3"
+					item: "gtceu:inert_metal_mixture_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "70A155DB3A9E9CEA"
+					type: "checkmark"
+				}
+			]
+			x: 7.5d
+			y: 19.0d
+		}
+		{
+			dependencies: [
+				"01A1A06A3963D3BE"
+				"5572651D3F510E1E"
+				"0EB271912D5F4761"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:rarest_metal_mixture_dust"
+			id: "56105EBA9D073902"
+			min_required_dependencies: 2
+			subtitle: "{gtlcore.quest.gtl.quest.56105eba9d073902.subtitle}"
+			tasks: [
+				{
+					id: "4727481B8F45C4E1"
+					item: "gtceu:rarest_metal_mixture_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0E713C814A133F91"
+					type: "checkmark"
+				}
+			]
+			x: 7.5d
+			y: 21.0d
+		}
+		{
+			dependencies: [
+				"1AEB6A36DD3F8408"
+				"46435121E3AE44EF"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:rhodium_sulfate_bucket"
+			id: "447948ACBDAF1D5A"
+			tasks: [
+				{
+					id: "3184F386275ACCAD"
+					item: "gtceu:rhodium_sulfate_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "15EEBC46E4611D55"
+					item: "gtceu:rhodium_sulfate_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5CCFE960B42A6B4B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.447948acbdaf1d5a.title}"
+			x: 9.0d
+			y: 18.5d
+		}
+		{
+			dependencies: [
+				"1AEB6A36DD3F8408"
+				"2DEED122A9B447C5"
+			]
+			icon: "gtceu:leach_residue_dust"
+			id: "5572651D3F510E1E"
+			tasks: [
+				{
+					id: "6F52D25C0DFC4B08"
+					item: "gtceu:leach_residue_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7C4FC3E7BF7B9204"
+					type: "checkmark"
+				}
+			]
+			x: 6.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"5572651D3F510E1E"
+				"46435121E3AE44EF"
+				"0EB271912D5F4761"
+				"71947B29A781480D"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:sodium_rutheniate_dust"
+			id: "515CC449D60C6B6F"
+			min_required_dependencies: 3
+			tasks: [
+				{
+					id: "08775C688318E02F"
+					item: "gtceu:sodium_rutheniate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5BB2670E88348768"
+					type: "checkmark"
+				}
+			]
+			x: 9.0d
+			y: 19.5d
+		}
+		{
+			dependencies: [
+				"56105EBA9D073902"
+				"1CD8B448677A18F1"
+			]
+			icon: "gtceu:iridium_metal_residue_dust"
+			id: "6555B785CDEA2B0D"
+			tasks: [
+				{
+					id: "16CC0DB1A157BB61"
+					item: "gtceu:iridium_metal_residue_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6817D1790519FCFB"
+					type: "checkmark"
+				}
+			]
+			x: 9.0d
+			y: 20.5d
+		}
+		{
+			dependencies: [
+				"56105EBA9D073902"
+				"1CD8B448677A18F1"
+			]
+			icon: "gtceu:acidic_osmium_solution_bucket"
+			id: "1E69FCB460019502"
+			tasks: [
+				{
+					id: "32C3A9A2137ECCE8"
+					item: "gtceu:acidic_osmium_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "26877E1538C1ABB8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1e69fcb460019502.title}"
+			x: 9.0d
+			y: 21.5d
+		}
+		{
+			dependencies: ["6555B785CDEA2B0D"]
+			icon: "gtceu:iridium_dioxide_dust"
+			id: "544D94653B07DABF"
+			tasks: [
+				{
+					id: "4FBB1CDD11226171"
+					item: "gtceu:iridium_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "56B2A608CE9CD004"
+					type: "checkmark"
+				}
+			]
+			x: 11.0d
+			y: 20.5d
+		}
+		{
+			dependencies: ["6BA527FE4D528D54"]
+			icon: "gtceu:iridium_dust"
+			icon_scale: 2.0d
+			id: "17365ABC639496E6"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "4CCC488DCA086040"
+					item: "gtceu:iridium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "239BB316FFE32CF7"
+					type: "checkmark"
+				}
+			]
+			x: 17.0d
+			y: 20.5d
+		}
+		{
+			dependencies: ["1E69FCB460019502"]
+			icon: "gtceu:osmium_tetroxide_dust"
+			id: "7B57E5FA2FD62C15"
+			subtitle: "{gtlcore.quest.gtl.quest.7b57e5fa2fd62c15.subtitle}"
+			tasks: [
+				{
+					id: "630A0AD9877F9200"
+					item: "gtceu:osmium_tetroxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "452AE3303E0EEBAD"
+					type: "checkmark"
+				}
+			]
+			x: 13.0d
+			y: 21.5d
+		}
+		{
+			dependencies: ["7B57E5FA2FD62C15"]
+			icon: "gtceu:osmium_dust"
+			icon_scale: 2.0d
+			id: "25FDE220C552A0D7"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "160FE1F2BCD8F27F"
+					item: "gtceu:osmium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41B78E6FEFA301BF"
+					type: "checkmark"
+				}
+			]
+			x: 17.0d
+			y: 21.5d
+		}
+		{
+			dependencies: ["447948ACBDAF1D5A"]
+			icon: "gtceu:roughly_rhodium_metal_dust"
+			id: "3A816A08848067B0"
+			tasks: [
+				{
+					id: "33EAC6FF223BFEC9"
+					item: "gtceu:roughly_rhodium_metal_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "558E68DA7C3103ED"
+					type: "checkmark"
+				}
+			]
+			x: 10.0d
+			y: 18.5d
+		}
+		{
+			dependencies: ["3A816A08848067B0"]
+			icon: "gtceu:rhodium_salt_dust"
+			id: "3E439E4735E85BE5"
+			tasks: [
+				{
+					id: "19419BA850D12934"
+					item: "gtceu:rhodium_salt_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4883DCDBB6868D36"
+					type: "checkmark"
+				}
+			]
+			x: 11.0d
+			y: 18.5d
+		}
+		{
+			dependencies: ["3E439E4735E85BE5"]
+			icon: "gtceu:rhodium_salt_solution_bucket"
+			id: "737542A27F32418F"
+			tasks: [
+				{
+					id: "1DF06FAB724C577E"
+					item: "gtceu:rhodium_salt_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2652754592AFD2CC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.737542a27f32418f.title}"
+			x: 12.0d
+			y: 18.5d
+		}
+		{
+			dependencies: [
+				"737542A27F32418F"
+				"71947B29A781480D"
+			]
+			icon: "gtceu:rhodium_nitrate_dust"
+			id: "1745E379DAEA5EE0"
+			tasks: [
+				{
+					id: "16D5062BB781CD95"
+					item: "gtceu:rhodium_nitrate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "21DB0D927149AE17"
+					type: "checkmark"
+				}
+			]
+			x: 13.0d
+			y: 18.5d
+		}
+		{
+			dependencies: ["1745E379DAEA5EE0"]
+			icon: "gtceu:rhodium_filter_cake_dust"
+			id: "712E7D1F539B51A8"
+			tasks: [
+				{
+					id: "459E521C65860513"
+					item: "gtceu:rhodium_filter_cake_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "00B99609CDA405C6"
+					type: "checkmark"
+				}
+			]
+			x: 14.0d
+			y: 18.5d
+		}
+		{
+			dependencies: ["712E7D1F539B51A8"]
+			icon: "gtceu:rhodium_filter_cake_solution_bucket"
+			id: "73399771638FD112"
+			tasks: [
+				{
+					id: "04C94B060214C917"
+					item: "gtceu:rhodium_filter_cake_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "394D4E69C251078D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.73399771638fd112.title}"
+			x: 15.0d
+			y: 18.5d
+		}
+		{
+			dependencies: ["73399771638FD112"]
+			icon: "gtceu:reprecipitated_rhodium_dust"
+			id: "18FB4DDA55B7D430"
+			tasks: [
+				{
+					id: "17292F329ACCF7A7"
+					item: "gtceu:reprecipitated_rhodium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "20DCA52F1DFFA94B"
+					type: "checkmark"
+				}
+			]
+			x: 16.0d
+			y: 18.5d
+		}
+		{
+			dependencies: [
+				"18FB4DDA55B7D430"
+				"1CD8B448677A18F1"
+			]
+			icon: "gtceu:rhodium_dust"
+			icon_scale: 2.0d
+			id: "51AA4887F2DC9747"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.51aa4887f2dc9747.subtitle}"
+			tasks: [
+				{
+					id: "1530C7BBA1C03A74"
+					item: "gtceu:rhodium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "357501CA24F8E74C"
+					type: "checkmark"
+				}
+			]
+			x: 17.0d
+			y: 18.5d
+		}
+		{
+			dependencies: [
+				"41A9E381A0326997"
+				"043EF736C9E6B3FB"
+			]
+			icon: "gtceu:platinum_dust"
+			id: "2CD7D8B5F38A50F5"
+			tasks: [
+				{
+					id: "734594D8EE4E807E"
+					item: "gtceu:platinum_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "55675C54FA52DF87"
+					item: "gtceu:palladium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2DE33C322360CC4B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2cd7d8b5f38a50f5.title}"
+			x: 5.5d
+			y: 21.5d
+		}
+		{
+			dependencies: ["515CC449D60C6B6F"]
+			icon: "gtceu:ruthenium_tetroxide_bucket"
+			id: "5C12F24D7C0DB328"
+			tasks: [
+				{
+					id: "18ED9710724B22C6"
+					item: "gtceu:ruthenium_tetroxide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0942DD5664B498DA"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5c12f24d7c0db328.title}"
+			x: 10.0d
+			y: 19.5d
+		}
+		{
+			dependencies: ["5C12F24D7C0DB328"]
+			icon: "gtceu:ruthenium_tetroxide_hot_bucket"
+			id: "277E11D01F736C89"
+			tasks: [
+				{
+					id: "3F47C69329E4940B"
+					item: "gtceu:ruthenium_tetroxide_hot_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7458D756C52CA570"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.277e11d01f736c89.title}"
+			x: 12.0d
+			y: 19.5d
+		}
+		{
+			dependencies: ["277E11D01F736C89"]
+			icon: "gtceu:ruthenium_tetroxide_lq_bucket"
+			id: "1378ED1EC657A5D8"
+			tasks: [
+				{
+					id: "3524EF5F33337353"
+					item: "gtceu:ruthenium_tetroxide_lq_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "789796FD0D9D48BE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1378ed1ec657a5d8.title}"
+			x: 14.0d
+			y: 19.5d
+		}
+		{
+			dependencies: ["1378ED1EC657A5D8"]
+			icon: "gtceu:ruthenium_tetroxide_dust"
+			id: "6458E7BCD8D06C86"
+			tasks: [
+				{
+					id: "66D25854C8643D8D"
+					item: "gtceu:ruthenium_tetroxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7CC80098F63F28EB"
+					type: "checkmark"
+				}
+			]
+			x: 16.0d
+			y: 19.5d
+		}
+		{
+			dependencies: [
+				"6458E7BCD8D06C86"
+				"1CD8B448677A18F1"
+			]
+			icon: "gtceu:ruthenium_dust"
+			icon_scale: 2.0d
+			id: "20D5748D17E2C06D"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "18994A92E76B04F4"
+					item: "gtceu:ruthenium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3D43C4D707B0ABAE"
+					type: "checkmark"
+				}
+			]
+			x: 17.0d
+			y: 19.5d
+		}
+		{
+			dependencies: [
+				"544D94653B07DABF"
+				"1CD8B448677A18F1"
+			]
+			icon: "gtceu:acidic_iridium_bucket"
+			id: "353CE5B960B508FE"
+			tasks: [
+				{
+					id: "5B5A86C461B6CA47"
+					item: "gtceu:acidic_iridium_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7D697FF2C350AF5A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.353ce5b960b508fe.title}"
+			x: 13.0d
+			y: 20.5d
+		}
+		{
+			dependencies: [
+				"353CE5B960B508FE"
+				"69CC17C74F449A2C"
+			]
+			icon: "gtceu:iridium_chloride_dust"
+			id: "6BA527FE4D528D54"
+			tasks: [
+				{
+					id: "2DE0156492FEFC8E"
+					item: "gtceu:iridium_chloride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "00117A13240F6FCB"
+					type: "checkmark"
+				}
+			]
+			x: 15.0d
+			y: 20.5d
+		}
+		{
+			dependencies: ["1E4CFA4ED7E43E80"]
+			description: ["{gtlcore.quest.gtl.quest.5268cba4ab789bda.description.0000}"]
+			icon: "gtceu:uranium_dust"
+			icon_scale: 2.0d
+			id: "5268CBA4AB789BDA"
+			rewards: [{
+				id: "5989230D2BD649C0"
+				item: "gtceu:platinum_credit"
+				type: "item"
+			}]
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.5268cba4ab789bda.subtitle}"
+			tasks: [
+				{
+					id: "1F2EDCFFB9BEB463"
+					item: "gtceu:uranium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6029B388FB20ECCC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5268cba4ab789bda.title}"
+			x: 7.5d
+			y: 24.5d
+		}
+		{
+			dependencies: ["33D3301F5F0F855A"]
+			icon: "gtceu:uranium_235_dust"
+			icon_scale: 2.0d
+			id: "7405AF5F9FFA0C50"
+			min_required_dependencies: 1
+			rewards: [{
+				id: "2F229EB738C861A1"
+				item: "gtceu:platinum_credit"
+				type: "item"
+			}]
+			shape: "diamond"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7405af5f9ffa0c50.subtitle}"
+			tasks: [
+				{
+					id: "54393C32AFFEA91A"
+					item: "gtceu:uranium_235_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6A5D76721B786FFE"
+					type: "checkmark"
+				}
+			]
+			x: 9.0d
+			y: 23.5d
+		}
+		{
+			dependencies: ["4288A0EFF13D1F93"]
+			icon: "gtceu:depleted_uranium_hexafluoride_bucket"
+			id: "1E4CFA4ED7E43E80"
+			rewards: [{
+				id: "7068EF65018434C2"
+				item: "gtceu:platinum_credit"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "17C26E9FCDE366AD"
+					item: "gtceu:depleted_uranium_hexafluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "23AE542B716017D2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1e4cfa4ed7e43e80.title}"
+			x: 6.0d
+			y: 24.5d
+		}
+		{
+			dependencies: ["4288A0EFF13D1F93"]
+			icon: "gtceu:enriched_uranium_hexafluoride_bucket"
+			id: "33D3301F5F0F855A"
+			rewards: [{
+				id: "55C9D507FB95BA4B"
+				item: "gtceu:platinum_credit"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "79FDFE49860DE4C5"
+					item: "gtceu:enriched_uranium_hexafluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "08176633275113C6"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.33d3301f5f0f855a.title}"
+			x: 7.5d
+			y: 23.5d
+		}
+		{
+			dependencies: ["3526A3770E9CCB1E"]
+			icon: "gtceu:uranium_hexafluoride_bucket"
+			id: "4288A0EFF13D1F93"
+			rewards: [{
+				id: "6F1EE6682BB13572"
+				item: "gtceu:platinum_credit"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "0E17CB781FA05F55"
+					item: "gtceu:uranium_hexafluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "17EE924844ADFC3F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4288a0eff13d1f93.title}"
+			x: 6.0d
+			y: 23.5d
+		}
+		{
+			dependencies: ["23C2F99FC949AF0A"]
+			icon: "gtceu:uraninite_dust"
+			id: "3526A3770E9CCB1E"
+			rewards: [{
+				id: "2170189BB6102EEB"
+				item: "gtceu:platinum_credit"
+				type: "item"
+			}]
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "607557054EA9B26D"
+					item: "gtceu:uraninite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0206D5C502A758E9"
+					type: "checkmark"
+				}
+			]
+			x: 4.5d
+			y: 23.5d
+		}
+		{
+			dependencies: [
+				"7405AF5F9FFA0C50"
+				"035C470213E8B4DB"
+			]
+			icon: "gtceu:fissioned_uranium_235_dust"
+			id: "45A543C859C4C376"
+			tasks: [
+				{
+					id: "207F9613DB0254C8"
+					item: "gtceu:fissioned_uranium_235_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5EF555A6014008BE"
+					type: "checkmark"
+				}
+			]
+			x: 10.5d
+			y: 23.5d
+		}
+		{
+			dependencies: ["45A543C859C4C376"]
+			icon: "gtceu:technetium_dust"
+			icon_scale: 2.0d
+			id: "3F5618A925DFA300"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.3f5618a925dfa300.subtitle}"
+			tasks: [
+				{
+					id: "5F7B3AED2B6CAEC6"
+					item: "gtceu:technetium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2150E77B56F29D6F"
+					type: "checkmark"
+				}
+			]
+			x: 12.0d
+			y: 23.5d
+		}
+		{
+			dependencies: [
+				"2A3874F7C50BAF1A"
+				"365298DB6520227A"
+			]
+			icon: "kubejs:reactor_thorium_simple"
+			id: "7FE75D42E8DDA53D"
+			tasks: [
+				{
+					id: "240191F0E6C9D53E"
+					item: "kubejs:reactor_thorium_simple"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2954FD179E3698F0"
+					type: "checkmark"
+				}
+			]
+			x: 7.5d
+			y: 27.5d
+		}
+		{
+			dependencies: [
+				"5268CBA4AB789BDA"
+				"6B8E242FD397D8B4"
+				"365298DB6520227A"
+			]
+			icon: "kubejs:reactor_mox_simple"
+			id: "7E4BA4C2DA91D286"
+			tasks: [
+				{
+					id: "7358C2F04FE1FB0E"
+					item: "kubejs:reactor_mox_simple"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0C42CD7E2C626EB7"
+					type: "checkmark"
+				}
+			]
+			x: 7.5d
+			y: 25.5d
+		}
+		{
+			dependencies: ["0931ECBAAD9252C7"]
+			icon: "gtceu:thorium_dust"
+			id: "2A3874F7C50BAF1A"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.2a3874f7c50baf1a.subtitle}"
+			tasks: [
+				{
+					id: "5F50B16A87609772"
+					item: "gtceu:thorium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5E0DBEC6A521477A"
+					type: "checkmark"
+				}
+			]
+			x: 4.5d
+			y: 27.5d
+		}
+		{
+			dependencies: ["0931ECBAAD9252C7"]
+			icon: "gtceu:plutonium_dust"
+			id: "6B8E242FD397D8B4"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "2FAE33BFA7591208"
+					item: "gtceu:plutonium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "08C3329FB924B60B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6b8e242fd397d8b4.title}"
+			x: 4.5d
+			y: 25.5d
+		}
+		{
+			dependencies: [
+				"7FE75D42E8DDA53D"
+				"7E4BA4C2DA91D286"
+			]
+			dependency_requirement: "one_completed"
+			icon: "kubejs:nuclear_waste"
+			id: "6D650AE5A76585B3"
+			tasks: [
+				{
+					id: "4EB30593E5D86DB8"
+					item: "kubejs:nuclear_waste"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "08EA70371C095676"
+					type: "checkmark"
+				}
+			]
+			x: 10.5d
+			y: 25.5d
+		}
+		{
+			dependencies: ["6D650AE5A76585B3"]
+			description: ["{gtlcore.quest.gtl.quest.35897d7a428fced0.description.0000}"]
+			icon: "gtceu:protactinium_dust"
+			icon_scale: 2.0d
+			id: "35897D7A428FCED0"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "704C02EA24462B26"
+					item: "gtceu:protactinium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "03A7E9B12814A672"
+					item: "gtceu:tiny_protactinium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3B17C1C3951513EE"
+					type: "checkmark"
+				}
+			]
+			x: 12.0d
+			y: 25.5d
+		}
+		{
+			dependencies: ["6D650AE5A76585B3"]
+			description: ["{gtlcore.quest.gtl.quest.37b172aa6c7dd6bb.description.0000}"]
+			icon: "gtceu:neptunium_dust"
+			icon_scale: 2.0d
+			id: "37B172AA6C7DD6BB"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "7C4FBD756DAE51CC"
+					item: "gtceu:neptunium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "03738B47C1F42507"
+					item: "gtceu:tiny_neptunium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6357F3726E1E7BBE"
+					type: "checkmark"
+				}
+			]
+			x: 12.0d
+			y: 26.5d
+		}
+		{
+			dependencies: ["6D650AE5A76585B3"]
+			description: ["{gtlcore.quest.gtl.quest.7b412e455e2c321b.description.0000}"]
+			hide_dependent_lines: true
+			icon: "gtceu:polonium_dust"
+			icon_scale: 2.0d
+			id: "7B412E455E2C321B"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.7b412e455e2c321b.subtitle}"
+			tasks: [
+				{
+					id: "146DB1101ED83C52"
+					item: "gtceu:polonium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5ACA28B5072596B3"
+					item: "gtceu:tiny_polonium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "10D655A0584F254F"
+					type: "checkmark"
+				}
+			]
+			x: 12.0d
+			y: 24.5d
+		}
+		{
+			dependencies: ["150F3113E9012C2F"]
+			description: [
+				"{gtlcore.quest.gtl.quest.3eac914aa2073b05.description.0000}"
+				""
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"1534BC8521461BC8\"},\"translate\":\"gtlcore.quest.gtl.quest.3eac914aa2073b05.description.0002.text.0000\"}"
+			]
+			icon: "gtceu:indium_dust"
+			icon_scale: 2.0d
+			id: "3EAC914AA2073B05"
+			shape: "diamond"
+			size: 1.0d
+			tasks: [
+				{
+					id: "3EAEF8CE76B2B015"
+					item: "gtceu:indium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4CC3739405753A01"
+					type: "checkmark"
+				}
+			]
+			x: 38.0d
+			y: 13.0d
+		}
+		{
+			icon: "gtceu:indium_concentrate_bucket"
+			id: "150F3113E9012C2F"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.150f3113e9012c2f.subtitle}"
+			tasks: [
+				{
+					id: "1FB16AD12252A875"
+					item: "gtceu:purified_sphalerite_ore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "53830C9C023DCB84"
+					item: "gtceu:purified_galena_ore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "297406E29DD94621"
+					item: "gtceu:indium_concentrate_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "26FD390785A98943"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.150f3113e9012c2f.title}"
+			x: 36.5d
+			y: 13.0d
+		}
+		{
+			dependencies: [
+				"71C977A601F879AE"
+				"317B25B778FAF317"
+				"0611E972C84FDC4B"
+			]
+			dependency_requirement: "one_completed"
+			hide_dependency_lines: true
+			icon: "gtceu:rare_earth_dust"
+			id: "6B71EE1A869ABCD5"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "3473829E14B4727F"
+					item: "gtceu:rare_earth_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5EF5A518CE86D869"
+					type: "checkmark"
+				}
+			]
+			x: 20.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["7979C5ACF9A0C8D2"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			id: "37C5E7628A4B826C"
+			tasks: [{
+				id: "0416DFD37DE6C2A4"
+				title: "{gtlcore.quest.gtl.task.0416dfd37de6c2a4.title}"
+				type: "checkmark"
+			}]
+			x: 3.0d
+			y: 23.5d
+		}
+		{
+			dependencies: ["6B71EE1A869ABCD5"]
+			icon: "gtceu:rare_earth_hydroxides_bucket"
+			id: "4CF6C5A8940B4DDF"
+			tasks: [
+				{
+					id: "4262044D90BED20E"
+					item: "gtceu:rare_earth_hydroxides_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "256C185B6CD754B0"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4cf6c5a8940b4ddf.title}"
+			x: 21.5d
+			y: 13.0d
+		}
+		{
+			dependencies: ["4CF6C5A8940B4DDF"]
+			description: ["{\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"605B973142727552\"},\"translate\":\"gtlcore.quest.gtl.quest.5465659ad5eee7e3.description.0000.text.0000\"}"]
+			icon: "gtceu:rare_earth_chlorides_bucket"
+			id: "5465659AD5EEE7E3"
+			tasks: [
+				{
+					id: "657D69E5C9CC9BDA"
+					item: "gtceu:rare_earth_chlorides_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5D3BA4D718607B19"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5465659ad5eee7e3.title}"
+			x: 23.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["5465659AD5EEE7E3"]
+			icon: "gtceu:hv_item_magnet"
+			id: "0E6B85A8E9CE4CA6"
+			tasks: [
+				{
+					id: "340AC08B99F9BDDB"
+					item: "gtceu:hv_item_magnet"
+					type: "item"
+				}
+				{
+					id: "7DBD78FAB3C68D38"
+					item: "gtceu:la_nd_oxides_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "333B62B74C4F2172"
+					item: "gtceu:sm_gd_oxides_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0977A10E394BC3C2"
+					item: "gtceu:tb_ho_oxides_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "06CFBF6FE1CBFEA7"
+					item: "gtceu:er_lu_oxides_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0e6b85a8e9ce4ca6.title}"
+			x: 24.5d
+			y: 13.0d
+		}
+		{
+			dependencies: ["0E6B85A8E9CE4CA6"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4a86402c581abb27.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4a86402c581abb27.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4a86402c581abb27.description.0004}"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:samarium_oxide_dust"
+			id: "4A86402C581ABB27"
+			rewards: [
+				{
+					id: "28E00E48C28D13B7"
+					item: "gtceu:neodymium_dust"
+					type: "item"
+				}
+				{
+					id: "24AED00C5972FD9A"
+					item: "gtceu:lanthanum_dust"
+					type: "item"
+				}
+				{
+					id: "08F21B044C7D5614"
+					item: "gtceu:cerium_dust"
+					type: "item"
+				}
+				{
+					id: "67E6F50AE54107B5"
+					item: "gtceu:praseodymium_dust"
+					type: "item"
+				}
+				{
+					id: "7F1CCCB8640F756E"
+					item: "gtceu:holmium_dust"
+					type: "item"
+				}
+				{
+					id: "3520F12E8CF806A4"
+					item: "gtceu:dysprosium_dust"
+					type: "item"
+				}
+				{
+					id: "34D33EB1B76FEF28"
+					item: "gtceu:terbium_dust"
+					type: "item"
+				}
+				{
+					id: "793295C15BEDEB39"
+					item: "gtceu:gadolinium_dust"
+					type: "item"
+				}
+				{
+					id: "7EAA694FCE281A6D"
+					item: "gtceu:europium_dust"
+					type: "item"
+				}
+				{
+					id: "5C4165F0277F5D3E"
+					item: "gtceu:samarium_dust"
+					type: "item"
+				}
+				{
+					id: "492EE23F11D50819"
+					item: "gtceu:ytterbium_dust"
+					type: "item"
+				}
+				{
+					id: "4F2FEBE6C3C3FF60"
+					item: "gtceu:lutetium_dust"
+					type: "item"
+				}
+				{
+					id: "5A85EDD56EC8522B"
+					item: "gtceu:erbium_dust"
+					type: "item"
+				}
+				{
+					id: "6420DED18A02196F"
+					item: "gtceu:scandium_dust"
+					type: "item"
+				}
+				{
+					id: "74E10E525C45B310"
+					item: "gtceu:yttrium_dust"
+					type: "item"
+				}
+				{
+					id: "471EECEBA0B94194"
+					item: "gtceu:thulium_dust"
+					type: "item"
+				}
+			]
+			subtitle: "{gtlcore.quest.gtl.quest.4a86402c581abb27.subtitle}"
+			tasks: [{
+				id: "77BE8A33D3451252"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4a86402c581abb27.title}"
+			x: 26.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["5465659AD5EEE7E3"]
+			icon: "gtceu:rare_earth_oxide_dust"
+			id: "275854E3F1E59652"
+			tasks: [
+				{
+					id: "21C9B648FF9B1B17"
+					item: "gtceu:rare_earth_oxide_dust"
+					type: "item"
+				}
+				{
+					id: "4AA34A4878FC6CB1"
+					type: "checkmark"
+				}
+			]
+			x: 23.0d
+			y: 14.0d
+		}
+		{
+			dependencies: [
+				"275854E3F1E59652"
+				"4059A907154E2865"
+			]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"670D8EB2CE915FD5\"},\"translate\":\"gtlcore.quest.gtl.quest.7570243ede6f35b1.description.0000.text.0000\"}"]
+			icon: "gtceu:rare_earth_metal_dust"
+			id: "7570243EDE6F35B1"
+			subtitle: "{gtlcore.quest.gtl.quest.7570243ede6f35b1.subtitle}"
+			tasks: [
+				{
+					id: "6BCA75161304244F"
+					item: "gtceu:rare_earth_metal_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "575F505094AD76DE"
+					type: "checkmark"
+				}
+			]
+			x: 23.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["7570243EDE6F35B1"]
+			dependency_requirement: "one_completed"
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"72DFAC3212692136\"},\"translate\":\"gtlcore.quest.gtl.quest.5e03d3f795bd0f55.description.0000.text.0000\"}"]
+			icon: "gtceu:promethium_dust"
+			id: "5E03D3F795BD0F55"
+			min_required_dependencies: 1
+			subtitle: "{gtlcore.quest.gtl.quest.5e03d3f795bd0f55.subtitle}"
+			tasks: [
+				{
+					id: "5107DC687C7A012F"
+					item: "gtceu:promethium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "06C699FDC3C7900F"
+					type: "checkmark"
+				}
+			]
+			x: 24.5d
+			y: 15.0d
+		}
+		{
+			dependencies: [
+				"7979C5ACF9A0C8D2"
+				"29D4D49428BF7FF4"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1223d839c224777b.description.0000}"]
+			hide_dependent_lines: true
+			id: "1223D839C224777B"
+			subtitle: "{gtlcore.quest.gtl.quest.1223d839c224777b.subtitle}"
+			tasks: [{
+				id: "00F08CD4279B1525"
+				title: "{gtlcore.quest.gtl.task.00f08cd4279b1525.title}"
+				type: "checkmark"
+			}]
+			x: 18.5d
+			y: 2.0d
+		}
+		{
+			dependencies: ["01A1A06A3963D3BE"]
+			id: "46031C6722259C54"
+			subtitle: "{gtlcore.quest.gtl.quest.46031c6722259c54.subtitle}"
+			tasks: [{
+				id: "2EBFC43E7D201657"
+				title: "{gtlcore.quest.gtl.task.2ebfc43e7d201657.title}"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.46031c6722259c54.title}"
+			x: 13.0d
+			y: 17.0d
+		}
+		{
+			dependencies: ["36E8964CD1BE7569"]
+			icon: "gtceu:indium_phosphide_dust"
+			icon_scale: 2.0d
+			id: "1534BC8521461BC8"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.1534bc8521461bc8.subtitle}"
+			tasks: [
+				{
+					id: "7FEE777235FA0998"
+					item: "gtceu:indium_phosphide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1967013B4AF917A7"
+					type: "checkmark"
+				}
+			]
+			x: 24.5d
+			y: 24.0d
+		}
+		{
+			icon: "gtceu:samarium_refined_powder_dust"
+			id: "2ED005FB3DC2EAB2"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.2ed005fb3dc2eab2.subtitle}"
+			tasks: [
+				{
+					id: "772489A2AC0DA9B6"
+					item: "gtceu:samarium_refined_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "37D4D3D196F6FCA8"
+					type: "checkmark"
+				}
+			]
+			x: 28.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["00AA7D62FCE4B40E"]
+			description: ["{gtlcore.quest.gtl.quest.71c977a601f879ae.description.0000}"]
+			icon: "gtceu:monazite_dust"
+			id: "71C977A601F879AE"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.71c977a601f879ae.subtitle}"
+			tasks: [
+				{
+					id: "222E9D1D4F6F71F9"
+					item: "gtceu:monazite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "162AA8C5FDDD7351"
+					item: "gtceu:small_rare_earth_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41F71C144B25513E"
+					type: "checkmark"
+				}
+			]
+			x: 20.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["00AA7D62FCE4B40E"]
+			icon: "gtceu:bastnasite_dust"
+			id: "4F220FB82AB77225"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "4DECA124A915D0BB"
+					item: "gtceu:bastnasite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "01E96983F93B23E9"
+					type: "checkmark"
+				}
+			]
+			x: 20.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"71C977A601F879AE"
+				"3DE17F205E0FFCD2"
+			]
+			icon: "gtceu:monazite_rare_earth_turbid_liquid_bucket"
+			id: "218DF03160595A6F"
+			subtitle: "{gtlcore.quest.gtl.quest.218df03160595a6f.subtitle}"
+			tasks: [
+				{
+					id: "0F421B066A2BAB87"
+					item: "gtceu:monazite_rare_earth_turbid_liquid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7ACC73B045C74342"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.218df03160595a6f.title}"
+			x: 21.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["218DF03160595A6F"]
+			icon: "gtceu:diluted_monazite_slurry_bucket"
+			id: "75FF3EA9CF248DA8"
+			tasks: [
+				{
+					id: "7ED2800CC9158C1F"
+					item: "gtceu:diluted_monazite_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6E3C863C52B0DE71"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.75ff3ea9cf248da8.title}"
+			x: 22.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["75FF3EA9CF248DA8"]
+			icon: "gtceu:monazite_sulfate_powder_dust"
+			id: "66B8CE1489E1332F"
+			tasks: [
+				{
+					id: "7E2DF45BB8C17B58"
+					item: "gtceu:monazite_sulfate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "16EC63D12A2944CA"
+					type: "checkmark"
+				}
+			]
+			x: 23.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["66B8CE1489E1332F"]
+			icon: "gtceu:diluted_monazite_sulfate_solution_bucket"
+			id: "14C20FE222033E2D"
+			tasks: [
+				{
+					id: "298A5AF83393CC7D"
+					item: "gtceu:diluted_monazite_sulfate_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "080C18A6390A1AB1"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.14c20fe222033e2d.title}"
+			x: 24.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"14C20FE222033E2D"
+				"1CC46F9D14AB0C07"
+			]
+			icon: "gtceu:acidic_monazite_powder_dust"
+			id: "37462EF914F322CF"
+			tasks: [
+				{
+					id: "3D1A9EDBB45CD63F"
+					item: "gtceu:acidic_monazite_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4CA9197270CE2F62"
+					type: "checkmark"
+				}
+			]
+			x: 25.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["37462EF914F322CF"]
+			icon: "gtceu:monazite_rare_earth_filter_residue_powder_dust"
+			id: "7878B1E4C001D370"
+			tasks: [
+				{
+					id: "40EE87EBB6363330"
+					item: "gtceu:monazite_rare_earth_filter_residue_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "68EF9ABFAFC2869D"
+					type: "checkmark"
+				}
+			]
+			x: 26.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["37462EF914F322CF"]
+			icon: "gtceu:thorium_phosphate_filter_cake_powder_dust"
+			id: "6C248CBD3C3C6A60"
+			tasks: [
+				{
+					id: "697550F50386D7C1"
+					item: "gtceu:thorium_phosphate_filter_cake_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6FADD3406F6C155E"
+					type: "checkmark"
+				}
+			]
+			x: 26.0d
+			y: 5.0d
+		}
+		{
+			can_repeat: false
+			dependencies: ["6C248CBD3C3C6A60"]
+			description: ["{gtlcore.quest.gtl.quest.7aca4ed39a1119fd.description.0000}"]
+			icon: "gtceu:thorium_phosphate_refined_powder_dust"
+			id: "7ACA4ED39A1119FD"
+			subtitle: "{gtlcore.quest.gtl.quest.7aca4ed39a1119fd.subtitle}"
+			tasks: [
+				{
+					id: "14AB746C12D36A98"
+					item: "gtceu:thorium_phosphate_refined_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "215A8E0CFF4DF515"
+					type: "checkmark"
+				}
+			]
+			x: 27.0d
+			y: 5.0d
+		}
+		{
+			dependencies: [
+				"7878B1E4C001D370"
+				"1CC46F9D14AB0C07"
+			]
+			icon: "gtceu:neutralized_monazite_rare_earth_filter_residue_powder_dust"
+			id: "598FA5C3B7B70FB4"
+			tasks: [
+				{
+					id: "6F176CE4046A2249"
+					item: "gtceu:neutralized_monazite_rare_earth_filter_residue_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "064726FB6E562054"
+					type: "checkmark"
+				}
+			]
+			x: 27.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["598FA5C3B7B70FB4"]
+			icon: "gtceu:uranium_filter_residue_powder_dust"
+			id: "464EEB44F0B7A22D"
+			tasks: [
+				{
+					id: "0D9EC9BD144C22AA"
+					item: "gtceu:uranium_filter_residue_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "59C7CCC95D563A5C"
+					type: "checkmark"
+				}
+			]
+			x: 28.0d
+			y: 3.0d
+		}
+		{
+			dependencies: [
+				"464EEB44F0B7A22D"
+				"3826D52A9D851E44"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:neutralized_uranium_filter_residue_powder_dust"
+			id: "05496BBB8ABFAA30"
+			subtitle: "{gtlcore.quest.gtl.quest.05496bbb8abfaa30.subtitle}"
+			tasks: [
+				{
+					id: "41D403E0EC536840"
+					item: "gtceu:neutralized_uranium_filter_residue_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0C3E568F62546CAE"
+					type: "checkmark"
+				}
+			]
+			x: 29.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["598FA5C3B7B70FB4"]
+			icon: "gtceu:concentrated_monazite_rare_earth_hydroxide_powder_dust"
+			id: "3703CE6AC3C7DF99"
+			tasks: [
+				{
+					id: "37A3C5D8E8F8DB4C"
+					item: "gtceu:concentrated_monazite_rare_earth_hydroxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "33A939679D60B5B7"
+					type: "checkmark"
+				}
+			]
+			x: 28.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["3703CE6AC3C7DF99"]
+			icon: "gtceu:dried_concentrated_nitric_monazite_rare_earth_powder_dust"
+			id: "526199E216862B1C"
+			tasks: [
+				{
+					id: "5744C847D00C7E74"
+					item: "gtceu:dried_concentrated_nitric_monazite_rare_earth_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5DB046D0FA485EC7"
+					type: "checkmark"
+				}
+			]
+			x: 29.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"526199E216862B1C"
+				"3DE17F205E0FFCD2"
+			]
+			icon: "gtceu:concentrated_nitride_monazite_rare_earth_solution_bucket"
+			id: "455D715BC4934CBB"
+			tasks: [
+				{
+					id: "110CF37F6A5756FA"
+					item: "gtceu:concentrated_nitride_monazite_rare_earth_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0B01762ADF236DBE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.455d715bc4934cbb.title}"
+			x: 30.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"455D715BC4934CBB"
+				"2FD681A788D189E9"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:nitric_leachate_from_monazite_bucket"
+			id: "08BE4F17331AA62A"
+			min_required_dependencies: 1
+			tasks: [
+				{
+					id: "2F8EEE85FAF3939E"
+					item: "gtceu:nitric_leachate_from_monazite_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4420784DAE0CE0E7"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.08be4f17331aa62a.title}"
+			x: 31.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["4F220FB82AB77225"]
+			icon: "gtceu:cerium_rich_mixture_powder_dust"
+			id: "2FD681A788D189E9"
+			tasks: [
+				{
+					id: "680F16E7BA80DB34"
+					item: "gtceu:cerium_rich_mixture_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41574AF3B0A58F74"
+					type: "checkmark"
+				}
+			]
+			x: 24.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["2FD681A788D189E9"]
+			icon: "gtceu:cerium_chloride_powder_dust"
+			id: "00F19A725DCE5F96"
+			subtitle: "{gtlcore.quest.gtl.quest.00f19a725dce5f96.subtitle}"
+			tasks: [
+				{
+					id: "1E25AAE13565A29B"
+					item: "gtceu:cerium_chloride_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "53928634BB241F30"
+					type: "checkmark"
+				}
+			]
+			x: 25.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["2FD681A788D189E9"]
+			hide_dependent_lines: true
+			icon: "gtceu:concentrated_cerium_chloride_solution_bucket"
+			id: "5858E81A332CE35E"
+			tasks: [
+				{
+					id: "0D9E357440B3C1CD"
+					item: "gtceu:concentrated_cerium_chloride_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "02D989FE3616CF64"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5858e81a332ce35e.title}"
+			x: 25.0d
+			y: 9.0d
+		}
+		{
+			dependencies: ["08BE4F17331AA62A"]
+			icon: "gtceu:concentrated_nitric_leachate_from_monazite_bucket"
+			id: "2276C8A9F2CDA798"
+			tasks: [
+				{
+					id: "0D18CD0F6F3823A4"
+					item: "gtceu:concentrated_nitric_leachate_from_monazite_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6FB874978A9BE972"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2276c8a9f2cda798.title}"
+			x: 32.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["2276C8A9F2CDA798"]
+			icon: "gtceu:cooling_concentrated_nitric_monazite_rare_earth_powder_dust"
+			id: "2B503CB642C4D94D"
+			tasks: [
+				{
+					id: "23F2F9078FBA1300"
+					item: "gtceu:cooling_concentrated_nitric_monazite_rare_earth_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "35AB99786189D7B3"
+					type: "checkmark"
+				}
+			]
+			x: 33.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["2B503CB642C4D94D"]
+			icon: "gtceu:monazite_rare_earth_precipitate_powder_dust"
+			id: "01967C002078825B"
+			tasks: [
+				{
+					id: "66D8521D51011A11"
+					item: "gtceu:monazite_rare_earth_precipitate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2083A935E42EDE78"
+					type: "checkmark"
+				}
+			]
+			x: 34.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["2B503CB642C4D94D"]
+			icon: "gtceu:europium_oxide_dust"
+			id: "5D62F873D2AE9ABA"
+			tasks: [
+				{
+					id: "63F8FFCCA0F0593C"
+					item: "gtceu:europium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0BCEE8E57B76B296"
+					type: "checkmark"
+				}
+			]
+			x: 34.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["01967C002078825B"]
+			icon: "gtceu:heterogeneous_halide_monazite_rare_earth_mixture_powder_dust"
+			id: "487650F662F3A466"
+			tasks: [
+				{
+					id: "5A24F52AD2199F86"
+					item: "gtceu:heterogeneous_halide_monazite_rare_earth_mixture_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "412B613B4EEE8423"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"487650F662F3A466"
+				"2ED005FB3DC2EAB2"
+				"22AEE3F4F698D455"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:saturated_monazite_rare_earth_powder_dust"
+			id: "317B25B778FAF317"
+			min_required_dependencies: 2
+			subtitle: "{gtlcore.quest.gtl.quest.317b25b778faf317.subtitle}"
+			tasks: [
+				{
+					id: "38FE2CDD66FB661A"
+					item: "gtceu:saturated_monazite_rare_earth_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "731FF8EDDF76D9DD"
+					type: "checkmark"
+				}
+			]
+			x: 36.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"317B25B778FAF317"
+				"40DFCE8427D1A982"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:samarium_precipitate_powder_dust"
+			id: "3D0269117FB85C9E"
+			min_required_dependencies: 1
+			tasks: [
+				{
+					id: "105551C54061540F"
+					item: "gtceu:samarium_precipitate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "12F0BDED481E5008"
+					type: "checkmark"
+				}
+			]
+			x: 37.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"3D0269117FB85C9E"
+				"528C6451188B2D1B"
+				"48B894E2E4986481"
+				"701925BC9731EC86"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:samarium_dust"
+			icon_scale: 2.0d
+			id: "2EB12E9509B5DEC0"
+			shape: "diamond"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.2eb12e9509b5dec0.subtitle}"
+			tasks: [
+				{
+					id: "5DB0FAB49EE7B7BE"
+					item: "gtceu:samarium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4220021F47C8E389"
+					type: "checkmark"
+				}
+			]
+			x: 38.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"3D0269117FB85C9E"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:gadolinium_dust"
+			icon_scale: 2.0d
+			id: "5C1DD02C486DE5B8"
+			shape: "diamond"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5c1dd02c486de5b8.subtitle}"
+			tasks: [
+				{
+					id: "712A70214E470FB6"
+					item: "gtceu:gadolinium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "444D26CEF545FD7C"
+					type: "checkmark"
+				}
+			]
+			x: 37.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["2ED005FB3DC2EAB2"]
+			hide_dependent_lines: true
+			icon: "gtceu:samarium_chloride_concentrate_solution_bucket"
+			id: "69C8B1423C6D98F8"
+			tasks: [
+				{
+					id: "7ED1A0AF5EDC3F7C"
+					item: "gtceu:samarium_chloride_concentrate_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6B20DEBCF827F949"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.69c8b1423c6d98f8.title}"
+			x: 29.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["2ED005FB3DC2EAB2"]
+			icon: "gtceu:samarium_rrare_eearth_turbid_liquid_bucket"
+			id: "2BB0DDC08A816CD8"
+			tasks: [
+				{
+					id: "1D1B60CEEBBB28DB"
+					item: "gtceu:samarium_rrare_eearth_turbid_liquid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2BB000FB714FF2B6"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2bb0ddc08a816cd8.title}"
+			x: 29.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["2BB0DDC08A816CD8"]
+			hide_dependency_lines: false
+			hide_dependent_lines: true
+			icon: "gtceu:cerium_oxide_dust"
+			id: "35EDC45B7E060C4E"
+			tasks: [
+				{
+					id: "3ACC5D5801926E30"
+					item: "gtceu:cerium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4F822CCAAD0ACDB2"
+					type: "checkmark"
+				}
+			]
+			x: 30.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["2BB0DDC08A816CD8"]
+			icon: "gtceu:samarium_rare_earth_slurry_bucket"
+			id: "1F4B0A4BF43EAC50"
+			tasks: [
+				{
+					id: "2B487C61AD90B3C6"
+					item: "gtceu:samarium_rare_earth_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "794BD045CA10EDEE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1f4b0a4bf43eac50.title}"
+			x: 30.0d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"1F4B0A4BF43EAC50"
+				"15A2F5EFFBB91EDA"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:neodymium_rare_earth_concentrate_powder_dust"
+			id: "6C8E955523139E76"
+			min_required_dependencies: 1
+			tasks: [
+				{
+					id: "6A693868F1DC57E4"
+					item: "gtceu:neodymium_rare_earth_concentrate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3FB6B1C2D898EA30"
+					type: "checkmark"
+				}
+			]
+			x: 31.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["1F4B0A4BF43EAC50"]
+			icon: "gtceu:samarium_rare_earth_diluted_solution_bucket"
+			id: "14E622727B18979E"
+			tasks: [
+				{
+					id: "7E584318A2F8777D"
+					item: "gtceu:samarium_rare_earth_diluted_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6908B0C9DA3E94FD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.14e622727b18979e.title}"
+			x: 31.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["6C8E955523139E76"]
+			hide_dependent_lines: true
+			icon: "gtceu:lanthanum_chloride_dust"
+			id: "07A82335BAF78EFE"
+			tasks: [
+				{
+					id: "199A7BA3B548468A"
+					item: "gtceu:lanthanum_chloride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0A39AFC5975B9563"
+					type: "checkmark"
+				}
+			]
+			x: 31.0d
+			y: 9.0d
+		}
+		{
+			dependencies: ["6C8E955523139E76"]
+			icon: "gtceu:neodymium_oxide_dust"
+			id: "5C29D6DC794FDEC6"
+			tasks: [
+				{
+					id: "1C44E4EB6039E6B8"
+					item: "gtceu:neodymium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "33D4352323FB1722"
+					type: "checkmark"
+				}
+			]
+			x: 32.0d
+			y: 9.0d
+		}
+		{
+			dependencies: [
+				"14E622727B18979E"
+				"4AE8888208F4FDE9"
+			]
+			icon: "gtceu:samarium_oxalate_with_impurities_dust"
+			id: "5FD14B43657801F6"
+			tasks: [
+				{
+					id: "234534E21CC32C01"
+					item: "gtceu:samarium_oxalate_with_impurities_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6BE6243B101BE517"
+					type: "checkmark"
+				}
+			]
+			x: 32.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["14E622727B18979E"]
+			hide_dependent_lines: true
+			icon: "gtceu:phosphorus_free_samarium_concentrate_powder_dust"
+			id: "528C6451188B2D1B"
+			tasks: [
+				{
+					id: "64D3FF643A5C7C3E"
+					item: "gtceu:phosphorus_free_samarium_concentrate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3C9C0AB03EBD5F00"
+					type: "checkmark"
+				}
+			]
+			x: 32.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["5FD14B43657801F6"]
+			icon: "gtceu:samarium_chloride_with_impurities_dust"
+			id: "02ACE93CA2E66099"
+			tasks: [
+				{
+					id: "6C8CE262AC2ACC6D"
+					item: "gtceu:samarium_chloride_with_impurities_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0F406E60086DF0E0"
+					type: "checkmark"
+				}
+			]
+			x: 33.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["02ACE93CA2E66099"]
+			icon: "gtceu:samarium_chloride_sodium_chloride_mixture_powder_dust"
+			id: "48B894E2E4986481"
+			tasks: [
+				{
+					id: "0277A697850CBD5C"
+					item: "gtceu:samarium_chloride_sodium_chloride_mixture_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2AAD567A031714D4"
+					type: "checkmark"
+				}
+			]
+			x: 34.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["02ACE93CA2E66099"]
+			icon: "gtceu:samarium_chloride_with_impurities_bucket"
+			id: "00E4396DF297B6A3"
+			tasks: [
+				{
+					id: "4409F268FD4F0377"
+					item: "gtceu:samarium_chloride_with_impurities_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "433D8FE56B10B1FE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.00e4396df297b6a3.title}"
+			x: 34.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["00E4396DF297B6A3"]
+			icon: "gtceu:samarium_bucket"
+			id: "701925BC9731EC86"
+			tasks: [
+				{
+					id: "6628D8E9577FF127"
+					item: "gtceu:samarium_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1A564F2E042E08F3"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.701925bc9731ec86.title}"
+			x: 35.0d
+			y: 7.0d
+		}
+		{
+			dependencies: ["00E4396DF297B6A3"]
+			icon: "gtceu:lanthanum_chloride_with_impurities_dust"
+			id: "14986844B71C83AC"
+			subtitle: "{gtlcore.quest.gtl.quest.14986844b71c83ac.subtitle}"
+			tasks: [
+				{
+					id: "15463A7478CDAE4E"
+					item: "gtceu:lanthanum_chloride_with_impurities_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3886AF6A8FF64CE8"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["14986844B71C83AC"]
+			icon: "gtceu:lanthanum_chloride_dust"
+			id: "26597A2ED848C9A1"
+			tasks: [
+				{
+					id: "163FBC3441E38630"
+					item: "gtceu:lanthanum_chloride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "24AEC1624406AC8D"
+					type: "checkmark"
+				}
+			]
+			x: 36.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"4F220FB82AB77225"
+				"3DE17F205E0FFCD2"
+			]
+			icon: "gtceu:fluoro_carbon_lanthanide_cerium_solution_bucket"
+			id: "355FF18BC5AECBBF"
+			tasks: [
+				{
+					id: "330880F4CCC4AB59"
+					item: "gtceu:fluoro_carbon_lanthanide_cerium_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0F81156A8AEEE2E0"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.355ff18bc5aecbbf.title}"
+			x: 21.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["355FF18BC5AECBBF"]
+			icon: "gtceu:steam_cracked_fluoro_carbon_lanthanide_slurry_bucket"
+			id: "3967DE6E4384B756"
+			tasks: [
+				{
+					id: "4D4D368BC1287F2E"
+					item: "gtceu:steam_cracked_fluoro_carbon_lanthanide_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1CB643D1712DC504"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3967de6e4384b756.title}"
+			x: 22.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"3967DE6E4384B756"
+				"3DE17F205E0FFCD2"
+			]
+			icon: "gtceu:modulated_fluoro_carbon_lanthanide_slurry_bucket"
+			id: "7FD4EA18599A4C80"
+			tasks: [
+				{
+					id: "36C40CE93CCD8983"
+					item: "gtceu:modulated_fluoro_carbon_lanthanide_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "17078EBCC1ECAF6F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7fd4ea18599a4c80.title}"
+			x: 23.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["7FD4EA18599A4C80"]
+			icon: "gtceu:diluted_fluoro_carbon_lanthanide_slurry_bucket"
+			id: "68012C0C6C072430"
+			tasks: [
+				{
+					id: "269E11D2DA3B35B1"
+					item: "gtceu:diluted_fluoro_carbon_lanthanide_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "103D5B3CFC923DED"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.68012c0c6c072430.title}"
+			x: 24.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["68012C0C6C072430"]
+			icon: "gtceu:filtered_fluoro_carbon_lanthanide_slurry_bucket"
+			id: "16F2DAB7D5DDCF72"
+			tasks: [
+				{
+					id: "4D398A9988E9F4B6"
+					item: "gtceu:filtered_fluoro_carbon_lanthanide_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0B69F40B8B746EAA"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.16f2dab7d5ddcf72.title}"
+			x: 25.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["16F2DAB7D5DDCF72"]
+			icon: "gtceu:fluoro_carbon_lanthanide_cerium_oxide_powder_dust"
+			id: "3678A2BA0642E20A"
+			tasks: [
+				{
+					id: "732A4EC295FE4F92"
+					item: "gtceu:fluoro_carbon_lanthanide_cerium_oxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "51AA60E8AF84C683"
+					type: "checkmark"
+				}
+			]
+			x: 26.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"3678A2BA0642E20A"
+				"115A8F4A3FF514D8"
+			]
+			icon: "gtceu:acid_leached_fluoro_carbon_lanthanide_cerium_oxide_powder_dust"
+			id: "5E6604859810EBE0"
+			tasks: [
+				{
+					id: "40128233980FC2A4"
+					item: "gtceu:acid_leached_fluoro_carbon_lanthanide_cerium_oxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "359D27DF1DCD2F68"
+					type: "checkmark"
+				}
+			]
+			x: 27.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["5E6604859810EBE0"]
+			icon: "gtceu:calcined_rare_earth_oxide_powder_dust"
+			id: "5DB26712A2A0CE8E"
+			tasks: [
+				{
+					id: "15943A0D57DAB54B"
+					item: "gtceu:calcined_rare_earth_oxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "11BE380A81D11AC1"
+					type: "checkmark"
+				}
+			]
+			x: 28.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["5DB26712A2A0CE8E"]
+			icon: "gtceu:wet_rare_earth_oxide_powder_dust"
+			id: "6D9E44E04D29DA0A"
+			tasks: [
+				{
+					id: "3FECA95E2747B87A"
+					item: "gtceu:wet_rare_earth_oxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5D9B4207DCFA1BB8"
+					type: "checkmark"
+				}
+			]
+			x: 29.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["6D9E44E04D29DA0A"]
+			icon: "gtceu:cerium_oxide_rare_earth_oxide_powder_dust"
+			id: "57DEA0CDF85D69B1"
+			tasks: [
+				{
+					id: "09EED457353D3C7A"
+					item: "gtceu:cerium_oxide_rare_earth_oxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "18F29AEFA8115577"
+					type: "checkmark"
+				}
+			]
+			x: 30.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"57DEA0CDF85D69B1"
+				"0BCC84DA8DE39FC9"
+				"08BE4F17331AA62A"
+			]
+			dependency_requirement: "one_completed"
+			hide_dependency_lines: true
+			icon: "gtceu:cerium_oxide_dust"
+			id: "27DB26148D72E259"
+			tasks: [
+				{
+					id: "1227D3C574B78FFA"
+					item: "gtceu:cerium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3B34CF7D2F17B095"
+					type: "checkmark"
+				}
+			]
+			x: 27.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["57DEA0CDF85D69B1"]
+			icon: "gtceu:fluoro_carbon_lanthanide_cerium_rare_earth_oxide_powder_dust"
+			id: "08E7A6B4ED806D15"
+			tasks: [
+				{
+					id: "5A37001B084A6A2C"
+					item: "gtceu:fluoro_carbon_lanthanide_cerium_rare_earth_oxide_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "501E4C5E98469761"
+					type: "checkmark"
+				}
+			]
+			x: 31.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"08E7A6B4ED806D15"
+				"3DE17F205E0FFCD2"
+			]
+			icon: "gtceu:nitrided_fluoro_carbon_lanthanide_cerium_rare_earth_oxide_solution_bucket"
+			id: "53C9C8F22787FFA2"
+			tasks: [
+				{
+					id: "3318598C4DFF9046"
+					item: "gtceu:nitrided_fluoro_carbon_lanthanide_cerium_rare_earth_oxide_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "273B73BCCB2CBDC4"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.53c9c8f22787ffa2.title}"
+			x: 32.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"53C9C8F22787FFA2"
+				"22AEE3F4F698D455"
+			]
+			icon: "gtceu:fluoro_carbon_lanthanide_cerium_rare_earth_suspension_bucket"
+			id: "15A2F5EFFBB91EDA"
+			subtitle: "{gtlcore.quest.gtl.quest.15a2f5effbb91eda.subtitle}"
+			tasks: [
+				{
+					id: "7A625C923290EEA2"
+					item: "gtceu:fluoro_carbon_lanthanide_cerium_rare_earth_suspension_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "671C08642D6ABBF1"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.15a2f5effbb91eda.title}"
+			x: 33.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["15A2F5EFFBB91EDA"]
+			icon: "gtceu:samarium_rare_earth_concentrate_powder_dust"
+			id: "0611E972C84FDC4B"
+			subtitle: "{gtlcore.quest.gtl.quest.0611e972c84fdc4b.subtitle}"
+			tasks: [
+				{
+					id: "09012F5B518D32A5"
+					item: "gtceu:samarium_rare_earth_concentrate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "455E188F276C5AA2"
+					type: "checkmark"
+				}
+			]
+			x: 34.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"0611E972C84FDC4B"
+				"3826D52A9D851E44"
+			]
+			icon: "gtceu:fluorinated_samarium_concentrate_powder_dust"
+			id: "28A615DDEAC65561"
+			tasks: [
+				{
+					id: "55592E20FC82BCE0"
+					item: "gtceu:fluorinated_samarium_concentrate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "40166821A8347668"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"28A615DDEAC65561"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:holmium_dust"
+			icon_scale: 2.0d
+			id: "32B28C8978A03681"
+			min_required_dependencies: 1
+			shape: "diamond"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.32b28c8978a03681.subtitle}"
+			tasks: [
+				{
+					id: "26E350E1FF39814B"
+					item: "gtceu:holmium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4DF580730B5DD87C"
+					type: "checkmark"
+				}
+			]
+			x: 36.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["28A615DDEAC65561"]
+			icon: "gtceu:samarium_terbium_mixture_powder_dust"
+			id: "0B6DC857BE87B7FC"
+			tasks: [
+				{
+					id: "58BB2CF970AF4D32"
+					item: "gtceu:samarium_terbium_mixture_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2CAB9854F58BB58A"
+					type: "checkmark"
+				}
+			]
+			x: 36.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"0B6DC857BE87B7FC"
+				"1DBD35BB3019EC43"
+			]
+			icon: "gtceu:nitrided_samarium_terbium_mixture_powder_dust"
+			id: "40DFCE8427D1A982"
+			tasks: [
+				{
+					id: "1AD9B382DE7FC545"
+					item: "gtceu:nitrided_samarium_terbium_mixture_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "18A3D3FE3C0C1D55"
+					type: "checkmark"
+				}
+			]
+			x: 37.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["40DFCE8427D1A982"]
+			icon: "gtceu:terbium_nitrate_powder_dust"
+			id: "1874E85F7D8DBF28"
+			tasks: [
+				{
+					id: "5010A886A71C83CB"
+					item: "gtceu:terbium_nitrate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41E2C73FD3AAAC59"
+					type: "checkmark"
+				}
+			]
+			x: 38.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"00F19A725DCE5F96"
+				"4AE8888208F4FDE9"
+			]
+			icon: "gtceu:cerium_oxalate_powder_dust"
+			id: "0BCC84DA8DE39FC9"
+			shape: "circle"
+			tasks: [
+				{
+					id: "1ADC076FBB11A49A"
+					item: "gtceu:cerium_oxalate_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7E8501C0AABBD89F"
+					type: "checkmark"
+				}
+			]
+			x: 26.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"69C8B1423C6D98F8"
+				"5858E81A332CE35E"
+				"4059A907154E2865"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:concentrated_rare_earth_chloride_solution_bucket"
+			id: "67111A7C89E5BAA7"
+			min_required_dependencies: 2
+			tasks: [
+				{
+					id: "64CDC81DF8C2AFE0"
+					item: "gtceu:concentrated_rare_earth_chloride_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0FF820C3D1F35B33"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.67111a7c89e5baa7.title}"
+			x: 31.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["67111A7C89E5BAA7"]
+			icon: "gtceu:enriched_rare_earth_chloride_solution_bucket"
+			id: "3EB2D0CA54B2DE40"
+			tasks: [
+				{
+					id: "5053BA6212021968"
+					item: "gtceu:enriched_rare_earth_chloride_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "60B3406DD9399BEC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3eb2d0ca54b2de40.title}"
+			x: 32.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["3EB2D0CA54B2DE40"]
+			icon: "gtceu:diluted_rare_earth_chloride_solution_bucket"
+			id: "5D2C28357AB7D76A"
+			tasks: [
+				{
+					id: "03B57CB515A79148"
+					item: "gtceu:diluted_rare_earth_chloride_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "18EFC3DF2C7EF632"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5d2c28357ab7d76a.title}"
+			x: 33.0d
+			y: 13.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.72dfac3212692136.description.0000}"]
+			icon: "gtceu:p507_bucket"
+			id: "72DFAC3212692136"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.72dfac3212692136.subtitle}"
+			tasks: [
+				{
+					id: "64516808A90E9FB3"
+					item: "gtceu:p507_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "55534B4C1262293A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.72dfac3212692136.title}"
+			x: 29.0d
+			y: 13.0d
+		}
+		{
+			dependencies: [
+				"72DFAC3212692136"
+				"02F523E003E1C93D"
+			]
+			description: ["{gtlcore.quest.gtl.quest.45b6ab3615ff2228.description.0000}"]
+			id: "45B6AB3615FF2228"
+			tasks: [{
+				id: "435E547C20569366"
+				title: "{gtlcore.quest.gtl.task.435e547c20569366.title}"
+				type: "checkmark"
+			}]
+			x: 30.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["45B6AB3615FF2228"]
+			id: "5FE4742B6A5FFABA"
+			tasks: [{
+				id: "5A310F6717B18752"
+				title: "{gtlcore.quest.gtl.task.5a310f6717b18752.title}"
+				type: "checkmark"
+			}]
+			x: 34.0d
+			y: 13.0d
+		}
+		{
+			dependencies: ["4B3E2F27FE938277"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7db48a5766bd91e6.description.0000}"
+				"{gtlcore.quest.gtl.quest.7db48a5766bd91e6.description.0001}"
+				"{gtlcore.quest.gtl.quest.7db48a5766bd91e6.description.0002}"
+				"{gtlcore.quest.gtl.quest.7db48a5766bd91e6.description.0003}"
+			]
+			id: "7DB48A5766BD91E6"
+			tasks: [{
+				id: "5DE3CE19B98A1D05"
+				title: "{gtlcore.quest.gtl.task.5de3ce19b98a1d05.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["4B3E2F27FE938277"]
+			description: [
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0000}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0001}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0004}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0005}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0008}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0009}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0010}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0011}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0012}"
+				""
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0014}"
+				"{gtlcore.quest.gtl.quest.2fa83022cc8a0928.description.0015}"
+			]
+			id: "2FA83022CC8A0928"
+			tasks: [{
+				id: "6E95953C40968751"
+				title: "{gtlcore.quest.gtl.task.6e95953c40968751.title}"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2fa83022cc8a0928.title}"
+			x: 40.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["7979C5ACF9A0C8D2"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			id: "38091E7431B96FF6"
+			tasks: [{
+				id: "73C4EE18E31D6F42"
+				title: "{gtlcore.quest.gtl.task.73c4ee18e31d6f42.title}"
+				type: "checkmark"
+			}]
+			x: 20.0d
+			y: 17.0d
+		}
+		{
+			dependencies: ["5FDD8771824E57CF"]
+			icon: "gtceu:raw_naquadah"
+			id: "5D1037E8365CC910"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.5d1037e8365cc910.subtitle}"
+			tasks: [
+				{
+					id: "11D65D25476CBE44"
+					item: "gtceu:raw_naquadah"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "72E98DF580771281"
+					type: "checkmark"
+				}
+			]
+			x: 21.5d
+			y: 20.0d
+		}
+		{
+			dependencies: ["5D1037E8365CC910"]
+			icon: "gtceu:naquadah_dust"
+			id: "09EBEB8F3415BB6E"
+			tasks: [
+				{
+					id: "5B07A2D41693C6E0"
+					item: "gtceu:naquadah_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "437DA4E62594EFFE"
+					type: "checkmark"
+				}
+			]
+			x: 23.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["5D1037E8365CC910"]
+			description: ["{gtlcore.quest.gtl.quest.36e8964cd1be7569.description.0000}"]
+			icon: "gtceu:enriched_naquadah_dust"
+			id: "36E8964CD1BE7569"
+			tasks: [
+				{
+					id: "57336BFC9D32EFF4"
+					item: "gtceu:enriched_naquadah_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5A7CC708DC8829A3"
+					type: "checkmark"
+				}
+			]
+			x: 23.0d
+			y: 23.0d
+		}
+		{
+			dependencies: [
+				"6DDE77C23FC5D067"
+				"7A7C73D046390488"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:enriched_naquadah_ore"
+			id: "0255D733668E3BF7"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.0255d733668e3bf7.subtitle}"
+			tasks: [
+				{
+					id: "21B669A650122204"
+					item: "gtceu:enriched_naquadah_ore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0624A9C09B24D493"
+					item: "gtceu:endstone_enriched_naquadah_ore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1BE99D72F4B66561"
+					type: "checkmark"
+				}
+			]
+			x: 21.5d
+			y: 26.0d
+		}
+		{
+			dependencies: [
+				"6DDE77C23FC5D067"
+				"7A7C73D046390488"
+			]
+			dependency_requirement: "one_completed"
+			description: [
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"0E926F9B91EECD78\"},\"translate\":\"gtlcore.quest.gtl.quest.67ecdd5601dbbb5b.description.0000.text.0000\"}"
+				""
+				"{gtlcore.quest.gtl.quest.67ecdd5601dbbb5b.description.0002}"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:trinium_compound_ore"
+			id: "67ECDD5601DBBB5B"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.67ecdd5601dbbb5b.subtitle}"
+			tasks: [
+				{
+					id: "1DB0385AC5D4B2A6"
+					item: "gtceu:trinium_compound_ore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "51ABA2822F7798E8"
+					item: "gtceu:endstone_trinium_compound_ore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6351B0F273A85AC2"
+					type: "checkmark"
+				}
+			]
+			x: 21.5d
+			y: 24.0d
+		}
+		{
+			dependencies: [
+				"09EBEB8F3415BB6E"
+				"55233E02B6C95444"
+				"766D051A40AB5324"
+			]
+			icon: "gtceu:impure_enriched_naquadah_solution_bucket"
+			id: "3703156457BD35FD"
+			tasks: [
+				{
+					id: "540567C813999894"
+					item: "gtceu:impure_enriched_naquadah_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5834FAA7F7A1B4A5"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3703156457bd35fd.title}"
+			x: 24.5d
+			y: 20.0d
+		}
+		{
+			dependencies: ["3703156457BD35FD"]
+			icon: "gtceu:hexafluoride_enriched_naquadah_solution_bucket"
+			id: "59B5170E8A1265E4"
+			tasks: [
+				{
+					id: "09D8310F47324DBF"
+					item: "gtceu:hexafluoride_enriched_naquadah_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "46CA949AD9373606"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.59b5170e8a1265e4.title}"
+			x: 26.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["59B5170E8A1265E4"]
+			icon: "gtceu:xenon_hexafluoro_enriched_naquadate_bucket"
+			id: "57DBBE2F51BB822E"
+			tasks: [
+				{
+					id: "44F1D02CEFA7226E"
+					item: "gtceu:xenon_hexafluoro_enriched_naquadate_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6537EB56DEE6B725"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.57dbbe2f51bb822e.title}"
+			x: 27.5d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"57DBBE2F51BB822E"
+				"55233E02B6C95444"
+				"05B41A85F662F218"
+			]
+			id: "76A2D869A0D5C41E"
+			tasks: [{
+				id: "5DF2D04D86807663"
+				item: "gtceu:enriched_naquadah_solution_bucket"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.76a2d869a0d5c41e.title}"
+			x: 29.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["76A2D869A0D5C41E"]
+			icon: "gtceu:acidic_enriched_naquadah_solution_bucket"
+			id: "36FB56BD8B6415D7"
+			tasks: [
+				{
+					id: "7ADC1AEDE66CEBB2"
+					item: "gtceu:acidic_enriched_naquadah_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0DA140B55BF2B041"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.36fb56bd8b6415d7.title}"
+			x: 30.5d
+			y: 21.0d
+		}
+		{
+			dependencies: ["36FB56BD8B6415D7"]
+			icon: "gtceu:enriched_naquadah_sulfate_dust"
+			id: "1CD2A15A1C5B1395"
+			subtitle: "{gtlcore.quest.gtl.quest.1cd2a15a1c5b1395.subtitle}"
+			tasks: [
+				{
+					id: "4838581B78418606"
+					item: "gtceu:enriched_naquadah_sulfate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "30A3EBF8CDFF4BCA"
+					type: "checkmark"
+				}
+			]
+			x: 32.0d
+			y: 21.0d
+		}
+		{
+			dependencies: ["36FB56BD8B6415D7"]
+			icon: "gtceu:enriched_naquadah_waste_bucket"
+			id: "3868B8E8021CC035"
+			subtitle: "{gtlcore.quest.gtl.quest.3868b8e8021cc035.subtitle}"
+			tasks: [
+				{
+					id: "5062B0E2FE1808C7"
+					item: "gtceu:enriched_naquadah_waste_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "67940DCCA79A3970"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3868b8e8021cc035.title}"
+			x: 32.0d
+			y: 22.0d
+		}
+		{
+			dependencies: [
+				"36E8964CD1BE7569"
+				"55233E02B6C95444"
+				"766D051A40AB5324"
+			]
+			icon: "gtceu:impure_naquadria_solution_bucket"
+			id: "2F4E165431B56059"
+			tasks: [
+				{
+					id: "36ADC52B2F4EB070"
+					item: "gtceu:impure_naquadria_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3590A35FFD1472A8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2f4e165431b56059.title}"
+			x: 24.5d
+			y: 23.0d
+		}
+		{
+			dependencies: ["2F4E165431B56059"]
+			icon: "gtceu:hexafluoride_naquadria_solution_bucket"
+			id: "147D445B1E2E2BDB"
+			tasks: [
+				{
+					id: "10DE0C7406D7B55D"
+					item: "gtceu:hexafluoride_naquadria_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7637D43189178FEE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.147d445b1e2e2bdb.title}"
+			x: 27.5d
+			y: 23.0d
+		}
+		{
+			dependencies: [
+				"147D445B1E2E2BDB"
+				"5ED340BDF18D3D7B"
+			]
+			icon: "gtceu:radon_naquadria_octafluoride_bucket"
+			id: "2C6EF38A0BE22028"
+			tasks: [
+				{
+					id: "2C3E0982A668A0A2"
+					item: "gtceu:radon_naquadria_octafluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7E3F34203818ED39"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2c6ef38a0be22028.title}"
+			x: 29.0d
+			y: 24.0d
+		}
+		{
+			dependencies: [
+				"2C6EF38A0BE22028"
+				"37038ABC92527C87"
+			]
+			icon: "gtceu:naquadria_caesium_xenonnonfluoride_bucket"
+			id: "7DC037BA0E0A18DA"
+			tasks: [
+				{
+					id: "40B06BBBE27665E9"
+					item: "gtceu:naquadria_caesium_xenonnonfluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3AEC0FA258BC68ED"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7dc037ba0e0a18da.title}"
+			x: 30.5d
+			y: 24.0d
+		}
+		{
+			dependencies: [
+				"7DC037BA0E0A18DA"
+				"44BA755CD566EB42"
+			]
+			icon: "gtceu:naquadria_caesiumfluoride_bucket"
+			id: "2405FED0FD07E879"
+			tasks: [
+				{
+					id: "302D5DEB070303B7"
+					item: "gtceu:naquadria_caesiumfluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7F5BD42F0D8E4676"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2405fed0fd07e879.title}"
+			x: 32.0d
+			y: 24.0d
+		}
+		{
+			dependencies: ["2405FED0FD07E879"]
+			icon: "gtceu:acidic_naquadria_caesiumfluoride_bucket"
+			id: "4EDDD95D554B8643"
+			tasks: [
+				{
+					id: "633E135C6838F62A"
+					item: "gtceu:acidic_naquadria_caesiumfluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "639F715E7FE720DE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4eddd95d554b8643.title}"
+			x: 33.5d
+			y: 24.0d
+		}
+		{
+			dependencies: ["147D445B1E2E2BDB"]
+			icon: "gtceu:naquadria_solution_bucket"
+			id: "14C55CE8EA930227"
+			tasks: [
+				{
+					id: "2BF33E3351168D61"
+					item: "gtceu:naquadria_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E846D6DC913A964"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.14c55ce8ea930227.title}"
+			x: 32.0d
+			y: 23.0d
+		}
+		{
+			dependencies: ["14C55CE8EA930227"]
+			icon: "gtceu:acidic_naquadria_solution_bucket"
+			id: "3F165F658B061FB8"
+			tasks: [
+				{
+					id: "113061A83BBB5DDF"
+					item: "gtceu:acidic_naquadria_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "25532EDEB9541C3A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3f165f658b061fb8.title}"
+			x: 33.5d
+			y: 23.0d
+		}
+		{
+			dependencies: [
+				"3F165F658B061FB8"
+				"4EDDD95D554B8643"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:naquadria_sulfate_dust"
+			icon_scale: 2.0d
+			id: "30D6A973D89212B9"
+			shape: "diamond"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.30d6a973d89212b9.subtitle}"
+			tasks: [
+				{
+					id: "4199544AE7A66761"
+					item: "gtceu:naquadria_sulfate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "55A27F6187821BD8"
+					item: "gtceu:tiny_naquadria_sulfate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "68C6B81C79441067"
+					type: "checkmark"
+				}
+			]
+			x: 36.5d
+			y: 24.0d
+		}
+		{
+			dependencies: ["3F165F658B061FB8"]
+			icon: "gtceu:naquadria_waste_bucket"
+			id: "6E2187ECE4FD9684"
+			subtitle: "{gtlcore.quest.gtl.quest.6e2187ece4fd9684.subtitle}"
+			tasks: [
+				{
+					id: "0BA49C7857B6C915"
+					item: "gtceu:naquadria_waste_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "65AB43F7088219C6"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6e2187ece4fd9684.title}"
+			x: 35.0d
+			y: 23.0d
+		}
+		{
+			dependencies: [
+				"6E2187ECE4FD9684"
+				"4EDDD95D554B8643"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:trinium_sulfide_dust"
+			icon_scale: 2.0d
+			id: "7C45390524D47942"
+			shape: "diamond"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7c45390524d47942.subtitle}"
+			tasks: [
+				{
+					id: "30DEB628EC345633"
+					item: "gtceu:trinium_sulfide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "073B4D8682B57E5B"
+					type: "checkmark"
+				}
+			]
+			x: 36.5d
+			y: 23.0d
+		}
+		{
+			dependencies: ["76A2D869A0D5C41E"]
+			icon: "gtceu:radon_cracked_enriched_aquadah_bucket"
+			id: "40823ABFBBE43496"
+			subtitle: "{gtlcore.quest.gtl.quest.40823abfbbe43496.subtitle}"
+			tasks: [
+				{
+					id: "3985EEFFFEEAF1BC"
+					item: "gtceu:radon_cracked_enriched_aquadah_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "664C2E2AF0A57C98"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.40823abfbbe43496.title}"
+			x: 30.5d
+			y: 20.0d
+		}
+		{
+			dependencies: ["40823ABFBBE43496"]
+			description: ["{gtlcore.quest.gtl.quest.7248ec9288c91a33.description.0000}"]
+			icon: "gtceu:enriched_naquadah_fuel_bucket"
+			id: "7248EC9288C91A33"
+			tasks: [
+				{
+					id: "5747AD76A31CD66B"
+					item: "gtceu:enriched_naquadah_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4309A5FF5DBE654E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7248ec9288c91a33.title}"
+			x: 32.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"09EBEB8F3415BB6E"
+				"1F017EDA47785D38"
+			]
+			icon: "gtceu:naquadah_solution_bucket"
+			id: "1EE19E725DC91553"
+			tasks: [
+				{
+					id: "0D62EAD7D2D8025B"
+					item: "gtceu:naquadah_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "35817B7DC992AD9E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1ee19e725dc91553.title}"
+			x: 24.5d
+			y: 17.0d
+		}
+		{
+			dependencies: ["1EE19E725DC91553"]
+			icon: "gtceu:fluorine_cracked_aquadah_bucket"
+			id: "7D1E1EB10A6FFE98"
+			subtitle: "{gtlcore.quest.gtl.quest.7d1e1eb10a6ffe98.subtitle}"
+			tasks: [
+				{
+					id: "144F9B3C76BDFECA"
+					item: "gtceu:fluorine_cracked_aquadah_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3518C84CC12E0A9E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7d1e1eb10a6ffe98.title}"
+			x: 28.0d
+			y: 17.0d
+		}
+		{
+			dependencies: ["7D1E1EB10A6FFE98"]
+			description: ["{gtlcore.quest.gtl.quest.75d953244e729fec.description.0000}"]
+			icon: "gtceu:naquadah_fuel_bucket"
+			id: "75D953244E729FEC"
+			subtitle: "{gtlcore.quest.gtl.quest.75d953244e729fec.subtitle}"
+			tasks: [
+				{
+					id: "5EE6707C631C948A"
+					item: "gtceu:naquadah_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "02C7D56100059E15"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.75d953244e729fec.title}"
+			x: 32.0d
+			y: 17.0d
+		}
+		{
+			dependencies: [
+				"75D953244E729FEC"
+				"7248EC9288C91A33"
+				"14C55CE8EA930227"
+			]
+			description: ["{gtlcore.quest.gtl.quest.0d53712aa7f733a8.description.0000}"]
+			icon: "gtceu:hyper_fuel_1_bucket"
+			id: "0D53712AA7F733A8"
+			tasks: [
+				{
+					id: "041A075952C819BA"
+					item: "gtceu:hyper_fuel_1_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "47B03A6002B88DF5"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0d53712aa7f733a8.title}"
+			x: 35.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"0255D733668E3BF7"
+				"5B73961795BE42EE"
+			]
+			icon: "gtceu:milled_enriched_naquadah"
+			id: "4E3BD7980CD652A5"
+			tasks: [
+				{
+					id: "59AAD833ADDB0087"
+					item: "gtceu:milled_enriched_naquadah"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7B4DD04C9DA3FABA"
+					type: "checkmark"
+				}
+			]
+			x: 23.0d
+			y: 26.0d
+		}
+		{
+			dependencies: [
+				"4E3BD7980CD652A5"
+				"2588A0EF7F27DE5B"
+			]
+			icon: "gtceu:enriched_naquadah_front_bucket"
+			id: "6A5AB82C3E14D091"
+			subtitle: "{gtlcore.quest.gtl.quest.6a5ab82c3e14d091.subtitle}"
+			tasks: [
+				{
+					id: "4666200C2877EED6"
+					item: "gtceu:enriched_naquadah_front_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "79E187EDDB163FE2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6a5ab82c3e14d091.title}"
+			x: 24.5d
+			y: 26.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.430303070695d7d3.description.0000}"]
+			icon: "minecraft:totem_of_undying"
+			id: "430303070695D7D3"
+			shape: "gear"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.430303070695d7d3.subtitle}"
+			tasks: [{
+				id: "19CF50A809E4A437"
+				title: "{gtlcore.quest.gtl.task.19cf50a809e4a437.title}"
+				type: "checkmark"
+			}]
+			x: 48.0d
+			y: 27.5d
+		}
+		{
+			dependencies: ["3526A3770E9CCB1E"]
+			hide_dependency_lines: true
+			icon: "gtceu:uranium_sulfate_waste_solution_bucket"
+			id: "2AA1609DA42EA84F"
+			subtitle: "{gtlcore.quest.gtl.quest.2aa1609da42ea84f.subtitle}"
+			tasks: [
+				{
+					id: "0C75C7BABA17EE50"
+					item: "gtceu:uranium_sulfate_waste_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5CED005BFC625928"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2aa1609da42ea84f.title}"
+			x: 10.5d
+			y: 27.5d
+		}
+		{
+			dependencies: ["2AA1609DA42EA84F"]
+			description: [
+				"{gtlcore.quest.gtl.quest.65ba1075b4ba1c0a.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.65ba1075b4ba1c0a.description.0002}"
+			]
+			icon: "gtceu:radium_dust"
+			icon_scale: 2.0d
+			id: "65BA1075B4BA1C0A"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.65ba1075b4ba1c0a.subtitle}"
+			tasks: [
+				{
+					id: "7BC139E963716816"
+					item: "gtceu:radium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "726109E540F2CFE6"
+					item: "gtceu:tiny_radium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0380E00CB5718784"
+					type: "checkmark"
+				}
+			]
+			x: 12.0d
+			y: 27.5d
+		}
+		{
+			dependencies: [
+				"1D4903B520E37BFE"
+				"63F90FA0F85804B8"
+			]
+			id: "6687DB631FB316D6"
+			optional: true
+			tasks: [{
+				id: "5CA839E151F23A37"
+				item: "gtceu:advanced_infinite_driller"
+				type: "item"
+			}]
+			x: 10.5d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"0BCC84DA8DE39FC9"
+				"35EDC45B7E060C4E"
+				"27DB26148D72E259"
+				"4A86402C581ABB27"
+				"5E8BEDA811A1E28C"
+				"54A0802A03CC22A9"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:cerium_dust"
+			icon_scale: 2.0d
+			id: "2A7BB94047BD42E9"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.2a7bb94047bd42e9.subtitle}"
+			tasks: [
+				{
+					id: "17F4452862287597"
+					item: "gtceu:cerium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "03AC663F7EA98B92"
+					type: "checkmark"
+				}
+			]
+			x: 27.0d
+			y: 9.0d
+		}
+		{
+			dependencies: [
+				"07A82335BAF78EFE"
+				"26597A2ED848C9A1"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:lanthanum_dust"
+			icon_scale: 2.0d
+			id: "5CC02A5F67A676F6"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.5cc02a5f67a676f6.subtitle}"
+			tasks: [
+				{
+					id: "69CCA25F4CA41F6C"
+					item: "gtceu:lanthanum_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3AD7AAEBA6E63296"
+					type: "checkmark"
+				}
+			]
+			x: 36.0d
+			y: 9.0d
+		}
+		{
+			dependencies: [
+				"5D62F873D2AE9ABA"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:europium_dust"
+			icon_scale: 2.0d
+			id: "337AEE190971194A"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.337aee190971194a.subtitle}"
+			tasks: [
+				{
+					id: "2531D9E3E2F3B5B2"
+					item: "gtceu:europium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "78557218E0D4B2B0"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 3.0d
+		}
+		{
+			dependencies: [
+				"5C29D6DC794FDEC6"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			description: ["{gtlcore.quest.gtl.quest.40819b02d619cc50.description.0000}"]
+			icon: "gtceu:neodymium_dust"
+			icon_scale: 2.0d
+			id: "40819B02D619CC50"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.40819b02d619cc50.subtitle}"
+			tasks: [
+				{
+					id: "04A4A48B18A019BC"
+					item: "gtceu:neodymium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4AA59F660B09662F"
+					type: "checkmark"
+				}
+			]
+			x: 33.0d
+			y: 9.0d
+		}
+		{
+			dependencies: [
+				"1874E85F7D8DBF28"
+				"4A86402C581ABB27"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:terbium_dust"
+			icon_scale: 2.0d
+			id: "3B7425C576EB10C2"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.3b7425c576eb10c2.subtitle}"
+			tasks: [
+				{
+					id: "75EC27FBF3F8C250"
+					item: "gtceu:terbium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "004C69E4CFE76FA7"
+					type: "checkmark"
+				}
+			]
+			x: 38.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["41B15E107F6501C9"]
+			id: "6784066D68451295"
+			tasks: [{
+				id: "6E36C1A398EA5670"
+				title: "{gtlcore.quest.gtl.task.6e36c1a398ea5670.title}"
+				type: "checkmark"
+			}]
+			x: 43.5d
+			y: 2.0d
+		}
+		{
+			dependencies: ["41B15E107F6501C9"]
+			hide_dependent_lines: true
+			id: "4B3E2F27FE938277"
+			tasks: [{
+				id: "48D82E87760BFCFF"
+				title: "{gtlcore.quest.gtl.task.48d82e87760bfcff.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 2.0d
+		}
+		{
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"224B850538D346D3\"},\"translate\":\"gtlcore.quest.gtl.quest.3ab780c51f3f021a.description.0000.text.0000\"}"]
+			id: "3AB780C51F3F021A"
+			tasks: [{
+				id: "6B75C2EA75F998A8"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3ab780c51f3f021a.title}"
+			x: 40.5d
+			y: 8.0d
+		}
+		{
+			id: "507C5D3A6F000A45"
+			tasks: [{
+				id: "38EF2F5FCB289A8C"
+				title: "{gtlcore.quest.gtl.task.38ef2f5fcb289a8c.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"540616F05F35AD13"
+				"5B0DC99796FE65DF"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:iodine_dust"
+			icon_scale: 2.0d
+			id: "3E12F92D695A7CF8"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.3e12f92d695a7cf8.subtitle}"
+			tasks: [
+				{
+					id: "64D41D2845646560"
+					item: "gtceu:iodine_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2F5F3C91683274F8"
+					type: "checkmark"
+				}
+			]
+			x: 48.0d
+			y: 11.0d
+		}
+		{
+			dependencies: ["6730821C43B619C5"]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"1FE5F8D737ADB1B8\"},\"translate\":\"gtlcore.quest.gtl.quest.4a7883f69f6490c5.description.0000.text.0000\"}"]
+			icon: "gtceu:bromine_bucket"
+			icon_scale: 2.0d
+			id: "4A7883F69F6490C5"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "2A958824253ACC22"
+					item: "gtceu:bromine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1D6189244B48C76A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4a7883f69f6490c5.title}"
+			x: 48.0d
+			y: 8.0d
+		}
+		{
+			icon: "gtceu:salt_water_bucket"
+			id: "56D717659A69161F"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "6F199E3192D3C2E2"
+					item: "gtceu:salt_water_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "051FE925400564B3"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.56d717659a69161f.title}"
+			x: 40.5d
+			y: 9.0d
+		}
+		{
+			dependencies: ["56D717659A69161F"]
+			icon: "gtceu:raw_brine_bucket"
+			id: "228EBCB0E3778D76"
+			tasks: [
+				{
+					id: "19961819AC21B974"
+					item: "gtceu:raw_brine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "108BC339CBC39F43"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.228ebcb0e3778d76.title}"
+			x: 42.0d
+			y: 9.0d
+		}
+		{
+			dependencies: ["228EBCB0E3778D76"]
+			icon: "gtceu:hot_brine_bucket"
+			id: "7F83F74AB862FFC5"
+			tasks: [
+				{
+					id: "2E91082FB1FE1837"
+					item: "gtceu:hot_brine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4F89565176ABE6D9"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7f83f74ab862ffc5.title}"
+			x: 43.5d
+			y: 10.0d
+		}
+		{
+			dependencies: ["7F83F74AB862FFC5"]
+			icon: "gtceu:hydrogen_iodide_bucket"
+			id: "540616F05F35AD13"
+			tasks: [
+				{
+					id: "5F794334B32FDDF3"
+					item: "gtceu:hydrogen_iodide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "620AE906684DD725"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.540616f05f35ad13.title}"
+			x: 45.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"7F83F74AB862FFC5"
+				"41C3B9A9845B579C"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:hot_alkaline_debrominated_brine_bucket"
+			id: "3684FED87FF9C6EF"
+			tasks: [
+				{
+					id: "10E4CEA80D90379F"
+					item: "gtceu:hot_alkaline_debrominated_brine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "23F99320A664FFCD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3684fed87ff9c6ef.title}"
+			x: 45.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["3684FED87FF9C6EF"]
+			description: ["{gtlcore.quest.gtl.quest.3d95f917f5899b44.description.0000}"]
+			icon: "gtceu:hot_debrominated_brine_bucket"
+			id: "3D95F917F5899B44"
+			subtitle: "{gtlcore.quest.gtl.quest.3d95f917f5899b44.subtitle}"
+			tasks: [
+				{
+					id: "15A375BF317C6676"
+					item: "gtceu:hot_debrominated_brine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3A9ABBC40F119670"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3d95f917f5899b44.title}"
+			x: 46.5d
+			y: 10.0d
+		}
+		{
+			dependencies: ["7F83F74AB862FFC5"]
+			icon: "gtceu:hot_chlorinated_brominated_brine_bucket"
+			id: "41C3B9A9845B579C"
+			tasks: [
+				{
+					id: "3C279AA0F4D2F972"
+					item: "gtceu:hot_chlorinated_brominated_brine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "61665E969BA214C1"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.41c3b9a9845b579c.title}"
+			x: 43.5d
+			y: 9.0d
+		}
+		{
+			dependencies: ["41C3B9A9845B579C"]
+			icon: "gtceu:brominated_chlorine_vapor_bucket"
+			id: "44DF921A86BF4FFB"
+			tasks: [
+				{
+					id: "6D90C045CD97A786"
+					item: "gtceu:brominated_chlorine_vapor_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "12B80E920041DD81"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.44df921a86bf4ffb.title}"
+			x: 43.5d
+			y: 8.0d
+		}
+		{
+			dependencies: ["44DF921A86BF4FFB"]
+			icon: "gtceu:acidic_bromine_solution_bucket"
+			id: "4C10197D6155BC5E"
+			tasks: [
+				{
+					id: "2BEA29A5BD757CF5"
+					item: "gtceu:acidic_bromine_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7B0B0155B01205C7"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4c10197d6155bc5e.title}"
+			x: 45.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["4C10197D6155BC5E"]
+			description: [""]
+			icon: "gtceu:concentrated_bromine_solution_bucket"
+			id: "6730821C43B619C5"
+			subtitle: "{gtlcore.quest.gtl.quest.6730821c43b619c5.subtitle}"
+			tasks: [
+				{
+					id: "3E1AF2B3DF402882"
+					item: "gtceu:concentrated_bromine_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0CFA7850FB638712"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6730821c43b619c5.title}"
+			x: 46.5d
+			y: 8.0d
+		}
+		{
+			dependencies: ["4C10197D6155BC5E"]
+			icon: "gtceu:acidic_bromine_exhaust_bucket"
+			id: "2E03A7381EACF886"
+			subtitle: "{gtlcore.quest.gtl.quest.2e03a7381eacf886.subtitle}"
+			tasks: [
+				{
+					id: "3DEFD1508F5F68BD"
+					item: "gtceu:acidic_bromine_exhaust_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "636FDB8EF5005AAF"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2e03a7381eacf886.title}"
+			x: 46.5d
+			y: 9.0d
+		}
+		{
+			icon: "minecraft:kelp"
+			id: "0B962E97522F005D"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "596D4F5E08513EEB"
+					item: "minecraft:kelp"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "06ED0148E4AAF014"
+					type: "checkmark"
+				}
+			]
+			x: 40.5d
+			y: 12.0d
+		}
+		{
+			dependencies: ["0B962E97522F005D"]
+			icon: "minecraft:dried_kelp"
+			id: "394714ACF8B43B4F"
+			tasks: [
+				{
+					id: "51191A065138D250"
+					item: "minecraft:dried_kelp"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4F0929826AAAC664"
+					type: "checkmark"
+				}
+			]
+			x: 42.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["394714ACF8B43B4F"]
+			icon: "gtceu:kelp_slurry_bucket"
+			id: "01FE8A98578AF2C3"
+			tasks: [
+				{
+					id: "1D5F41AD6954734C"
+					item: "gtceu:kelp_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "758F0806853E1B49"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.01fe8a98578af2c3.title}"
+			x: 43.5d
+			y: 12.0d
+		}
+		{
+			dependencies: ["01FE8A98578AF2C3"]
+			icon: "gtceu:enriched_potassium_iodide_slurry_bucket"
+			id: "5228EAD34AF13835"
+			tasks: [
+				{
+					id: "0E631484C52F2230"
+					item: "gtceu:enriched_potassium_iodide_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3C9EA5C224D7DF65"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5228ead34af13835.title}"
+			x: 45.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["5228EAD34AF13835"]
+			description: ["{gtlcore.quest.gtl.quest.5b0dc99796fe65df.description.0000}"]
+			icon: "gtceu:iodine_containing_slurry_bucket"
+			id: "5B0DC99796FE65DF"
+			tasks: [
+				{
+					id: "7372CED78F003A6B"
+					item: "gtceu:iodine_containing_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "167B5097DC14B42E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5b0dc99796fe65df.title}"
+			x: 46.5d
+			y: 12.0d
+		}
+		{
+			dependencies: ["241F7BC9C8CA8CA2"]
+			icon: "gtceu:germanium_dust"
+			icon_scale: 2.0d
+			id: "4440E4317E21101C"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.4440e4317e21101c.subtitle}"
+			tasks: [
+				{
+					id: "4C27A37CC08EBE15"
+					item: "gtceu:germanium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5E4CEC900C8F867E"
+					type: "checkmark"
+				}
+			]
+			x: 48.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["05ABA04E8E9E01D1"]
+			icon: "gtceu:germanium_dioxide_dust"
+			id: "241F7BC9C8CA8CA2"
+			tasks: [
+				{
+					id: "5756D98162F9F4E9"
+					item: "gtceu:germanium_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "13B16B84CB9D85D2"
+					type: "checkmark"
+				}
+			]
+			x: 46.5d
+			y: 16.0d
+		}
+		{
+			dependencies: ["05937A9E1C83A748"]
+			icon: "gtceu:germanium_tetrachloride_solution_bucket"
+			id: "05ABA04E8E9E01D1"
+			tasks: [
+				{
+					id: "0F0B7668815C85FF"
+					item: "gtceu:germanium_tetrachloride_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3370D1D52853BF5A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.05aba04e8e9e01d1.title}"
+			x: 45.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["0C89013B5E95C74B"]
+			icon: "gtceu:germanium_ash_dust"
+			id: "05937A9E1C83A748"
+			tasks: [
+				{
+					id: "6DC441DD97E95941"
+					item: "gtceu:germanium_ash_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0F717CACCD11A089"
+					type: "checkmark"
+				}
+			]
+			x: 43.5d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"358E53E79232DE08"
+				"450DDC84A3ED9E67"
+			]
+			icon: "gtceu:germanium_containing_precipitate_dust"
+			id: "0C89013B5E95C74B"
+			tasks: [
+				{
+					id: "0CB50D39F0B5E6C4"
+					item: "gtceu:germanium_containing_precipitate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3747D3ADFC319E05"
+					type: "checkmark"
+				}
+			]
+			x: 42.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["01420420FB8302C8"]
+			icon: "gtceu:ash_leaching_solution_bucket"
+			id: "358E53E79232DE08"
+			tasks: [
+				{
+					id: "0EF587B6BB51B071"
+					item: "gtceu:ash_leaching_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "32F31D07AC7BDE3F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.358e53e79232de08.title}"
+			x: 42.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["79606AABEED573B3"]
+			icon: "gtceu:tannic_bucket"
+			id: "450DDC84A3ED9E67"
+			tasks: [
+				{
+					id: "68B7505F10C567EC"
+					item: "gtceu:tannic_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5FDFDBC41D68D89F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.450ddc84a3ed9e67.title}"
+			x: 42.0d
+			y: 17.0d
+		}
+		{
+			dependencies: ["2BB52D1C09C418A9"]
+			icon: "minecraft:nether_wart"
+			id: "79606AABEED573B3"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "3DF75B3DB8195E8E"
+					item: "minecraft:nether_wart"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "342B3B4D36458A30"
+					type: "checkmark"
+				}
+			]
+			x: 40.5d
+			y: 17.0d
+		}
+		{
+			icon: "gtceu:ash_dust"
+			id: "01420420FB8302C8"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "027632AD5FF183C5"
+					item: "gtceu:ash_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "685530A750E9F9D6"
+					type: "checkmark"
+				}
+			]
+			x: 40.5d
+			y: 15.0d
+		}
+		{
+			id: "1278152299FBED54"
+			tasks: [{
+				id: "5B9C945576034637"
+				title: "{gtlcore.quest.gtl.task.5b9c945576034637.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 14.0d
+		}
+		{
+			id: "61A202B234E64B8C"
+			tasks: [{
+				id: "7F413725CD381E13"
+				title: "{gtlcore.quest.gtl.task.7f413725cd381e13.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 19.0d
+		}
+		{
+			dependencies: ["77B77342C58A5D9D"]
+			icon: "gtceu:hafnium_dust"
+			icon_scale: 2.0d
+			id: "5589EA34A58E2A32"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.5589ea34a58e2a32.subtitle}"
+			tasks: [
+				{
+					id: "3808BC0372BAF686"
+					item: "gtceu:hafnium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "33600058F18F607E"
+					type: "checkmark"
+				}
+			]
+			x: 48.0d
+			y: 21.0d
+		}
+		{
+			dependencies: ["33CB831C7C78F646"]
+			icon: "gtceu:zirconium_dust"
+			icon_scale: 2.0d
+			id: "38128ABFF4C30595"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.38128abff4c30595.subtitle}"
+			tasks: [
+				{
+					id: "52A3AEC0EE82A6F0"
+					item: "gtceu:zirconium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7CE14E73494A3805"
+					type: "checkmark"
+				}
+			]
+			x: 48.0d
+			y: 20.0d
+		}
+		{
+			icon: "gtceu:zircon_dust"
+			id: "64706BF0EC96AB4F"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "1829CAF10CBCF11C"
+					item: "gtceu:zircon_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2FF9E61AD3118C1F"
+					type: "checkmark"
+				}
+			]
+			x: 40.5d
+			y: 20.0d
+		}
+		{
+			dependencies: ["64706BF0EC96AB4F"]
+			description: ["{gtlcore.quest.gtl.quest.7a96027096126976.description.0000}"]
+			icon: "gtceu:zircon_chlorinating_residue_bucket"
+			id: "7A96027096126976"
+			tasks: [
+				{
+					id: "0439D235EF91CD8B"
+					item: "gtceu:zircon_chlorinating_residue_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "761D6E90CFF458E8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7a96027096126976.title}"
+			x: 42.0d
+			y: 21.0d
+		}
+		{
+			dependencies: ["64706BF0EC96AB4F"]
+			icon: "gtceu:zirconium_hafnium_chloride_bucket"
+			id: "5012177F0FB6BC2C"
+			tasks: [
+				{
+					id: "3AE49B2DCC1E9D3B"
+					item: "gtceu:zirconium_hafnium_chloride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5DC724CDEF5D320B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5012177f0fb6bc2c.title}"
+			x: 42.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["5012177F0FB6BC2C"]
+			icon: "gtceu:zirconiu_hafnium_oxychloride_bucket"
+			id: "3E6B2E4FCD5A6E90"
+			tasks: [
+				{
+					id: "581BDC69EB392642"
+					item: "gtceu:zirconiu_hafnium_oxychloride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "54BCC4EF42368E4E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3e6b2e4fcd5a6e90.title}"
+			x: 43.5d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"3E6B2E4FCD5A6E90"
+				"68A781120A98B0FB"
+			]
+			icon: "gtceu:zirconium_oxide_dust"
+			id: "33CB831C7C78F646"
+			tasks: [
+				{
+					id: "327245AFE43C7D6D"
+					item: "gtceu:zirconium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "68E3217F4817EAA3"
+					type: "checkmark"
+				}
+			]
+			x: 45.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"3E6B2E4FCD5A6E90"
+				"68A781120A98B0FB"
+			]
+			icon: "gtceu:hafnium_oxide_dust"
+			id: "4CB84CD5BCE5E88C"
+			tasks: [
+				{
+					id: "3687E0B63BDA3055"
+					item: "gtceu:hafnium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0D61B79D9CA5C168"
+					type: "checkmark"
+				}
+			]
+			x: 45.0d
+			y: 21.0d
+		}
+		{
+			dependencies: ["4CB84CD5BCE5E88C"]
+			icon: "gtceu:hafnium_chloride_dust"
+			id: "77B77342C58A5D9D"
+			tasks: [
+				{
+					id: "77C4135BF8E642C9"
+					item: "gtceu:hafnium_chloride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0C90A18B8C96EFEB"
+					type: "checkmark"
+				}
+			]
+			x: 46.5d
+			y: 21.0d
+		}
+		{
+			icon: "gtceu:hematite_dust"
+			id: "68A781120A98B0FB"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "102A37BE06F86139"
+					item: "gtceu:hematite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2F1C39FF26249527"
+					item: "gtceu:hydrogen_peroxide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4DCB1F008FFF77DA"
+					item: "gtceu:sulfur_trioxide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "564518C6DAB2D7B1"
+					item: "gtceu:potassium_hydroxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6A99D541D376E7F2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.68a781120a98b0fb.title}"
+			x: 43.5d
+			y: 21.0d
+		}
+		{
+			dependencies: ["094804D1F190858B"]
+			icon: "gtceu:rhenium_dust"
+			icon_scale: 2.0d
+			id: "4D0ABB8BAB575DDC"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.4d0abb8bab575ddc.subtitle}"
+			tasks: [
+				{
+					id: "2AA0689645DCE9D2"
+					item: "gtceu:rhenium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "32CA9A1DABA1313F"
+					type: "checkmark"
+				}
+			]
+			x: 48.0d
+			y: 24.5d
+		}
+		{
+			id: "78C7EC57A93783BE"
+			tasks: [{
+				id: "6A2450E473D02995"
+				title: "{gtlcore.quest.gtl.task.6a2450e473d02995.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 23.5d
+		}
+		{
+			dependencies: ["0989A526E0188F2A"]
+			icon: "gtceu:ammonium_perrhenate_bucket"
+			id: "094804D1F190858B"
+			subtitle: "{gtlcore.quest.gtl.quest.094804d1f190858b.subtitle}"
+			tasks: [
+				{
+					id: "3496FF05E7C21A9E"
+					item: "gtceu:ammonium_perrhenate_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4C4D9EA11E76FA27"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.094804d1f190858b.title}"
+			x: 46.5d
+			y: 24.5d
+		}
+		{
+			dependencies: ["2052CBF18AFB6A9F"]
+			icon: "gtceu:rhenium_sulfuric_solution_bucket"
+			id: "0989A526E0188F2A"
+			tasks: [
+				{
+					id: "0AD27B2A3D61AE96"
+					item: "gtceu:rhenium_sulfuric_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "60924E749F9516FC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0989a526e0188f2a.title}"
+			x: 45.0d
+			y: 24.5d
+		}
+		{
+			dependencies: ["2AB3893648555B8C"]
+			icon: "gtceu:molybdenum_flue_bucket"
+			id: "2052CBF18AFB6A9F"
+			tasks: [
+				{
+					id: "36BCE75088971E33"
+					item: "gtceu:molybdenum_flue_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2134010A4AEA717A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2052cbf18afb6a9f.title}"
+			x: 43.5d
+			y: 24.5d
+		}
+		{
+			dependencies: ["20AF1DB9161AF24F"]
+			icon: "gtceu:molybdenum_concentrate_dust"
+			id: "2AB3893648555B8C"
+			tasks: [
+				{
+					id: "40A488EF7FA088CF"
+					item: "gtceu:molybdenum_concentrate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "04C66025F201A16A"
+					type: "checkmark"
+				}
+			]
+			x: 43.5d
+			y: 23.5d
+		}
+		{
+			dependencies: [
+				"61145DE1B3B66CB2"
+				"57F8807D5E9777EB"
+			]
+			icon: "gtceu:gold_depleted_molybdenite_dust"
+			id: "20AF1DB9161AF24F"
+			tasks: [
+				{
+					id: "6E9C8B6DFCE22BB0"
+					item: "gtceu:gold_depleted_molybdenite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "53A7A1627AAF3950"
+					type: "checkmark"
+				}
+			]
+			x: 42.0d
+			y: 24.5d
+		}
+		{
+			icon: "gtceu:molybdenite_dust"
+			id: "61145DE1B3B66CB2"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "79DE2B259276B565"
+					item: "gtceu:molybdenite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5B7F9C1F7769F274"
+					type: "checkmark"
+				}
+			]
+			x: 42.0d
+			y: 25.5d
+		}
+		{
+			dependencies: ["36F60D47583E34F2"]
+			icon: "gtceu:sodium_cyanide_bucket"
+			id: "57F8807D5E9777EB"
+			tasks: [
+				{
+					id: "5C4FFB219A167719"
+					item: "gtceu:sodium_cyanide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6F76FD4AFC064622"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.57f8807d5e9777eb.title}"
+			x: 40.5d
+			y: 24.5d
+		}
+		{
+			dependencies: ["20AF1DB9161AF24F"]
+			icon: "gtceu:gold_cyanide_bucket"
+			id: "51A893594B30F3F1"
+			subtitle: "{gtlcore.quest.gtl.quest.51a893594b30f3f1.subtitle}"
+			tasks: [
+				{
+					id: "062655E09CFDD3DE"
+					item: "gtceu:gold_cyanide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4A3355429EB34BFC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.51a893594b30f3f1.title}"
+			x: 43.5d
+			y: 25.5d
+		}
+		{
+			icon: "gtceu:hydrogen_cyanide_bucket"
+			id: "36F60D47583E34F2"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "684F88403D4C3F67"
+					item: "gtceu:hydrogen_cyanide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "23CAC0CD32EAD689"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.36f60d47583e34f2.title}"
+			x: 40.5d
+			y: 25.5d
+		}
+		{
+			dependencies: ["2AB3893648555B8C"]
+			icon: "gtceu:molybdenum_trioxide_dust"
+			id: "23A05AC4EADC9FDA"
+			subtitle: "{gtlcore.quest.gtl.quest.23a05ac4eadc9fda.subtitle}"
+			tasks: [
+				{
+					id: "473700F9AB008A98"
+					item: "gtceu:molybdenum_trioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3304CC8047611875"
+					type: "checkmark"
+				}
+			]
+			x: 45.0d
+			y: 23.5d
+		}
+		{
+			dependencies: ["7DB48A5766BD91E6"]
+			description: ["{gtlcore.quest.gtl.quest.4402c84cf27479a9.description.0000}"]
+			icon: "gtceu:cyclopentadiene_bucket"
+			icon_scale: 2.0d
+			id: "4402C84CF27479A9"
+			subtitle: "{gtlcore.quest.gtl.quest.4402c84cf27479a9.subtitle}"
+			tasks: [
+				{
+					id: "4232D42BA6387D5A"
+					item: "gtceu:cyclopentadiene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1A1FC7D4D98E9FE1"
+					item: "gtceu:turpentine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1DF347005ABEDA8F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4402c84cf27479a9.title}"
+			x: 42.0d
+			y: 3.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.6b7aa3abf8d020b5.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6b7aa3abf8d020b5.description.0002}"
+			]
+			icon: "gtceu:hydrogen_bucket"
+			icon_scale: 2.0d
+			id: "6B7AA3ABF8D020B5"
+			size: 1.0d
+			tasks: [
+				{
+					id: "599CD83BE551AFC4"
+					item: "gtceu:hydrogen_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E74825B9334FF73"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6b7aa3abf8d020b5.title}"
+			x: 42.0d
+			y: 6.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.2cdb693780b9be2e.description.0000}"]
+			icon: "gtceu:chlorine_bucket"
+			icon_scale: 2.0d
+			id: "2CDB693780B9BE2E"
+			size: 1.0d
+			tasks: [
+				{
+					id: "73836F941F727127"
+					item: "gtceu:chlorine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7D10AFDEAA63904F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2cdb693780b9be2e.title}"
+			x: 46.5d
+			y: 6.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.3530ef128290387a.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.3530ef128290387a.description.0002}"
+			]
+			icon: "gtceu:fluorine_bucket"
+			icon_scale: 2.0d
+			id: "3530EF128290387A"
+			size: 1.0d
+			tasks: [
+				{
+					id: "003EA6303D70CA5D"
+					item: "gtceu:fluorine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3F29F139D60BB861"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3530ef128290387a.title}"
+			x: 45.0d
+			y: 6.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.1d45d9cfb1fe7b47.description.0000}"]
+			icon: "gtceu:oxygen_bucket"
+			icon_scale: 2.0d
+			id: "1D45D9CFB1FE7B47"
+			size: 1.0d
+			tasks: [
+				{
+					id: "0B45372690C432EC"
+					item: "gtceu:oxygen_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "51401A4DD0FC1F8F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1d45d9cfb1fe7b47.title}"
+			x: 43.5d
+			y: 6.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.072df7ac0e91d955.description.0000}"]
+			icon: "gtceu:nitrogen_bucket"
+			icon_scale: 2.0d
+			id: "072DF7AC0E91D955"
+			size: 1.0d
+			tasks: [
+				{
+					id: "678F5CA9E9CF7C70"
+					item: "gtceu:nitrogen_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "522CA1F32CE57EEB"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.072df7ac0e91d955.title}"
+			x: 48.0d
+			y: 6.0d
+		}
+		{
+			id: "5C85BA8F26EAEF6B"
+			tasks: [{
+				id: "1BD55B8B514F6837"
+				title: "{gtlcore.quest.gtl.task.1bd55b8b514f6837.title}"
+				type: "checkmark"
+			}]
+			x: 40.5d
+			y: 6.0d
+		}
+		{
+			dependencies: ["68765386EA084EC0"]
+			description: ["{gtlcore.quest.gtl.quest.411628d717089480.description.0000}"]
+			id: "411628D717089480"
+			optional: true
+			tasks: [
+				{
+					id: "36A777AEE2F1AD75"
+					item: "gtceu:steam_miner"
+					type: "item"
+				}
+				{
+					id: "2126A32A2C318C11"
+					item: "gtceu:lv_miner"
+					type: "item"
+				}
+				{
+					id: "018B7666B697D478"
+					item: "gtceu:mv_miner"
+					type: "item"
+				}
+				{
+					id: "54FF8286EE437D14"
+					item: "gtceu:hv_miner"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.411628d717089480.title}"
+			x: 3.0d
+			y: -2.0d
+		}
+		{
+			icon: "gtceu:radon_difluoride_bucket"
+			id: "5ED340BDF18D3D7B"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "51404FF90E32A6B0"
+					item: "gtceu:radon_difluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3FB43C0E48EEA6A0"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5ed340bdf18d3d7b.title}"
+			x: 27.5d
+			y: 24.0d
+		}
+		{
+			dependencies: [
+				"0D3B890089D80412"
+				"43F49B949D085DF8"
+			]
+			icon: "gtceu:caesium_xenontrioxide_fluoride_bucket"
+			id: "37038ABC92527C87"
+			tasks: [
+				{
+					id: "677303D861E34CF3"
+					item: "gtceu:caesium_xenontrioxide_fluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "14A82295416FE1A7"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.37038abc92527c87.title}"
+			x: 29.0d
+			y: 25.0d
+		}
+		{
+			icon: "gtceu:xenon_trioxide_bucket"
+			id: "43F49B949D085DF8"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "75DB68D9B7AF25C7"
+					item: "gtceu:xenon_trioxide_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "01B9BF7581677499"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.43f49b949d085df8.title}"
+			x: 27.5d
+			y: 25.0d
+		}
+		{
+			icon: "gtceu:caesium_fluoride_bucket"
+			id: "0D3B890089D80412"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "63EAE6496E76B679"
+					item: "gtceu:caesium_fluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1735ED107AB767F5"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0d3b890089d80412.title}"
+			x: 27.5d
+			y: 26.0d
+		}
+		{
+			icon: "gtceu:nitryl_fluoride_bucket"
+			id: "44BA755CD566EB42"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "32ED1947828CF637"
+					item: "gtceu:nitryl_fluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "23AAC09F66808B9E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.44ba755cd566eb42.title}"
+			x: 30.5d
+			y: 25.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:fluoroantimonic_acid_bucket"
+			id: "55233E02B6C95444"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "458031377B26C9A7"
+					item: "gtceu:fluoroantimonic_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "08F2CC4A1870AD73"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.55233e02b6c95444.title}"
+			x: 24.5d
+			y: 21.5d
+		}
+		{
+			dependencies: [
+				"328058CBCC254AEC"
+				"5ABE1C11479A0229"
+			]
+			icon: "gtceu:gold_trifluoride_dust"
+			id: "05B41A85F662F218"
+			subtitle: "{gtlcore.quest.gtl.quest.05b41a85f662f218.subtitle}"
+			tasks: [
+				{
+					id: "05E92B2FD4A5CA01"
+					item: "gtceu:gold_trifluoride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "445D772B72A32939"
+					type: "checkmark"
+				}
+			]
+			x: 29.0d
+			y: 21.0d
+		}
+		{
+			icon: "gtceu:gold_chloride_bucket"
+			id: "328058CBCC254AEC"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "51045A41FB9EC630"
+					item: "gtceu:gold_chloride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5FAA7ACF7F662D8C"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.328058cbcc254aec.title}"
+			x: 27.5d
+			y: 21.0d
+		}
+		{
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3AB780C51F3F021A\"},\"translate\":\"gtlcore.quest.gtl.quest.5abe1c11479a0229.description.0000.text.0000\"}"]
+			icon: "gtceu:bromine_trifluoride_bucket"
+			id: "5ABE1C11479A0229"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "5D18E214246697E3"
+					item: "gtceu:bromine_trifluoride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "36E63DDD79D2039E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5abe1c11479a0229.title}"
+			x: 29.0d
+			y: 22.0d
+		}
+		{
+			dependencies: ["38091E7431B96FF6"]
+			id: "40B8E6C5B9FEA5D4"
+			subtitle: "{gtlcore.quest.gtl.quest.40b8e6c5b9fea5d4.subtitle}"
+			tasks: [{
+				id: "68E93738BB4FE9A1"
+				title: "{gtlcore.quest.gtl.task.68e93738bb4fe9a1.title}"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.40b8e6c5b9fea5d4.title}"
+			x: 21.5d
+			y: 17.0d
+		}
+		{
+			dependencies: ["6B8E242FD397D8B4"]
+			description: ["{gtlcore.quest.gtl.quest.3885639c66eb8e84.description.0000}"]
+			hide_dependency_lines: true
+			icon: "gtceu:plutonium_241_dust"
+			icon_scale: 2.0d
+			id: "3885639C66EB8E84"
+			shape: "diamond"
+			size: 1.0d
+			tasks: [
+				{
+					id: "34F6945395C94E6F"
+					item: "gtceu:plutonium_241_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "58F9D80C20C01A35"
+					type: "checkmark"
+				}
+			]
+			x: 9.0d
+			y: 27.5d
+		}
+		{
+			dependencies: ["1223D839C224777B"]
+			id: "18CB66D8EABD5132"
+			tasks: [{
+				id: "059C6D910694FC36"
+				title: "{gtlcore.quest.gtl.task.059c6d910694fc36.title}"
+				type: "checkmark"
+			}]
+			x: 18.5d
+			y: 13.0d
+		}
+		{
+			dependencies: [
+				"7A7C73D046390488"
+				"6DDE77C23FC5D067"
+			]
+			dependency_requirement: "one_completed"
+			id: "6DB1B7A9173E2C78"
+			tasks: [{
+				id: "182BB2FF62D525C5"
+				title: "{gtlcore.quest.gtl.task.182bb2ff62d525c5.title}"
+				type: "checkmark"
+			}]
+			x: 20.0d
+			y: 26.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.19d339f25e824a2c.description.0000}"
+				"{gtlcore.quest.gtl.quest.19d339f25e824a2c.description.0001}"
+				""
+				"{gtlcore.quest.gtl.quest.19d339f25e824a2c.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.19d339f25e824a2c.description.0005}"
+				"{gtlcore.quest.gtl.quest.19d339f25e824a2c.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.19d339f25e824a2c.description.0008}"
+			]
+			icon: "gtceu:slaughterhouse"
+			id: "19D339F25E824A2C"
+			rewards: [{
+				id: "53C893D3CCD81981"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "6A3DC88D5B9616B4"
+				title: "{gtlcore.quest.gtl.task.6a3dc88d5b9616b4.title}"
+				type: "checkmark"
+			}]
+			x: 49.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["7CBD79CE32AF8E30"]
+			icon: "gtceu:molten_stainless_steel_bucket"
+			id: "2A1FD2014EA69CFD"
+			subtitle: "{gtlcore.quest.gtl.quest.2a1fd2014ea69cfd.subtitle}"
+			tasks: [{
+				id: "3F3605BFBBA3D0C7"
+				title: "{gtlcore.quest.gtl.task.3f3605bfbba3d0c7.title}"
+				type: "checkmark"
+			}]
+			x: 7.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["7CBD79CE32AF8E30"]
+			icon: "gtceu:hot_vibrant_alloy_ingot"
+			id: "22C01BA26841FDCC"
+			subtitle: "{gtlcore.quest.gtl.quest.22c01ba26841fdcc.subtitle}"
+			tasks: [{
+				id: "7377537FC932F3A3"
+				title: "{gtlcore.quest.gtl.task.7377537fc932f3a3.title}"
+				type: "checkmark"
+			}]
+			x: 5.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["7979C5ACF9A0C8D2"]
+			id: "7CBD79CE32AF8E30"
+			tasks: [{
+				id: "7F7A6D5BDCF43234"
+				title: "{gtlcore.quest.gtl.task.7f7a6d5bdcf43234.title}"
+				type: "checkmark"
+			}]
+			x: 4.0d
+			y: 7.5d
+		}
+		{
+			dependencies: ["7CBD79CE32AF8E30"]
+			icon: "gtceu:orichalcum_plasma_bucket"
+			id: "4AD5D24C2C018D79"
+			subtitle: "{gtlcore.quest.gtl.quest.4ad5d24c2c018d79.subtitle}"
+			tasks: [{
+				id: "755D300470DEE06F"
+				title: "{gtlcore.quest.gtl.task.755d300470dee06f.title}"
+				type: "checkmark"
+			}]
+			x: 9.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["0485D45408234C99"]
+			hide_dependent_lines: true
+			id: "39380262677612A9"
+			tasks: [{
+				id: "1B85421BB1F7B489"
+				title: "{gtlcore.quest.gtl.task.1b85421bb1f7b489.title}"
+				type: "checkmark"
+			}]
+			x: 32.0d
+			y: 15.0d
+		}
+		{
+			icon: "minecraft:ancient_debris"
+			id: "792EDC834FE9BE1F"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "2DE8A83396F2E97F"
+					item: "minecraft:ancient_debris"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3638D2A128C51F76"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 16.0d
+		}
+		{
+			icon: "minecraft:prismarine"
+			id: "1F8E29F234211EE9"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "659160B21F6AA876"
+					item: "minecraft:prismarine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "13DA4416D09D3955"
+					type: "checkmark"
+				}
+			]
+			x: 33.5d
+			y: 15.0d
+		}
+		{
+			dependencies: ["1F8E29F234211EE9"]
+			icon: "minecraft:prismarine_shard"
+			id: "6FA616D48E37E3EA"
+			tasks: [
+				{
+					id: "35CE6F4D6A993B30"
+					item: "minecraft:prismarine_shard"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "39FAF70AF8324733"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 15.0d
+		}
+		{
+			icon: "gtceu:nether_air_bucket"
+			id: "5DFA4E55CF2B2F8E"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "1CF1AF30761A3B97"
+					item: "gtceu:nether_air_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0EA71FF6854A946E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5dfa4e55cf2b2f8e.title}"
+			x: 36.5d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"792EDC834FE9BE1F"
+				"6FA616D48E37E3EA"
+				"5DFA4E55CF2B2F8E"
+			]
+			icon: "minecraft:netherite_scrap"
+			id: "42D674AA1A9887C9"
+			tasks: [
+				{
+					id: "59AFDE45CA539D41"
+					item: "minecraft:netherite_scrap"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "695690E2D0B3806B"
+					type: "checkmark"
+				}
+			]
+			x: 36.5d
+			y: 15.0d
+		}
+		{
+			dependencies: ["66AE53E13E3C3C19"]
+			icon: "ad_astra:calorite_ingot"
+			id: "4CC4035A6482E51D"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "1AB87C2C5A59595D"
+					item: "ad_astra:calorite_ingot"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7F767FE2D0145401"
+					type: "checkmark"
+				}
+			]
+			x: 38.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"42D674AA1A9887C9"
+				"4CC4035A6482E51D"
+			]
+			icon: "minecraft:netherite_ingot"
+			icon_scale: 2.0d
+			id: "6C963FE46ADB8248"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.6c963fe46adb8248.subtitle}"
+			tasks: [
+				{
+					id: "10B94E07D196E75E"
+					item: "minecraft:netherite_ingot"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2D5BD452341CBA44"
+					type: "checkmark"
+				}
+			]
+			x: 38.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["68765386EA084EC0"]
+			description: ["{gtlcore.quest.gtl.quest.5bc3d0488341f862.description.0000}"]
+			id: "5BC3D0488341F862"
+			optional: true
+			tasks: [
+				{
+					id: "61D12E1013AB56FE"
+					item: "gtceu:lp_steam_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "6DE88256F83E8CB8"
+					item: "gtceu:hp_steam_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "78B6E11696FCB69C"
+					item: "gtceu:lv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "49BBEFE429190C72"
+					item: "gtceu:mv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "774376DB2AAF0FE4"
+					item: "gtceu:hv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "4184D2B3C6102306"
+					item: "gtceu:ev_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "5B467D01CAF122EA"
+					item: "gtceu:iv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "553E4F7A3A7D119C"
+					item: "gtceu:luv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "263BBBE83909B6C5"
+					item: "gtceu:zpm_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "03C64044E9A467A9"
+					item: "gtceu:uv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "03F992036834DCA9"
+					item: "gtceu:uhv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "12D97FB54B3F412A"
+					item: "gtceu:uev_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "3436E37CA66587CB"
+					item: "gtceu:uiv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "0BCF820C4FAB4D82"
+					item: "gtceu:uxv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "1F6AF3508044FBB9"
+					item: "gtceu:opv_rock_crusher"
+					type: "item"
+				}
+				{
+					id: "0468B248B3E5306A"
+					item: "gtceu:large_rock_crusher"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5bc3d0488341f862.title}"
+			x: 4.5d
+			y: -1.0d
+		}
+		{
+			icon: "gtceu:lv_rock_crusher"
+			id: "076E96E5EB3E44E5"
+			tasks: [
+				{
+					id: "24513E28F78DAD1C"
+					item: "gtceu:lv_rock_crusher"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2409ACB3CC6E9FE5"
+					item: "gtceu:mv_rock_crusher"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "149B6B64D024FB45"
+					item: "gtceu:hv_rock_crusher"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6045BC7373F82910"
+					item: "gtceu:ev_rock_crusher"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3DFE3AC5A602B590"
+					item: "gtceu:large_rock_crusher"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "276CE5D04E74DF44"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.076e96e5eb3e44e5.title}"
+			x: 15.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "minecraft:basalt"
+			icon_scale: 1.3d
+			id: "4215A91343202A6B"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.4215a91343202a6b.subtitle}"
+			tasks: [
+				{
+					id: "071D3417FD960E28"
+					item: "gtceu:olivine_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "22EFBF59FFE0CA12"
+					item: "gtceu:calcite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4A145BDC9942EDDA"
+					item: "gtceu:flint_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "53D29BCC0B6A8445"
+					item: "gtceu:dark_ash_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "02AA3A7B5510F86D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4215a91343202a6b.title}"
+			x: 15.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "minecraft:andesite"
+			icon_scale: 1.3d
+			id: "345BC85E25F99D40"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.345bc85e25f99d40.subtitle}"
+			tasks: [
+				{
+					id: "60A29AA5C8FA0516"
+					item: "gtceu:saltpeter_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "770A10EEDBED6FBC"
+					item: "gtceu:asbestos_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "03AB2DB6B04A837C"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.345bc85e25f99d40.title}"
+			x: 14.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "gtceu:red_granite"
+			icon_scale: 1.3d
+			id: "6A48668B229F78CA"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.6a48668b229f78ca.subtitle}"
+			tasks: [
+				{
+					id: "40978FA3DFEA0B7D"
+					item: "gtceu:uranium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1777C091EEC02550"
+					item: "gtceu:aluminium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3AEA61BB55A33C98"
+					item: "gtceu:potassium_feldspar_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "029F444730A50AE4"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6a48668b229f78ca.title}"
+			x: 14.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "minecraft:granite"
+			icon_scale: 1.3d
+			id: "0D9308DCD09B474E"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.0d9308dcd09b474e.subtitle}"
+			tasks: [
+				{
+					id: "6071AFDD8B759A8F"
+					item: "gtceu:silicon_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "60EA93B5B7BA2FD6"
+					item: "gtceu:redrock_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "61085FB0D57190CC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0d9308dcd09b474e.title}"
+			x: 16.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "minecraft:stone"
+			icon_scale: 1.3d
+			id: "7179DFEE938964BA"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.7179dfee938964ba.subtitle}"
+			tasks: [
+				{
+					id: "5389CEF002749982"
+					item: "gtceu:quartzite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "037ECD47B920F3EC"
+					item: "gtceu:potassium_feldspar_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "251DB9D966D8D3B1"
+					item: "gtceu:marble_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1A84A6466E358164"
+					item: "gtceu:biotite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1802BDA5B7265F97"
+					item: "gtceu:metal_mixture_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4D5B8F400657BD6E"
+					item: "gtceu:sodalite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "48B63FC16E2E6944"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7179dfee938964ba.title}"
+			x: 15.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "gtceu:marble"
+			icon_scale: 1.3d
+			id: "4A5C14B5973D3023"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.4a5c14b5973d3023.subtitle}"
+			tasks: [
+				{
+					id: "368685543329F956"
+					item: "gtceu:magnesium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "49E477E16EF64894"
+					item: "gtceu:calcite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4949952A82630CF3"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4a5c14b5973d3023.title}"
+			x: 16.0d
+			y: 15.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "minecraft:deepslate"
+			icon_scale: 1.3d
+			id: "211E2CF1BEE6D504"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.211e2cf1bee6d504.subtitle}"
+			tasks: [
+				{
+					id: "74266AE3CA591DF0"
+					item: "gtceu:thorium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "683CC87C0124AE15"
+					item: "gtceu:silicon_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0E6C388CF95285E5"
+					item: "gtceu:biotite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "61389EA3986D2777"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.211e2cf1bee6d504.title}"
+			x: 16.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["076E96E5EB3E44E5"]
+			icon: "minecraft:obsidian"
+			icon_scale: 1.3d
+			id: "2628AD721D2CCE91"
+			shape: "hexagon"
+			subtitle: "{gtlcore.quest.gtl.quest.2628ad721d2cce91.subtitle}"
+			tasks: [
+				{
+					id: "54408E88165249FE"
+					item: "gtceu:magnesium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3745CD16AFC13697"
+					item: "gtceu:iron_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5EE22F14C6E33A55"
+					item: "gtceu:silicon_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2D2BEAE455378477"
+					item: "gtceu:oxygen_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "319C841EE613522E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2628ad721d2cce91.title}"
+			x: 14.0d
+			y: 15.0d
+		}
+		{
+			dependencies: [
+				"218DF03160595A6F"
+				"528C6451188B2D1B"
+			]
+			icon: "gtceu:thorite_powder_dust"
+			id: "5DECAB3C913C31FE"
+			subtitle: "{gtlcore.quest.gtl.quest.5decab3c913c31fe.subtitle}"
+			tasks: [
+				{
+					id: "4AB9A987C16B775E"
+					item: "gtceu:thorite_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "534CAB5F443FDB64"
+					type: "checkmark"
+				}
+			]
+			x: 22.0d
+			y: 5.0d
+		}
+		{
+			dependencies: ["726A61CD2C9D9495"]
+			id: "324D979A0D38E7D1"
+			tasks: [{
+				id: "31F6875681F15099"
+				title: "{gtlcore.quest.gtl.task.31f6875681f15099.title}"
+				type: "checkmark"
+			}]
+			x: 12.5d
+			y: 15.0d
+		}
+		{
+			dependencies: ["08BE4F17331AA62A"]
+			hide_dependent_lines: true
+			icon: "gtceu:cerium_oxide_dust"
+			id: "5E8BEDA811A1E28C"
+			tasks: [
+				{
+					id: "6F59618477E1EDAE"
+					item: "gtceu:cerium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7822A8B19B7945B0"
+					type: "checkmark"
+				}
+			]
+			x: 32.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["28A615DDEAC65561"]
+			icon: "gtceu:fluorite_dust"
+			id: "20EC8290D4E739CD"
+			tasks: [
+				{
+					id: "3DA89AE2736CA462"
+					item: "gtceu:fluorite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2D76377038E865EA"
+					type: "checkmark"
+				}
+			]
+			x: 35.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["57DEA0CDF85D69B1"]
+			hide_dependent_lines: true
+			icon: "gtceu:cerium_oxide_dust"
+			id: "54A0802A03CC22A9"
+			tasks: [
+				{
+					id: "5C813DF41387E223"
+					item: "gtceu:cerium_oxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "21C91473E4AB1F24"
+					type: "checkmark"
+				}
+			]
+			x: 31.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"68012C0C6C072430"
+				"75FF3EA9CF248DA8"
+			]
+			dependency_requirement: "one_completed"
+			hide_dependency_lines: true
+			icon: "gtceu:red_zircon_powder_dust"
+			id: "51A4EF883D0F293C"
+			tasks: [
+				{
+					id: "6D409C07A0497B0B"
+					item: "gtceu:silicon_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "17A98B375A1852DF"
+					item: "gtceu:rutile_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "32FF05EF6940F428"
+					item: "gtceu:red_zircon_powder_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "521314F93D81C6FB"
+					item: "gtceu:ilmenite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4BDD69AD982E33DB"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.51a4ef883d0f293c.title}"
+			x: 22.0d
+			y: 8.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.113d8ae67948f32e.description.0000}"]
+			icon: "ad_astra:oil_bucket"
+			id: "113D8AE67948F32E"
+			optional: true
+			tasks: [{
+				id: "685DD7E3D6ECAE89"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.113d8ae67948f32e.title}"
+			x: 45.0d
+			y: 2.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.29c1f160ecaa561a.description.0000}"]
+			icon: "ad_astra:fuel_bucket"
+			id: "29C1F160ECAA561A"
+			optional: true
+			rewards: [{
+				id: "7637CDD645BFDF93"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "7927D04D69656205"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.29c1f160ecaa561a.title}"
+			x: 46.5d
+			y: 2.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.3ab939b4878750a7.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.3ab939b4878750a7.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.3ab939b4878750a7.description.0004}"
+			]
+			icon: "ad_astra:moon_cheese_ore"
+			id: "3AB939B4878750A7"
+			optional: true
+			rewards: [{
+				id: "7F89E6E1001E4ADA"
+				item: "gtceu:cupronickel_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "266B8FD89AAB2C20"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3ab939b4878750a7.title}"
+			x: 48.0d
+			y: 2.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:ammonium_nitrate_solution_bucket"
+			id: "1CC46F9D14AB0C07"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "2D372C277F4E45F6"
+					item: "gtceu:ammonium_nitrate_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1BF4DB108F187B99"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1cc46f9d14ab0c07.title}"
+			x: 20.0d
+			y: 5.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:acetone_bucket"
+			id: "22AEE3F4F698D455"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "1003577B80AB2202"
+					item: "gtceu:acetone_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6642A6B9B82ABB5D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.22aee3f4f698d455.title}"
+			x: 20.0d
+			y: 6.5d
+		}
+		{
+			icon: "gtceu:ammonium_chloride_dust"
+			id: "1DBD35BB3019EC43"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "0D9966A954D980F5"
+					item: "gtceu:ammonium_chloride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5BFA7A3FB46E2CCB"
+					type: "checkmark"
+				}
+			]
+			x: 37.0d
+			y: 12.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:oxalic_acid_bucket"
+			id: "4AE8888208F4FDE9"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "75293BFC602BAA75"
+					item: "gtceu:oxalic_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4C19056BD657E753"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4ae8888208f4fde9.title}"
+			x: 20.0d
+			y: 7.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:nitric_acid_bucket"
+			id: "3DE17F205E0FFCD2"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "54DBB9F5A221574D"
+					item: "gtceu:nitric_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "794AFFD57CBD4B5A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3de17f205e0ffcd2.title}"
+			x: 20.0d
+			y: 8.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:hydrofluoric_acid_bucket"
+			id: "3826D52A9D851E44"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "2C4363295C55176A"
+					item: "gtceu:hydrofluoric_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4DA722119B35005D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3826d52a9d851e44.title}"
+			x: 20.0d
+			y: 9.5d
+		}
+		{
+			icon: "gtceu:hydrochloric_acid_bucket"
+			id: "115A8F4A3FF514D8"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "7FD34E366B04D913"
+					item: "gtceu:hydrochloric_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "689AEFBD278235AD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.115a8f4a3ff514d8.title}"
+			x: 26.0d
+			y: 10.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:hydrochloric_acid_bucket"
+			id: "1CD8B448677A18F1"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "4178D4288301BE6E"
+					item: "gtceu:hydrochloric_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E7E5B73AE8B42E8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1cd8b448677a18f1.title}"
+			x: 8.5d
+			y: 17.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:ammonium_chloride_dust"
+			id: "69CC17C74F449A2C"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "4E232518C8FB9C7C"
+					item: "gtceu:ammonium_chloride_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "28158ADD5CFCE010"
+					type: "checkmark"
+				}
+			]
+			x: 9.5d
+			y: 17.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:soda_ash_dust"
+			id: "0EB271912D5F4761"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "06B4747C0F94AB6B"
+					item: "gtceu:soda_ash_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5585A9D55DBBDB24"
+					type: "checkmark"
+				}
+			]
+			x: 10.5d
+			y: 17.0d
+		}
+		{
+			icon: "gtceu:potassium_pyrosulfate_dust"
+			id: "2DEED122A9B447C5"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "005A837AB6FEAD0C"
+					item: "gtceu:potassium_pyrosulfate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "26124F9EDFE24D58"
+					type: "checkmark"
+				}
+			]
+			x: 4.5d
+			y: 20.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:sodium_nitrate_dust"
+			id: "71947B29A781480D"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "66EAF08EA75BEF66"
+					item: "gtceu:sodium_nitrate_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "50EDF91A50C50010"
+					type: "checkmark"
+				}
+			]
+			x: 11.5d
+			y: 17.0d
+		}
+		{
+			icon: "gtceu:aqua_regia_bucket"
+			id: "0AE7E19DC4FD17B2"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "425A30ACD4BFA078"
+					item: "gtceu:aqua_regia_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1979BAE37EA60F6D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0ae7e19dc4fd17b2.title}"
+			x: 7.5d
+			y: 17.0d
+		}
+		{
+			icon: "gtceu:formic_acid_bucket"
+			id: "043EF736C9E6B3FB"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "7781FF2F5F87863F"
+					item: "gtceu:formic_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4CD86AF897E96D4D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.043ef736c9e6b3fb.title}"
+			x: 4.5d
+			y: 22.0d
+		}
+		{
+			dependencies: ["365298DB6520227A"]
+			icon: "kubejs:reactor_uranium_simple"
+			id: "536F166366A79CA8"
+			tasks: [
+				{
+					id: "2B986E12593DA194"
+					item: "kubejs:reactor_uranium_simple"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41E924BAC9BF8D4F"
+					item: "kubejs:reactor_naquadah_simple"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "39F33DF2E899113F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.536f166366a79ca8.title}"
+			x: 7.5d
+			y: 26.5d
+		}
+		{
+			icon: "gtceu:ammonium_nitrate_solution_bucket"
+			id: "1F017EDA47785D38"
+			shape: "pentagon"
+			tasks: [
+				{
+					id: "07149A77227F03BA"
+					item: "gtceu:ammonium_nitrate_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "429B91DD1D08A9F2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1f017eda47785d38.title}"
+			x: 23.0d
+			y: 17.0d
+		}
+		{
+			dependencies: ["7CBD79CE32AF8E30"]
+			icon: "gtceu:argon_bucket"
+			id: "73CAB219B444F14D"
+			subtitle: "{gtlcore.quest.gtl.quest.73cab219b444f14d.subtitle}"
+			tasks: [{
+				id: "71EDCBA7450E2BA3"
+				title: "{gtlcore.quest.gtl.task.71edcba7450e2ba3.title}"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.73cab219b444f14d.title}"
+			x: 11.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["7CBD79CE32AF8E30"]
+			description: ["{gtlcore.quest.gtl.quest.5f6743f253daa00e.description.0000}"]
+			icon: "gtceu:chaos_bucket"
+			id: "5F6743F253DAA00E"
+			subtitle: "{gtlcore.quest.gtl.quest.5f6743f253daa00e.subtitle}"
+			tasks: [{
+				id: "531281C4D12E64E1"
+				title: "{gtlcore.quest.gtl.task.531281c4d12e64e1.title}"
+				type: "checkmark"
+			}]
+			x: 13.5d
+			y: 8.5d
+		}
+		{
+			dependencies: [
+				"4CD8D717657730DF"
+				"19F3E6426C5C7FCD"
+			]
+			icon: "gtceu:red_mud_bucket"
+			id: "6A97D3F6B0CE2C42"
+			subtitle: "{gtlcore.quest.gtl.quest.6a97d3f6b0ce2c42.subtitle}"
+			tasks: [
+				{
+					id: "5C43373EB7CD8621"
+					item: "gtceu:red_mud_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "036C36DE94386A52"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6a97d3f6b0ce2c42.title}"
+			x: 43.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["6A97D3F6B0CE2C42"]
+			icon: "gtceu:neutralised_red_mud_bucket"
+			id: "10DA22DCF8269EBE"
+			tasks: [
+				{
+					id: "31F9F43D155A5FCA"
+					item: "gtceu:neutralised_red_mud_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "22DD6C0C63B329DD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.10da22dcf8269ebe.title}"
+			x: 45.0d
+			y: -1.0d
+		}
+		{
+			dependencies: ["10DA22DCF8269EBE"]
+			icon: "gtceu:red_slurry_bucket"
+			id: "7B36AF4885EF0CE8"
+			tasks: [
+				{
+					id: "6A294833F791BB00"
+					item: "gtceu:red_slurry_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "67AC9E23C437E2D9"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7b36af4885ef0ce8.title}"
+			x: 46.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["10DA22DCF8269EBE"]
+			icon: "gtceu:ferric_ree_chloride_bucket"
+			id: "090B5ECF1E1446D0"
+			tasks: [
+				{
+					id: "5B7D2D6C4AFAA95D"
+					item: "gtceu:ferric_ree_chloride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4F5685B409F43974"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.090b5ecf1e1446d0.title}"
+			x: 45.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["7B36AF4885EF0CE8"]
+			icon: "gtceu:titanyl_sulfate_bucket"
+			id: "6506B06AD3678111"
+			tasks: [
+				{
+					id: "50FBFF7D602F24D2"
+					item: "gtceu:titanyl_sulfate_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "03A3A20080ABAAD6"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6506b06ad3678111.title}"
+			x: 48.0d
+			y: -1.0d
+		}
+		{
+			dependencies: ["6506B06AD3678111"]
+			icon: "gtceu:titanium_tetrachloride_bucket"
+			icon_scale: 2.0d
+			id: "2169CC60A6CD56B1"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "678B5AF630F7A692"
+					item: "gtceu:titanium_tetrachloride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "235526F9624509CC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2169cc60a6cd56b1.title}"
+			x: 49.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["090B5ECF1E1446D0"]
+			icon: "gtceu:rare_earth_chlorides_bucket"
+			icon_scale: 2.0d
+			id: "0774EF5DC443A072"
+			shape: "diamond"
+			tasks: [
+				{
+					id: "50EFAA286842158E"
+					item: "gtceu:rare_earth_chlorides_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "75C30F75C1C5C0D8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0774ef5dc443a072.title}"
+			x: 46.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["090B5ECF1E1446D0"]
+			icon: "gtceu:iron_iii_chloride_bucket"
+			id: "0C9C6415D9DEE550"
+			tasks: [
+				{
+					id: "661C77AF088538AF"
+					item: "gtceu:iron_iii_chloride_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "68E2EB5519D20F8B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0c9c6415d9dee550.title}"
+			x: 45.0d
+			y: 1.0d
+		}
+		{
+			icon: "gtceu:sodium_hydroxide_solution_bucket"
+			id: "19F3E6426C5C7FCD"
+			tasks: [
+				{
+					id: "58C96DADA3FC3AE2"
+					item: "gtceu:sodium_hydroxide_solution_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2A6B540F46124DFE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.19f3e6426c5c7fcd.title}"
+			x: 43.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["6F7ECACBB30F2E15"]
+			icon: "gtceu:stone_dust_residue_dust"
+			id: "4CD8D717657730DF"
+			subtitle: "{gtlcore.quest.gtl.quest.4cd8d717657730df.subtitle}"
+			tasks: [
+				{
+					id: "1539BCE6AE619FDC"
+					item: "gtceu:stone_dust_residue_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6750A96A94FA0742"
+					type: "checkmark"
+				}
+			]
+			x: 42.0d
+			y: -1.0d
+		}
+		{
+			dependencies: ["5E8F9D81FB483A5A"]
+			icon: "gtceu:dirty_hexafluorosilicic_acid_bucket"
+			id: "6F7ECACBB30F2E15"
+			tasks: [
+				{
+					id: "712C1798B874F30A"
+					item: "gtceu:dirty_hexafluorosilicic_acid_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "361D7F63E96FC3FD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6f7ecacbb30f2e15.title}"
+			x: 40.5d
+			y: -1.0d
+		}
+		{
+			id: "605B973142727552"
+			tasks: [{
+				id: "3A16890A86764715"
+				title: "{gtlcore.quest.gtl.task.3a16890a86764715.title}"
+				type: "checkmark"
+			}]
+			x: 39.0d
+			y: -2.0d
+		}
+		{
+			icon: "gtceu:stone_dust"
+			id: "5E8F9D81FB483A5A"
+			tasks: [
+				{
+					id: "61272BA88B86AB2A"
+					item: "gtceu:stone_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "63AA3C297DA290EE"
+					type: "checkmark"
+				}
+			]
+			x: 39.0d
+			y: -1.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.6589ff5d2a68b509.description.0000}"]
+			icon: "minecraft:lava_bucket"
+			id: "6589FF5D2A68B509"
+			tasks: [
+				{
+					id: "153DAD5549258C4B"
+					item: "gtceu:silicon_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "414CB8B8749E0B60"
+					item: "gtceu:magnesia_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "768A658ACFF5125F"
+					item: "gtceu:quicklime_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7C9B0CFA4ADE2266"
+					item: "minecraft:gold_nugget"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "06521653BB2E263C"
+					item: "gtceu:sapphire_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6B1B837C2BAB8145"
+					item: "gtceu:tantalite_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "16D8FC6E4F725221"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6589ff5d2a68b509.title}"
+			x: 49.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["4FD556B867463D30"]
+			id: "5DF5B7470FF81C80"
+			tasks: [{
+				id: "5A8293F9BBF582C1"
+				title: "{gtlcore.quest.gtl.task.5a8293f9bbf582c1.title}"
+				type: "checkmark"
+			}]
+			x: 16.0d
+			y: 24.5d
+		}
+		{
+			dependencies: ["5DF5B7470FF81C80"]
+			icon: "gtceu:ruby_slurry_bucket"
+			id: "0B4B79CC02E2FF3E"
+			tasks: [
+				{
+					id: "0D16B4781555A5EA"
+					item: "gtceu:aluminium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2570FDD28B29072C"
+					item: "gtceu:chromium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "12E0480691247C4C"
+					item: "gtceu:iron_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "24CD83A83EFEA66E"
+					item: "gtceu:vanadium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5BA899BD43D351D4"
+					item: "gtceu:titanium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2F592430C85BFE90"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0b4b79cc02e2ff3e.title}"
+			x: 16.0d
+			y: 23.5d
+		}
+		{
+			dependencies: ["5DF5B7470FF81C80"]
+			icon: "gtceu:sapphire_slurry_bucket"
+			id: "36B91BD999443B6A"
+			tasks: [
+				{
+					id: "5F5AD8986FDB3096"
+					item: "gtceu:aluminium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					consume_items: false
+					id: "1984D4EB00C4B3E0"
+					item: "gtceu:titanium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2883B6945D07C500"
+					item: "gtceu:iron_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "753602A3057D9B97"
+					item: "gtceu:vanadium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "59DC3739142B80FF"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.36b91bd999443b6a.title}"
+			x: 17.0d
+			y: 25.0d
+		}
+		{
+			dependencies: ["5DF5B7470FF81C80"]
+			icon: "gtceu:green_sapphire_slurry_bucket"
+			id: "49AA718B9CABF90E"
+			tasks: [
+				{
+					id: "18CB66816BAEACBF"
+					item: "gtceu:aluminium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0E0050107AFEF884"
+					item: "gtceu:beryllium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "623ACF7B4D99EA77"
+					item: "gtceu:titanium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "658D271E4122A427"
+					item: "gtceu:iron_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7E138D8D54CE4832"
+					item: "gtceu:vanadium_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1EFBC72BBD40B26D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.49aa718b9cabf90e.title}"
+			x: 15.0d
+			y: 25.0d
+		}
+		{
+			dependencies: ["3A1B2DE425269339"]
+			icon: "minecraft:gravel"
+			id: "0BFC95A048BA34FF"
+			subtitle: "{gtlcore.quest.gtl.quest.0bfc95a048ba34ff.subtitle}"
+			tasks: [
+				{
+					id: "6B28DACF192D2D0A"
+					item: "minecraft:gravel"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "458855132C6E0DDF"
+					type: "checkmark"
+				}
+			]
+			x: 30.0d
+			y: -1.0d
+		}
+		{
+			icon: "minecraft:cobblestone"
+			id: "3A1B2DE425269339"
+			tasks: [
+				{
+					id: "60039E59D5CF2FFA"
+					item: "minecraft:cobblestone"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0B3D0262186EB1FB"
+					type: "checkmark"
+				}
+			]
+			x: 28.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["0BFC95A048BA34FF"]
+			icon: "minecraft:sand"
+			id: "314AFD72A3AE2A13"
+			subtitle: "{gtlcore.quest.gtl.quest.314afd72a3ae2a13.subtitle}"
+			tasks: [
+				{
+					id: "3B4F398B48EF7AA3"
+					item: "minecraft:sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0BA781B75ED22F32"
+					type: "checkmark"
+				}
+			]
+			x: 31.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["314AFD72A3AE2A13"]
+			icon: "minecraft:glass"
+			id: "38960F5028500D2C"
+			subtitle: "{gtlcore.quest.gtl.quest.38960f5028500d2c.subtitle}"
+			tasks: [
+				{
+					id: "605927AC8EB703FB"
+					item: "minecraft:glass"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7BBE011A92FE8AF7"
+					type: "checkmark"
+				}
+			]
+			x: 33.0d
+			y: -1.0d
+		}
+		{
+			dependencies: ["38960F5028500D2C"]
+			icon: "gtceu:glass_dust"
+			id: "710DAA152D6FFCA2"
+			subtitle: "{gtlcore.quest.gtl.quest.710daa152d6ffca2.subtitle}"
+			tasks: [
+				{
+					id: "5B9681EB0DBFF167"
+					item: "gtceu:glass_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "025DBE15862EEFD3"
+					type: "checkmark"
+				}
+			]
+			x: 34.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["710DAA152D6FFCA2"]
+			description: ["{gtlcore.quest.gtl.quest.2eed5b75dee9b11a.description.0000}"]
+			icon: "gtceu:silicon_dioxide_dust"
+			icon_scale: 2.0d
+			id: "2EED5B75DEE9B11A"
+			shape: "diamond"
+			subtitle: "{gtlcore.quest.gtl.quest.2eed5b75dee9b11a.subtitle}"
+			tasks: [
+				{
+					id: "497E915C86EF6DD6"
+					item: "gtceu:silicon_dioxide_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "29392FF29842ABFA"
+					type: "checkmark"
+				}
+			]
+			x: 36.0d
+			y: -1.0d
+		}
+		{
+			id: "379B4B02D157C824"
+			tasks: [{
+				id: "1B072339BCBE0852"
+				title: "{gtlcore.quest.gtl.task.1b072339bcbe0852.title}"
+				type: "checkmark"
+			}]
+			x: 28.5d
+			y: -2.0d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.0ef94fa5d02096d9.title}"
+}

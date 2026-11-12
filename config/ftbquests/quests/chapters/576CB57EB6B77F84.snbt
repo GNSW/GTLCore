@@ -1,0 +1,2001 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "576CB57EB6B77F84"
+	group: "24F4987B35ABEE82"
+	icon: "ad_astra:coal_generator"
+	id: "576CB57EB6B77F84"
+	order_index: 4
+	quest_links: [{
+		id: "36B7CB415A94ED0D"
+		linked_quest: "1486FC9F82B2E56E"
+		x: 3.5d
+		y: -3.5d
+	}]
+	quests: [
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:lv_wireless_energy_receive_cover"
+			id: "7577061AE4366606"
+			tasks: [{
+				id: "208E887FE1E45C23"
+				title: "{gtlcore.quest.gtl.task.208e887fe1e45c23.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: -3.5d
+		}
+		{
+			dependencies: ["7577061AE4366606"]
+			dependency_requirement: "one_completed"
+			description: [
+				"{gtlcore.quest.gtl.quest.4c591aa4f1d907c1.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4c591aa4f1d907c1.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4c591aa4f1d907c1.description.0004}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.4c591aa4f1d907c1.description.0006}"
+			]
+			hide_dependent_lines: true
+			id: "4C591AA4F1D907C1"
+			rewards: [
+				{
+					id: "6FBE47C05C4F3A66"
+					item: "gtceu:lv_primitive_magic_energy"
+					type: "item"
+				}
+				{
+					id: "3107B7FFED0C090D"
+					item: "minecraft:end_crystal"
+					type: "item"
+				}
+				{
+					id: "5BAC40FA163F69AB"
+					item: "minecraft:obsidian"
+					type: "item"
+				}
+			]
+			tasks: [{
+				id: "243E535AEDB5D1A5"
+				item: "gtceu:lv_steam_turbine"
+				type: "item"
+			}]
+			x: -2.5d
+			y: -3.5d
+		}
+		{
+			dependencies: ["7577061AE4366606"]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"2E401B78E52B9BBC\"},\"translate\":\"gtlcore.quest.gtl.quest.11cbf5394de28373.description.0000.text.0000\"}"]
+			id: "11CBF5394DE28373"
+			tasks: [{
+				id: "64A4900F3622DCD3"
+				item: "gtceu:lv_combustion"
+				type: "item"
+			}]
+			x: -1.0d
+			y: -3.5d
+		}
+		{
+			dependencies: ["7577061AE4366606"]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"351B9D097EC493C5\"},\"translate\":\"gtlcore.quest.gtl.quest.2103464d61daf017.description.0000.text.0000\"}"]
+			id: "2103464D61DAF017"
+			tasks: [{
+				id: "1D2E4E5A4DEFD377"
+				item: "gtceu:lv_gas_turbine"
+				type: "item"
+			}]
+			x: 0.5d
+			y: -3.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:mv_wireless_energy_receive_cover"
+			id: "05C8B854877A8A7D"
+			tasks: [{
+				id: "503E4DDF1F1A68CC"
+				title: "{gtlcore.quest.gtl.task.503e4ddf1f1a68cc.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: -2.0d
+		}
+		{
+			dependencies: ["05C8B854877A8A7D"]
+			description: ["{gtlcore.quest.gtl.quest.18e1b2bb5cd96398.description.0000}"]
+			id: "18E1B2BB5CD96398"
+			subtitle: "{gtlcore.quest.gtl.quest.18e1b2bb5cd96398.subtitle}"
+			tasks: [{
+				id: "77D31323DD63EC0C"
+				item: "gtceu:mv_steam_turbine"
+				type: "item"
+			}]
+			x: -2.5d
+			y: -2.0d
+		}
+		{
+			dependencies: ["05C8B854877A8A7D"]
+			description: ["{gtlcore.quest.gtl.quest.2edff445746b7571.description.0000}"]
+			id: "2EDFF445746B7571"
+			tasks: [{
+				id: "007DBD60D0CD1C12"
+				item: "gtceu:mv_combustion"
+				type: "item"
+			}]
+			x: -1.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["05C8B854877A8A7D"]
+			description: ["{gtlcore.quest.gtl.quest.07103c13615b4340.description.0000}"]
+			id: "07103C13615B4340"
+			tasks: [{
+				id: "7D9607E817F5F3C8"
+				item: "gtceu:mv_gas_turbine"
+				type: "item"
+			}]
+			x: 0.5d
+			y: -2.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:hv_wireless_energy_receive_cover"
+			id: "6934C9C15FAAD00A"
+			tasks: [{
+				id: "2206076670EC76B3"
+				title: "{gtlcore.quest.gtl.task.2206076670ec76b3.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: -0.5d
+		}
+		{
+			dependencies: ["6934C9C15FAAD00A"]
+			description: ["{gtlcore.quest.gtl.quest.67a3afd69b00ec4c.description.0000}"]
+			id: "67A3AFD69B00EC4C"
+			tasks: [{
+				id: "73693527D6E35992"
+				item: "gtceu:hv_steam_turbine"
+				type: "item"
+			}]
+			x: -2.5d
+			y: -0.5d
+		}
+		{
+			dependencies: ["6934C9C15FAAD00A"]
+			id: "4AE439A017FF5A04"
+			tasks: [{
+				id: "31B6DE310917805B"
+				item: "gtceu:hv_combustion"
+				type: "item"
+			}]
+			x: -1.0d
+			y: -0.5d
+		}
+		{
+			dependencies: ["6934C9C15FAAD00A"]
+			id: "5F1205B5A2B98E21"
+			tasks: [{
+				id: "41A77DEE3ADFAD06"
+				item: "gtceu:hv_gas_turbine"
+				type: "item"
+			}]
+			x: 0.5d
+			y: -0.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:ev_wireless_energy_receive_cover"
+			id: "62D8D7B8C9730557"
+			tasks: [{
+				id: "0CE1A9B25F5823C9"
+				title: "{gtlcore.quest.gtl.task.0ce1a9b25f5823c9.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["4C591AA4F1D907C1"]
+			description: [
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0008}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0015}"
+				""
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0009}"
+				""
+				"{gtlcore.quest.gtl.quest.1b77b2c00b24906e.description.0014}"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:steam_large_turbine"
+			id: "1B77B2C00B24906E"
+			rewards: [{
+				id: "21590805634EFCFF"
+				item: {
+					Count: 1
+					id: "gtceu:turbine_rotor"
+					tag: {
+						GT.PartStats: {
+							Material: "gtceu:hssg"
+						}
+					}
+				}
+				type: "item"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.1b77b2c00b24906e.subtitle}"
+			tasks: [
+				{
+					id: "72AF5205FE80B133"
+					item: "gtceu:steam_large_turbine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "58949511FC574F0A"
+					item: {
+						Count: 1
+						id: "gtceu:turbine_rotor"
+						tag: {
+							GT.PartStats: {
+								Material: "gtceu:aluminium"
+							}
+						}
+					}
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5642FDE8D5824121"
+					type: "checkmark"
+				}
+			]
+			x: 3.5d
+			y: -0.5d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"62D8D7B8C9730557"
+			]
+			description: ["{gtlcore.quest.gtl.quest.38918d31e5a969c1.description.0000}"]
+			id: "38918D31E5A969C1"
+			tasks: [{
+				id: "225A42BE61876F4A"
+				item: "gtceu:gas_large_turbine"
+				type: "item"
+			}]
+			x: 3.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["62D8D7B8C9730557"]
+			description: [
+				"{gtlcore.quest.gtl.quest.763dde9819c3986c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.763dde9819c3986c.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.763dde9819c3986c.description.0004}"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:large_combustion_engine"
+			id: "763DDE9819C3986C"
+			tasks: [
+				{
+					id: "3D82B481E29DAE6B"
+					item: "gtceu:large_combustion_engine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0ECD461BEF7872C7"
+					type: "checkmark"
+				}
+			]
+			x: 0.5d
+			y: 1.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:iv_wireless_energy_receive_cover"
+			id: "5460CFE78B89DC30"
+			tasks: [{
+				id: "4B7E26D82AAFA0A5"
+				title: "{gtlcore.quest.gtl.task.4b7e26d82aafa0a5.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 2.5d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"62D8D7B8C9730557"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.6196565b3de59bf1.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6196565b3de59bf1.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.6196565b3de59bf1.description.0004}"
+			]
+			icon: "gtceu:steam_mega_turbine"
+			id: "6196565B3DE59BF1"
+			rewards: [{
+				id: "2361C99C0B6F8D3A"
+				item: "gtceu:rotor_hatch"
+				type: "item"
+			}]
+			tasks: [{
+				id: "625BBCED62255415"
+				item: "gtceu:steam_mega_turbine"
+				type: "item"
+			}]
+			x: 6.5d
+			y: 1.0d
+		}
+		{
+			dependencies: [
+				"5460CFE78B89DC30"
+				"763DDE9819C3986C"
+			]
+			description: ["{gtlcore.quest.gtl.quest.3dfd3d7c8df30b75.description.0000}"]
+			id: "3DFD3D7C8DF30B75"
+			tasks: [{
+				id: "14FBA3E915BD5C17"
+				item: "gtceu:extreme_combustion_engine"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 2.5d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"5460CFE78B89DC30"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1ff27c8ce8bd4041.description.0000}"]
+			id: "1FF27C8CE8BD4041"
+			tasks: [{
+				id: "7A3302436045F131"
+				item: "gtceu:gas_mega_turbine"
+				type: "item"
+			}]
+			x: 3.5d
+			y: 2.5d
+		}
+		{
+			dependencies: ["62D8D7B8C9730557"]
+			description: ["{gtlcore.quest.gtl.quest.1bdb51f089ed52d3.description.0000}"]
+			id: "1BDB51F089ED52D3"
+			tasks: [{
+				id: "0D3FDB5461E50DF0"
+				item: "gtceu:ev_rocket_engine"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["5460CFE78B89DC30"]
+			description: ["{gtlcore.quest.gtl.quest.1a76e49604336b50.description.0000}"]
+			id: "1A76E49604336B50"
+			tasks: [{
+				id: "3A071C147BA1B580"
+				item: "gtceu:iv_rocket_engine"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 2.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:luv_wireless_energy_receive_cover"
+			id: "504BA5B399BFA571"
+			tasks: [{
+				id: "326C22F23137507B"
+				title: "{gtlcore.quest.gtl.task.326c22f23137507b.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["504BA5B399BFA571"]
+			description: ["{gtlcore.quest.gtl.quest.5960aa3d42e0f886.description.0000}"]
+			id: "5960AA3D42E0F886"
+			tasks: [{
+				id: "68AC62415412A2A1"
+				item: "gtceu:luv_rocket_engine"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["504BA5B399BFA571"]
+			description: ["{gtlcore.quest.gtl.quest.2cc7e0e80d23e7ef.description.0000}"]
+			id: "2CC7E0E80D23E7EF"
+			tasks: [{
+				id: "562C661F9252E3AF"
+				item: "gtceu:luv_naquadah_reactor"
+				type: "item"
+			}]
+			x: 0.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["5460CFE78B89DC30"]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"36F5A40D3976E512\"},\"translate\":\"gtlcore.quest.gtl.quest.48991235c17fb211.description.0000.text.0000\"}"]
+			id: "48991235C17FB211"
+			tasks: [{
+				id: "5AF1CFBEC9280D1A"
+				item: "gtceu:iv_naquadah_reactor"
+				type: "item"
+			}]
+			x: 0.5d
+			y: 2.5d
+		}
+		{
+			dependencies: ["1BD6F43D61ABF744"]
+			description: ["{gtlcore.quest.gtl.quest.67a37c28f37f2c3d.description.0000}"]
+			id: "67A37C28F37F2C3D"
+			tasks: [{
+				id: "43FD10D740D6DCB4"
+				item: "gtceu:zpm_naquadah_reactor"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 5.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:zpm_wireless_energy_receive_cover"
+			id: "1BD6F43D61ABF744"
+			tasks: [{
+				id: "1661853C8F3910C0"
+				title: "{gtlcore.quest.gtl.task.1661853c8f3910c0.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 5.5d
+		}
+		{
+			dependencies: [
+				"5460CFE78B89DC30"
+				"763DDE9819C3986C"
+			]
+			description: ["{gtlcore.quest.gtl.quest.666098a2d466c77a.description.0000}"]
+			id: "666098A2D466C77A"
+			tasks: [{
+				id: "05ADF526AE790643"
+				item: "gtceu:chemical_energy_devourer"
+				type: "item"
+			}]
+			x: 6.5d
+			y: 2.5d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"5460CFE78B89DC30"
+			]
+			description: ["{gtlcore.quest.gtl.quest.2cf58b9ef4f70090.description.0000}"]
+			id: "2CF58B9EF4F70090"
+			tasks: [{
+				id: "5ACF147740945167"
+				item: "gtceu:rocket_mega_turbine"
+				type: "item"
+			}]
+			x: 5.0d
+			y: 2.5d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"504BA5B399BFA571"
+			]
+			description: ["{gtlcore.quest.gtl.quest.5e76606d0601e263.description.0000}"]
+			id: "5E76606D0601E263"
+			tasks: [{
+				id: "3EE9E5A4C22EB8A5"
+				item: "gtceu:plasma_large_turbine"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"1BD6F43D61ABF744"
+			]
+			id: "48462EE64EA29340"
+			tasks: [{
+				id: "70FB2E5BE288D032"
+				item: "gtceu:plasma_mega_turbine"
+				type: "item"
+			}]
+			x: -1.0d
+			y: 5.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:uv_wireless_energy_receive_cover"
+			id: "44F827B28C513D5B"
+			tasks: [{
+				id: "513C7F42EA555C43"
+				title: "{gtlcore.quest.gtl.task.513c7f42ea555c43.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"62D8D7B8C9730557"
+			]
+			description: ["{gtlcore.quest.gtl.quest.408c3c831b65d6f1.description.0000}"]
+			id: "408C3C831B65D6F1"
+			tasks: [{
+				id: "32BCA52A82F7C585"
+				item: "gtceu:rocket_large_turbine"
+				type: "item"
+			}]
+			x: 5.0d
+			y: 1.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:uhv_wireless_energy_receive_cover"
+			id: "4B33F47839538D7B"
+			tasks: [{
+				id: "5B512F241E6679D1"
+				title: "{gtlcore.quest.gtl.task.5b512f241e6679d1.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["4B33F47839538D7B"]
+			description: [
+				"{gtlcore.quest.gtl.quest.548e8fa4b1004534.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.548e8fa4b1004534.description.0002}"
+			]
+			id: "548E8FA4B1004534"
+			tasks: [{
+				id: "5079AC2040FDA3AA"
+				item: "gtceu:hyper_reactor"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["19C7474792787EE9"]
+			description: [
+				"{gtlcore.quest.gtl.quest.082bb082be18c820.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.082bb082be18c820.description.0002}"
+			]
+			id: "082BB082BE18C820"
+			subtitle: "{gtlcore.quest.gtl.quest.082bb082be18c820.subtitle}"
+			tasks: [{
+				id: "4DC11532BC403AB3"
+				item: "gtceu:dyson_sphere"
+				type: "item"
+			}]
+			x: -1.0d
+			y: 10.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:uiv_wireless_energy_receive_cover"
+			id: "19C7474792787EE9"
+			tasks: [{
+				id: "2E8606C5E07D1D88"
+				title: "{gtlcore.quest.gtl.task.2e8606c5e07d1d88.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 10.0d
+		}
+		{
+			dependencies: ["19C7474792787EE9"]
+			description: [
+				"{gtlcore.quest.gtl.quest.25f672cf48091cec.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.25f672cf48091cec.description.0002}"
+			]
+			id: "25F672CF48091CEC"
+			subtitle: "{gtlcore.quest.gtl.quest.25f672cf48091cec.subtitle}"
+			tasks: [{
+				id: "7F7D348C6E55EC07"
+				item: "gtceu:advanced_hyper_reactor"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 10.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:opv_wireless_energy_receive_cover"
+			id: "31779C5096523FEF"
+			tasks: [{
+				id: "28E9E67B5567ABFB"
+				title: "{gtlcore.quest.gtl.task.28e9e67b5567abfb.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 11.5d
+		}
+		{
+			dependencies: ["7577061AE4366606"]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"1248D8F428A12A95\"},\"translate\":\"gtlcore.quest.gtl.quest.6ef3c749d06c7262.description.0000.text.0000\"}"]
+			id: "6EF3C749D06C7262"
+			tasks: [{
+				id: "329F1BD301166219"
+				item: "gtceu:lv_semi_fluid"
+				type: "item"
+			}]
+			x: 2.0d
+			y: -3.5d
+		}
+		{
+			dependencies: ["05C8B854877A8A7D"]
+			id: "28507EACD363F3D1"
+			tasks: [{
+				id: "1D47416F630379AB"
+				item: "gtceu:mv_semi_fluid"
+				type: "item"
+			}]
+			x: 2.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["6934C9C15FAAD00A"]
+			description: ["{gtlcore.quest.gtl.quest.236eb8b88ea504c9.description.0000}"]
+			id: "236EB8B88EA504C9"
+			tasks: [{
+				id: "778BDD1B9F40E23F"
+				item: "gtceu:hv_semi_fluid"
+				type: "item"
+			}]
+			x: 2.0d
+			y: -0.5d
+		}
+		{
+			dependencies: [
+				"62D8D7B8C9730557"
+				"763DDE9819C3986C"
+			]
+			id: "4E8004D6D020E5E5"
+			tasks: [{
+				id: "37D6A5F6A1C6D304"
+				item: "gtceu:large_semi_fluid_generator"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 1.0d
+		}
+		{
+			dependencies: ["62D8D7B8C9730557"]
+			description: [
+				"{gtlcore.quest.gtl.quest.45656bc02dc740ce.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.45656bc02dc740ce.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.45656bc02dc740ce.description.0004}"
+				""
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"0F663054E006E97B\"},\"translate\":\"gtlcore.quest.gtl.quest.45656bc02dc740ce.description.0006.text.0000\"}"
+			]
+			id: "45656BC02DC740CE"
+			rewards: [{
+				id: "04F92B9F1BC615D2"
+				item: {
+					Count: 1
+					id: "minecraft:trident"
+					tag: {
+						Damage: 240
+						Enchantments: [{
+							id: "minecraft:channeling"
+							lvl: 1
+						}]
+					}
+				}
+				type: "item"
+			}]
+			tasks: [{
+				id: "11BBDF10AD954709"
+				item: "gtceu:ev_lightning_rod"
+				type: "item"
+			}]
+			x: -1.0d
+			y: 1.0d
+		}
+		{
+			dependencies: ["5460CFE78B89DC30"]
+			id: "61B0C3E3C0B7E6EE"
+			rewards: [{
+				id: "5140439277BABE11"
+				item: {
+					Count: 1
+					id: "minecraft:trident"
+					tag: {
+						Damage: 240
+						Enchantments: [{
+							id: "minecraft:channeling"
+							lvl: 1
+						}]
+					}
+				}
+				type: "item"
+			}]
+			tasks: [{
+				id: "31A9D370C6B93F87"
+				item: "gtceu:iv_lightning_rod"
+				type: "item"
+			}]
+			x: -1.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["504BA5B399BFA571"]
+			id: "36ED28C6C3F2CDEC"
+			rewards: [{
+				id: "449571C11EA4E049"
+				item: {
+					Count: 1
+					id: "minecraft:trident"
+					tag: {
+						Damage: 240
+						Enchantments: [{
+							id: "minecraft:channeling"
+							lvl: 1
+						}]
+					}
+				}
+				type: "item"
+			}]
+			tasks: [{
+				id: "5BEE28B100FC5354"
+				item: "gtceu:luv_lightning_rod"
+				type: "item"
+			}]
+			x: -1.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"504BA5B399BFA571"
+			]
+			description: ["{gtlcore.quest.gtl.quest.749ffdd88305518c.description.0000}"]
+			id: "749FFDD88305518C"
+			tasks: [{
+				id: "7EE83AF0AE0CD89E"
+				item: "gtceu:supercritical_steam_turbine"
+				type: "item"
+			}]
+			x: 3.5d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"1B77B2C00B24906E"
+				"1BD6F43D61ABF744"
+			]
+			id: "301FD6AEF56EDB77"
+			tasks: [{
+				id: "039203DBB3645A9D"
+				item: "gtceu:supercritical_mega_steam_turbine"
+				type: "item"
+			}]
+			x: 0.5d
+			y: 5.5d
+		}
+		{
+			dependencies: ["1A6111948261BCB8"]
+			description: [
+				"{gtlcore.quest.gtl.quest.410d898f86927828.description.0000}"
+				"{gtlcore.quest.gtl.quest.410d898f86927828.description.0001}"
+			]
+			icon: "gtceu:steam_bucket"
+			id: "410D898F86927828"
+			subtitle: "{gtlcore.quest.gtl.quest.410d898f86927828.subtitle}"
+			tasks: [
+				{
+					id: "56F7A145321FEBD7"
+					item: "gtceu:steam_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "350AC64C547729BB"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.410d898f86927828.title}"
+			x: -8.5d
+			y: 5.5d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:light_fuel_bucket"
+			id: "156A6119EF3FC8EC"
+			subtitle: "{gtlcore.quest.gtl.quest.156a6119ef3fc8ec.subtitle}"
+			tasks: [
+				{
+					id: "1E363439BE539298"
+					item: "gtceu:light_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4B3D8D45E413B269"
+					item: "gtceu:sulfuric_light_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3C74B8D3F9984DCB"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.156a6119ef3fc8ec.title}"
+			x: -11.5d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:diesel_bucket"
+			id: "760B73534368A83F"
+			subtitle: "{gtlcore.quest.gtl.quest.760b73534368a83f.subtitle}"
+			tasks: [
+				{
+					id: "5FA9888C67929589"
+					item: "gtceu:diesel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "42CAFFF90E233ED4"
+					item: "gtceu:cetane_boosted_diesel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6A2ACEDE1A19A66A"
+					item: "gtceu:bio_diesel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7188FADD94412ACF"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.760b73534368a83f.title}"
+			x: -10.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["1A6111948261BCB8"]
+			icon: "gtceu:supercritical_steam_bucket"
+			id: "19B859F1C3DBECC7"
+			subtitle: "{gtlcore.quest.gtl.quest.19b859f1c3dbecc7.subtitle}"
+			tasks: [
+				{
+					id: "2FC2DAC3F005A348"
+					item: "gtceu:supercritical_steam_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "64FDBA80800826A3"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.19b859f1c3dbecc7.title}"
+			x: -10.0d
+			y: 5.5d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:benzene_bucket"
+			id: "3C210DB34841CFB8"
+			subtitle: "{gtlcore.quest.gtl.quest.3c210db34841cfb8.subtitle}"
+			tasks: [
+				{
+					id: "312A1A1C47D1F12E"
+					item: "gtceu:benzene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7194EF4F829117AE"
+					item: "gtceu:nitrobenzene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3CC7B52A2DDE13CA"
+					item: "gtceu:phenol_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "56F7084DD2860CB9"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3c210db34841cfb8.title}"
+			x: -8.5d
+			y: -3.5d
+		}
+		{
+			dependencies: [
+				"456FF3E513F8660C"
+				"2E401B78E52B9BBC"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:rocket_fuel_bucket"
+			id: "10FC17CA92F03449"
+			tasks: [
+				{
+					id: "494ED57AD7C250C0"
+					item: "gtceu:rocket_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "585CC0485C0589F1"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.10fc17ca92f03449.title}"
+			x: -8.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["456FF3E513F8660C"]
+			icon: "gtceu:rocket_fuel_rp_1_bucket"
+			id: "0E05F0BA3F52580A"
+			subtitle: "{gtlcore.quest.gtl.quest.0e05f0ba3f52580a.subtitle}"
+			tasks: [
+				{
+					id: "6C126B5EB720870F"
+					item: "gtceu:rocket_fuel_rp_1_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7C0509BB5EB12EE1"
+					item: "gtceu:dense_hydrazine_fuel_mixture_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "30123D8086D84D8C"
+					item: "gtceu:rocket_fuel_cn3h7o3_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6A76AC0C22C40B6A"
+					item: "ad_astra:cryo_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5EEC127A1DE73D49"
+					item: "gtceu:stellar_energy_rocket_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "72BF982EF919F293"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0e05f0ba3f52580a.title}"
+			x: -11.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["456FF3E513F8660C"]
+			description: ["{gtlcore.quest.gtl.quest.7f74d4ed0c9354c2.description.0000}"]
+			icon: "gtceu:rocket_fuel_h8n4c2o4_bucket"
+			id: "7F74D4ED0C9354C2"
+			subtitle: "{gtlcore.quest.gtl.quest.7f74d4ed0c9354c2.subtitle}"
+			tasks: [
+				{
+					id: "35616BDE7144320C"
+					item: "gtceu:rocket_fuel_h8n4c2o4_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "273F7336141D55FF"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7f74d4ed0c9354c2.title}"
+			x: -10.0d
+			y: 1.0d
+		}
+		{
+			dependencies: ["3E951CCF86DDA5CB"]
+			icon: "gtceu:naquadah_fuel_bucket"
+			id: "39C2B44EAE240C42"
+			subtitle: "{gtlcore.quest.gtl.quest.39c2b44eae240c42.subtitle}"
+			tasks: [
+				{
+					id: "7983F795CA030A71"
+					item: "gtceu:naquadah_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6C4202A348C5A14E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.39c2b44eae240c42.title}"
+			x: -11.5d
+			y: 2.5d
+		}
+		{
+			dependencies: ["3E951CCF86DDA5CB"]
+			icon: "gtceu:enriched_naquadah_fuel_bucket"
+			id: "75C002EA5F45EB2B"
+			subtitle: "{gtlcore.quest.gtl.quest.75c002ea5f45eb2b.subtitle}"
+			tasks: [
+				{
+					id: "36B5B049C7D1DAA0"
+					item: "gtceu:enriched_naquadah_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "42D27AC3B07DC898"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.75c002ea5f45eb2b.title}"
+			x: -13.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["1814ECC88C7A6D7E"]
+			icon: "gtceu:nitrogen_plasma_bucket"
+			id: "2B19FC33D419D5F3"
+			subtitle: "{gtlcore.quest.gtl.quest.2b19fc33d419d5f3.subtitle}"
+			tasks: [
+				{
+					id: "0BD570C9462116B0"
+					item: "gtceu:nitrogen_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6BDC70109D040156"
+					item: "gtceu:oxygen_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "55FF0FBCF3F4603C"
+					item: "gtceu:helium_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "525C5ACEDC5FC419"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2b19fc33d419d5f3.title}"
+			x: -8.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1A6111948261BCB8"]
+			icon: "gtceu:hyper_fuel_1_bucket"
+			id: "4C7F01C6BDC4C668"
+			subtitle: "{gtlcore.quest.gtl.quest.4c7f01c6bdc4c668.subtitle}"
+			tasks: [
+				{
+					id: "06F85A701518B6F5"
+					item: "gtceu:hyper_fuel_1_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "170F06CEC80E8064"
+					item: "gtceu:hyper_fuel_2_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "64AC3D663B37D806"
+					item: "gtceu:hyper_fuel_3_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7889220B2D1FB064"
+					item: "gtceu:hyper_fuel_4_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "618C675912DD6D18"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4c7f01c6bdc4c668.title}"
+			x: -8.5d
+			y: 8.5d
+		}
+		{
+			dependencies: ["1A6111948261BCB8"]
+			description: ["{gtlcore.quest.gtl.quest.703b4e87bfb463a3.description.0000}"]
+			icon: "gtceu:concentration_mixing_hyper_fuel_1_bucket"
+			id: "703B4E87BFB463A3"
+			subtitle: "{gtlcore.quest.gtl.quest.703b4e87bfb463a3.subtitle}"
+			tasks: [
+				{
+					id: "5F10F9EBFF422F19"
+					item: "gtceu:concentration_mixing_hyper_fuel_1_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3560E9EFBBA5A492"
+					item: "gtceu:concentration_mixing_hyper_fuel_2_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1CF78040408BAE70"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.703b4e87bfb463a3.title}"
+			x: -8.5d
+			y: 10.0d
+		}
+		{
+			dependencies: ["1A6111948261BCB8"]
+			icon: "kubejs:neutronium_antimatter_fuel_rod"
+			id: "0371ECA23AB14C7F"
+			subtitle: "{gtlcore.quest.gtl.quest.0371eca23ab14c7f.subtitle}"
+			tasks: [
+				{
+					id: "6ED166264A82E96F"
+					item: "kubejs:neutronium_antimatter_fuel_rod"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "60C7E1074E36278D"
+					item: "kubejs:draconium_antimatter_fuel_rod"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0B91B62CB9B36F4E"
+					item: "kubejs:cosmicneutronium_antimatter_fuel_rod"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "441A60B4E4B75056"
+					item: "kubejs:infinity_antimatter_fuel_rod"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "73D5441111075427"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0371eca23ab14c7f.title}"
+			x: -8.5d
+			y: 11.5d
+		}
+		{
+			dependencies: ["1A6111948261BCB8"]
+			icon: "kubejs:dyson_swarm_module"
+			id: "5E0E64D2C0CA912A"
+			tasks: [
+				{
+					id: "34B2083FD039EFE4"
+					item: "kubejs:dyson_swarm_module"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6D898C0C4CAC1D20"
+					item: "kubejs:gelid_cryotheum_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7BA617FD694A5732"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5e0e64d2c0ca912a.title}"
+			x: -10.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["31779C5096523FEF"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5ca04083fcfd26a8.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5ca04083fcfd26a8.description.0002}"
+			]
+			id: "5CA04083FCFD26A8"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5ca04083fcfd26a8.subtitle}"
+			tasks: [{
+				id: "13573E3E1023E028"
+				item: "gtceu:annihilate_generator"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 11.5d
+		}
+		{
+			dependencies: ["44F827B28C513D5B"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0004}"
+				"{\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"5535934109A12B5D\"},\"translate\":\"gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0005.text.0000\"}"
+				"{gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0006}"
+				"{gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0007}"
+				""
+				"{gtlcore.quest.gtl.quest.7bbbf338330f4793.description.0009}"
+			]
+			id: "7BBBF338330F4793"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "450CDF7F75C84E34"
+				table_id: 6225023274141477362L
+				type: "loot"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.7bbbf338330f4793.subtitle}"
+			tasks: [{
+				id: "17D037479DE11EDF"
+				item: "gtceu:large_naquadah_reactor"
+				type: "item"
+			}]
+			x: -2.5d
+			y: 7.0d
+		}
+		{
+			dependencies: ["3E951CCF86DDA5CB"]
+			icon: "gtceu:naquadah_bucket"
+			id: "2B9329747B063165"
+			subtitle: "{gtlcore.quest.gtl.quest.2b9329747b063165.subtitle}"
+			tasks: [
+				{
+					id: "68B36EA0FAE0FCED"
+					item: "gtceu:naquadah_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4645C6993A5378BD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2b9329747b063165.title}"
+			x: -8.5d
+			y: 2.5d
+		}
+		{
+			dependencies: ["3E951CCF86DDA5CB"]
+			icon: "gtceu:enriched_naquadah_bucket"
+			id: "18CC8C74CC9D7550"
+			subtitle: "{gtlcore.quest.gtl.quest.18cc8c74cc9d7550.subtitle}"
+			tasks: [
+				{
+					id: "41AC5E8F88FA39E4"
+					item: "gtceu:enriched_naquadah_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3A6997E8ED2B59E0"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.18cc8c74cc9d7550.title}"
+			x: -10.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["1814ECC88C7A6D7E"]
+			icon: "gtceu:mithril_plasma_bucket"
+			id: "2B8D6962F7760615"
+			subtitle: "{gtlcore.quest.gtl.quest.2b8d6962f7760615.subtitle}"
+			tasks: [
+				{
+					id: "54E3E5B6B1391176"
+					item: "gtceu:mithril_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0D12117745CB17D6"
+					item: "gtceu:orichalcum_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4FFA236D4AFF951B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2b8d6962f7760615.title}"
+			x: -11.5d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1814ECC88C7A6D7E"]
+			icon: "gtceu:silver_plasma_bucket"
+			id: "57831AAC063CA3EB"
+			subtitle: "{gtlcore.quest.gtl.quest.57831aac063ca3eb.subtitle}"
+			tasks: [
+				{
+					id: "552AB01251E342F2"
+					item: "gtceu:silver_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3F88F542F195D379"
+					item: "gtceu:iron_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3D6ABFF4BB672C3B"
+					item: "gtceu:nickel_plasma_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "48AECCE08AB7B2E9"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.57831aac063ca3eb.title}"
+			x: -10.0d
+			y: 4.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:luv_naquadah_reactor"
+			id: "3E951CCF86DDA5CB"
+			tasks: [{
+				id: "330EAAD1F7D76DB7"
+				title: "{gtlcore.quest.gtl.task.330eaad1f7d76db7.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: 2.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:luv_rocket_engine"
+			id: "456FF3E513F8660C"
+			tasks: [{
+				id: "0AA9768CA91B571A"
+				title: "{gtlcore.quest.gtl.task.0aa9768ca91b571a.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["456FF3E513F8660C"]
+			icon: "gtceu:explosivehydrazine_bucket"
+			id: "434E3D95145C537C"
+			subtitle: "{gtlcore.quest.gtl.quest.434e3d95145c537c.subtitle}"
+			tasks: [
+				{
+					id: "1D11C0A07525961E"
+					item: "gtceu:explosivehydrazine_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0C046FF8996F3F8C"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.434e3d95145c537c.title}"
+			x: -13.0d
+			y: 1.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:plasma_large_turbine"
+			id: "1814ECC88C7A6D7E"
+			tasks: [{
+				id: "17DA1F85537D48E0"
+				title: "{gtlcore.quest.gtl.task.17da1f85537d48e0.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: 4.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:hv_combustion"
+			id: "2E401B78E52B9BBC"
+			tasks: [{
+				id: "69C6510D05710D1D"
+				title: "{gtlcore.quest.gtl.task.69c6510d05710d1d.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: -2.0d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:hv_gas_turbine"
+			id: "351B9D097EC493C5"
+			tasks: [{
+				id: "74F26AD3A9FAFE49"
+				title: "{gtlcore.quest.gtl.task.74f26ad3a9fafe49.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: -3.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:hv_semi_fluid"
+			id: "1248D8F428A12A95"
+			tasks: [{
+				id: "0070F56927FEED89"
+				title: "{gtlcore.quest.gtl.task.0070f56927feed89.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: -0.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtceu:fission_reactor"
+			id: "1A6111948261BCB8"
+			tasks: [{
+				id: "353661CEC8603F0F"
+				title: "{gtlcore.quest.gtl.task.353661cec8603f0f.title}"
+				type: "checkmark"
+			}]
+			x: -6.5d
+			y: 5.5d
+		}
+		{
+			dependencies: ["1248D8F428A12A95"]
+			description: ["{gtlcore.quest.gtl.quest.1d8a7d7fb1810c98.description.0000}"]
+			icon: "gtceu:oil_heavy_bucket"
+			id: "1D8A7D7FB1810C98"
+			subtitle: "{gtlcore.quest.gtl.quest.1d8a7d7fb1810c98.subtitle}"
+			tasks: [
+				{
+					id: "5BB6F24F46BACEDD"
+					item: "gtceu:oil_heavy_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3EBFAA1AF7A3A4F4"
+					item: "gtceu:oil_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "544114AD48A51B09"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1d8a7d7fb1810c98.title}"
+			x: -8.5d
+			y: -0.5d
+		}
+		{
+			dependencies: [
+				"1248D8F428A12A95"
+				"2E401B78E52B9BBC"
+			]
+			dependency_requirement: "one_completed"
+			icon: "gtceu:oil_light_bucket"
+			id: "18067F02EC9451C6"
+			subtitle: "{gtlcore.quest.gtl.quest.18067f02ec9451c6.subtitle}"
+			tasks: [
+				{
+					id: "750E90F673CE8833"
+					item: "gtceu:oil_light_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7D9D85FABE3306FA"
+					item: "gtceu:oil_medium_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "297EE116C736F6FA"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.18067f02ec9451c6.title}"
+			x: -10.0d
+			y: -0.5d
+		}
+		{
+			dependencies: ["1248D8F428A12A95"]
+			icon: "gtceu:heavy_fuel_bucket"
+			id: "35814A2AC2F64619"
+			subtitle: "{gtlcore.quest.gtl.quest.35814a2ac2f64619.subtitle}"
+			tasks: [
+				{
+					id: "51AE369811C5373E"
+					item: "gtceu:heavy_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "055A56EACFEFD8A5"
+					item: "gtceu:sulfuric_heavy_fuel_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "754F2E1C6E4C17B0"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.35814a2ac2f64619.title}"
+			x: -13.0d
+			y: -0.5d
+		}
+		{
+			dependencies: ["1248D8F428A12A95"]
+			icon: "gtceu:biomass_bucket"
+			id: "4A7A5410BD430499"
+			tasks: [
+				{
+					id: "10A5DE70FEA980EF"
+					item: "gtceu:biomass_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6862052DBA786A36"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4a7a5410bd430499.title}"
+			x: -14.5d
+			y: -0.5d
+		}
+		{
+			dependencies: ["1248D8F428A12A95"]
+			icon: "gtceu:glycerol_bucket"
+			id: "5D99E179D0441A2B"
+			subtitle: "{gtlcore.quest.gtl.quest.5d99e179d0441a2b.subtitle}"
+			tasks: [
+				{
+					id: "21E7755982AFACE4"
+					item: "gtceu:glycerol_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "53011A4BBFB39AC5"
+					item: "gtceu:creosote_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5E9E9D9AEE6CDF8D"
+					item: "gtceu:coal_tar_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "61E3549CF2F21DA9"
+					item: "gtceu:seed_oil_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1FDFAABFEF2CE144"
+					item: "gtceu:fish_oil_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1D329AD0791CF059"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5d99e179d0441a2b.title}"
+			x: -11.5d
+			y: -0.5d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:gasoline_bucket"
+			id: "5CAAF5F2517154CF"
+			subtitle: "{gtlcore.quest.gtl.quest.5caaf5f2517154cf.subtitle}"
+			tasks: [
+				{
+					id: "139BA85283FA6BE6"
+					item: "gtceu:gasoline_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3A0D2D40197F7513"
+					item: "gtceu:high_octane_gasoline_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "580E1921FF02B4E3"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5caaf5f2517154cf.title}"
+			x: -8.5d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:methanol_bucket"
+			id: "0BAF673775810FDA"
+			subtitle: "{gtlcore.quest.gtl.quest.0baf673775810fda.subtitle}"
+			tasks: [
+				{
+					id: "2822B22BD83FFB2D"
+					item: "gtceu:methanol_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "019305EBFBAF4271"
+					item: "gtceu:ethanol_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4CE656F684BA4533"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0baf673775810fda.title}"
+			x: -13.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:naphtha_bucket"
+			id: "0F1F54BF056184CB"
+			tasks: [
+				{
+					id: "7D13BF8F859D369D"
+					item: "gtceu:naphtha_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0183FF921EA06622"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0f1f54bf056184cb.title}"
+			x: -14.5d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:octane_bucket"
+			id: "3F7ABC60B4648790"
+			tasks: [
+				{
+					id: "4A35C71999A1B0CC"
+					item: "gtceu:octane_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1CA9BDBBB1E731E4"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3f7abc60b4648790.title}"
+			x: -16.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2E401B78E52B9BBC"]
+			icon: "gtceu:toluene_bucket"
+			id: "04210BEFF26EFEA8"
+			tasks: [
+				{
+					id: "0C7F515C9336085F"
+					item: "gtceu:toluene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "73B92C8E4525BB96"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.04210beff26efea8.title}"
+			x: -17.5d
+			y: -2.0d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:ethylene_bucket"
+			id: "552C19BEDDAF85A9"
+			subtitle: "{gtlcore.quest.gtl.quest.552c19beddaf85a9.subtitle}"
+			tasks: [
+				{
+					id: "1B0068DFEC0BD555"
+					item: "gtceu:ethylene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "325750B462CFD2DA"
+					item: "gtceu:propene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1BAC7619C0226220"
+					item: "gtceu:butene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "62706A38C7A957B2"
+					item: "gtceu:butadiene_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2198F43BD963CE7D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.552c19beddaf85a9.title}"
+			x: -10.0d
+			y: -3.5d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:sulfuric_naphtha_bucket"
+			id: "1083F3227DA6309F"
+			tasks: [
+				{
+					id: "2F8405BEDD2209AD"
+					item: "gtceu:sulfuric_naphtha_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2E4D6B8D59D5C87E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1083f3227da6309f.title}"
+			x: -14.5d
+			y: -3.5d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:methane_bucket"
+			id: "3233B8B40DCAA08D"
+			subtitle: "{gtlcore.quest.gtl.quest.3233b8b40dcaa08d.subtitle}"
+			tasks: [
+				{
+					id: "5B0A118BE6D9FEAE"
+					item: "gtceu:methane_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1CB6A273D85D10FF"
+					item: "gtceu:ethane_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E9E1D9A4B50B9BE"
+					item: "gtceu:propane_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "23A7E0CACCE90137"
+					item: "gtceu:butane_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3C299235352614A2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3233b8b40dcaa08d.title}"
+			x: -11.5d
+			y: -3.5d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:refinery_gas_bucket"
+			id: "7D0D37B4B70AF728"
+			subtitle: "{gtlcore.quest.gtl.quest.7d0d37b4b70af728.subtitle}"
+			tasks: [
+				{
+					id: "77A56EFD17BF6D4C"
+					item: "gtceu:refinery_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4101B07F0799F6F5"
+					item: "gtceu:sulfuric_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4745FAB89DC43D95"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7d0d37b4b70af728.title}"
+			x: -13.0d
+			y: -3.5d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:natural_gas_bucket"
+			id: "4C7E7DDDC91991E5"
+			subtitle: "{gtlcore.quest.gtl.quest.4c7e7dddc91991e5.subtitle}"
+			tasks: [
+				{
+					id: "5ED755EF2736F285"
+					item: "gtceu:natural_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6E0B4E5D9404C2C8"
+					item: "gtceu:lpg_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1BDCFCBB0E2A658F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4c7e7dddc91991e5.title}"
+			x: -16.0d
+			y: -3.5d
+		}
+		{
+			dependencies: ["351B9D097EC493C5"]
+			icon: "gtceu:coal_gas_bucket"
+			id: "0E38C8FDAD35779A"
+			subtitle: "{gtlcore.quest.gtl.quest.0e38c8fdad35779a.subtitle}"
+			tasks: [
+				{
+					id: "5BC7EE8083D5046A"
+					item: "gtceu:coal_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "145C2E790D2E708D"
+					item: "gtceu:wood_gas_bucket"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1FBB2F7E2E88BB59"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0e38c8fdad35779a.title}"
+			x: -17.5d
+			y: -3.5d
+		}
+		{
+			hide_dependent_lines: true
+			icon: "gtmthings:max_wireless_energy_receive_cover"
+			id: "129B3F81E43C237D"
+			tasks: [{
+				id: "7953D09AF58F4D90"
+				title: "{gtlcore.quest.gtl.task.7953d09af58f4d90.title}"
+				type: "checkmark"
+			}]
+			x: -4.5d
+			y: 13.0d
+		}
+		{
+			dependencies: ["129B3F81E43C237D"]
+			description: ["{gtlcore.quest.gtl.quest.3b18900343c2f4e3.description.0000}"]
+			icon: "gtceu:active_transformer"
+			id: "3B18900343C2F4E3"
+			subtitle: "{gtlcore.quest.gtl.quest.3b18900343c2f4e3.subtitle}"
+			tasks: [
+				{
+					id: "586428C96B81B3FF"
+					item: "gtceu:active_transformer"
+					type: "item"
+				}
+				{
+					id: "7392D649858C0BAC"
+					item: "gtmthings:creative_energy_hatch"
+					type: "item"
+				}
+				{
+					id: "7DEC05B7049C4085"
+					item: "gtmthings:creative_laser_hatch"
+					type: "item"
+				}
+				{
+					id: "56DAF1C0101F4081"
+					item: "gtmthings:max_4194304a_wireless_laser_source_hatch"
+					type: "item"
+				}
+			]
+			x: -2.5d
+			y: 13.0d
+		}
+		{
+			description: ["{gtlcore.quest.gtl.quest.09aadf1a6ecb4164.description.0000}"]
+			icon: "gtceu:solar_panel"
+			id: "09AADF1A6ECB4164"
+			subtitle: "{gtlcore.quest.gtl.quest.09aadf1a6ecb4164.subtitle}"
+			tasks: [{
+				id: "31290CFE5589EA23"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.09aadf1a6ecb4164.title}"
+			x: -6.5d
+			y: 7.0d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.576cb57eb6b77f84.title}"
+}

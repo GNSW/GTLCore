@@ -1,0 +1,4721 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: "hexagon"
+	filename: "49ED18A26C5A1B83"
+	group: "24F4987B35ABEE82"
+	icon: "gtceu:electric_blast_furnace"
+	id: "49ED18A26C5A1B83"
+	order_index: 5
+	progression_mode: "flexible"
+	quest_links: [ ]
+	quests: [
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0000}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0001}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0002}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0003}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0004}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0006}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0007}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0008}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0009}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0010}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0011}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0012}"
+				""
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0030}"
+				""
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0014}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0015}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0016}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0018}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0019}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0020}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0021}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0022}"
+				""
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0024}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0025}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0026}"
+				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0027}"
+			]
+			hide_dependent_lines: true
+			icon: "gtlcore:structure_detect"
+			icon_scale: 1.3d
+			id: "262671AC71B36736"
+			rewards: [{
+				id: "496E682F4928BE18"
+				item: "gtceu:copper_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "245AC1ED6CECE7D0"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.262671ac71b36736.title}"
+			x: -10.0d
+			y: -2.0d
+		}
+		{
+			description: [
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0000}"
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0001}"
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0004}"
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0005}"
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0006}"
+				"{gtlcore.quest.gtl.quest.124ee416d53264b8.description.0007}"
+			]
+			hide_dependent_lines: true
+			icon: "gtceu:max_dual_input_hatch"
+			icon_scale: 1.3d
+			id: "124EE416D53264B8"
+			rewards: [{
+				id: "79538B4B19DE9885"
+				item: "gtceu:copper_credit"
+				type: "item"
+			}]
+			tasks: [{
+				id: "703A425F858BE442"
+				title: "{gtlcore.quest.gtl.task.703a425f858be442.title}"
+				type: "checkmark"
+			}]
+			x: -8.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["5930E12A8BCAF996"]
+			icon_scale: 1.3d
+			id: "703F7F40C36AC0DD"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "495A72B1612C0BC6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "2AB92C4BB85484CD"
+				item: "gtceu:electric_blast_furnace"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"703F7F40C36AC0DD"
+				"5930E12A8BCAF996"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "24D3D414058A19D8"
+			tasks: [{
+				id: "5C9D71CE1F39D1A4"
+				item: "gtceu:cupronickel_coil_block"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"24D3D414058A19D8"
+				"36742169BE411C01"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "3BDD3759B2C12843"
+			tasks: [{
+				id: "0DD6195A3A0A58FC"
+				item: "gtceu:kanthal_coil_block"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"3BDD3759B2C12843"
+				"4F6776718454D6D1"
+				"32BD532132423050"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "6C1258159E342BFB"
+			tasks: [{
+				id: "5CFB9A0F21385BD5"
+				item: "gtceu:nichrome_coil_block"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"6C1258159E342BFB"
+				"45096D94AE6F7864"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "10FE41FB3D5B5118"
+			tasks: [{
+				id: "638FF3E26C81720D"
+				item: "gtceu:rtm_alloy_coil_block"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 5.5d
+		}
+		{
+			dependencies: [
+				"10FE41FB3D5B5118"
+				"1443E064A0AB0B8B"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "31D132F6EC9062BC"
+			tasks: [{
+				id: "7B5204F3B6E6D82E"
+				item: "gtceu:hssg_coil_block"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 5.5d
+		}
+		{
+			dependencies: [
+				"31D132F6EC9062BC"
+				"6D3BE9E3D76C71F9"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "4706F66FF46487F2"
+			tasks: [{
+				id: "443DD5E60A85CE55"
+				item: "gtceu:naquadah_coil_block"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 5.5d
+		}
+		{
+			dependencies: [
+				"4706F66FF46487F2"
+				"6D3BE9E3D76C71F9"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "20244C7F0CCA0B56"
+			tasks: [{
+				id: "2EF13FF8A46E8A81"
+				item: "gtceu:trinium_coil_block"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"20244C7F0CCA0B56"
+				"5672B9E868EDBE4D"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "1634D669590E28E3"
+			tasks: [{
+				id: "69C2F24D7140D3EA"
+				item: "gtceu:tritanium_coil_block"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"1634D669590E28E3"
+				"253337A8CECFB499"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "00F50033D3AF8479"
+			tasks: [{
+				id: "5FCD131CFF643162"
+				item: "kubejs:abyssalalloy_coil_block"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"00F50033D3AF8479"
+				"6A590699685D1D8A"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "0EE3316A709A45FE"
+			tasks: [{
+				id: "240F70B294FA73C1"
+				item: "kubejs:titansteel_coil_block"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 8.5d
+		}
+		{
+			dependencies: [
+				"0EE3316A709A45FE"
+				"65C4F7EDC0E9D99D"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "59FB03850785FF2F"
+			tasks: [{
+				id: "3B6E996C4F732910"
+				item: { Count: 16, id: "kubejs:adamantine_coil_block" }
+				type: "item"
+			}]
+			x: -2.0d
+			y: 8.5d
+		}
+		{
+			dependencies: [
+				"59FB03850785FF2F"
+				"65C4F7EDC0E9D99D"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "5AEC213D2281F8F0"
+			tasks: [{
+				id: "32B961C1335D9D0D"
+				item: { Count: 16, id: "kubejs:naquadriatictaranium_coil_block" }
+				type: "item"
+			}]
+			x: -4.0d
+			y: 8.5d
+		}
+		{
+			dependencies: [
+				"5AEC213D2281F8F0"
+				"5019F5F1A660DB40"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "4C54B6D5B8BB6626"
+			tasks: [{
+				id: "40B8CE0E81F493CA"
+				item: { Count: 16, id: "kubejs:starmetal_coil_block" }
+				type: "item"
+			}]
+			x: -4.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"4C54B6D5B8BB6626"
+				"234661B47841AA2B"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "66DA8A1B2CEEB9A1"
+			tasks: [{
+				id: "0999BA1473904A08"
+				item: { Count: 16, id: "kubejs:infinity_coil_block" }
+				type: "item"
+			}]
+			x: -2.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"66DA8A1B2CEEB9A1"
+				"234661B47841AA2B"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "1795FC9ACAC4D042"
+			tasks: [{
+				id: "042FCC16A0D4A88D"
+				item: { Count: 16, id: "kubejs:hypogen_coil_block" }
+				type: "item"
+			}]
+			x: 0.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"1795FC9ACAC4D042"
+				"234661B47841AA2B"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "7B8EC90F1EFDB7F2"
+			tasks: [{
+				id: "67129ADF4E0E8389"
+				item: { Count: 16, id: "kubejs:eternity_coil_block" }
+				type: "item"
+			}]
+			x: 0.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["23DC6EEC1BCEF845"]
+			description: ["{gtlcore.quest.gtl.quest.06eaf391250421ca.description.0000}"]
+			icon_scale: 1.3d
+			id: "06EAF391250421CA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "51AE69A98F3C27CD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "3EDDB35968BBBEDD"
+				item: "gtceu:dimensionally_transcendent_plasma_forge"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "4F6776718454D6D1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6DB0A965FE7F502A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "089D3DB381324C35"
+				item: "gtceu:vacuum_freezer"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "34908D217BF13202"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2709B18A4178A073"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1E87D587DFD3E87D"
+				item: "gtceu:cold_ice_freezer"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"4F6776718454D6D1"
+				"253337A8CECFB499"
+			]
+			icon_scale: 1.3d
+			id: "789045D2500D0273"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "708072AD29EF9968"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4C3CFED2CDA00203"
+				item: "gtceu:mega_vacuum_freezer"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "1991013E3A63A228"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5F7F11DDBCCCEE83"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7CC5CA80646DA932"
+				item: "gtceu:blaze_blast_furnace"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"703F7F40C36AC0DD"
+				"5672B9E868EDBE4D"
+			]
+			icon_scale: 1.3d
+			id: "7EC8ABE240032E52"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6BF510A5B0604C71"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "08042E19C729FD76"
+				item: "gtceu:mega_blast_furnace"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"7EC8ABE240032E52"
+				"43BE6D55B3BB6FDE"
+				"253337A8CECFB499"
+			]
+			icon_scale: 1.3d
+			id: "06EDDFCA1F5A655D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "645140503424FE9B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7664A77072AB9CBE"
+				item: "gtceu:super_blast_smelter"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"70B58231B2150488"
+				"5672B9E868EDBE4D"
+			]
+			icon_scale: 1.3d
+			id: "43BE6D55B3BB6FDE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7BA9F465E9A45F0D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "66B79900264C6A4C"
+				item: "gtceu:mega_alloy_blast_smelter"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			description: ["{gtlcore.quest.gtl.quest.70b58231b2150488.description.0000}"]
+			icon_scale: 1.3d
+			id: "70B58231B2150488"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3771D0609B30997A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 1.0d
+			tasks: [{
+				id: "46C1CD3452A95743"
+				item: "gtceu:alloy_blast_smelter"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "18DF7BD5424C42C2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "465D1CD00A257E04"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1F4D6E17C8653F61"
+				item: "gtceu:primitive_blast_furnace"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"18DF7BD5424C42C2"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "369BD7F046987CB2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4DF8583624FB132B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "18E383DE56A0FCFF"
+				item: "gtceu:dimensionally_transcendent_dirt_forge"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "14B9F8B8BB4FB8EE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4F805A78BB316BF6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7B3AB142A4992E94"
+				item: "gtceu:bronze_large_boiler"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "3EE3754E039F4075"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6B832656C359FB16"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6968E1DED56DAABF"
+				item: "gtceu:steel_large_boiler"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "744502A8023CFB5B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "690EF0BD3ACF5206"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "61FB35BCA78F91AA"
+				item: "gtceu:titanium_large_boiler"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "780C2F702D31BFCB"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5C534446857DDFCB"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0C42DD216CE02B13"
+				item: "gtceu:tungstensteel_large_boiler"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"780C2F702D31BFCB"
+				"1443E064A0AB0B8B"
+			]
+			dependency_requirement: "all_started"
+			icon_scale: 1.3d
+			id: "4AB7F1BE4D120AF9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5DBF783BD4950475"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "10D830BF010D798A"
+				item: "gtceu:dimensionally_transcendent_steam_boiler"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "5B84CF1D367582E4"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "297C2DAD29B04CC2"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4FB2D4251A56E0E3"
+				item: "gtceu:steam_oven"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"5B84CF1D367582E4"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "67D7D6E7D2F3D8B3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "641B5378E252E002"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "4831728CD372B9AF"
+				item: "gtceu:dimensionally_transcendent_steam_oven"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "293762688F27FD99"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6BFE06FBF885039A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7E8CE46EE2DFF56A"
+				item: "gtceu:steam_grinder"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"293762688F27FD99"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			description: ["{gtlcore.quest.gtl.quest.51a1a2397af521d9.description.0000}"]
+			icon_scale: 1.3d
+			id: "51A1A2397AF521D9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "27FCA877295F3C85"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "62A40548C20A4310"
+				item: "gtceu:large_steam_macerator"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			description: ["{gtlcore.quest.gtl.quest.4877db6020d6bfbc.description.0000}"]
+			icon_scale: 1.3d
+			id: "4877DB6020D6BFBC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0DE03DDF82CC3896"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7619FF42134B3ED2"
+				item: "gtceu:steam_piston_hammer"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "7902A7E9ADB189D9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7402B738BBBE281B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "35F12473994F904B"
+				item: "gtceu:steam_pressor"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			description: ["{gtlcore.quest.gtl.quest.77406a75bd5839c2.description.0000}"]
+			icon_scale: 1.3d
+			id: "77406A75BD5839C2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4B17B1D24FF36223"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "2AEC60CE651B6400"
+				item: "gtceu:steam_foundry"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "0B96B20B2FEE77CE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "58286266EBC6B53E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1454A4D453C3E27E"
+				item: "gtceu:steam_mixer"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"0B96B20B2FEE77CE"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "37CD2592D45E71E0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3DCD46B117E58A68"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "35F532684CE5F88C"
+				item: "gtceu:large_steam_mixer"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "7FF9045E4B4B2459"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "66A2793725D21F05"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "440816FA8D648C70"
+				item: "gtceu:large_steam_centrifuge"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "7AE52BAD2043947A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5792931C3DC35035"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4DEA5FEBD6461E5F"
+				item: "gtceu:large_steam_thermal_centrifuge"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "4043EFEBD3B3F866"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6AB701EA9326B81A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "282F36F20F540214"
+				item: "gtceu:steam_bath"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"4043EFEBD3B3F866"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "4D7B7F0FA6962066"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3A0A112588CDFA2D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "32FE2B3978582F49"
+				item: "gtceu:large_steam_bath"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "20640FDFDB9A19EA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2DEA2B3AA8ABE8B6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5EBAAC64FCA23A6C"
+				item: "gtceu:steam_ore_washer"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"20640FDFDB9A19EA"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "63EC74F3B67B9E2E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "205FC694683B88F3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5D864E297DE95B6E"
+				item: "gtceu:large_steam_ore_washer"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "3541676E1269F053"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3C16EFCFF7AA2915"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 2.0d
+			tasks: [{
+				id: "216BEDD1FE314954"
+				item: "gtceu:large_chemical_reactor"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"3541676E1269F053"
+				"6D3BE9E3D76C71F9"
+			]
+			icon_scale: 1.3d
+			id: "15C94BB329BF231C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6936D838CB00BE2F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6277B0EFAA01A408"
+				item: "gtceu:chemical_plant"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"15C94BB329BF231C"
+				"6A590699685D1D8A"
+			]
+			icon_scale: 1.3d
+			id: "395977CDDDD7DB71"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6C1E1B8BD3C5B2AE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "30B926D755C75047"
+				item: "gtceu:large_chemical_plant"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			description: [
+				"{gtlcore.quest.gtl.quest.17a797c2d7167222.description.0000}"
+				"{gtlcore.quest.gtl.quest.17a797c2d7167222.description.0001}"
+			]
+			icon_scale: 1.3d
+			id: "17A797C2D7167222"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1DA6CB2EB174A515"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7DEC23B5B5B60887"
+				item: "gtceu:distillation_tower"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "1C4D03D4C5202D67"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "14169810E6E089F5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "298F3156F852D73F"
+				item: "gtceu:cracker"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			description: ["{gtlcore.quest.gtl.quest.0a65389266654b6a.description.0000}"]
+			icon_scale: 1.3d
+			id: "0A65389266654B6A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "62BCF50DEEFE8709"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "08CFD0E0ECD34F97"
+				item: "gtceu:large_steam_circuit_assembler"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "6992E6733C4AF2C8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "12BC3272FEEB984A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7D98AA262099E416"
+				item: "gtceu:multi_smelter"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "1A2E1B8496F9BCBC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "39C24581CBD3BD70"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1A236859B4DFDAC8"
+				item: "gtceu:fishing_ground"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["5930E12A8BCAF996"]
+			icon_scale: 1.3d
+			id: "4BC1562A95EEFB49"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2372B07B3A55DAA8"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "370B060E1D3FBCFC"
+				item: "gtceu:slaughterhouse"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "4DB8234007297D23"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4F74225199F7A06A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1CAB2CF1C63F092A"
+				item: "gtceu:large_material_press"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "61FC724C91DD34AA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "24B5067D1E0FA965"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "556592649525E5EA"
+				item: "gtceu:large_wiremill"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "6646B75F928E5E24"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6978B78108936A7B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "108CFC9419E38D01"
+				item: "gtceu:large_extruder"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			description: ["{gtlcore.quest.gtl.quest.40f426c73bc0d0b1.description.0000}"]
+			icon_scale: 1.3d
+			id: "40F426C73BC0D0B1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4DC8A49C11922401"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "71B58F12D90004CD"
+				item: "gtceu:large_maceration_tower"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			description: ["{gtlcore.quest.gtl.quest.68231575d1c914d3.description.0000}"]
+			icon_scale: 1.3d
+			id: "68231575D1C914D3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "378603E7F5996EE7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "24C4FBB352F17232"
+				item: "gtceu:large_rock_crusher"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "2B84B8AF004A3E30"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2B51713C9E43EB72"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0AD11A5E68B5AB76"
+				item: "gtceu:large_chemical_bath"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "4CE943B11817839B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1B82FDC8A5A0C59D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "626DF9530989FAFF"
+				item: "gtceu:large_autoclave"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			description: [
+				"{gtlcore.quest.gtl.quest.0ba7e63542f3df65.description.0000}"
+				"{gtlcore.quest.gtl.quest.0ba7e63542f3df65.description.0001}"
+				"{gtlcore.quest.gtl.quest.0ba7e63542f3df65.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "0BA7E63542F3DF65"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4E4A8577DF13056D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "46B00D07B903315D"
+				item: "gtceu:large_distillery"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "7B27C60DCA2E3E3B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4939524DE541D0BE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5457CF6985E9B652"
+				item: "gtceu:large_extractor"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "73098848CB2E14A0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "21301F28AE51AAC8"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "631601FF1B2F5811"
+				item: "gtceu:large_solidifier"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			description: ["{gtlcore.quest.gtl.quest.18252d602561e4a9.description.0000}"]
+			icon_scale: 1.3d
+			id: "18252D602561E4A9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "34AD0183FD8E756A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "06C8CFECF0770A4B"
+				item: "gtceu:large_assembler"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			description: ["{gtlcore.quest.gtl.quest.0892bf5a6b8239f3.description.0000}"]
+			icon_scale: 1.3d
+			id: "0892BF5A6B8239F3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "327E5948BAC520B5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6C133A30621B7CF8"
+				item: "gtceu:large_circuit_assembler"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "4C3AEBDFC6EABF1C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0F56DAAFD22360C3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "131B8455EC02C61C"
+				item: "gtceu:large_centrifuge"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "575ED5E8BFF4C4DA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7E958CB35A2676AA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "21A2787A7737A002"
+				item: "gtceu:large_sifting_funnel"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "1028F818343D7E98"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "69AE982662AF69B2"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0774458710DDC0C1"
+				item: "gtceu:large_mixer"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "567F4961F73AF444"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "77785BC3FB417DAE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "68F64EA7774D3D95"
+				item: "gtceu:large_electrolyzer"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "733F780D21B24299"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5E77B47BC59C8D83"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "00C8354009D8F1E9"
+				item: "gtceu:large_electromagnet"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "39AF31AE6A35268B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2FBF4BBFCA0F49F5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6AEE584059520EAE"
+				item: "gtceu:large_arc_smelter"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "6877D6C1A85A3966"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3468C8EE388C127A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "73C1891D4BA13645"
+				item: "gtceu:large_engraving_laser"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "655590EA82BBCE85"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5EAC5CE53D864C45"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "31F4AB1734BAF33E"
+				item: "gtceu:large_brewer"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "222812461331CD79"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1BEF8B1662A47204"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "2451AFBFC91B1C5B"
+				item: "gtceu:large_cutter"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"1C4D03D4C5202D67"
+				"6D3BE9E3D76C71F9"
+			]
+			icon_scale: 1.3d
+			id: "49AAFC714080194F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "45671D9D577CDAB4"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "04AC6931B5188ABA"
+				item: "gtceu:large_cracker"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "6F214917085BB3C1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6CC5FA9A8B38A74B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6B3A120AF6198847"
+				item: "gtceu:large_gas_collector"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "6D92BE9ABB5872A8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "15A5EC4A60C52BAA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "14DC29114E2E9E95"
+				item: "gtceu:void_miner"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "7655EE3D83EBB13E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "72DBF4D9A638BBE5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "43B052665415761A"
+				item: "gtceu:iv_large_miner"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "473D7D8B36DB5430"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7A50FAE1F9A9CBE5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1E91FAD2754E680A"
+				item: "gtceu:ev_large_miner"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "2CCAD0B9D81993B8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0D204DF3A5B14B3C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5E8405B5834ED9BA"
+				item: "gtceu:luv_large_miner"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 14.0d
+		}
+		{
+			dependencies: [
+				"2CCAD0B9D81993B8"
+				"7655EE3D83EBB13E"
+				"473D7D8B36DB5430"
+				"5672B9E868EDBE4D"
+				"6D92BE9ABB5872A8"
+			]
+			icon_scale: 1.3d
+			id: "56F2156559F2ADF9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2F1C80DECBEA53D8"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "49BA26D8933E6AB2"
+				item: "gtceu:large_void_miner"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["36742169BE411C01"]
+			icon_scale: 1.3d
+			id: "4BE89B8ACA67B40E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "427B908E3141A42D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "2AE174BF3F387D9B"
+				item: "gtceu:mv_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "2C5487A0EC202859"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0B4EE63CDE158FED"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "30B3C1A31C071416"
+				item: "gtceu:hv_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "64FDE4E65171925B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5759A3D01816688D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "2CCF1EDF23AB860F"
+				item: "gtceu:ev_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"4BE89B8ACA67B40E"
+				"2C5487A0EC202859"
+				"64FDE4E65171925B"
+				"5672B9E868EDBE4D"
+			]
+			dependency_requirement: "all_started"
+			icon_scale: 1.3d
+			id: "6D6A8592BA1B4A3B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "20F011F838A68F9B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1C69197EB8ADD074"
+				item: "gtceu:void_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "219F925EFF51D910"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "73414F51AAC24123"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "15159BAB2249A9C2"
+				item: "gtceu:implosion_compressor"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"219F925EFF51D910"
+				"5672B9E868EDBE4D"
+			]
+			icon_scale: 1.3d
+			id: "7B69F3FFF5B4ACD0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1A5876D3198F6E8D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "385FF806612D15D2"
+				item: "gtceu:electric_implosion_compressor"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["36742169BE411C01"]
+			icon_scale: 1.3d
+			id: "22D20E733EF2AAA6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6276C00BEAC8AD00"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4BFEF0EEFB69C047"
+				item: "gtceu:pyrolyse_oven"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"22D20E733EF2AAA6"
+				"1443E064A0AB0B8B"
+			]
+			icon_scale: 1.3d
+			id: "395FF094289E28A6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "653FADF59EA2CAD6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "08EC32D1BA08F740"
+				item: "gtceu:large_pyrolyse_oven"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			description: [
+				"{gtlcore.quest.gtl.quest.224b850538d346d3.description.0000}"
+				"{gtlcore.quest.gtl.quest.224b850538d346d3.description.0001}"
+			]
+			icon_scale: 1.3d
+			id: "224B850538D346D3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1CFD1107C96B9564"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "35754BC5CA22B983"
+				item: "gtceu:evaporation_plant"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			description: ["{gtlcore.quest.gtl.quest.2576eb4b191fa2c2.description.0000}"]
+			icon_scale: 1.3d
+			id: "2576EB4B191FA2C2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4499B855700FF7BE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "694E93AAE449976E"
+				item: "gtceu:primitive_pump"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "2868F50AE67459A0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6D69F2747570E93C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3F252D04A2CA9A6C"
+				item: "gtceu:coke_oven"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "5A3ED2E3807DC4F8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "74D18D5316459A49"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0F8C11179A5C3EDB"
+				item: "gtceu:wooden_multiblock_tank"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "1AA844E565DA56CE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "77BE85F9D0B345CD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "27C60DD71B3C55C1"
+				item: "gtceu:steel_multiblock_tank"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "558B8208DD44E27B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "13BD214F6556FF6A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0BFDC960CC82E3B0"
+				item: "gtceu:assembly_line"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"558B8208DD44E27B"
+				"253337A8CECFB499"
+			]
+			icon_scale: 1.3d
+			id: "05801CE2E3390E3F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "39F850D4F582FC1B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "34B271313B0D9275"
+				item: "gtceu:advanced_assembly_line"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["253337A8CECFB499"]
+			icon_scale: 1.3d
+			id: "592B6311A21418F2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "27A124E466A63633"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "46362AC0356A022F"
+				item: "gtceu:circuit_assembly_line"
+				type: "item"
+			}]
+			x: -12.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "2ECA13C21316E02E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5AAF12EF09D98680"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4C9B6C9E9C0C7530"
+				item: "gtceu:precision_assembler"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"2ECA13C21316E02E"
+				"6A590699685D1D8A"
+			]
+			icon_scale: 1.3d
+			id: "51B87A7BB7ED907F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "239FA8058B9671A1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6DF0A0A96D362F8A"
+				item: "gtceu:mage_assembler"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"24F5D1338F48A57E"
+				"592B6311A21418F2"
+				"05801CE2E3390E3F"
+			]
+			icon_scale: 1.3d
+			id: "46ACC4672A4FBF67"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "353C3686965F51A8"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6459458AFA862B47"
+				item: "gtceu:suprachronal_assembly_line"
+				type: "item"
+			}]
+			x: -10.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"46ACC4672A4FBF67"
+			]
+			icon_scale: 1.3d
+			id: "3B7D2907D1B6A0D1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "67F6AD0D65EDC4F4"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "39BBC4F42BD49987"
+				item: "gtceu:suprachronal_assembly_line_module"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["253337A8CECFB499"]
+			icon_scale: 1.3d
+			id: "40D8E0B3024D5231"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "16558D7A60D33ABC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "295710BB8066D43B"
+				item: "gtceu:space_elevator"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"253337A8CECFB499"
+				"40D8E0B3024D5231"
+				"05801CE2E3390E3F"
+			]
+			description: ["{gtlcore.quest.gtl.quest.24f5d1338f48a57e.description.0000}"]
+			icon_scale: 1.3d
+			id: "24F5D1338F48A57E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6E364B8D8BFCF58F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3BA3485CD23604FF"
+				item: "gtceu:assembler_module"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"253337A8CECFB499"
+				"40D8E0B3024D5231"
+				"56F2156559F2ADF9"
+				"6D6A8592BA1B4A3B"
+			]
+			description: ["{gtlcore.quest.gtl.quest.290495468bab6553.description.0000}"]
+			icon_scale: 1.3d
+			id: "290495468BAB6553"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3899AFBD2C09F3CC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5F02C1D185DD1B36"
+				item: "gtceu:resource_collection"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "6314B1DF4CF9FC6E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0D4071ECE1692807"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "266009DFBDF2134B"
+				item: "gtceu:research_station"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "378905E03EE109DB"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "618E2075CFB01FE7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "075B0B08A0326838"
+				item: "gtceu:data_bank"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 14.0d
+		}
+		{
+			dependencies: [
+				"2FFE55F9A4FEC902"
+				"65C4F7EDC0E9D99D"
+			]
+			icon_scale: 1.3d
+			id: "50EE965E3CD0C2D7"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0DD753B604FB0D29"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "38F2EE7C8636AA5F"
+				item: "gtceu:super_computation"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "2FFE55F9A4FEC902"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7EC3F959DF51CACE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "018C3F114180EE3B"
+				item: "gtceu:high_performance_computation_array"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["5672B9E868EDBE4D"]
+			icon_scale: 1.3d
+			id: "15CA5B22946B744E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "38708764640AF403"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0F7DE6D6AB5ADAA6"
+				item: "gtceu:network_switch"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["5F5F348E3A34827E"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:ulv_machine_hull"
+			icon_scale: 1.3d
+			id: "40405034AE9D9945"
+			tasks: [{
+				id: "2E2E9FB9EFF51D49"
+				title: "{gtlcore.quest.gtl.task.2e2e9fb9eff51d49.title}"
+				type: "checkmark"
+			}]
+			x: -6.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["51B9A72C19F84F0E"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:lv_machine_hull"
+			icon_scale: 1.3d
+			id: "5930E12A8BCAF996"
+			tasks: [{
+				id: "64152215D45E4E00"
+				title: "{gtlcore.quest.gtl.task.64152215d45e4e00.title}"
+				type: "checkmark"
+			}]
+			x: -4.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["7296C57805F5DC96"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:mv_machine_hull"
+			icon_scale: 1.3d
+			id: "36742169BE411C01"
+			tasks: [{
+				id: "2FFCC0CAAD18A08E"
+				title: "{gtlcore.quest.gtl.task.2ffcc0caad18a08e.title}"
+				type: "checkmark"
+			}]
+			x: -2.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["1A48D2DB936FF632"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:hv_machine_hull"
+			icon_scale: 1.3d
+			id: "32BD532132423050"
+			tasks: [{
+				id: "5834899F4BB1EA9E"
+				title: "{gtlcore.quest.gtl.task.5834899f4bb1ea9e.title}"
+				type: "checkmark"
+			}]
+			x: 0.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["1E7344C133C99565"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:ev_machine_hull"
+			icon_scale: 1.3d
+			id: "45096D94AE6F7864"
+			tasks: [{
+				id: "5839CF5120A4D7E1"
+				title: "{gtlcore.quest.gtl.task.5839cf5120a4d7e1.title}"
+				type: "checkmark"
+			}]
+			x: 2.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["38480A52A13DA157"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:iv_machine_hull"
+			icon_scale: 1.3d
+			id: "1443E064A0AB0B8B"
+			tasks: [{
+				id: "52DD9088B6DE3FEB"
+				title: "{gtlcore.quest.gtl.task.52dd9088b6de3feb.title}"
+				type: "checkmark"
+			}]
+			x: 4.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["4BFA114E12BCB163"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:luv_machine_hull"
+			icon_scale: 1.3d
+			id: "6D3BE9E3D76C71F9"
+			tasks: [{
+				id: "65CC4F6A2DB4D2C5"
+				title: "{gtlcore.quest.gtl.task.65cc4f6a2db4d2c5.title}"
+				type: "checkmark"
+			}]
+			x: 6.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["0485D45408234C99"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:zpm_machine_hull"
+			icon_scale: 1.3d
+			id: "5672B9E868EDBE4D"
+			tasks: [{
+				id: "34BA8C9664EA25EE"
+				title: "{gtlcore.quest.gtl.task.34ba8c9664ea25ee.title}"
+				type: "checkmark"
+			}]
+			x: 8.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["7C23CC6ADDC33EA0"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:uv_machine_hull"
+			icon_scale: 1.3d
+			id: "253337A8CECFB499"
+			tasks: [{
+				id: "4221729B13EB09A9"
+				title: "{gtlcore.quest.gtl.task.4221729b13eb09a9.title}"
+				type: "checkmark"
+			}]
+			x: 10.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["035C470213E8B4DB"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:uhv_machine_hull"
+			icon_scale: 1.3d
+			id: "6A590699685D1D8A"
+			tasks: [{
+				id: "552126AC9F26A977"
+				title: "{gtlcore.quest.gtl.task.552126ac9f26a977.title}"
+				type: "checkmark"
+			}]
+			x: 12.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["713FF88279AD9A31"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:uev_machine_hull"
+			icon_scale: 1.3d
+			id: "65C4F7EDC0E9D99D"
+			tasks: [{
+				id: "28F5DD716FD478A9"
+				title: "{gtlcore.quest.gtl.task.28f5dd716fd478a9.title}"
+				type: "checkmark"
+			}]
+			x: 14.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["23B418803D455368"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:uiv_machine_hull"
+			icon_scale: 1.3d
+			id: "23DC6EEC1BCEF845"
+			tasks: [{
+				id: "01DD5BEA919FB23A"
+				title: "{gtlcore.quest.gtl.task.01dd5bea919fb23a.title}"
+				type: "checkmark"
+			}]
+			x: 16.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["26607B94D873E07A"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:uxv_machine_hull"
+			icon_scale: 1.3d
+			id: "5019F5F1A660DB40"
+			tasks: [{
+				id: "5FFDE9B2DF3EACF8"
+				title: "{gtlcore.quest.gtl.task.5ffde9b2df3eacf8.title}"
+				type: "checkmark"
+			}]
+			x: 18.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["00A227F06D7F109E"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:opv_machine_hull"
+			icon_scale: 1.3d
+			id: "234661B47841AA2B"
+			tasks: [{
+				id: "1E8F8497159EB846"
+				title: "{gtlcore.quest.gtl.task.1e8f8497159eb846.title}"
+				type: "checkmark"
+			}]
+			x: 20.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["296DE95F3BE7DC54"]
+			hide_dependency_lines: true
+			hide_dependent_lines: true
+			icon: "gtceu:max_machine_hull"
+			icon_scale: 1.3d
+			id: "3D79A180FDCC8B5B"
+			tasks: [{
+				id: "7772042253C705C0"
+				title: "{gtlcore.quest.gtl.task.7772042253c705c0.title}"
+				type: "checkmark"
+			}]
+			x: 22.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["36742169BE411C01"]
+			icon_scale: 1.3d
+			id: "110DECA7A49F869A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4DB023644DB9EA39"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "691DB269D356C7F2"
+				item: "gtceu:greenhouse"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"110DECA7A49F869A"
+				"45096D94AE6F7864"
+			]
+			icon_scale: 1.3d
+			id: "78726B8F3398951F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "420B3BC46C28D8B1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "361C2A084BE1FB97"
+				item: "gtceu:large_greenhouse"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "53D7FDEEA83A1AE6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "407D2EDFA086F90C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4070AB701CD71875"
+				item: "gtceu:power_substation"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			description: ["{gtlcore.quest.gtl.quest.148048263032f162.description.0000}"]
+			icon_scale: 1.3d
+			id: "148048263032F162"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6638251F2BF4BC15"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "50EE338165CBDD51"
+				item: "gtceu:active_transformer"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "2055BDA7D6201897"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "718DE820449B3341"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "79122A61AC8CA3BD"
+				item: "gtceu:luv_fusion_reactor"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"5672B9E868EDBE4D"
+				"2055BDA7D6201897"
+			]
+			icon_scale: 1.3d
+			id: "352CFB0F948D448A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0CA9830413E4CB15"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3B8915FB528ED52C"
+				item: "gtceu:zpm_fusion_reactor"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"253337A8CECFB499"
+				"352CFB0F948D448A"
+			]
+			icon_scale: 1.3d
+			id: "1003B3EB3976B4AA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "55DF748B98FC687E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0CA56D4BDE2EC67E"
+				item: "gtceu:uv_fusion_reactor"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 18.0d
+		}
+		{
+			can_repeat: false
+			dependencies: ["5672B9E868EDBE4D"]
+			icon_scale: 1.3d
+			id: "4BA939D68409A060"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5C93AAED7A41973D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "23501DAEA3123D9D"
+				item: "gtceu:super_particle_collider"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["5672B9E868EDBE4D"]
+			icon_scale: 1.3d
+			id: "06F2C3F739385E91"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "29FD9ED76DAC3307"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "433333F3F248AB51"
+				item: "gtceu:petrochemical_plant"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["5672B9E868EDBE4D"]
+			icon_scale: 1.3d
+			id: "61631D86D47D54F6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "17775DCDEB3E82CB"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "2C2F4648054F5CAE"
+				item: "gtceu:integrated_ore_processor"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "0C18789B508763DF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0E9A41A0816B837D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "144461299F6741F6"
+				item: "gtceu:stellar_forge"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"23DC6EEC1BCEF845"
+				"0C18789B508763DF"
+			]
+			icon_scale: 1.3d
+			id: "4BA21E95563903C6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2BA978516D05A610"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "715C41EC3865B842"
+				item: "gtceu:star_ultimate_material_forge_factory"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["5672B9E868EDBE4D"]
+			icon_scale: 1.3d
+			id: "7EE1BA3F7BF5E5B2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "09022DE84783F376"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0A518B4DE31BBD70"
+				item: "gtceu:nano_forge_1"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"7EE1BA3F7BF5E5B2"
+				"65C4F7EDC0E9D99D"
+			]
+			icon_scale: 1.3d
+			id: "76627BE5CFA5CD0F"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "25B2CC3A77B210D1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6A4475D29E3016C3"
+				item: "gtceu:nano_forge_2"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"76627BE5CFA5CD0F"
+				"5019F5F1A660DB40"
+			]
+			icon_scale: 1.3d
+			id: "5A8CD11A645D1704"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6B36B9A8336F8123"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3C3C660349ADC8FD"
+				item: "gtceu:nano_forge_3"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"253337A8CECFB499"
+				"15C94BB329BF231C"
+			]
+			description: ["{gtlcore.quest.gtl.quest.7d4a2d34144fd542.description.0000}"]
+			icon_scale: 1.3d
+			id: "7D4A2D34144FD542"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "76518697F5B17BC9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6E98DB0DCCF53FE8"
+				item: "gtceu:chemical_distort"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "475112AC44A31C2B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1FBE6BEDEC1C047C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "25EDEEE4055E596B"
+				item: "gtceu:crystalline_infinity"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"253337A8CECFB499"
+				"789045D2500D0273"
+			]
+			icon_scale: 1.3d
+			id: "2F13B5E4E33F4D73"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2F53026862B63B4E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1FBEDE3CAF13FFD3"
+				item: "gtceu:plasma_condenser"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"2F13B5E4E33F4D73"
+				"6A590699685D1D8A"
+			]
+			icon_scale: 1.3d
+			id: "08BEBF433B8D5A58"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "16E2F74959736641"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4103F2144F15CA6E"
+				item: "gtceu:cooling_tower"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "2DE15692C9088542"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "79A664B7A621DE79"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "64A7E441A9E82D28"
+				item: "gtceu:engraving_laser_plant"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 14.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"2DE15692C9088542"
+			]
+			icon_scale: 1.3d
+			id: "39D2F0878B42C8E6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5CA4253BEA203DE5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0D123D9350E86678"
+				item: "gtceu:dimensional_focus_engraving_array"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "4B0E809714EECE13"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6E4C86DCF0BBA653"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1E7267EB0741FC05"
+				item: "gtceu:mega_wiremill"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "2ECC71B099B547DB"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "185DFA5D295826E7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5511CF11E64D1A1F"
+				item: "gtceu:mega_presser"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 8.0d
+		}
+		{
+			can_repeat: false
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "3A5837FABF4B6EB6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "092A2E8BB5B8C12C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "2DC64B7250EDB186"
+				item: "gtceu:field_extruder_factory"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "284D0861067B0EA1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6913FA9CF3EDD4A8"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7759FBA59C695891"
+				item: "gtceu:pcb_factory"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "7339FFAE2944DAE1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "520BC2403A05327F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3E26260128D1B8C0"
+				item: "gtceu:large_recycler"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"7339FFAE2944DAE1"
+			]
+			icon_scale: 1.3d
+			id: "66F8F3BECB78774A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1414B7D68A69BAFC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "63F3A71A4FD43154"
+				item: "gtceu:matter_fabricator"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"66F8F3BECB78774A"
+				"23DC6EEC1BCEF845"
+			]
+			icon_scale: 1.3d
+			id: "02FD5777A119864D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "536839672189D037"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5B8579225398FEC7"
+				item: "gtceu:mass_fabricator"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"02FD5777A119864D"
+				"5019F5F1A660DB40"
+			]
+			icon_scale: 1.3d
+			id: "2BBBC6DADEEB7B99"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "46CF6FEAEEAEF45F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6B2226F8C9685BEB"
+				item: "gtceu:a_mass_fabricator"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"65C4F7EDC0E9D99D"
+				"75C8D3D419E64A76"
+			]
+			icon_scale: 1.3d
+			id: "6FBCE75667BEE8F7"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "450C5DBC3B745F50"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6A73F5A3E6801AD6"
+				item: "gtceu:sps_crafting"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"65C4F7EDC0E9D99D"
+				"6FBCE75667BEE8F7"
+			]
+			icon_scale: 1.3d
+			id: "586322780FE411DA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "36D91556350834FF"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "653A24F30C594419"
+				item: "gtceu:advanced_sps_crafting"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["65C4F7EDC0E9D99D"]
+			icon_scale: 1.3d
+			id: "75C8D3D419E64A76"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3F1DCCA3AB435BED"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7E02036B0326B98C"
+				item: "gtceu:magic_manufacturer"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["65C4F7EDC0E9D99D"]
+			icon_scale: 1.3d
+			id: "4B12DDA7B79B6C26"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "05F3335072AD1315"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1CED362920EAABFC"
+				item: "gtceu:bedrock_drilling_rig"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["65C4F7EDC0E9D99D"]
+			icon_scale: 1.3d
+			id: "0512BC754D0B6682"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "20F54A2E5A29D382"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "435D0DA50852112B"
+				item: "gtceu:aggregation_device"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["23DC6EEC1BCEF845"]
+			icon_scale: 1.3d
+			id: "3AA303E79FBD0FAC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7B34D1F9A3CBB9F6"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0D236CC90E4E2797"
+				item: "gtceu:dimensionally_transcendent_mixer"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"23DC6EEC1BCEF845"
+				"290495468BAB6553"
+			]
+			icon_scale: 1.3d
+			id: "02F4149B834DB360"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5787FEA1CFF7998D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "76E6BBCD42F929D3"
+				item: "gtceu:space_probe_surface_reception"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["5019F5F1A660DB40"]
+			icon_scale: 1.3d
+			id: "5FD8B140D91DAF26"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5C096039D0BCB6CE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0D8C764021647EFE"
+				item: "gtceu:qft"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["5019F5F1A660DB40"]
+			icon_scale: 1.3d
+			id: "7F97C23786F11B86"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6574FB2D69FE6FAC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0C2B673D25B1AE6A"
+				item: "gtceu:dragon_egg_copier"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["234661B47841AA2B"]
+			icon_scale: 1.3d
+			id: "4D9128784D248CDD"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1DDFEEA9D50EA38D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1FDCF7F74127B2C8"
+				item: "gtceu:eye_of_harmony"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["234661B47841AA2B"]
+			icon_scale: 1.3d
+			id: "592285E714D9DD07"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6DAED3848C97A369"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "44D8238DF85A29EC"
+				item: "gtceu:door_of_create"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["3D79A180FDCC8B5B"]
+			icon_scale: 1.3d
+			id: "5C739DF7944A8023"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6C7B877ED9105004"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "31A6C6B8E1A94832"
+				item: "gtceu:create_aggregation"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["3D79A180FDCC8B5B"]
+			icon_scale: 1.3d
+			id: "551CA99382355477"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2F737B9457C4D1FA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "73FA4AA0210FAD5B"
+				item: "gtceu:create_computation"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["3D79A180FDCC8B5B"]
+			icon_scale: 1.3d
+			id: "0BC7F2A97E11AB0E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "152E8A14C5001A4D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "35BB575B61EC1784"
+				item: "gtceu:gravitation_shockburst"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "2780147FF749D647"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "230D4C2D1DABF796"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "65A659D61B14BBEA"
+				item: "gtceu:mega_extractor"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "59EBDD98D68B56ED"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3BE6CF17DB00F5B5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5CF174A68D99AFFD"
+				item: "gtceu:holy_separator"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 12.0d
+		}
+		{
+			can_repeat: false
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "3F4B3257D5F782F9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4698C67C66AF4AD5"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "11A938BB2F8591C6"
+				item: "gtceu:superconducting_electromagnetism"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["5672B9E868EDBE4D"]
+			icon_scale: 1.3d
+			id: "3678CFDEBF68B148"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "02FDA47EAE154B26"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "176561761A608324"
+				item: "gtceu:decay_hastener"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"32BD532132423050"
+				"110DECA7A49F869A"
+			]
+			dependency_requirement: "one_started"
+			icon_scale: 1.3d
+			id: "36942BA28CF5A9B5"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "09F35CA7D0118897"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "24397E84337971FD"
+				item: "gtceu:incubator"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"36942BA28CF5A9B5"
+				"6D3BE9E3D76C71F9"
+			]
+			icon_scale: 1.3d
+			id: "0732B37F43AB3B76"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "69DACE8CE621D6FE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5586F700965AEEA1"
+				item: "gtceu:large_incubator"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"5B84CF1D367582E4"
+				"40405034AE9D9945"
+			]
+			dependency_requirement: "one_started"
+			description: ["{gtlcore.quest.gtl.quest.2f1f6a9d3b3f52a2.description.0000}"]
+			icon_scale: 1.3d
+			id: "2F1F6A9D3B3F52A2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5D7FFD9D8D9B3BC3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0C482B46A9A5B0C5"
+				item: "gtceu:lava_furnace"
+				type: "item"
+			}]
+			x: -8.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "1CE64D0254AA4F7B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0327F64C6FD63A62"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "62A19D1D16E5D2EE"
+				item: "gtceu:rare_earth_centrifugal"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			description: ["{gtlcore.quest.gtl.quest.200b218e6c4560b5.description.0000}"]
+			icon_scale: 1.3d
+			id: "200B218E6C4560B5"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "42DB2CDD2E11D8EE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1A160B9D2DF9246E"
+				item: "gtceu:charcoal_pile_igniter"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["36742169BE411C01"]
+			description: [
+				"{gtlcore.quest.gtl.quest.42b4263b2a138d15.description.0000}"
+				"{gtlcore.quest.gtl.quest.42b4263b2a138d15.description.0001}"
+				"{gtlcore.quest.gtl.quest.42b4263b2a138d15.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "42B4263B2A138D15"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5BD38A252A5B58FC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.42b4263b2a138d15.subtitle}"
+			tasks: [
+				{
+					id: "0A6C14B19EE2BE1B"
+					item: "gtceu:processing_plant"
+					type: "item"
+				}
+				{
+					id: "3CD1A70006F00B71"
+					item: "gtceu:assemble_plant"
+					type: "item"
+				}
+				{
+					id: "5CA6348EB057CDF6"
+					item: "gtceu:separated_plant"
+					type: "item"
+				}
+				{
+					id: "091C8744A1CAC02A"
+					item: "gtceu:mixed_plant"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.42b4263b2a138d15.title}"
+			x: 2.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "48AEC946B15A5267"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "43E1346E7C9B7780"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5AD50C828BDE61F1"
+				item: "gtceu:steam_large_turbine"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"48AEC946B15A5267"
+				"45096D94AE6F7864"
+			]
+			icon_scale: 1.3d
+			id: "2A069C464E7595BF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7D192E97730E81BD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7398EB1CDE5A8FE8"
+				item: "gtceu:steam_mega_turbine"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "759498DACCDAF325"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "788BEF7EFB0AFCA1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0BFA33191FA1FBC1"
+				item: "gtceu:gas_large_turbine"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"1443E064A0AB0B8B"
+				"759498DACCDAF325"
+			]
+			icon_scale: 1.3d
+			id: "06FC6AF467942374"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "6D86B6A7E0D63E51"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "30439E818DE1344B"
+				item: "gtceu:gas_mega_turbine"
+				type: "item"
+			}]
+			x: 28.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "59A7C1119E4DE02C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "540F19AAAC909D04"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "43D1E27CE0401AAF"
+				item: "gtceu:large_combustion_engine"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"1443E064A0AB0B8B"
+				"59A7C1119E4DE02C"
+			]
+			icon_scale: 1.3d
+			id: "27DFF80C0E52DF04"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "74533A312492B49B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "33FC15757D0E28FC"
+				item: "gtceu:extreme_combustion_engine"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"1443E064A0AB0B8B"
+				"27DFF80C0E52DF04"
+			]
+			icon_scale: 1.3d
+			id: "15E5FE47F23A3D3E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5E31D8A16CDF9053"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "00D3D76C0ABAEDB4"
+				item: "gtceu:chemical_energy_devourer"
+				type: "item"
+			}]
+			x: 28.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "01F06325252BFA38"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "658623DCFA572366"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6419C271C9581FB7"
+				item: "gtceu:rocket_large_turbine"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"1443E064A0AB0B8B"
+				"01F06325252BFA38"
+			]
+			icon_scale: 1.3d
+			id: "2EC6C274AE4885A6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1CB984220322FFC1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5C2377D76D93526A"
+				item: "gtceu:rocket_mega_turbine"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "78AF8CB71F6E7433"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "72770615FC2742DB"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6FCC1EF459D25DD1"
+				item: "gtceu:plasma_large_turbine"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"5672B9E868EDBE4D"
+				"78AF8CB71F6E7433"
+			]
+			icon_scale: 1.3d
+			id: "4694ADDC6B380507"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "40FA9D0176C85FF3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6900ECA754BFD35B"
+				item: "gtceu:plasma_mega_turbine"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["253337A8CECFB499"]
+			icon_scale: 1.3d
+			id: "6871757ABEE012AB"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "240E0EB11F76912C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5386BDBC4749AF5C"
+				item: "gtceu:large_naquadah_reactor"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"6871757ABEE012AB"
+			]
+			icon_scale: 1.3d
+			id: "29C1F233DC7CE8B6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "17F3364D19D21442"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6F1AECBCB17A71F7"
+				item: "gtceu:hyper_reactor"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"23DC6EEC1BCEF845"
+				"29C1F233DC7CE8B6"
+			]
+			icon_scale: 1.3d
+			id: "22DBCE32EE30D259"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "752B20190CE6846A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0A44CEF6659E4329"
+				item: "gtceu:advanced_hyper_reactor"
+				type: "item"
+			}]
+			x: 28.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["23DC6EEC1BCEF845"]
+			icon_scale: 1.3d
+			id: "04A583F6DA8EF4A9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1F9961BDBBDF9143"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "68C3F3757EAF252C"
+				item: "gtceu:dyson_sphere"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["234661B47841AA2B"]
+			description: ["{gtlcore.quest.gtl.quest.015be5c32238b5f7.description.0000}"]
+			icon_scale: 1.3d
+			id: "015BE5C32238B5F7"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "50494C6514F402AA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "229243B6FBCD9D83"
+				item: "gtceu:annihilate_generator"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["5930E12A8BCAF996"]
+			description: ["{gtlcore.quest.gtl.quest.0f663054e006e97b.description.0000}"]
+			icon_scale: 1.3d
+			id: "0F663054E006E97B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2C38C3D832D52D6C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3E102D223A6541CD"
+				item: "gtceu:weather_control"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "39CC012A1CE7D847"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "309ED428F6D35212"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5EBBDD910FEEF1DD"
+				item: "gtceu:block_conversion_room"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "2E6CAE16920D7E65"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5DBE0E65CDA06D46"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "538B6EF23EA0432A"
+				item: "gtceu:neutron_activator"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "520122FB3A4F5CFF"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "478D7C775C08F603"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5019B21A70F75608"
+				item: "gtceu:disassembly"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["253337A8CECFB499"]
+			icon_scale: 1.3d
+			id: "037E0C98C48C3322"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "005A9F1560DB4EAA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "730A2B2A251609A9"
+				item: "gtceu:zpm_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: -6.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "21B4AC077D650888"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3E180E00E82D0B5E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "050AE8EA53DC5484"
+				item: "gtceu:heat_exchanger"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"21B4AC077D650888"
+				"6D3BE9E3D76C71F9"
+			]
+			icon_scale: 1.3d
+			id: "7D2EE78F3D30E31B"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "451117AC85691DC9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4204AAEB9F708F06"
+				item: "gtceu:supercritical_steam_turbine"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"6D3BE9E3D76C71F9"
+				"7D2EE78F3D30E31B"
+			]
+			icon_scale: 1.3d
+			id: "2E9DCF7DCDC64E67"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "35BAF5CD03553A6C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "51565780EBBC5C8A"
+				item: "gtceu:supercritical_mega_steam_turbine"
+				type: "item"
+			}]
+			x: 28.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "6DA70545DD14A77E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "66F9F3CD1D20B61C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5016DB7B9847D883"
+				item: "gtceu:mega_canner"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["1443E064A0AB0B8B"]
+			icon_scale: 1.3d
+			id: "2C69B970398512F2"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2561157FD6657C0E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "25CEEF5CD6569838"
+				item: "gtceu:fission_reactor"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"5019F5F1A660DB40"
+				"4BA21E95563903C6"
+			]
+			icon_scale: 1.3d
+			id: "7D021939D9850C51"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1AE97A64DBA26EFD"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3985BDD2169528FD"
+				item: "gtceu:element_copying"
+				type: "item"
+			}]
+			x: 20.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["075D368E91231337"]
+			description: [
+				"{gtlcore.quest.gtl.quest.376f6857abef60bf.description.0000}"
+				"{gtlcore.quest.gtl.quest.376f6857abef60bf.description.0001}"
+				"{gtlcore.quest.gtl.quest.376f6857abef60bf.description.0002}"
+			]
+			icon: "gtceu:portable_debug_scanner"
+			icon_scale: 1.3d
+			id: "376F6857ABEF60BF"
+			rewards: [{
+				id: "650A2F50E2D24196"
+				item: {
+					Count: 1
+					id: "gtceu:portable_debug_scanner"
+					tag: {
+						Charge: 1000000L
+						Mode: 0
+					}
+				}
+				type: "item"
+			}]
+			tasks: [{
+				id: "35D84DB9E78E62B4"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.376f6857abef60bf.title}"
+			x: -12.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "4868C061C42E207D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "738B7D44BD8784A4"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6F827B491BBEFAE6"
+				item: "gtceu:isa_mill"
+				type: "item"
+			}]
+			x: -2.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "768F3D85ABCE3640"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0C3D3357150D86C8"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "68885EBD34D3D834"
+				item: "gtceu:flotation_cell_regulator"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "4FB562E42CFEE64D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "523F6EF418A7391E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1F1A06BFFE71A63F"
+				item: "gtceu:vacuum_drying_furnace"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["65C4F7EDC0E9D99D"]
+			icon_scale: 1.3d
+			id: "4AC5C7225A44A5A1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1742451B55F7F2CA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "378D287C4DA4BC84"
+				item: "gtceu:atomic_energy_excitation_plant"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"65C4F7EDC0E9D99D"
+				"61631D86D47D54F6"
+			]
+			icon_scale: 1.3d
+			id: "2E4A5A581F9FCAF9"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "509723CAF4333B38"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6CD146597B0E0067"
+				item: "gtceu:advanced_integrated_ore_processor"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["253337A8CECFB499"]
+			icon_scale: 1.3d
+			id: "3932407899FC965D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "11668C5FEAA240AE"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "031B00FA92EC18BD"
+				item: "gtceu:component_assembly_line"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 14.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"1003B3EB3976B4AA"
+			]
+			icon_scale: 1.3d
+			id: "6266818A4E07B6C0"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7BD6DA82A61E04AA"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "42B7D2856930C54C"
+				item: "gtceu:uhv_fusion_reactor"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"65C4F7EDC0E9D99D"
+				"6266818A4E07B6C0"
+			]
+			icon_scale: 1.3d
+			id: "76663A1DCB27B23E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2052C1E40B5C06D9"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4E7761681A5314F4"
+				item: "gtceu:uev_fusion_reactor"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 18.0d
+		}
+		{
+			dependencies: [
+				"2055BDA7D6201897"
+				"6D3BE9E3D76C71F9"
+			]
+			icon_scale: 1.3d
+			id: "3ADF090AC4D79F83"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3189583CF8D63A2C"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0631BA476430AC9E"
+				item: "gtceu:luv_compressed_fusion_reactor"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"352CFB0F948D448A"
+				"5672B9E868EDBE4D"
+			]
+			icon_scale: 1.3d
+			id: "051FFC493B0CD3FE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "33FDC1A5E95003A4"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "63FC0B6A3ECBB021"
+				item: "gtceu:zpm_compressed_fusion_reactor"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"253337A8CECFB499"
+				"1003B3EB3976B4AA"
+			]
+			icon_scale: 1.3d
+			id: "733C3D2DE15B3665"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "029AAF518171501A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5ABFA57CFAADC2A2"
+				item: "gtceu:uv_compressed_fusion_reactor"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"6266818A4E07B6C0"
+			]
+			icon_scale: 1.3d
+			id: "596438D407B66AA4"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "498772927676F45F"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "1B231B9C1973DDDB"
+				item: "gtceu:uhv_compressed_fusion_reactor"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"76663A1DCB27B23E"
+				"65C4F7EDC0E9D99D"
+			]
+			icon_scale: 1.3d
+			id: "749B0A45731259CC"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "46870BF379E21F11"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4DFD09227C1A238B"
+				item: "gtceu:uev_compressed_fusion_reactor"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["23DC6EEC1BCEF845"]
+			icon_scale: 1.3d
+			id: "7E1B4060CF39DDF1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "5A8369C9CA7346FC"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0E609EEF75BF4ABA"
+				item: "gtceu:mega_fluid_heater"
+				type: "item"
+			}]
+			x: 16.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["5930E12A8BCAF996"]
+			icon_scale: 1.3d
+			id: "51A93378CE8E3854"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "1DE9F92231FD8DA0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4FD70AE24C719AB3"
+				item: "gtceu:generator_array"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "691036B243876022"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "00AD513CA489302B"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "4591F611F2984EA1"
+				item: "gtceu:large_semi_fluid_generator"
+				type: "item"
+			}]
+			x: 24.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"6992E6733C4AF2C8"
+				"32BD532132423050"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.5549bbb07626b52c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5549bbb07626b52c.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "5549BBB07626B52C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2835146B69169C46"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "10C327278A3B27AC"
+				item: "gtceu:advanced_multi_smelter"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"5672B9E868EDBE4D"
+				"39CC012A1CE7D847"
+			]
+			icon_scale: 1.3d
+			id: "45B0D6248A72501C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "68AA22E06256F267"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "6BEC59412BB8B982"
+				item: "gtceu:large_block_conversion_room"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["6A590699685D1D8A"]
+			icon_scale: 1.3d
+			id: "376F87497E524AF6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "76C076B19185CF90"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "7D14208F57BE7493"
+				item: "gtceu:mega_distillery"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"5019F5F1A660DB40"
+				"5A8CD11A645D1704"
+			]
+			icon_scale: 1.3d
+			id: "2BA31B9AD20E6352"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "341FC983712B8492"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "56C5EFF878F5B99D"
+				item: "gtceu:nano_core"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 16.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "5C12FB74BE35FBFE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "42A42F5A2F40D491"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "76822A4B0E31CFB8"
+				item: "gtceu:digestion_tank"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			description: ["{gtlcore.quest.gtl.quest.58ccda50b0673db3.description.0000}"]
+			icon_scale: 1.3d
+			id: "58CCDA50B0673DB3"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "05EF04B9DE5CA499"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "71AC311A1EFBC821"
+				item: "gtceu:dissolving_tank"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["6D3BE9E3D76C71F9"]
+			icon_scale: 1.3d
+			id: "0D6B4C0507AC864D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "360F92F183CB1781"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "60FF973CF9933299"
+				item: "gtceu:wood_distillation"
+				type: "item"
+			}]
+			x: 18.0d
+			y: 14.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "6D66C6C1499330AE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "135A9E971B393700"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "0E5AE870B90C7F33"
+				item: "gtceu:desulfurizer"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["45096D94AE6F7864"]
+			icon_scale: 1.3d
+			id: "4C4D21DAF791BD04"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "39953D2CA1D8D464"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "43D01387B6E43D98"
+				item: "gtceu:large_packer"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"65C4F7EDC0E9D99D"
+				"037E0C98C48C3322"
+			]
+			icon_scale: 1.3d
+			id: "59C0279AD036CC6A"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "27C2328769D1D8B2"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "53886EBE0EBE8768"
+				item: "gtceu:advanced_infinite_driller"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 20.0d
+		}
+		{
+			dependencies: [
+				"23DC6EEC1BCEF845"
+				"1CE64D0254AA4F7B"
+			]
+			icon_scale: 1.3d
+			id: "727E11CFC9192EB6"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "23DE193D49CCE3C3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3DCAEA8A11CF6F00"
+				item: "gtceu:advanced_rare_earth_centrifugal"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 16.0d
+		}
+		{
+			dependencies: [
+				"23DC6EEC1BCEF845"
+				"0732B37F43AB3B76"
+			]
+			icon_scale: 1.3d
+			id: "0F9239ED3EA77200"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "09986948B9FB0D6A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "17B8C37316AE3B37"
+				item: "gtceu:huge_incubator"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"23DC6EEC1BCEF845"
+				"2E6CAE16920D7E65"
+			]
+			icon_scale: 1.3d
+			id: "4C621E1E2A899BB1"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "03CD78A58CCD74B3"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "35EBECC04FA41B73"
+				item: "gtceu:advanced_neutron_activator"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"6A590699685D1D8A"
+				"4FB562E42CFEE64D"
+			]
+			icon_scale: 1.3d
+			id: "0D6455149BE89BAB"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "08B0ED58001B494D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "3C12B0D44C168A99"
+				item: "gtceu:advanced_vacuum_drying_furnace"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 14.0d
+		}
+		{
+			dependencies: [
+				"234661B47841AA2B"
+				"02F4149B834DB360"
+			]
+			icon_scale: 1.3d
+			id: "3A69F2EB6F7B45AE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "16DE34FD4D59ED1A"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "172EB7B6030B9FFE"
+				item: "gtceu:space_cosmic_probe_receivers"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["23DC6EEC1BCEF845"]
+			icon_scale: 1.3d
+			id: "220816F822AB69C5"
+			tasks: [{
+				id: "5750BB98E587F05E"
+				item: "kubejs:uruium_coil_block"
+				type: "item"
+			}]
+			x: -4.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["32BD532132423050"]
+			icon_scale: 1.3d
+			id: "4988CC6C645B4BCA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4F293621CC4F115E"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "417E39193E7B8979"
+				item: "gtceu:cleanroom"
+				type: "item"
+			}]
+			x: 26.0d
+			y: 20.0d
+		}
+		{
+			dependencies: ["253337A8CECFB499"]
+			icon_scale: 1.3d
+			id: "7732552F32655422"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "70683AB9D67855B1"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			tasks: [{
+				id: "5562E5D67F7965EF"
+				item: "gtceu:molecular_assembler_matrix"
+				type: "item"
+			}]
+			x: 22.0d
+			y: 18.0d
+		}
+		{
+			dependencies: ["40405034AE9D9945"]
+			icon_scale: 1.3d
+			id: "32A19B3CCBC73D1C"
+			invisible: true
+			optional: true
+			tasks: [{
+				id: "1548F98EECA8A88C"
+				item: "gtceu:primitive_void_ore"
+				type: "item"
+			}]
+			x: 28.0d
+			y: 20.0d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.49ed18a26c5a1b83.title}"
+}

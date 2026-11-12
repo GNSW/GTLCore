@@ -1,0 +1,210 @@
+{
+	icon: {
+		Count: 1
+		id: "expatternprovider:infinity_cell"
+		tag: {
+			record: {
+				"#c": "ae2:i"
+				id: "minecraft:cobblestone"
+			}
+		}
+	}
+	id: "0344CD7A31502AEE"
+	loot_size: 1
+	order_index: 11
+	rewards: [
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:white_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:black_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:gray_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:light_gray_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:brown_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:red_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:blue_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:light_blue_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:purple_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:pink_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:magenta_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:orange_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:green_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:yellow_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:cyan_concrete"
+					}
+				}
+			}
+		}
+		{
+			item: {
+				Count: 1
+				id: "expatternprovider:infinity_cell"
+				tag: {
+					record: {
+						"#c": "ae2:i"
+						id: "minecraft:lime_concrete"
+					}
+				}
+			}
+		}
+	]
+	title: "{gtlcore.quest.gtl.reward_table.0344cd7a31502aee.title}"
+}

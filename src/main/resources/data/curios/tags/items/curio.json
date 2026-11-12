@@ -1,8 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    "gtlcore:wireless_throughput_monitor_terminal",
-    "gtlcore:wireless_emitter_manager_terminal",
-    "gtlcore:wireless_me_chamber_manager_terminal"
-  ]
-}

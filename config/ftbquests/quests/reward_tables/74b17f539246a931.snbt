@@ -1,0 +1,12 @@
+{
+	id: "74B17F539246A931"
+	loot_size: 1
+	order_index: 7
+	rewards: [
+		{ count: 16, item: "gtmthings:wireless_item_transfer_cover" }
+		{ count: 16, item: "gtmthings:wireless_fluid_transfer_cover" }
+		{ count: 8, item: "gtmthings:advanced_wireless_item_transfer_cover" }
+		{ count: 8, item: "gtmthings:advanced_wireless_fluid_transfer_cover" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.74b17f539246a931.title}"
+}

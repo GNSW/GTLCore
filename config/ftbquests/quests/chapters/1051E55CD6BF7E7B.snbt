@@ -1,0 +1,488 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "1051E55CD6BF7E7B"
+	group: "68CBF1606D696C68"
+	icon: "gtlcore:max_electric_motor"
+	id: "1051E55CD6BF7E7B"
+	order_index: 14
+	quest_links: [{
+		id: "2B20C263CB41DBAD"
+		linked_quest: "296DE95F3BE7DC54"
+		shape: "hexagon"
+		size: 2.0d
+		x: -1.0d
+		y: 2.5d
+	}]
+	quests: [
+		{
+			dependencies: ["48925ECBCC5D268D"]
+			icon: {
+				Count: 1
+				id: "kubejs:magnetohydrodynamicallyconstrainedstarmatter_chestplate"
+				tag: {
+					Damage: 0
+				}
+			}
+			id: "67A81E3F7E247521"
+			subtitle: "{gtlcore.quest.gtl.quest.67a81e3f7e247521.subtitle}"
+			tasks: [
+				{
+					id: "15D75BB0BB713D68"
+					item: {
+						Count: 1
+						id: "kubejs:magnetohydrodynamicallyconstrainedstarmatter_helmet"
+						tag: {
+							Damage: 0
+						}
+					}
+					type: "item"
+				}
+				{
+					id: "052DD5E4314038CA"
+					item: {
+						Count: 1
+						id: "kubejs:magnetohydrodynamicallyconstrainedstarmatter_chestplate"
+						tag: {
+							Damage: 0
+						}
+					}
+					type: "item"
+				}
+				{
+					id: "414803F9595967FD"
+					item: {
+						Count: 1
+						id: "kubejs:magnetohydrodynamicallyconstrainedstarmatter_leggings"
+						tag: {
+							Damage: 0
+						}
+					}
+					type: "item"
+				}
+				{
+					id: "633F0A3296C38CD5"
+					item: {
+						Count: 1
+						id: "kubejs:magnetohydrodynamicallyconstrainedstarmatter_boots"
+						tag: {
+							Damage: 0
+						}
+					}
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.67a81e3f7e247521.title}"
+			x: 5.0d
+			y: 4.5d
+		}
+		{
+			dependencies: ["67A81E3F7E247521"]
+			description: [
+				"{gtlcore.quest.gtl.quest.1416eae88c9030c8.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.1416eae88c9030c8.description.0002}"
+			]
+			id: "1416EAE88C9030C8"
+			subtitle: "{gtlcore.quest.gtl.quest.1416eae88c9030c8.subtitle}"
+			tasks: [{
+				dimension: "kubejs:create"
+				id: "533527A60F7C2024"
+				title: "{gtlcore.quest.gtl.task.533527a60f7c2024.title}"
+				type: "dimension"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1416eae88c9030c8.title}"
+			x: 7.0d
+			y: 4.5d
+		}
+		{
+			dependencies: ["296DE95F3BE7DC54"]
+			description: [
+				"{gtlcore.quest.gtl.quest.470ddccd8e017a4f.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.470ddccd8e017a4f.description.0002}"
+			]
+			icon_scale: 2.0d
+			id: "470DDCCD8E017A4F"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.470ddccd8e017a4f.subtitle}"
+			tasks: [{
+				id: "6C1581BB60019E84"
+				item: "minecraft:command_block"
+				type: "item"
+			}]
+			x: 1.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["2C3C46AC660CC54E"]
+			id: "5AFEAD001EDA612D"
+			subtitle: "{gtlcore.quest.gtl.quest.5afead001eda612d.subtitle}"
+			tasks: [{
+				id: "318A4B7F9925680F"
+				item: "kubejs:create_ultimate_battery"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 0.5d
+		}
+		{
+			dependencies: [
+				"0BF48314F3323108"
+				"38FFB6D2003C7EB4"
+				"4CF8E0618D65DD65"
+			]
+			id: "1EB9F1815EB656B0"
+			subtitle: "{gtlcore.quest.gtl.quest.1eb9f1815eb656b0.subtitle}"
+			tasks: [{
+				id: "453883277EF4A1B6"
+				item: "kubejs:two_way_foil"
+				type: "item"
+			}]
+			x: 1.0d
+			y: 0.5d
+		}
+		{
+			dependencies: [
+				"470DDCCD8E017A4F"
+				"1EB9F1815EB656B0"
+			]
+			description: ["{gtlcore.quest.gtl.quest.48925ecbcc5d268d.description.0000}"]
+			id: "48925ECBCC5D268D"
+			subtitle: "{gtlcore.quest.gtl.quest.48925ecbcc5d268d.subtitle}"
+			tasks: [{
+				id: "3DFC2C88970DA844"
+				item: "kubejs:command_block_core"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["48925ECBCC5D268D"]
+			description: [
+				"{gtlcore.quest.gtl.quest.34db07a64cd1439c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.34db07a64cd1439c.description.0002}"
+			]
+			hide_dependent_lines: true
+			id: "34DB07A64CD1439C"
+			subtitle: "{gtlcore.quest.gtl.quest.34db07a64cd1439c.subtitle}"
+			tasks: [{
+				id: "7BD60E6DCA58004A"
+				item: "kubejs:command_wand"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 4.5d
+		}
+		{
+			dependencies: ["48925ECBCC5D268D"]
+			id: "338F629A694C7556"
+			subtitle: "{gtlcore.quest.gtl.quest.338f629a694c7556.subtitle}"
+			tasks: [{
+				id: "16C8AA0E8A7E6784"
+				item: "gtlcore:create_casing"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 1.5d
+		}
+		{
+			dependencies: [
+				"338F629A694C7556"
+				"5AFEAD001EDA612D"
+				"65C38365E20B7F16"
+			]
+			icon_scale: 2.0d
+			id: "7C4AD33299386B47"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.7c4ad33299386b47.subtitle}"
+			tasks: [{
+				id: "29CE180A8857179D"
+				item: "gtceu:gravitation_shockburst"
+				type: "item"
+			}]
+			x: 5.0d
+			y: 0.5d
+		}
+		{
+			dependencies: ["7C4AD33299386B47"]
+			hide_dependency_lines: true
+			id: "4C37CB772835CFD0"
+			tasks: [{
+				id: "3456609519072452"
+				item: "kubejs:command_block_broken"
+				type: "item"
+			}]
+			x: 11.0d
+			y: 3.5d
+		}
+		{
+			dependencies: ["48925ECBCC5D268D"]
+			description: [
+				"{gtlcore.quest.gtl.quest.30907d7231913acb.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.30907d7231913acb.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.30907d7231913acb.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.30907d7231913acb.description.0006}"
+			]
+			icon_scale: 2.0d
+			id: "30907D7231913ACB"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.30907d7231913acb.subtitle}"
+			tasks: [{
+				id: "46A19A3E3D3CF4A9"
+				item: "gtceu:create_computation"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["7C4AD33299386B47"]
+			id: "429AEBE4BF55B1FF"
+			tasks: [{
+				id: "77BD91BF9EFBE178"
+				item: "kubejs:chain_command_block_core"
+				type: "item"
+			}]
+			x: 7.0d
+			y: 0.5d
+		}
+		{
+			dependencies: [
+				"429AEBE4BF55B1FF"
+				"1416EAE88C9030C8"
+				"30907D7231913ACB"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.2f9392ef05db11ef.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.2f9392ef05db11ef.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.2f9392ef05db11ef.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.2f9392ef05db11ef.description.0006}"
+			]
+			icon_scale: 2.0d
+			id: "2F9392EF05DB11EF"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.2f9392ef05db11ef.subtitle}"
+			tasks: [{
+				id: "7AB830407E68C7F1"
+				item: "gtceu:create_aggregation"
+				type: "item"
+			}]
+			x: 9.0d
+			y: 2.5d
+		}
+		{
+			dependencies: [
+				"2F9392EF05DB11EF"
+				"4C37CB772835CFD0"
+				"34DB07A64CD1439C"
+			]
+			id: "2D1F2793A396B322"
+			tasks: [{
+				id: "4C7140E1B28862FE"
+				item: "minecraft:chain_command_block"
+				type: "item"
+			}]
+			x: 11.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["429AEBE4BF55B1FF"]
+			id: "5BA55D56C47EA2C4"
+			tasks: [{
+				id: "3C8BF60743D0FB97"
+				item: "kubejs:repeating_command_block_core"
+				type: "item"
+			}]
+			x: 9.0d
+			y: 0.5d
+		}
+		{
+			dependencies: [
+				"5BA55D56C47EA2C4"
+				"435394EAA6536AA9"
+				"34DB07A64CD1439C"
+			]
+			id: "75CE99CD1614FB64"
+			tasks: [{
+				id: "065BE74992505A08"
+				item: "minecraft:repeating_command_block"
+				type: "item"
+			}]
+			x: 11.0d
+			y: 0.5d
+		}
+		{
+			dependencies: ["2D1F2793A396B322"]
+			id: "435394EAA6536AA9"
+			tasks: [{
+				id: "5321FDC4FAA49862"
+				item: "kubejs:chain_command_block_broken"
+				type: "item"
+			}]
+			x: 11.0d
+			y: 1.5d
+		}
+		{
+			dependencies: ["5AFEAD001EDA612D"]
+			hide_dependency_lines: true
+			icon_scale: 2.0d
+			id: "2A19E7C6DC247B90"
+			tasks: [{
+				id: "00F2D831815D719F"
+				item: "kubejs:chaotic_energy_core"
+				type: "item"
+			}]
+			x: 11.0d
+			y: 4.5d
+		}
+		{
+			dependencies: ["75CE99CD1614FB64"]
+			description: ["{gtlcore.quest.gtl.quest.31b4b834d5dd87db.description.0000}"]
+			icon_scale: 2.0d
+			id: "31B4B834D5DD87DB"
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.31b4b834d5dd87db.subtitle}"
+			tasks: [{
+				id: "6D68D65E443AE5FE"
+				item: "gtceu:creative_data_access_hatch"
+				type: "item"
+			}]
+			x: 13.0d
+			y: 1.5d
+		}
+		{
+			dependencies: [
+				"2A19E7C6DC247B90"
+				"2D1F2793A396B322"
+			]
+			description: [
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3B18900343C2F4E3\"},\"translate\":\"gtlcore.quest.gtl.quest.5f145d9019c4bc48.description.0000.text.0000\"}"
+				""
+				"{gtlcore.quest.gtl.quest.5f145d9019c4bc48.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.5f145d9019c4bc48.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.5f145d9019c4bc48.description.0006}"
+			]
+			icon_scale: 2.0d
+			id: "5F145D9019C4BC48"
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5f145d9019c4bc48.subtitle}"
+			tasks: [
+				{
+					id: "02CCDE9B8302A71A"
+					item: "gtmthings:creative_laser_hatch"
+					type: "item"
+				}
+				{
+					id: "4F47141E78EDAE2F"
+					item: "gtmthings:creative_energy_hatch"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5f145d9019c4bc48.title}"
+			x: 13.0d
+			y: 3.5d
+		}
+		{
+			dependencies: [
+				"5F145D9019C4BC48"
+				"31B4B834D5DD87DB"
+			]
+			description: ["{gtlcore.quest.gtl.quest.516498830339a0a9.description.0000}"]
+			id: "516498830339A0A9"
+			rewards: [{
+				id: "561786F8A1EF94F6"
+				item: "ae2:controller"
+				type: "item"
+			}]
+			shape: "diamond"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.516498830339a0a9.subtitle}"
+			tasks: [{
+				id: "74404EE9AEC393D4"
+				item: "expatternprovider:fishbig"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.516498830339a0a9.title}"
+			x: 15.0d
+			y: 2.5d
+		}
+		{
+			dependencies: ["516498830339A0A9"]
+			description: [
+				"{gtlcore.quest.gtl.quest.503a37c31e60684b.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.503a37c31e60684b.description.0002}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.503a37c31e60684b.description.0004}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.503a37c31e60684b.description.0006}"
+			]
+			hide_dependency_lines: true
+			icon: "gtlcore:ultimate_tea"
+			id: "503A37C31E60684B"
+			invisible: true
+			rewards: [
+				{
+					id: "76A7B329CDF35304"
+					item: "gtlcore:ultimate_tea"
+					type: "item"
+				}
+				{
+					id: "1B03B8D7C87EF60B"
+					item: "kubejs:heartofthesmogus"
+					type: "item"
+				}
+			]
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.503a37c31e60684b.subtitle}"
+			tasks: [{
+				id: "334CC982B1A39C03"
+				item: "expatternprovider:fishbig"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.503a37c31e60684b.title}"
+			x: 17.5d
+			y: 2.5d
+		}
+		{
+			dependencies: ["2A29DA4239E6BA44"]
+			id: "4CF8E0618D65DD65"
+			tasks: [{
+				id: "043893C259EE2DA8"
+				item: "kubejs:hyper_stable_self_healing_adhesive"
+				type: "item"
+			}]
+			x: -1.0d
+			y: 0.5d
+		}
+		{
+			dependencies: [
+				"2A29DA4239E6BA44"
+				"06795792E774476F"
+			]
+			id: "65C38365E20B7F16"
+			tasks: [{
+				id: "36E49D10C86129A3"
+				item: "kubejs:black_body_naquadria_supersolid"
+				type: "item"
+			}]
+			x: 4.0d
+			y: -0.5d
+		}
+	]
+	subtitle: ["{gtlcore.quest.gtl.chapter.1051e55cd6bf7e7b.subtitle.0000}"]
+	title: "{gtlcore.quest.gtl.chapter.1051e55cd6bf7e7b.title}"
+}

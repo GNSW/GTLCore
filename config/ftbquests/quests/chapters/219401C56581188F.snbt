@@ -1,0 +1,1082 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "219401C56581188F"
+	group: "68CBF1606D696C68"
+	icon: "gtceu:uev_electric_motor"
+	id: "219401C56581188F"
+	order_index: 10
+	quest_links: [
+		{
+			id: "662A44313552F6C7"
+			linked_quest: "713FF88279AD9A31"
+			shape: "gear"
+			size: 2.0d
+			x: 0.0d
+			y: -2.0d
+		}
+		{
+			id: "69E387EDBF8DF32B"
+			linked_quest: "78F0147BABE80DDD"
+			x: 0.0d
+			y: 0.0d
+		}
+	]
+	quests: [
+		{
+			dependencies: [
+				"23B418803D455368"
+				"783379F3A7557CEE"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.22053b1292ee07c9.description.0000}"
+				"{gtlcore.quest.gtl.quest.22053b1292ee07c9.description.0001}"
+				""
+				"{gtlcore.quest.gtl.quest.22053b1292ee07c9.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.22053b1292ee07c9.description.0005}"
+			]
+			icon_scale: 1.3d
+			id: "22053B1292EE07C9"
+			rewards: [{
+				count: 16
+				id: "1A05149169B129BE"
+				item: "minecraft:egg"
+				type: "item"
+			}]
+			shape: "hexagon"
+			size: 2.0d
+			tasks: [{
+				id: "62BD5C7471D8A9DB"
+				item: "gtceu:magic_manufacturer"
+				type: "item"
+			}]
+			x: 4.0d
+			y: -2.0d
+		}
+		{
+			dependencies: [
+				"2858C1A89BAF2624"
+				"24585C3114095227"
+				"42A3F72D88E25018"
+				"22053B1292EE07C9"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.7523fb4aab1f89c3.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7523fb4aab1f89c3.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "7523FB4AAB1F89C3"
+			shape: "hexagon"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7523fb4aab1f89c3.subtitle}"
+			tasks: [{
+				id: "244F8871BA1B7E34"
+				item: "gtceu:sps_crafting"
+				type: "item"
+			}]
+			x: 8.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["78350872B1ACF525"]
+			description: ["{gtlcore.quest.gtl.quest.34d6f0df329b1877.description.0000}"]
+			hide_dependent_lines: true
+			id: "34D6F0DF329B1877"
+			tasks: [{
+				id: "18706EDCE5C2C70A"
+				item: "gtceu:infuscolium_ingot"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"07B45AA08AA91467"
+				"01268072B19FA1C9"
+				"477C3F64F4CAA009"
+				"021401D3D29EBC87"
+				"2E05225ADF4D7D31"
+			]
+			icon_scale: 2.0d
+			id: "792A351AAA2A4F2B"
+			tasks: [{
+				id: "6496D870388FBB8D"
+				item: "kubejs:exotic_processing_core"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"22053B1292EE07C9"
+				"61B5CBFAACE6010D"
+				"4059A907154E2865"
+			]
+			id: "78350872B1ACF525"
+			tasks: [{
+				id: "540D06A0A84A3BAA"
+				item: "gtceu:adamantine_ingot"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["6DB1B7A9173E2C78"]
+			description: ["{gtlcore.quest.gtl.quest.61b5cbfaace6010d.description.0000}"]
+			icon: "gtceu:naquadah_contain_rare_earth_dust"
+			id: "61B5CBFAACE6010D"
+			tasks: [
+				{
+					id: "327FFD86CCB4EFF8"
+					item: "gtceu:naquadah_contain_rare_earth_dust"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5E1CBEA9E0623B56"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.61b5cbfaace6010d.title}"
+			x: 2.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["78350872B1ACF525"]
+			description: ["{gtlcore.quest.gtl.quest.1aa874c1351e4a0d.description.0000}"]
+			icon_scale: 2.0d
+			id: "1AA874C1351E4A0D"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4740C50F2D2B3F8D"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			tasks: [{
+				id: "1932A8FC6815B114"
+				item: "kubejs:adamantine_coil_block"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.1aa874c1351e4a0d.title}"
+			x: 6.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["792A351AAA2A4F2B"]
+			description: ["{gtlcore.quest.gtl.quest.48e77454d1cd87cd.description.0000}"]
+			icon_scale: 2.0d
+			id: "48E77454D1CD87CD"
+			tasks: [{
+				id: "4244DC73F0D8DA55"
+				item: "kubejs:exotic_processor"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"48E77454D1CD87CD"
+				"2AA6041AC73CD47E"
+			]
+			icon_scale: 2.0d
+			id: "025FA532523BF33B"
+			tasks: [{
+				id: "2860A4E1E332B23C"
+				item: "kubejs:exotic_assembly"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["025FA532523BF33B"]
+			icon_scale: 2.0d
+			id: "140CE2AEC7015CAB"
+			tasks: [{
+				id: "2F5461C2A1F31B6E"
+				item: "kubejs:exotic_computer"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"140CE2AEC7015CAB"
+				"78C6AB89612D047E"
+			]
+			icon_scale: 2.0d
+			id: "39F73A63746EE6E8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "517013EDE4E538F7"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "diamond"
+			size: 1.0d
+			tasks: [{
+				id: "02A3997B96CC0AEC"
+				item: "kubejs:exotic_mainframe"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["7523FB4AAB1F89C3"]
+			description: ["{gtlcore.quest.gtl.quest.61f8c5aa6deb30d6.description.0000}"]
+			id: "61F8C5AA6DEB30D6"
+			tasks: [{
+				id: "78A6560A02FCD3E9"
+				item: "gtceu:bedrock_dust"
+				type: "item"
+			}]
+			x: 9.0d
+			y: -1.0d
+		}
+		{
+			dependencies: [
+				"0ED237B0CE3DDF59"
+				"3968C254B6AC9B9D"
+			]
+			id: "26607B94D873E07A"
+			tasks: [{
+				id: "10B8C317B5D6DFD0"
+				item: "gtceu:vibranium_ingot"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"4F0F175ACFF363F0"
+				"1AA874C1351E4A0D"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.6bb5ed6ecc43e30c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6bb5ed6ecc43e30c.description.0002}"
+			]
+			id: "6BB5ED6ECC43E30C"
+			tasks: [{
+				id: "2BF3713C3B23B0D0"
+				item: "gtceu:taranium_ingot"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["3968C254B6AC9B9D"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4f0f175acff363f0.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4f0f175acff363f0.description.0002}"
+			]
+			icon: "gtceu:metal_residue_dust"
+			id: "4F0F175ACFF363F0"
+			tasks: [{
+				id: "49024352D46F755A"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4f0f175acff363f0.title}"
+			x: 8.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"7523FB4AAB1F89C3"
+				"34D6F0DF329B1877"
+			]
+			description: ["{gtlcore.quest.gtl.quest.2641cc6bc33f6a31.description.0000}"]
+			id: "2641CC6BC33F6A31"
+			subtitle: "{gtlcore.quest.gtl.quest.2641cc6bc33f6a31.subtitle}"
+			tasks: [{
+				id: "2F9E606799202DC9"
+				item: "gtceu:echoite_ingot"
+				type: "item"
+			}]
+			x: 10.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["075D368E91231337"]
+			description: [
+				"{gtlcore.quest.gtl.quest.42a3f72d88e25018.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.42a3f72d88e25018.description.0002}"
+			]
+			icon: "minecraft:echo_shard"
+			id: "42A3F72D88E25018"
+			rewards: [{
+				count: 64
+				id: "4C12785CE331254C"
+				item: "minecraft:jungle_sapling"
+				type: "item"
+			}]
+			tasks: [
+				{
+					id: "38C1386CB0AF51BD"
+					item: "minecraft:echo_shard"
+					type: "item"
+				}
+				{
+					id: "3CBB798C2D565597"
+					item: "minecraft:sculk_catalyst"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 10.0d
+			y: -4.0d
+		}
+		{
+			dependencies: [
+				"4D8E0C0295DB26EF"
+				"4EA64DC5DA2F0F8C"
+			]
+			id: "1F5B121C6647E2CA"
+			subtitle: "{gtlcore.quest.gtl.quest.1f5b121c6647e2ca.subtitle}"
+			tasks: [{
+				id: "02C4C3897AB62269"
+				item: "kubejs:exotic_chip"
+				type: "item"
+			}]
+			x: 8.0d
+			y: -4.0d
+		}
+		{
+			dependencies: [
+				"335A02C9498DCBB0"
+				"348787ECA57EA11C"
+				"281B6C20538A3CBA"
+			]
+			id: "07B45AA08AA91467"
+			tasks: [{
+				id: "68E24C35E921D70B"
+				item: "kubejs:x_ray_laser"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["2641CC6BC33F6A31"]
+			hide_dependency_lines: true
+			id: "335A02C9498DCBB0"
+			tasks: [{
+				id: "4F89800700465811"
+				item: "gtlcore:microfocus_x_ray_tube"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1AA874C1351E4A0D"]
+			id: "477C3F64F4CAA009"
+			tasks: [{
+				id: "46CA7F0E9FBD3DE6"
+				item: "gtceu:cinobite_ingot"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["78350872B1ACF525"]
+			hide_dependent_lines: true
+			id: "588C2C0BED069F41"
+			tasks: [{
+				id: "7045DA087F52FA80"
+				item: "kubejs:unstable_star"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["39F73A63746EE6E8"]
+			description: ["{gtlcore.quest.gtl.quest.33390417e8a0ab88.description.0000}"]
+			icon_scale: 2.0d
+			id: "33390417E8A0AB88"
+			optional: true
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.33390417e8a0ab88.subtitle}"
+			tasks: [{
+				id: "7AB2A11AD97054E2"
+				item: "gtceu:advanced_sps_crafting"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"77BE1524AABF6003"
+				"78F0147BABE80DDD"
+			]
+			description: ["{gtlcore.quest.gtl.quest.369dcd1e26334632.description.0000}"]
+			hide_dependent_lines: true
+			id: "369DCD1E26334632"
+			subtitle: "{gtlcore.quest.gtl.quest.369dcd1e26334632.subtitle}"
+			tasks: [{
+				id: "1758AC8CF4E9EC2B"
+				item: "gtceu:attuned_tengam_ingot"
+				type: "item"
+			}]
+			x: 4.5d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"4F945AA31D61A74D"
+				"78F0147BABE80DDD"
+			]
+			hide_dependent_lines: true
+			id: "348787ECA57EA11C"
+			subtitle: "{gtlcore.quest.gtl.quest.348787eca57ea11c.subtitle}"
+			tasks: [{
+				id: "1C064C1F74BB23C2"
+				item: "gtceu:fullerene_polymer_matrix_pulp_dust"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["42A3F72D88E25018"]
+			description: ["{gtlcore.quest.gtl.quest.127b8396034c0f34.description.0000}"]
+			icon: "minecraft:sculk_vein"
+			id: "127B8396034C0F34"
+			subtitle: "{gtlcore.quest.gtl.quest.127b8396034c0f34.subtitle}"
+			tasks: [
+				{
+					id: "669890BC5869D144"
+					item: "minecraft:sculk_shrieker"
+					type: "item"
+				}
+				{
+					id: "4F2634989CD39932"
+					item: "minecraft:sculk_sensor"
+					type: "item"
+				}
+				{
+					id: "498C0D8F59B3019E"
+					item: "minecraft:sculk_vein"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.127b8396034c0f34.title}"
+			x: 11.0d
+			y: -3.0d
+		}
+		{
+			dependencies: [
+				"26607B94D873E07A"
+				"0CF40DD5F6239209"
+			]
+			id: "01268072B19FA1C9"
+			tasks: [{
+				id: "0D6AF6925DC299F6"
+				item: "kubejs:exotic_printed_circuit_board"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["30C1D7DEFB3B18BD"]
+			icon_scale: 2.0d
+			id: "2AA6041AC73CD47E"
+			tasks: [{
+				id: "1D9CEEE0C21C135E"
+				item: "kubejs:draconic_core"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"192B626CF217FDBC"
+				"71CB57064256F904"
+				"63F90FA0F85804B8"
+				"369DCD1E26334632"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.30c1d7defb3b18bd.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.30c1d7defb3b18bd.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "30C1D7DEFB3B18BD"
+			shape: "hexagon"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.30c1d7defb3b18bd.subtitle}"
+			tasks: [{
+				id: "185FF9B96D2E6DA0"
+				item: "gtceu:aggregation_device"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["2E05225ADF4D7D31"]
+			description: ["{gtlcore.quest.gtl.quest.192b626cf217fdbc.description.0000}"]
+			hide_dependent_lines: true
+			id: "192B626CF217FDBC"
+			tasks: [{
+				id: "529CC0E222436601"
+				item: "kubejs:draconium_dust"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["7370721CB75472C1"]
+			description: [
+				"{gtlcore.quest.gtl.quest.77be1524aabf6003.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.77be1524aabf6003.description.0002}"
+			]
+			id: "77BE1524AABF6003"
+			tasks: [{
+				id: "226943A2546478B5"
+				item: "gtceu:small_purified_tengam_dust"
+				type: "item"
+			}]
+			x: 3.5d
+			y: 2.0d
+		}
+		{
+			dependencies: ["606C81F449ABCE5B"]
+			id: "021401D3D29EBC87"
+			tasks: [{
+				id: "2D6BFFABEF72FB06"
+				item: "kubejs:high_precision_crystal_soc"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["7B8FEC11FCC03D9A"]
+			hide_dependency_lines: true
+			icon: "gtceu:euv_photoresist_bucket"
+			id: "606C81F449ABCE5B"
+			subtitle: "{gtlcore.quest.gtl.quest.606c81f449abce5b.subtitle}"
+			tasks: [
+				{
+					id: "011EBE67C0D8E442"
+					title: "{gtlcore.quest.gtl.task.011ebe67c0d8e442.title}"
+					type: "checkmark"
+				}
+				{
+					id: "56338B68129F709B"
+					item: "gtceu:euv_photoresist_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 8.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["7C23CC6ADDC33EA0"]
+			description: ["{gtlcore.quest.gtl.quest.281b6c20538a3cba.description.0000}"]
+			icon: "gtceu:californium_cyclopentadienide_bucket"
+			id: "281B6C20538A3CBA"
+			tasks: [
+				{
+					id: "0B10159A50C58ACF"
+					title: "{gtlcore.quest.gtl.task.0b10159a50c58acf.title}"
+					type: "checkmark"
+				}
+				{
+					id: "16970E29A0D1EF31"
+					item: "gtceu:californium_cyclopentadienide_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 0.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"021401D3D29EBC87"
+				"7523FB4AAB1F89C3"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.181a1b6f5ad15f52.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.181a1b6f5ad15f52.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.181a1b6f5ad15f52.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.181a1b6f5ad15f52.description.0006}"
+			]
+			hide_dependency_lines: true
+			icon_scale: 1.5d
+			id: "181A1B6F5AD15F52"
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.181a1b6f5ad15f52.subtitle}"
+			tasks: [{
+				id: "5EBD9582ED477D88"
+				item: "gtceu:super_computation"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["6BB5ED6ECC43E30C"]
+			description: ["{gtlcore.quest.gtl.quest.678e707f85cd2071.description.0000}"]
+			icon_scale: 2.0d
+			id: "678E707F85CD2071"
+			size: 1.0d
+			tasks: [{
+				id: "44B32E745AA622FE"
+				item: "kubejs:taranium_boule"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"713FF88279AD9A31"
+				"32A49A2CBFC934C8"
+			]
+			description: ["{gtlcore.quest.gtl.quest.67d93082da7185cc.description.0000}"]
+			hide_dependency_lines: true
+			icon: "gtlcore:law_filter_casing"
+			icon_scale: 2.0d
+			id: "67D93082DA7185CC"
+			shape: "rsquare"
+			tasks: [
+				{
+					id: "6791BE188E97863E"
+					item: "gtlcore:law_filter_casing"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7BE147B42B6E464C"
+					item: "gtceu:law_cleaning_maintenance_hatch"
+					type: "item"
+				}
+			]
+			x: 12.0d
+			y: -4.0d
+		}
+		{
+			dependencies: ["68FBE0346D15916B"]
+			id: "2F02BC009330F5CB"
+			tasks: [{
+				id: "6D489E30E36B6957"
+				item: "kubejs:cryogenic_interface"
+				type: "item"
+			}]
+			x: 4.0d
+			y: -4.0d
+		}
+		{
+			dependencies: ["59CA7B4A4A417B53"]
+			description: ["{gtlcore.quest.gtl.quest.68fbe0346d15916b.description.0000}"]
+			id: "68FBE0346D15916B"
+			tasks: [{
+				id: "296E4F77EC25E3C2"
+				item: "gtceu:zylon_dust"
+				type: "item"
+			}]
+			x: 2.0d
+			y: -4.0d
+		}
+		{
+			dependencies: [
+				"606C81F449ABCE5B"
+				"678E707F85CD2071"
+			]
+			id: "71CB57064256F904"
+			tasks: [{
+				id: "5DA669EA8A10856E"
+				item: "kubejs:pm_chip"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"2641CC6BC33F6A31"
+				"67D93082DA7185CC"
+			]
+			id: "63F90FA0F85804B8"
+			tasks: [{
+				id: "4463009D8015AD7E"
+				item: "kubejs:reinforced_echo_shard"
+				type: "item"
+			}]
+			x: 12.0d
+			y: -2.0d
+		}
+		{
+			dependencies: [
+				"63F90FA0F85804B8"
+				"61F8C5AA6DEB30D6"
+			]
+			description: ["{gtlcore.quest.gtl.quest.3968c254b6ac9b9d.description.0000}"]
+			hide_dependent_lines: true
+			icon: "gtceu:bedrock_drilling_rig"
+			icon_scale: 2.0d
+			id: "3968C254B6AC9B9D"
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.3968c254b6ac9b9d.subtitle}"
+			tasks: [{
+				id: "0F05C8DA47EB7768"
+				item: "gtceu:bedrock_drilling_rig"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 0.0d
+		}
+		{
+			dependencies: [
+				"2DD8E128C6E3E41D"
+				"1F5B121C6647E2CA"
+				"2F02BC009330F5CB"
+				"348787ECA57EA11C"
+			]
+			hide_dependency_lines: false
+			id: "2858C1A89BAF2624"
+			tasks: [{
+				id: "41832AD8FA67EE4C"
+				item: "kubejs:rydberg_spinorial_assembly"
+				type: "item"
+			}]
+			x: 6.0d
+			y: -4.0d
+		}
+		{
+			dependencies: ["588C2C0BED069F41"]
+			description: ["{gtlcore.quest.gtl.quest.0ed237b0ce3ddf59.description.0000}"]
+			icon_scale: 1.3d
+			id: "0ED237B0CE3DDF59"
+			shape: "hexagon"
+			size: 2.0d
+			tasks: [{
+				id: "3D1314CB02CBCEAC"
+				item: "gtceu:uev_fusion_reactor"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"63F90FA0F85804B8"
+				"192B626CF217FDBC"
+				"369DCD1E26334632"
+			]
+			description: ["{gtlcore.quest.gtl.quest.3a89c534a7ae9e33.description.0000}"]
+			icon_scale: 2.0d
+			id: "3A89C534A7AE9E33"
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.3a89c534a7ae9e33.subtitle}"
+			tasks: [{
+				id: "0AC875BF67775760"
+				item: "gtceu:atomic_energy_excitation_plant"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["63F90FA0F85804B8"]
+			description: [
+				"{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.description.0008}"
+				""
+				"{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.description.0010}"
+			]
+			icon: "gtceu:advanced_infinite_driller"
+			icon_scale: 2.0d
+			id: "6AAC6E7C8721EBD7"
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.6aac6e7c8721ebd7.subtitle}"
+			tasks: [
+				{
+					id: "41DA2385E5010CB7"
+					item: "gtceu:advanced_infinite_driller"
+					type: "item"
+				}
+				{
+					id: "59A9292B3134DECD"
+					item: "gtceu:heat_sensor"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 14.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["35C982D71C6154FA"]
+			id: "78C6AB89612D047E"
+			tasks: [{
+				id: "30367015BD2083EA"
+				item: "gtceu:black_titanium_ingot"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["31AA3CEE0C967212"]
+			description: ["{gtlcore.quest.gtl.quest.35c982d71c6154fa.description.0000}"]
+			icon_scale: 2.0d
+			id: "35C982D71C6154FA"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "4AD4082575708A46"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			tasks: [{
+				id: "10967AD7B34634D4"
+				item: "kubejs:naquadriatictaranium_coil_block"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.35c982d71c6154fa.title}"
+			x: 13.0d
+			y: 5.0d
+		}
+		{
+			dependencies: [
+				"6BB5ED6ECC43E30C"
+				"369DCD1E26334632"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.0991031579c4caa7.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0991031579c4caa7.description.0002}"
+			]
+			icon_scale: 2.0d
+			id: "0991031579C4CAA7"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.0991031579c4caa7.subtitle}"
+			tasks: [{
+				id: "335FA9C6613E28F5"
+				item: "gtceu:advanced_integrated_ore_processor"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"6BB5ED6ECC43E30C"
+				"192B626CF217FDBC"
+				"68D3E6670941A3F5"
+				"588C2C0BED069F41"
+				"369DCD1E26334632"
+			]
+			description: ["{gtlcore.quest.gtl.quest.670d8eb2ce915fd5.description.0000}"]
+			hide_dependent_lines: true
+			id: "670D8EB2CE915FD5"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.670d8eb2ce915fd5.subtitle}"
+			tasks: [{
+				id: "293848195AF04862"
+				item: "kubejs:space_drone_mk4"
+				type: "item"
+			}]
+			x: 9.0d
+			y: 3.0d
+		}
+		{
+			dependencies: ["39F73A63746EE6E8"]
+			description: ["{gtlcore.quest.gtl.quest.3f99f904b7b94324.description.0000}"]
+			icon_scale: 2.0d
+			id: "3F99F904B7B94324"
+			optional: true
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.3f99f904b7b94324.subtitle}"
+			tasks: [{
+				id: "2AC154F76B64844E"
+				item: "gtceu:mega_fluid_heater"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"68FBE0346D15916B"
+				"783379F3A7557CEE"
+				"713FF88279AD9A31"
+				"2E05225ADF4D7D31"
+				"4059A907154E2865"
+			]
+			description: ["{gtlcore.quest.gtl.quest.421a0242817f164c.description.0000}"]
+			icon_scale: 1.5d
+			id: "421A0242817F164C"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.421a0242817f164c.subtitle}"
+			tasks: [{
+				id: "05A4D8FFF0B087D3"
+				item: "gtceu:me_final_pattern_buffer"
+				type: "item"
+			}]
+			x: 0.0d
+			y: -4.0d
+		}
+		{
+			dependencies: ["39F73A63746EE6E8"]
+			description: ["{gtlcore.quest.gtl.quest.4eed4298235ab11f.description.0000}"]
+			icon_scale: 2.0d
+			id: "4EED4298235AB11F"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.4eed4298235ab11f.subtitle}"
+			tasks: [{
+				id: "188C66643FA0075F"
+				item: "gtceu:advanced_rare_earth_centrifugal"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"2DD8E128C6E3E41D"
+				"1FE5F8D737ADB1B8"
+			]
+			id: "23B418803D455368"
+			shape: "gear"
+			size: 2.0d
+			tasks: [{
+				id: "12A595464E70C437"
+				item: "gtceu:adamantium_ingot"
+				type: "item"
+			}]
+			x: 2.0d
+			y: -2.0d
+		}
+		{
+			dependencies: [
+				"71CB57064256F904"
+				"783379F3A7557CEE"
+				"369DCD1E26334632"
+			]
+			description: ["{gtlcore.quest.gtl.quest.31aa3cee0c967212.description.0000}"]
+			hide_dependency_lines: true
+			id: "31AA3CEE0C967212"
+			tasks: [{
+				id: "2BF9417FE9A5FFC6"
+				item: "gtceu:uiv_energy_input_hatch"
+				type: "item"
+			}]
+			x: 14.0d
+			y: 4.0d
+		}
+		{
+			icon: "minecraft:reinforced_deepslate"
+			id: "788621675279AC20"
+			optional: true
+			rewards: [{
+				command: "/locate structure minecraft:ancient_city"
+				elevate_perms: true
+				icon: "minecraft:warden_spawn_egg"
+				id: "38C944D8B95E71FE"
+				title: "{gtlcore.quest.gtl.reward.38c944d8b95e71fe.title}"
+				type: "command"
+			}]
+			size: 0.5d
+			tasks: [{
+				id: "6A524513170EB8B1"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.788621675279ac20.title}"
+			x: 10.0d
+			y: -3.25d
+		}
+		{
+			dependencies: [
+				"208FB88A70036325"
+				"35C982D71C6154FA"
+				"26607B94D873E07A"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.1840382adb062735.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.1840382adb062735.description.0002}"
+			]
+			hide_dependency_lines: true
+			icon_scale: 1.5d
+			id: "1840382ADB062735"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.1840382adb062735.subtitle}"
+			tasks: [{
+				id: "50B72C92EADBD68B"
+				item: "gtceu:huge_incubator"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"2F2BD994E5E06A91"
+				"6EE4B6DDE0A660B3"
+				"2858C1A89BAF2624"
+				"281B6C20538A3CBA"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1ac3ce494e4734bc.description.0000}"]
+			hide_dependency_lines: true
+			icon_scale: 1.5d
+			id: "1AC3CE494E4734BC"
+			optional: true
+			shape: "rsquare"
+			tasks: [{
+				id: "7720E1F719B99375"
+				item: "gtceu:me_stocking_wildcard_pattern_buffer"
+				type: "item"
+			}]
+			x: 14.0d
+			y: -4.0d
+		}
+	]
+	subtitle: ["{gtlcore.quest.gtl.chapter.219401c56581188f.subtitle.0000}"]
+	title: "{gtlcore.quest.gtl.chapter.219401c56581188f.title}"
+}

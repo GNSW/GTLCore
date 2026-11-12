@@ -1,7 +1,0 @@
-{
-  "$schema": "../schema.json",
-  "includes": [
-    "pattern_encoding_terminal.json",
-    "encoding/modify_processing.json"
-  ]
-}

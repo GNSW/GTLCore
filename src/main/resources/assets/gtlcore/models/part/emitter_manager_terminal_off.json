@@ -1,8 +1,0 @@
-{
-  "parent": "ae2:part/display_off",
-  "textures": {
-    "lightsBright": "gtlcore:part/emitter_manager_terminal_bright",
-    "lightsMedium": "gtlcore:part/emitter_manager_terminal_medium",
-    "lightsDark": "gtlcore:part/emitter_manager_terminal_dark"
-  }
-}

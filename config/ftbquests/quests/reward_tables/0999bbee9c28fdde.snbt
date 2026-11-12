@@ -1,0 +1,14 @@
+{
+	icon: "gtceu:copper_credit"
+	id: "0999BBEE9C28FDDE"
+	loot_size: 1
+	order_index: 15
+	rewards: [
+		{ count: 6400, item: "gtceu:copper_credit", weight: 1.0E-5f }
+		{ count: 640, item: "gtceu:copper_credit", weight: 0.1f }
+		{ count: 64, item: "gtceu:copper_credit", weight: 2.0f }
+		{ count: 32, item: "gtceu:copper_credit", weight: 10.0f }
+		{ count: 16, item: "gtceu:copper_credit", weight: 20.0f }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.0999bbee9c28fdde.title}"
+}

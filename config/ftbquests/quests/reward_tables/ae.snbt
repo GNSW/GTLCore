@@ -1,0 +1,13 @@
+{
+	id: "48BE8F127C76A428"
+	loot_size: 1
+	order_index: 5
+	rewards: [
+		{ count: 256, item: "ae2:fluix_covered_dense_cable" }
+		{ count: 256, item: "ae2:fluix_smart_dense_cable" }
+		{ count: 256, item: "ae2:fluix_glass_cable" }
+		{ count: 256, item: "ae2:fluix_covered_cable" }
+		{ count: 256, item: "ae2:fluix_smart_cable" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.48be8f127c76a428.title}"
+}

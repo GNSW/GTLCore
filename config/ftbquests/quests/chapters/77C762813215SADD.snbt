@@ -1,0 +1,1973 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "77C762813215SADD"
+	group: "24F4987B35ABEE82"
+	icon: "minecraft:diamond_ore"
+	id: "6A809CAE287B97BA"
+	order_index: 1
+	quest_links: [ ]
+	quests: [
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.692f4312b3f73faf.description.0000}"]
+			icon: "gtceu:yellow_limonite_ore"
+			id: "692F4312B3F73FAF"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.692f4312b3f73faf.subtitle}"
+			tasks: [
+				{
+					id: "5C43A8DCDB7B497C"
+					item: "gtceu:raw_goethite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "16DB53121FC7A35F"
+					item: "gtceu:raw_yellow_limonite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0981233B73506070"
+					item: "gtceu:raw_hematite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "28B6A22A79E83139"
+					item: "gtceu:raw_malachite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "00651C242180F43C"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.692f4312b3f73faf.title}"
+			x: 1.5d
+			y: -4.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.260e516a219825a2.description.0000}"]
+			icon: "gtceu:magnetite_ore"
+			id: "260E516A219825A2"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.260e516a219825a2.subtitle}"
+			tasks: [
+				{
+					id: "2814C224F95FA845"
+					item: "gtceu:raw_magnetite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2E5F8E8AC59E87CF"
+					item: "gtceu:raw_vanadium_magnetite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "15315A8A2513F7E4"
+					item: "minecraft:raw_gold"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6C8140D9761AE909"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.260e516a219825a2.title}"
+			x: 2.5d
+			y: -4.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.03fbba4a693011a8.description.0000}"]
+			icon: "gtceu:pyrite_ore"
+			id: "03FBBA4A693011A8"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.03fbba4a693011a8.subtitle}"
+			tasks: [
+				{
+					id: "21D9BE0CDF8D20D0"
+					item: "gtceu:raw_chalcopyrite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1915E87E03CA2995"
+					item: "minecraft:raw_iron"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "17AD746C72314452"
+					item: "gtceu:raw_pyrite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1EDF0D3646DB3983"
+					item: "minecraft:raw_copper"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1D414CB5BDBCB30A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.03fbba4a693011a8.title}"
+			x: 3.5d
+			y: -3.5d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4826dcd2fc457ea5.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4826dcd2fc457ea5.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.4826dcd2fc457ea5.description.0004}"
+			]
+			icon: "gtceu:chalcopyrite_ore"
+			id: "4826DCD2FC457EA5"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.4826dcd2fc457ea5.subtitle}"
+			tasks: [
+				{
+					id: "21B8E250B773443C"
+					item: "gtceu:raw_chalcopyrite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2C704F920F765D2D"
+					item: "gtceu:raw_zeolite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2AA6111227CF13B3"
+					item: "gtceu:raw_cassiterite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5EA6E475025D758C"
+					item: "gtceu:raw_realgar"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "63C2332D298DF3BE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4826dcd2fc457ea5.title}"
+			x: 4.5d
+			y: -3.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.3b379794a3030c73.description.0000}"]
+			icon: "gtceu:cassiterite_ore"
+			id: "3B379794A3030C73"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.3b379794a3030c73.subtitle}"
+			tasks: [
+				{
+					id: "46C302CBE74092FC"
+					item: "gtceu:raw_tin"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "55D733978CCBA87D"
+					item: "gtceu:raw_cassiterite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "777D56B7CE3E4E38"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.3b379794a3030c73.title}"
+			x: 5.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.41616c31d9c08648.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.41616c31d9c08648.description.0002}"
+			]
+			icon: "gtceu:cassiterite_sand_ore"
+			id: "41616C31D9C08648"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.41616c31d9c08648.subtitle}"
+			tasks: [
+				{
+					id: "281CC5BB43AB6FBC"
+					item: "gtceu:raw_cassiterite_sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0A0980AD4738EF96"
+					item: "gtceu:raw_garnet_sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "28AFE5A9181D76A7"
+					item: "gtceu:raw_asbestos"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3842A89827031CCB"
+					item: "gtceu:raw_diatomite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "63D3BE8AB68F5DA6"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.41616c31d9c08648.title}"
+			x: 5.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.1e27c654e2f6fff2.description.0000}"]
+			icon: "minecraft:coal_ore"
+			id: "1E27C654E2F6FFF2"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.1e27c654e2f6fff2.subtitle}"
+			tasks: [
+				{
+					id: "5B84B4265CDED2C1"
+					item: "gtceu:raw_coal"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0589CAD102BB8048"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1e27c654e2f6fff2.title}"
+			x: 5.85d
+			y: 0.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.1b45db5c85b68182.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.1b45db5c85b68182.description.0002}"
+			]
+			icon: "gtceu:graphite_ore"
+			id: "1B45DB5C85B68182"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.1b45db5c85b68182.subtitle}"
+			tasks: [
+				{
+					id: "774FD60E5F9C5225"
+					item: "gtceu:raw_graphite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2B74642C6B76656E"
+					item: "gtceu:raw_diamond"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "72945B8F8D65CDC9"
+					item: "gtceu:raw_coal"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0AF11F5B098713E4"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.1b45db5c85b68182.title}"
+			x: 5.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5289d5049a236d55.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5289d5049a236d55.description.0002}"
+			]
+			icon: "gtceu:salt_ore"
+			id: "5289D5049A236D55"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5289d5049a236d55.subtitle}"
+			tasks: [
+				{
+					id: "13B468D35939891B"
+					item: "gtceu:raw_salt"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "37199835CDD92171"
+					item: "gtceu:raw_rock_salt"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1C5608B78BB94EF0"
+					item: "gtceu:raw_lepidolite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6D3D2CBF04EA7874"
+					item: "gtceu:raw_spodumene"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "33EF08046A8691C3"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5289d5049a236d55.title}"
+			x: 5.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7c1b5559a03f6e02.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7c1b5559a03f6e02.description.0002}"
+			]
+			icon: "gtceu:olivine_ore"
+			id: "7C1B5559A03F6E02"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7c1b5559a03f6e02.subtitle}"
+			tasks: [
+				{
+					id: "58F760B7865A70E7"
+					item: "gtceu:raw_bentonite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2187C0C0273D7744"
+					item: "gtceu:raw_magnetite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "560C7AAC5353FAF6"
+					item: "gtceu:raw_olivine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5D40F6304F039349"
+					item: "gtceu:raw_glauconite_sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7E91B4E8140AC752"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7c1b5559a03f6e02.title}"
+			x: 4.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.178285129cea9f9f.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.178285129cea9f9f.description.0002}"
+			]
+			icon: "gtceu:red_garnet_ore"
+			id: "178285129CEA9F9F"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.178285129cea9f9f.subtitle}"
+			tasks: [
+				{
+					id: "50787547A7F0A72E"
+					item: "gtceu:raw_red_garnet"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "66ADB2741F652DFD"
+					item: "gtceu:raw_yellow_garnet"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3DB2F28F248E5030"
+					item: "gtceu:raw_amethyst"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "74912302B5E832B7"
+					item: "gtceu:raw_opal"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5A9FC62632124000"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.178285129cea9f9f.title}"
+			x: 3.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.70252b72f7728efd.description.0000}"]
+			icon: "gtceu:apatite_ore"
+			id: "70252B72F7728EFD"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.70252b72f7728efd.subtitle}"
+			tasks: [
+				{
+					id: "1091719F41C151CE"
+					item: "gtceu:raw_apatite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "469D723F9710A9C1"
+					item: "gtceu:raw_tricalcium_phosphate"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4B81E1DE0520A51A"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.70252b72f7728efd.title}"
+			x: 2.5d
+			y: 3.7d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.2e5a71ced4b01657.description.0000}"]
+			icon: "minecraft:redstone_ore"
+			id: "2E5A71CED4B01657"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.2e5a71ced4b01657.subtitle}"
+			tasks: [
+				{
+					id: "2CE255679DBEF5D8"
+					item: "gtceu:raw_redstone"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0E2985CCA3ADC16D"
+					item: "gtceu:raw_ruby"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "086C90A681E3DAC8"
+					item: "gtceu:raw_cinnabar"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5B7028C461456FFA"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2e5a71ced4b01657.title}"
+			x: 1.5d
+			y: 3.7d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.6efe154d32a2155e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6efe154d32a2155e.description.0002}"
+			]
+			icon: "gtceu:sapphire_ore"
+			id: "6EFE154D32A2155E"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.6efe154d32a2155e.subtitle}"
+			tasks: [
+				{
+					id: "1318A25CD8DF8CC8"
+					item: "gtceu:raw_almandine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4621A5772F8A1346"
+					item: "gtceu:raw_pyrope"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "74E7B27F19B5BB90"
+					item: "gtceu:raw_sapphire"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "597389A21B4802B9"
+					item: "gtceu:raw_green_sapphire"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "66456C9C235271F8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6efe154d32a2155e.title}"
+			x: 0.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7c35b6b0b4cffeb2.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7c35b6b0b4cffeb2.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.7c35b6b0b4cffeb2.description.0004}"
+			]
+			icon: "gtceu:oilsands_ore"
+			id: "7C35B6B0B4CFFEB2"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7c35b6b0b4cffeb2.subtitle}"
+			tasks: [
+				{
+					id: "301C4CD1E47E2D02"
+					item: "gtceu:raw_oilsands"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "795398E7D9C557F2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7c35b6b0b4cffeb2.title}"
+			x: -0.5d
+			y: 3.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.676667089653641c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.676667089653641c.description.0002}"
+			]
+			icon: "gtceu:soapstone_ore"
+			id: "676667089653641C"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.676667089653641c.subtitle}"
+			tasks: [
+				{
+					id: "742A8704F88BAA3C"
+					item: "gtceu:raw_soapstone"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "620C772B82D991D3"
+					item: "gtceu:raw_talc"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "72DD6E229709EED5"
+					item: "gtceu:raw_glauconite_sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "775FF22E8AC8DEC2"
+					item: "gtceu:raw_pentlandite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4A5AF018791B7CAE"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.676667089653641c.title}"
+			x: -1.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.39a58afe2e0c13eb.description.0000}"]
+			icon: "gtceu:lapis_ore"
+			id: "39A58AFE2E0C13EB"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.39a58afe2e0c13eb.subtitle}"
+			tasks: [
+				{
+					id: "3E903B26B6E0D98E"
+					item: "gtceu:raw_lazurite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "32D7780756D44749"
+					item: "gtceu:raw_sodalite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "606762EB6B4E6B44"
+					item: "gtceu:raw_lapis"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2A1B5CB79B4824D2"
+					item: "gtceu:raw_calcite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3697DB4E5A1F0637"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.39a58afe2e0c13eb.title}"
+			x: -1.5d
+			y: 1.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.2c75a50b17aa9af1.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.2c75a50b17aa9af1.description.0002}"
+			]
+			icon: "gtceu:pyrolusite_ore"
+			id: "2C75A50B17AA9AF1"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.2c75a50b17aa9af1.subtitle}"
+			tasks: [
+				{
+					id: "10FC904696261AF3"
+					item: "gtceu:raw_grossular"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2AB5A89CE949A602"
+					item: "gtceu:raw_spessartine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6119F8F02D09746A"
+					item: "gtceu:raw_pyrolusite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3C4F10C849D57CEE"
+					item: "gtceu:raw_tantalite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "37EB62C021F94417"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2c75a50b17aa9af1.title}"
+			x: -1.7999999999999998d
+			y: 0.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.14587ae142d84e12.description.0000}"]
+			icon: "gtceu:galena_ore"
+			id: "14587AE142D84E12"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.14587ae142d84e12.subtitle}"
+			tasks: [
+				{
+					id: "4E3A072619DD0ADD"
+					item: "gtceu:raw_galena"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "630590BF96CFC43C"
+					item: "gtceu:raw_silver"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1F04EE0BC55BBC3D"
+					item: "gtceu:raw_lead"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1902EE396F0CE5D8"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.14587ae142d84e12.title}"
+			x: -1.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: [
+				"{gtlcore.quest.gtl.quest.38c955f6cbdd95bd.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.38c955f6cbdd95bd.description.0002}"
+			]
+			icon: "gtceu:nickel_ore"
+			id: "38C955F6CBDD95BD"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.38c955f6cbdd95bd.subtitle}"
+			tasks: [
+				{
+					id: "2B48BE1948B21FA3"
+					item: "gtceu:raw_garnierite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7C7612EE2B7E4EC5"
+					item: "gtceu:raw_nickel"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "67E57FC9827B5092"
+					item: "gtceu:raw_cobaltite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "037ACF0F26406F6A"
+					item: "gtceu:raw_pentlandite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "034E1AEE3980C4EF"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.38c955f6cbdd95bd.title}"
+			x: -1.0d
+			y: -2.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.0b4ba438fe7f3640.description.0000}"]
+			icon: "gtceu:mica_ore"
+			id: "0B4BA438FE7F3640"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.0b4ba438fe7f3640.subtitle}"
+			tasks: [
+				{
+					id: "7296DE6280CBC6A1"
+					item: "gtceu:raw_kyanite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "74D148653E7A1B25"
+					item: "gtceu:raw_mica"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0091A8A8857BFCA3"
+					item: "gtceu:raw_pollucite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7B76B804A651310D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0b4ba438fe7f3640.title}"
+			x: -0.5d
+			y: -3.0d
+		}
+		{
+			dependencies: ["2BECA06D9AF485D3"]
+			description: ["{gtlcore.quest.gtl.quest.5295c4aefa8417f3.description.0000}"]
+			icon: "gtceu:granitic_mineral_sand_ore"
+			id: "5295C4AEFA8417F3"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5295c4aefa8417f3.subtitle}"
+			tasks: [
+				{
+					id: "0A9878360139CD46"
+					item: "gtceu:raw_basaltic_mineral_sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4080824C57EFA2C2"
+					item: "gtceu:raw_granitic_mineral_sand"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "37B33325ED63458D"
+					item: "gtceu:raw_fullers_earth"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1399C23538D97FDE"
+					item: "gtceu:raw_gypsum"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "298CD601F31F6ACB"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5295c4aefa8417f3.title}"
+			x: 0.5d
+			y: -3.5d
+		}
+		{
+			dependencies: ["36F2CA6E24DE74E1"]
+			description: [
+				"{gtlcore.quest.gtl.quest.0afadd21454d968e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.0afadd21454d968e.description.0002}"
+			]
+			icon: "gtceu:netherrack_yellow_limonite_ore"
+			id: "0AFADD21454D968E"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.0afadd21454d968e.subtitle}"
+			tasks: [
+				{
+					id: "03B8D3B4B4C7BE83"
+					item: "gtceu:raw_goethite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41BD26055599D5E4"
+					item: "gtceu:raw_yellow_limonite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "054BDF1BA67B6172"
+					item: "gtceu:raw_hematite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "75C7A1DCF25258C6"
+					item: "minecraft:raw_gold"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "47554C1B13798344"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.0afadd21454d968e.title}"
+			x: 25.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["71DEF0909984EE63"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4fc668ef2bf294ed.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4fc668ef2bf294ed.description.0002}"
+			]
+			icon: "gtceu:endstone_magnetite_ore"
+			id: "4FC668EF2BF294ED"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.4fc668ef2bf294ed.subtitle}"
+			tasks: [
+				{
+					id: "221E6D04EBEC9DDE"
+					item: "gtceu:raw_magnetite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "595577EA15045970"
+					item: "gtceu:raw_vanadium_magnetite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "22990DDA1E1B862C"
+					item: "gtceu:raw_chromite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "48CBB7AE11A1F841"
+					item: "minecraft:raw_gold"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3EC18589716A162E"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4fc668ef2bf294ed.title}"
+			x: 22.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["71DEF0909984EE63"]
+			description: ["{gtlcore.quest.gtl.quest.5ed483a04095efa3.description.0000}"]
+			icon: "gtceu:endstone_pitchblende_ore"
+			id: "5ED483A04095EFA3"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5ed483a04095efa3.subtitle}"
+			tasks: [
+				{
+					id: "6174FF347A1D09AE"
+					item: "gtceu:raw_pitchblende"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "449DE0416421D8ED"
+					item: "gtceu:raw_uraninite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4A1308856F3B69EF"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5ed483a04095efa3.title}"
+			x: 25.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["778546543F6413E7"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_nether"
+			id: "36F2CA6E24DE74E1"
+			size: 1.0d
+			tasks: [{
+				id: "377042ABB6567FBD"
+				title: "{gtlcore.quest.gtl.task.377042abb6567fbd.title}"
+				type: "checkmark"
+			}]
+			x: 24.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["5E3EDA6C94CEC3C4"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_end"
+			id: "71DEF0909984EE63"
+			size: 1.0d
+			tasks: [{
+				id: "6F190A09C2230BC7"
+				title: "{gtlcore.quest.gtl.task.6f190a09c2230bc7.title}"
+				type: "checkmark"
+			}]
+			x: 24.0d
+			y: 3.5d
+		}
+		{
+			dependencies: ["075D368E91231337"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_overworld"
+			id: "2BECA06D9AF485D3"
+			size: 1.0d
+			tasks: [{
+				id: "1DAF439DEDBD42A0"
+				title: "{gtlcore.quest.gtl.task.1daf439dedbd42a0.title}"
+				type: "checkmark"
+			}]
+			x: 2.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["335ED39019FC62E7"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_reactor"
+			id: "3FFD20E53A9DF62A"
+			size: 1.0d
+			tasks: [{
+				id: "69F1DA9AF626411A"
+				title: "{gtlcore.quest.gtl.task.69f1da9af626411a.title}"
+				type: "checkmark"
+			}]
+			x: 9.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.022eb2da7c908350.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.022eb2da7c908350.description.0002}"
+			]
+			icon: "gtceu:diorite_topaz_ore"
+			id: "022EB2DA7C908350"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.022eb2da7c908350.subtitle}"
+			tasks: [
+				{
+					id: "65AB6223D092EF82"
+					item: "gtceu:raw_blue_topaz"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "634A97841EF6170A"
+					item: "gtceu:raw_topaz"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3667A1B7D4569B7C"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.022eb2da7c908350.title}"
+			x: 7.5d
+			y: -0.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.6b51d30e9ba60ab2.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6b51d30e9ba60ab2.description.0002}"
+			]
+			icon: "gtceu:diorite_certus_quartz_ore"
+			id: "6B51D30E9BA60AB2"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.6b51d30e9ba60ab2.subtitle}"
+			tasks: [
+				{
+					id: "0B0CA82688C62391"
+					item: "gtceu:raw_quartzite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "61AF4CD8DE9456DD"
+					item: "gtceu:raw_certus_quartz"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "067B2DB44080D924"
+					item: "gtceu:raw_barite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "79C742DE7B781C74"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.6b51d30e9ba60ab2.title}"
+			x: 7.5d
+			y: 0.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.762dd49ff5c4fe47.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.762dd49ff5c4fe47.description.0002}"
+			]
+			icon: "gtceu:diorite_emerald_ore"
+			id: "762DD49FF5C4FE47"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.762dd49ff5c4fe47.subtitle}"
+			tasks: [
+				{
+					id: "4BF269AAF0616EEA"
+					item: "gtceu:raw_beryllium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0A03B86149D662A4"
+					item: "gtceu:raw_emerald"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "60666F43CF8D8633"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.762dd49ff5c4fe47.title}"
+			x: 8.5d
+			y: 1.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.742626c462ea7b83.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.742626c462ea7b83.description.0002}"
+			]
+			icon: "gtceu:diorite_saltpeter_ore"
+			id: "742626C462EA7B83"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.742626c462ea7b83.subtitle}"
+			tasks: [
+				{
+					id: "466DBFB8B6AF318D"
+					item: "gtceu:raw_saltpeter"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "31EA49633429AA0F"
+					item: "gtceu:raw_diatomite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3611C28B509D85EC"
+					item: "gtceu:raw_electrotine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5A98389604DFDBD6"
+					item: "gtceu:raw_alunite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "309FC90CB695D435"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.742626c462ea7b83.title}"
+			x: 9.5d
+			y: 1.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.34b57c3f50b1636c.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.34b57c3f50b1636c.description.0002}"
+			]
+			icon: "gtceu:diorite_nether_quartz_ore"
+			id: "34B57C3F50B1636C"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.34b57c3f50b1636c.subtitle}"
+			tasks: [
+				{
+					id: "0465793C56EFC6ED"
+					item: "gtceu:raw_nether_quartz"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "29052FCD55EB5310"
+					item: "gtceu:raw_quartzite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3565B16DF322FEDC"
+					item: "gtceu:raw_barite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "07381BC1718290D9"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.34b57c3f50b1636c.title}"
+			x: 10.5d
+			y: 0.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.12243715403f9e51.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.12243715403f9e51.description.0002}"
+			]
+			icon: "gtceu:diorite_sulfur_ore"
+			id: "12243715403F9E51"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.12243715403f9e51.subtitle}"
+			tasks: [
+				{
+					id: "6BFE966D8AD0624D"
+					item: "gtceu:raw_sulfur"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "689B82B6E96D482D"
+					item: "gtceu:raw_pyrite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0E0A9E5220E2E3FD"
+					item: "gtceu:raw_sphalerite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "289B22939B38C72C"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.12243715403f9e51.title}"
+			x: 10.5d
+			y: -0.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.086553052433a3a3.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.086553052433a3a3.description.0002}"
+			]
+			icon: "gtceu:diorite_tetrahedrite_ore"
+			id: "086553052433A3A3"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.086553052433a3a3.subtitle}"
+			tasks: [
+				{
+					id: "1F4A11EE0C8EC9F8"
+					item: "gtceu:raw_tetrahedrite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "65EF753F64B54870"
+					item: "minecraft:raw_copper"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4814F9373B1F1598"
+					item: "gtceu:raw_stibnite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "40FB724802BDAABC"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.086553052433a3a3.title}"
+			x: 9.5d
+			y: -1.5d
+		}
+		{
+			dependencies: ["3FFD20E53A9DF62A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.7585c38928db1b02.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7585c38928db1b02.description.0002}"
+			]
+			icon: "gtceu:diorite_molybdenum_ore"
+			id: "7585C38928DB1B02"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.7585c38928db1b02.subtitle}"
+			tasks: [
+				{
+					id: "3D3938FAD9D769E1"
+					item: "gtceu:raw_wulfenite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1A4B3C068C0F9479"
+					item: "gtceu:raw_molybdenite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4D900F715F8EFB3E"
+					item: "gtceu:raw_molybdenum"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "50BA5D97CF46106D"
+					item: "gtceu:raw_powellite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3C8D75B81B573408"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7585c38928db1b02.title}"
+			x: 8.5d
+			y: -1.5d
+		}
+		{
+			dependencies: ["075D368E91231337"]
+			description: ["{gtlcore.quest.gtl.quest.4badde862bda04ba.description.0000}"]
+			id: "4BADDE862BDA04BA"
+			tasks: [{
+				id: "3345D7655113741E"
+				type: "checkmark"
+			}]
+			title: "{gtlcore.quest.gtl.quest.4badde862bda04ba.title}"
+			x: -4.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["23C2F99FC949AF0A"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_moon"
+			id: "74F1C81B60FABEAA"
+			tasks: [{
+				id: "48929967A3BEAA01"
+				title: "{gtlcore.quest.gtl.task.48929967a3beaa01.title}"
+				type: "checkmark"
+			}]
+			x: 14.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["74F1C81B60FABEAA"]
+			description: ["{gtlcore.quest.gtl.quest.37b04bccc3b7fbed.description.0000}"]
+			icon: "gtceu:moon_stone_plutonium_ore"
+			id: "37B04BCCC3B7FBED"
+			subtitle: "{gtlcore.quest.gtl.quest.37b04bccc3b7fbed.subtitle}"
+			tasks: [
+				{
+					id: "29B49746B62B94F5"
+					item: "gtceu:raw_uraninite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1AB14D357DF9F037"
+					item: "gtceu:raw_thorium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "79EB1706462C078D"
+					item: "gtceu:raw_plutonium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3F110283021962B2"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.37b04bccc3b7fbed.title}"
+			x: 12.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["74F1C81B60FABEAA"]
+			description: ["{gtlcore.quest.gtl.quest.386f6727d3275126.description.0000}"]
+			icon: "gtceu:moon_stone_pitchblende_ore"
+			id: "386F6727D3275126"
+			subtitle: "{gtlcore.quest.gtl.quest.386f6727d3275126.subtitle}"
+			tasks: [
+				{
+					id: "5C5534F9C2225417"
+					item: "gtceu:raw_pitchblende"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "09F6BD7657DEDE74"
+					item: "gtceu:raw_thorium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "30B3A23170EF9A42"
+					item: "gtceu:raw_uraninite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3000E716B7344085"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.386f6727d3275126.title}"
+			x: 15.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["74F1C81B60FABEAA"]
+			description: [
+				"{gtlcore.quest.gtl.quest.4edead01aba4a16f.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.4edead01aba4a16f.description.0002}"
+			]
+			icon: "gtceu:moon_stone_bauxite_ore"
+			id: "4EDEAD01ABA4A16F"
+			subtitle: "{gtlcore.quest.gtl.quest.4edead01aba4a16f.subtitle}"
+			tasks: [
+				{
+					id: "0722FCB2EFCBDF54"
+					item: "gtceu:raw_bauxite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E3E32B74191AA7B"
+					item: "gtceu:raw_ilmenite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4A3F60AEF15E3E01"
+					item: "gtceu:raw_aluminium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7BD1E551368F5896"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4edead01aba4a16f.title}"
+			x: 14.0d
+			y: 1.5d
+		}
+		{
+			dependencies: ["74F1C81B60FABEAA"]
+			description: ["{gtlcore.quest.gtl.quest.00aa7d62fce4b40e.description.0000}"]
+			icon: "gtceu:moon_stone_bastnasite_ore"
+			id: "00AA7D62FCE4B40E"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.00aa7d62fce4b40e.subtitle}"
+			tasks: [
+				{
+					id: "662FB5C8B89A4EA0"
+					item: "gtceu:raw_bastnasite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1330BE4DEC34C914"
+					item: "gtceu:raw_monazite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "31CC30157996C177"
+					item: "gtceu:raw_neodymium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2D19396D56572B34"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.00aa7d62fce4b40e.title}"
+			x: 14.0d
+			y: -1.5d
+		}
+		{
+			dependencies: ["702471643821B0DE"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_mars"
+			id: "0CE213ED8D234B0A"
+			tasks: [{
+				id: "36EF29137DC38E08"
+				title: "{gtlcore.quest.gtl.task.36ef29137dc38e08.title}"
+				type: "checkmark"
+			}]
+			x: 19.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["0CE213ED8D234B0A"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5c9ac0d1f2624d9e.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5c9ac0d1f2624d9e.description.0002}"
+			]
+			icon: "gtceu:mars_stone_cooperite_ore"
+			id: "5C9AC0D1F2624D9E"
+			subtitle: "{gtlcore.quest.gtl.quest.5c9ac0d1f2624d9e.subtitle}"
+			tasks: [
+				{
+					id: "3067456D53FF8588"
+					item: "gtceu:raw_bornite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5E444028BCB6EA66"
+					item: "gtceu:raw_cooperite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "41E39B8B54EAECB6"
+					item: "gtceu:raw_platinum"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E38CD79485C9FD1"
+					item: "gtceu:raw_palladium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0C443DA001955C12"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5c9ac0d1f2624d9e.title}"
+			x: 17.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["0CE213ED8D234B0A"]
+			description: ["{gtlcore.quest.gtl.quest.11957acd9e524f6c.description.0000}"]
+			icon: "gtceu:mars_stone_pyrochlore_ore"
+			id: "11957ACD9E524F6C"
+			subtitle: "{gtlcore.quest.gtl.quest.11957acd9e524f6c.subtitle}"
+			tasks: [
+				{
+					id: "4F6AB83CEADD0096"
+					item: "gtceu:raw_pyrochlore"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3B8F037D2E633A53"
+					item: "gtceu:raw_apatite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0D419B80D4104106"
+					item: "gtceu:raw_tricalcium_phosphate"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4D0D58881BB26AF9"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.11957acd9e524f6c.title}"
+			x: 19.0d
+			y: 1.5d
+		}
+		{
+			dependencies: ["0CE213ED8D234B0A"]
+			description: ["{gtlcore.quest.gtl.quest.5d0fe695e1e46bc4.description.0000}"]
+			icon: "gtceu:mars_stone_scheelite_ore"
+			id: "5D0FE695E1E46BC4"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5d0fe695e1e46bc4.subtitle}"
+			tasks: [
+				{
+					id: "12F98FE5189F5FD5"
+					item: "gtceu:raw_scheelite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "1090E1CD04E2D670"
+					item: "gtceu:raw_tungstate"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "28A298172828F15E"
+					item: "gtceu:raw_lithium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "422D0E0392F4AA13"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5d0fe695e1e46bc4.title}"
+			x: 20.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["602F48807D4A89A6"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_venus"
+			id: "423F98D732C4D981"
+			tasks: [{
+				id: "0ED89C2EA5B44FC7"
+				title: "{gtlcore.quest.gtl.task.0ed89c2ea5b44fc7.title}"
+				type: "checkmark"
+			}]
+			x: 27.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["423F98D732C4D981"]
+			description: ["{gtlcore.quest.gtl.quest.7f0c57f9551d8ffa.description.0000}"]
+			icon: "gtceu:venus_stone_desh_ore"
+			id: "7F0C57F9551D8FFA"
+			subtitle: "{gtlcore.quest.gtl.quest.7f0c57f9551d8ffa.subtitle}"
+			tasks: [
+				{
+					id: "5CDBEA9233C83007"
+					item: "gtceu:raw_desh"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "432D27C7077DEE97"
+					item: "gtceu:raw_magnesite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "7D5A3F54B65AD07D"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.7f0c57f9551d8ffa.title}"
+			x: 29.0d
+			y: 3.5d
+		}
+		{
+			dependencies: ["240EDC34562E580F"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_mercury"
+			id: "108D89FA7643AEB8"
+			tasks: [{
+				id: "4BE32C3F21E70B08"
+				title: "{gtlcore.quest.gtl.task.4be32c3f21e70b08.title}"
+				type: "checkmark"
+			}]
+			x: 27.5d
+			y: 0.0d
+		}
+		{
+			dependencies: ["108D89FA7643AEB8"]
+			icon: "gtceu:mercury_stone_calorite_ore"
+			id: "19BB6B20C2335469"
+			subtitle: "{gtlcore.quest.gtl.quest.19bb6b20c2335469.subtitle}"
+			tasks: [
+				{
+					id: "1154C1EB51D5888F"
+					item: "gtceu:raw_calorite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "09B8E4BE626D8F20"
+					item: "gtceu:raw_cobalt"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6E671039617F710E"
+					item: "gtceu:raw_magnesite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "045BDEA60E26E2CD"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.19bb6b20c2335469.title}"
+			x: 29.0d
+			y: 0.0d
+		}
+		{
+			dependencies: ["36F2CA6E24DE74E1"]
+			icon: "gtceu:netherrack_chalcocite_ore"
+			id: "00683234698842B2"
+			subtitle: "{gtlcore.quest.gtl.quest.00683234698842b2.subtitle}"
+			tasks: [
+				{
+					id: "5973FB4AEDB7EF4A"
+					item: "gtceu:raw_chalcocite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "2B7C1F4DB9F8A46D"
+					item: "gtceu:raw_bornite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "0F73ED39FF3951A7"
+					item: "gtceu:raw_blue_topaz"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "77A5620BD4872170"
+					item: "gtceu:raw_topaz"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "12837AFA7C841F46"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.00683234698842b2.title}"
+			x: 22.5d
+			y: -1.0d
+		}
+		{
+			dependencies: ["36F2CA6E24DE74E1"]
+			description: ["{gtlcore.quest.gtl.quest.7f54de5e0414e54b.description.0000}"]
+			icon: "minecraft:ancient_debris"
+			id: "7F54DE5E0414E54B"
+			subtitle: "{gtlcore.quest.gtl.quest.7f54de5e0414e54b.subtitle}"
+			tasks: [
+				{
+					id: "5E645F651B6600D2"
+					item: "minecraft:ancient_debris"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "4303F8862B7F0685"
+					type: "checkmark"
+				}
+			]
+			x: 24.0d
+			y: 1.5d
+		}
+		{
+			dependencies: ["5010011959CF5337"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_ceres"
+			id: "76F659B8F102B236"
+			tasks: [{
+				id: "4E73854CB6C0A883"
+				title: "{gtlcore.quest.gtl.task.4e73854cb6c0a883.title}"
+				type: "checkmark"
+			}]
+			x: 8.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["76F659B8F102B236"]
+			icon: "gtceu:ceresstone_ostrum_ore"
+			id: "19F11B0FD7A04A57"
+			subtitle: "{gtlcore.quest.gtl.quest.19f11b0fd7a04a57.subtitle}"
+			tasks: [
+				{
+					id: "6631035679018D85"
+					item: "gtceu:raw_ostrum"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "50C54570ABDE9244"
+					item: "minecraft:raw_gold"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "12C7FE1C194AFA93"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.19f11b0fd7a04a57.title}"
+			x: 10.0d
+			y: 3.5d
+		}
+		{
+			dependencies: ["73613E3EBEFFB326"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_io"
+			id: "56AF6D5B1E2205DC"
+			tasks: [{
+				id: "73B96560086419EE"
+				title: "{gtlcore.quest.gtl.task.73b96560086419ee.title}"
+				type: "checkmark"
+			}]
+			x: 14.0d
+			y: 3.5d
+		}
+		{
+			dependencies: ["56AF6D5B1E2205DC"]
+			description: [
+				"{gtlcore.quest.gtl.quest.5fdd8771824e57cf.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.5fdd8771824e57cf.description.0002}"
+				""
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3E951CCF86DDA5CB\"},\"translate\":\"gtlcore.quest.gtl.quest.5fdd8771824e57cf.description.0004.text.0000\"}"
+			]
+			icon: "gtceu:iostone_naquadah_ore"
+			id: "5FDD8771824E57CF"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.5fdd8771824e57cf.subtitle}"
+			tasks: [
+				{
+					id: "7D879F333DCFA8C1"
+					item: "gtceu:raw_naquadah"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "3E077E8BC02A38CE"
+					item: "gtceu:raw_plutonium"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "6021046DA2AEACA4"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.5fdd8771824e57cf.title}"
+			x: 15.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["56AF6D5B1E2205DC"]
+			description: ["{gtlcore.quest.gtl.quest.06ba02ac044bbdf1.description.0000}"]
+			icon: "gtceu:iostone_celestine_ore"
+			id: "06BA02AC044BBDF1"
+			subtitle: "{gtlcore.quest.gtl.quest.06ba02ac044bbdf1.subtitle}"
+			tasks: [
+				{
+					id: "1D9CC30A59D6916A"
+					item: "gtceu:raw_celestine"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "67191CA8F32C7750"
+					item: "gtceu:raw_cooperite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "47CBBE438C9D3381"
+					item: "gtceu:raw_trona"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5E1684E6F58B515B"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.06ba02ac044bbdf1.title}"
+			x: 12.5d
+			y: 3.5d
+		}
+		{
+			dependencies: ["761877FE2F5E2E2E"]
+			hide_dependent_lines: true
+			icon: "gtlcore:world_fragments_ganymede"
+			id: "65A7AD4DF669F605"
+			tasks: [{
+				id: "2A2B08E5908F587E"
+				title: "{gtlcore.quest.gtl.task.2a2b08e5908f587e.title}"
+				type: "checkmark"
+			}]
+			x: 19.0d
+			y: 3.5d
+		}
+		{
+			dependencies: ["65A7AD4DF669F605"]
+			icon: "gtceu:ganymedestone_zircon_ore"
+			id: "71E844874F97530A"
+			subtitle: "{gtlcore.quest.gtl.quest.71e844874f97530a.subtitle}"
+			tasks: [
+				{
+					id: "0C57D1EC4477F67C"
+					item: "gtceu:raw_zircon"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "09E7FDD31F1BE67E"
+					item: "gtceu:raw_grossular"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "5406FBCFD8A5C09D"
+					item: "gtceu:raw_pyrolusite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "02813907F40E88FB"
+					item: "gtceu:raw_tantalite"
+					optional_task: true
+					type: "item"
+				}
+				{
+					id: "24B233EFE8941E0F"
+					type: "checkmark"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.71e844874f97530a.title}"
+			x: 20.5d
+			y: 3.5d
+		}
+	]
+	title: "{gtlcore.quest.gtl.chapter.6a809cae287b97ba.title}"
+}

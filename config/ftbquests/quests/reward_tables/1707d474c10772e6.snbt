@@ -1,0 +1,18 @@
+{
+	id: "1707D474C10772E6"
+	loot_size: 1
+	order_index: 14
+	rewards: [
+		{ count: 64, item: "minecraft:wheat_seeds" }
+		{ count: 64, item: "minecraft:pumpkin_seeds" }
+		{ count: 64, item: "minecraft:melon_seeds" }
+		{ count: 64, item: "minecraft:beetroot_seeds" }
+		{ count: 64, item: "minecraft:potato" }
+		{ count: 64, item: "minecraft:carrot" }
+		{ count: 64, item: "minecraft:kelp" }
+		{ count: 64, item: "minecraft:cactus" }
+		{ count: 64, item: "minecraft:bamboo" }
+		{ count: 64, item: "minecraft:sea_pickle" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.1707d474c10772e6.title}"
+}

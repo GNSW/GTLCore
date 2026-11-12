@@ -1,0 +1,8 @@
+{
+	chapter_groups: [
+		{ id: "24F4987B35ABEE82", title: "{gtlcore.quest.gtl.group.24f4987b35abee82.title}" }
+		{ id: "45061620BBCB7E0B", title: "{gtlcore.quest.gtl.group.45061620bbcb7e0b.title}" }
+		{ id: "68CBF1606D696C68", title: "{gtlcore.quest.gtl.group.68cbf1606d696c68.title}" }
+		{ id: "0ACE46048A3F93ED", title: "{gtlcore.quest.gtl.group.0ace46048a3f93ed.title}" }
+	]
+}

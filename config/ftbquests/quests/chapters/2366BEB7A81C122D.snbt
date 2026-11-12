@@ -1,0 +1,1118 @@
+{
+	default_hide_dependency_lines: false
+	default_quest_shape: ""
+	filename: "2366BEB7A81C122D"
+	group: "68CBF1606D696C68"
+	icon: "gtceu:uv_electric_motor"
+	id: "2366BEB7A81C122D"
+	order_index: 8
+	quest_links: [
+		{
+			id: "23C44004B0D7572C"
+			linked_quest: "73C70C42B7EF5D4F"
+			x: 2.0d
+			y: 2.0d
+		}
+		{
+			id: "3F71D8E597D26019"
+			linked_quest: "7C23CC6ADDC33EA0"
+			shape: "gear"
+			size: 2.0d
+			x: 0.0d
+			y: 2.0d
+		}
+		{
+			id: "3C65CAC0D7289CD7"
+			linked_quest: "702EFE9BA62A8CDA"
+			x: 2.0d
+			y: 12.0d
+		}
+	]
+	quests: [
+		{
+			dependencies: [
+				"0A2D46609F5C3CAB"
+				"7C4C11E7C931C01B"
+				"73C70C42B7EF5D4F"
+				"2719D88ECD353F24"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.6c4f1c87f08f38ac.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6c4f1c87f08f38ac.description.0002}"
+			]
+			icon_scale: 1.3d
+			id: "6C4F1C87F08F38AC"
+			shape: "hexagon"
+			size: 2.0d
+			tasks: [{
+				id: "1A869FB7AB0C0536"
+				item: "gtceu:uv_fusion_reactor"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["6C4F1C87F08F38AC"]
+			description: ["{gtlcore.quest.gtl.quest.035c470213e8b4db.description.0000}"]
+			id: "035C470213E8B4DB"
+			shape: "gear"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.035c470213e8b4db.subtitle}"
+			tasks: [{
+				id: "39B8A1A88BE55729"
+				item: "gtceu:neutronium_ingot"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["035C470213E8B4DB"]
+			description: ["{gtlcore.quest.gtl.quest.264ea49453e188c4.description.0000}"]
+			icon_scale: 2.0d
+			id: "264EA49453E188C4"
+			tasks: [{
+				id: "0DAE2E307ACAD4E6"
+				item: "gtceu:neutronium_boule"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["1223F5F9BF7FF37F"]
+			id: "4D8E0C0295DB26EF"
+			tasks: [{
+				id: "381C8725FC2BBC19"
+				item: "gtceu:highly_advanced_soc"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["24B011E770B7DF3F"]
+			description: ["{gtlcore.quest.gtl.quest.2810ced22a6ad31a.description.0000}"]
+			id: "2810CED22A6AD31A"
+			tasks: [
+				{
+					id: "7D4B60D506FF83C0"
+					item: "kubejs:smd_capacitor_bioware"
+					type: "item"
+				}
+				{
+					id: "796C0C67C3F01F7B"
+					item: "kubejs:smd_diode_bioware"
+					type: "item"
+				}
+				{
+					id: "7980D10B3CF288A4"
+					item: "kubejs:smd_resistor_bioware"
+					type: "item"
+				}
+				{
+					id: "36CB0E3E237EC422"
+					item: "kubejs:smd_transistor_bioware"
+					type: "item"
+				}
+				{
+					id: "43093BDBA607AFB5"
+					item: "kubejs:smd_inductor_bioware"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2810ced22a6ad31a.title}"
+			x: 5.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"4D8E0C0295DB26EF"
+				"43A7282802A06626"
+				"4F87B7DA47087F97"
+			]
+			description: ["{gtlcore.quest.gtl.quest.5e7f20c5f8530e1e.description.0000}"]
+			icon_scale: 2.0d
+			id: "5E7F20C5F8530E1E"
+			size: 1.0d
+			tasks: [{
+				id: "2A747FECF6A9366B"
+				item: "kubejs:bioware_processor"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"5E7F20C5F8530E1E"
+				"53EB6E99F976AF31"
+			]
+			icon_scale: 2.0d
+			id: "76C32ADCD71DE8B8"
+			tasks: [{
+				id: "3EDE41255F7E04E7"
+				item: "kubejs:bioware_assembly"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 10.0d
+		}
+		{
+			dependencies: ["76C32ADCD71DE8B8"]
+			icon_scale: 2.0d
+			id: "2AA1E574BA4327F8"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "0873F101ADC29532"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			size: 1.0d
+			tasks: [{
+				id: "648367DCA2352C63"
+				item: "kubejs:bioware_computer"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 7.0d
+		}
+		{
+			dependencies: [
+				"2AA1E574BA4327F8"
+				"1DFC7DC123A3D830"
+				"09537D159735D297"
+			]
+			description: ["{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"39380262677612A9\"},\"translate\":\"gtlcore.quest.gtl.quest.7204f1b6bcc74f1c.description.0000.text.0000\"}"]
+			icon_scale: 2.0d
+			id: "7204F1B6BCC74F1C"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2550FB2AB2774952"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "circle"
+			tasks: [{
+				id: "1E35DC7EF8C5881E"
+				item: "kubejs:bioware_mainframe"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["035C470213E8B4DB"]
+			description: ["{gtlcore.quest.gtl.quest.1dfc7dc123a3d830.description.0000}"]
+			id: "1DFC7DC123A3D830"
+			tasks: [{
+				id: "396FE1151A63CF4A"
+				item: "gtceu:ruthenium_trinium_americium_neutronate_ingot"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 4.0d
+		}
+		{
+			dependencies: ["2928C640C522E0A5"]
+			description: ["{gtlcore.quest.gtl.quest.24b011e770b7df3f.description.0000}"]
+			icon: "gtceu:polyimide_bucket"
+			id: "24B011E770B7DF3F"
+			tasks: [
+				{
+					id: "62A6274CE1A1FF7A"
+					title: "{gtlcore.quest.gtl.task.62a6274ce1a1ff7a.title}"
+					type: "checkmark"
+				}
+				{
+					id: "03C3ED6C4F34B9F5"
+					item: "gtceu:polyimide_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 4.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"59CA7B4A4A417B53"
+				"18CB66D8EABD5132"
+			]
+			id: "1FA9E56114BFABF5"
+			tasks: [{
+				id: "6A73DF3A0B7C1184"
+				item: "gtceu:pikyonium_ingot"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"1FA9E56114BFABF5"
+				"776563C5BA327495"
+				"3B098EA4601A7827"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.53eb6e99f976af31.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.53eb6e99f976af31.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.53eb6e99f976af31.description.0004}"
+			]
+			hide_dependency_lines: true
+			icon: "gtceu:circuit_assembly_line"
+			icon_scale: 1.3d
+			id: "53EB6E99F976AF31"
+			shape: "hexagon"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.53eb6e99f976af31.subtitle}"
+			tasks: [
+				{
+					id: "2E802CA66A25BB20"
+					item: "gtceu:circuit_assembly_line"
+					type: "item"
+				}
+				{
+					id: "02EE64DF10DA8AC6"
+					item: "kubejs:precision_circuit_assembly_robot_mk1"
+					type: "item"
+				}
+			]
+			x: 12.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"7204F1B6BCC74F1C"
+				"39380262677612A9"
+			]
+			description: ["{gtlcore.quest.gtl.quest.71d029b59c690121.description.0000}"]
+			icon_scale: 1.3d
+			id: "71D029B59C690121"
+			shape: "hexagon"
+			size: 2.0d
+			subtitle: "{gtlcore.quest.gtl.quest.71d029b59c690121.subtitle}"
+			tasks: [{
+				id: "50C209A33583AD73"
+				item: "gtceu:plasma_condenser"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"21CF5BE902E89B8A"
+				"2810CED22A6AD31A"
+				"583079AD88755662"
+				"7C9AC873CB7209D9"
+			]
+			icon_scale: 2.0d
+			id: "43A7282802A06626"
+			tasks: [{
+				id: "1763964DDAF2AECC"
+				item: "kubejs:bioware_processing_core"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"1B548589C6044A63"
+				"1223F5F9BF7FF37F"
+				"333B741B06E49CE8"
+				"11B90D1FD2508092"
+			]
+			description: ["{gtlcore.quest.gtl.quest.21cf5be902e89b8a.description.0000}"]
+			icon_scale: 2.0d
+			id: "21CF5BE902E89B8A"
+			tasks: [{
+				id: "708ED67D28AAA758"
+				item: "kubejs:bioware_boule"
+				type: "item"
+			}]
+			x: 6.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"7A7C73D046390488"
+				"53DEE1A65051E06F"
+				"5E86110BBAEA92BA"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.31ede3d976de5a33.description.0000}"
+				"{gtlcore.quest.gtl.quest.31ede3d976de5a33.description.0001}"
+				""
+				"{gtlcore.quest.gtl.quest.31ede3d976de5a33.description.0003}"
+			]
+			icon_scale: 2.0d
+			id: "31EDE3D976DE5A33"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.31ede3d976de5a33.subtitle}"
+			tasks: [{
+				id: "194425B2D808120E"
+				item: "gtceu:assembler_module"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"7A7C73D046390488"
+				"53DEE1A65051E06F"
+				"5E86110BBAEA92BA"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.7adb50acf5ae1d13.description.0000}"
+				"{gtlcore.quest.gtl.quest.7adb50acf5ae1d13.description.0001}"
+				""
+				"{gtlcore.quest.gtl.quest.7adb50acf5ae1d13.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.7adb50acf5ae1d13.description.0005}"
+			]
+			icon_scale: 2.0d
+			id: "7ADB50ACF5AE1D13"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.7adb50acf5ae1d13.subtitle}"
+			tasks: [{
+				id: "3F389DDC4C0810B4"
+				item: "gtceu:resource_collection"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["31EDE3D976DE5A33"]
+			description: [
+				"{gtlcore.quest.gtl.quest.6d83baac7db34d51.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.6d83baac7db34d51.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.6d83baac7db34d51.description.0004}"
+			]
+			id: "6D83BAAC7DB34D51"
+			shape: "pentagon"
+			subtitle: "{gtlcore.quest.gtl.quest.6d83baac7db34d51.subtitle}"
+			tasks: [{
+				id: "54ED6D9B82E6A10E"
+				item: "kubejs:space_drone_mk1"
+				type: "item"
+			}]
+			x: 2.0d
+			y: 10.0d
+		}
+		{
+			dependencies: [
+				"7A7C73D046390488"
+				"1278152299FBED54"
+				"61A202B234E64B8C"
+			]
+			description: ["{gtlcore.quest.gtl.quest.12f8275fc06fcfee.description.0000}"]
+			id: "12F8275FC06FCFEE"
+			tasks: [{
+				id: "3B3096FCBB8D2FE6"
+				item: "gtceu:abyssalalloy_ingot"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["12F8275FC06FCFEE"]
+			icon_scale: 2.0d
+			id: "3EA935A712FA0EBE"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "49B4CDC78BC20627"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			tasks: [{
+				id: "1D87EC0E1793346B"
+				item: "kubejs:abyssalalloy_coil_block"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.3ea935a712fa0ebe.title}"
+			x: 1.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"6C4F1C87F08F38AC"
+				"2802E34A99CE1D79"
+			]
+			description: ["{gtlcore.quest.gtl.quest.776563c5ba327495.description.0000}"]
+			id: "776563C5BA327495"
+			tasks: [
+				{
+					id: "55625B7675054641"
+					item: "gtceu:orichalcum_ingot"
+					type: "item"
+				}
+				{
+					id: "09537D159735D297"
+					item: "gtceu:mithril_ingot"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.776563c5ba327495.title}"
+			x: 3.0d
+			y: 5.0d
+		}
+		{
+			dependencies: [
+				"7ADB50ACF5AE1D13"
+				"6D83BAAC7DB34D51"
+				"07A5A5AD37710056"
+			]
+			description: ["{gtlcore.quest.gtl.quest.1b548589c6044a63.description.0000}"]
+			id: "1B548589C6044A63"
+			subtitle: "{gtlcore.quest.gtl.quest.1b548589c6044a63.subtitle}"
+			tasks: [{
+				id: "74AD31D4642ED7CF"
+				item: "kubejs:tcetieseaweedextract"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"1FA9E56114BFABF5"
+				"776563C5BA327495"
+				"37C5E7628A4B826C"
+				"035C470213E8B4DB"
+				"2A0269009ABF1414"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.7a7c73d046390488.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.7a7c73d046390488.description.0002}"
+				"{gtlcore.quest.gtl.quest.7a7c73d046390488.description.0003}"
+				""
+				"{gtlcore.quest.gtl.quest.7a7c73d046390488.description.0005}"
+				""
+				"{gtlcore.quest.gtl.quest.7a7c73d046390488.description.0007}"
+				""
+				"{gtlcore.quest.gtl.quest.7a7c73d046390488.description.0009}"
+			]
+			hide_dependent_lines: true
+			icon_scale: 1.3d
+			id: "7A7C73D046390488"
+			rewards: [
+				{
+					id: "680C703A77E766E4"
+					item: "avaritia:infinity_helmet"
+					type: "item"
+				}
+				{
+					id: "253A05AC70840061"
+					item: "avaritia:infinity_chestplate"
+					type: "item"
+				}
+				{
+					id: "377492F72A4F19D0"
+					item: "avaritia:infinity_pants"
+					type: "item"
+				}
+				{
+					id: "50FC070B92E66FE7"
+					item: "avaritia:infinity_boots"
+					type: "item"
+				}
+			]
+			shape: "hexagon"
+			size: 2.0d
+			tasks: [{
+				id: "2E049D2A5A1162D8"
+				item: "gtceu:space_elevator"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"051792ED136C96D0"
+				"4A058FA1859A00D1"
+				"4786A4C8A643EA4A"
+			]
+			description: ["{gtlcore.quest.gtl.quest.583079ad88755662.description.0000}"]
+			id: "583079AD88755662"
+			tasks: [{
+				id: "6B65C07BCA6CC667"
+				item: "kubejs:bioware_printed_circuit_board"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 12.0d
+		}
+		{
+			dependencies: ["264EA49453E188C4"]
+			id: "1223F5F9BF7FF37F"
+			tasks: [{
+				id: "3DA4F596F8B93303"
+				item: "gtceu:neutronium_wafer"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 8.0d
+		}
+		{
+			dependencies: ["1DFC7DC123A3D830"]
+			description: ["{gtlcore.quest.gtl.quest.4500ac22ee5c09f0.description.0000}"]
+			icon_scale: 2.0d
+			id: "4500AC22EE5C09F0"
+			shape: "rsquare"
+			size: 1.0d
+			tasks: [{
+				id: "1B9D3E6BA58D1E74"
+				item: "gtceu:mega_vacuum_freezer"
+				type: "item"
+			}]
+			x: 10.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"41C7A298C421C65D"
+				"7204F1B6BCC74F1C"
+				"71C7130610E0294D"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.1fcd63f77e978107.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.1fcd63f77e978107.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.1fcd63f77e978107.description.0004}"
+				"{gtlcore.quest.gtl.quest.1fcd63f77e978107.description.0005}"
+				"{gtlcore.quest.gtl.quest.1fcd63f77e978107.description.0006}"
+			]
+			icon_scale: 2.0d
+			id: "1FCD63F77E978107"
+			min_width: 250
+			shape: "rsquare"
+			size: 1.0d
+			subtitle: "{gtlcore.quest.gtl.quest.1fcd63f77e978107.subtitle}"
+			tasks: [{
+				id: "67242CD537B6FEC1"
+				item: "gtceu:super_blast_smelter"
+				type: "item"
+			}]
+			x: 11.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["7A7C73D046390488"]
+			description: ["{gtlcore.quest.gtl.quest.333b741b06e49ce8.description.0000}"]
+			icon: "gtceu:unknowwater_bucket"
+			id: "333B741B06E49CE8"
+			subtitle: "{gtlcore.quest.gtl.quest.333b741b06e49ce8.subtitle}"
+			tasks: [
+				{
+					id: "51F32C7FCCFA73A7"
+					title: "{gtlcore.quest.gtl.task.51f32c7fccfa73a7.title}"
+					type: "checkmark"
+				}
+				{
+					id: "5602A4B4CB885EC9"
+					item: "gtceu:unknowwater_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 6.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"7C23CC6ADDC33EA0"
+				"233CA36D529EC3FB"
+			]
+			id: "2719D88ECD353F24"
+			tasks: [{
+				id: "6BA667DA94DDC286"
+				item: "gtceu:uv_energy_input_hatch"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 4.0d
+		}
+		{
+			dependencies: [
+				"2802E34A99CE1D79"
+				"035C470213E8B4DB"
+			]
+			icon: "gtceu:antimatter_bucket"
+			id: "24585C3114095227"
+			subtitle: "{gtlcore.quest.gtl.quest.24585c3114095227.subtitle}"
+			tasks: [
+				{
+					id: "32D1AAAFAE4E6E8D"
+					type: "checkmark"
+				}
+				{
+					id: "102EF1894B691977"
+					item: "gtceu:antimatter_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.24585c3114095227.title}"
+			x: 6.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["035C470213E8B4DB"]
+			description: [
+				"{gtlcore.quest.gtl.quest.07a5a5ad37710056.description.0000}"
+				""
+				"{\"underlined\":\"true\",\"italic\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"3740DE62D42A4D0D\"},\"translate\":\"gtlcore.quest.gtl.quest.07a5a5ad37710056.description.0002.text.0000\"}"
+				"{@pagebreak}"
+				"{gtlcore.quest.gtl.quest.07a5a5ad37710056.description.0004}"
+			]
+			hide_dependent_lines: true
+			icon_scale: 2.0d
+			id: "07A5A5AD37710056"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.07a5a5ad37710056.subtitle}"
+			tasks: [{
+				id: "7039AA556E4A462A"
+				item: "gtceu:gravity_hatch"
+				type: "item"
+			}]
+			x: 7.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["035C470213E8B4DB"]
+			icon_scale: 2.0d
+			id: "7597D3F42E7E8515"
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.7597d3f42e7e8515.subtitle}"
+			tasks: [{
+				id: "798CD0CCB2B791EF"
+				item: "gtceu:zpm_fluid_drilling_rig"
+				type: "item"
+			}]
+			x: 9.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"02F523E003E1C93D"
+				"035C470213E8B4DB"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0002}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0003}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0004}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0005}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0006}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0007}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0008}"
+				"{gtlcore.quest.gtl.quest.16c93f76f74cb8db.description.0009}"
+			]
+			icon_scale: 2.0d
+			id: "16C93F76F74CB8DB"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "75A2190E42EDDB29"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.16c93f76f74cb8db.subtitle}"
+			tasks: [{
+				id: "42B8B94BB1B32E83"
+				item: "gtceu:chemical_distort"
+				type: "item"
+			}]
+			x: 8.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["11B90D1FD2508092"]
+			icon: "gtceu:mutated_living_solder_bucket"
+			id: "4F87B7DA47087F97"
+			tasks: [
+				{
+					id: "2B9CE70914717C3A"
+					type: "checkmark"
+				}
+				{
+					id: "7D8FFDC47FF188C9"
+					item: "gtceu:mutated_living_solder_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4f87b7da47087f97.title}"
+			x: 10.0d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"035C470213E8B4DB"
+				"0A2D46609F5C3CAB"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.09e013c97e05c052.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.09e013c97e05c052.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.09e013c97e05c052.description.0004}"
+				"{\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"5535934109A12B5D\"},\"translate\":\"gtlcore.quest.gtl.quest.09e013c97e05c052.description.0005.text.0000\"}"
+				"{gtlcore.quest.gtl.quest.09e013c97e05c052.description.0006}"
+				"{gtlcore.quest.gtl.quest.09e013c97e05c052.description.0007}"
+				""
+				"{gtlcore.quest.gtl.quest.09e013c97e05c052.description.0009}"
+			]
+			icon_scale: 2.0d
+			id: "09E013C97E05C052"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2A7DD0EB96FD2044"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.09e013c97e05c052.subtitle}"
+			tasks: [{
+				id: "6D5ADEFDD6695856"
+				item: "gtceu:large_naquadah_reactor"
+				type: "item"
+			}]
+			x: 4.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["035C470213E8B4DB"]
+			description: [
+				"{\"italic\":\"true\",\"underlined\":\"true\",\"clickEvent\":{\"action\":\"change_page\",\"value\":\"224B850538D346D3\"},\"translate\":\"gtlcore.quest.gtl.quest.4ea64dc5da2f0f8c.description.0000.text.0000\"}"
+				""
+				"{gtlcore.quest.gtl.quest.4ea64dc5da2f0f8c.description.0002}"
+			]
+			hide_dependency_lines: true
+			icon: "gtceu:grade_8_purified_water_bucket"
+			id: "4EA64DC5DA2F0F8C"
+			subtitle: "{gtlcore.quest.gtl.quest.4ea64dc5da2f0f8c.subtitle}"
+			tasks: [
+				{
+					id: "53B625F402EEFC80"
+					type: "checkmark"
+				}
+				{
+					id: "128EB32FE77B1AFF"
+					item: "gtceu:grade_8_purified_water_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.4ea64dc5da2f0f8c.title}"
+			x: 12.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"7204F1B6BCC74F1C"
+				"31A1ECA11AC31A29"
+			]
+			description: ["{gtlcore.quest.gtl.quest.2da05e5baeafb88e.description.0000}"]
+			id: "2DA05E5BAEAFB88E"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "51D272FBB89C06A0"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			subtitle: "{gtlcore.quest.gtl.quest.2da05e5baeafb88e.subtitle}"
+			tasks: [
+				{
+					id: "105A19D975EC4EAA"
+					item: "gtlcore:item_infinity_cell"
+					type: "item"
+				}
+				{
+					id: "78D71EA51CA14E68"
+					item: "gtlcore:fluid_infinity_cell"
+					type: "item"
+				}
+				{
+					id: "1EA2B1541113D258"
+					item: "gtlcore:fast_infinity_cell"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.2da05e5baeafb88e.title}"
+			x: 12.0d
+			y: 6.0d
+		}
+		{
+			dependencies: [
+				"7204F1B6BCC74F1C"
+				"39380262677612A9"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.36a2af68ae67c70a.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.36a2af68ae67c70a.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.36a2af68ae67c70a.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.36a2af68ae67c70a.description.0006}"
+				"{gtlcore.quest.gtl.quest.36a2af68ae67c70a.description.0007}"
+				"{image:ftbquests:textures/picture/003.png width:200 height:100 align:center}"
+				"{gtlcore.quest.gtl.quest.36a2af68ae67c70a.description.0009}"
+				"{image:ftbquests:textures/picture/006.png width:200 height:100 align:center}"
+			]
+			icon_scale: 2.0d
+			id: "36A2AF68AE67C70A"
+			min_width: 210
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "355BA94438730713"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			size: 1.0d
+			tasks: [{
+				id: "65C99D3D67D677D5"
+				item: "gtceu:component_assembly_line"
+				type: "item"
+			}]
+			x: 12.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"37C5E7628A4B826C"
+				"5D4131C48F9BAE46"
+			]
+			description: ["{gtlcore.quest.gtl.quest.53dee1a65051e06f.description.0000}"]
+			id: "53DEE1A65051E06F"
+			tasks: [{
+				id: "7A9EEB0C236E8FE7"
+				item: "gtceu:actinium_dust"
+				type: "item"
+			}]
+			x: 0.0d
+			y: 8.0d
+		}
+		{
+			dependencies: [
+				"035C470213E8B4DB"
+				"0A2D46609F5C3CAB"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.536de86ad2109f58.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.536de86ad2109f58.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.536de86ad2109f58.description.0004}"
+			]
+			icon_scale: 2.0d
+			id: "536DE86AD2109F58"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.536de86ad2109f58.subtitle}"
+			tasks: [{
+				id: "0B7BBAEB89C27FF0"
+				item: "gtceu:me_pattern_buffer_proxy"
+				type: "item"
+			}]
+			x: 5.0d
+			y: 2.0d
+		}
+		{
+			dependencies: ["19D008698197459E"]
+			description: ["{gtlcore.quest.gtl.quest.7c9ac873cb7209d9.description.0000}"]
+			icon: "gtceu:polyetheretherketone_bucket"
+			id: "7C9AC873CB7209D9"
+			tasks: [
+				{
+					id: "39D039C317D64FD9"
+					title: "{gtlcore.quest.gtl.task.39d039c317d64fd9.title}"
+					type: "checkmark"
+				}
+				{
+					id: "530E2541D49C1FD2"
+					item: "gtceu:polyetheretherketone_bucket"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 7.0d
+			y: 11.0d
+		}
+		{
+			dependencies: [
+				"0A2D46609F5C3CAB"
+				"035C470213E8B4DB"
+				"5F0A175D6704A8D0"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.172fc2f2b20cd187.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.172fc2f2b20cd187.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.172fc2f2b20cd187.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.172fc2f2b20cd187.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.172fc2f2b20cd187.description.0008}"
+			]
+			icon_scale: 2.0d
+			id: "172FC2F2B20CD187"
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2EACC5A946C44981"
+				table_id: 6225023274141477362L
+				type: "random"
+			}]
+			shape: "rsquare"
+			size: 1.0d
+			tasks: [{
+				id: "1F71F073D091459C"
+				item: "gtceu:advanced_assembly_line"
+				type: "item"
+			}]
+			x: 3.0d
+			y: 2.0d
+		}
+		{
+			dependencies: [
+				"776563C5BA327495"
+				"035C470213E8B4DB"
+				"12F8275FC06FCFEE"
+				"2A0269009ABF1414"
+			]
+			dependency_requirement: "one_completed"
+			description: [
+				"{gtlcore.quest.gtl.quest.02bee3dc9e98af15.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.02bee3dc9e98af15.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.02bee3dc9e98af15.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.02bee3dc9e98af15.description.0006}"
+				""
+				"{gtlcore.quest.gtl.quest.02bee3dc9e98af15.description.0008}"
+			]
+			hide_dependency_lines: true
+			icon_scale: 1.5d
+			id: "02BEE3DC9E98AF15"
+			min_required_dependencies: 3
+			optional: true
+			shape: "rsquare"
+			tasks: [
+				{
+					id: "6641F5083C721A75"
+					item: "gtceu:me_extended_export_buffer"
+					type: "item"
+				}
+				{
+					id: "3A065A45C61CAEB8"
+					item: "gtceu:me_extended_async_export_buffer"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.02bee3dc9e98af15.title}"
+			x: 0.0d
+			y: 6.0d
+		}
+		{
+			dependencies: ["702EFE9BA62A8CDA"]
+			description: [
+				"{gtlcore.quest.gtl.quest.21a1a4db4ba35b42.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.21a1a4db4ba35b42.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.21a1a4db4ba35b42.description.0004}"
+				""
+				"{gtlcore.quest.gtl.quest.21a1a4db4ba35b42.description.0006}"
+			]
+			icon_scale: 2.0d
+			id: "21A1A4DB4BA35B42"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.21a1a4db4ba35b42.subtitle}"
+			tasks: [{
+				id: "50A279F563E3B266"
+				item: "gtceu:me_extend_pattern_buffer"
+				type: "item"
+			}]
+			x: 11.5d
+			y: 12.0d
+		}
+		{
+			dependencies: [
+				"702EFE9BA62A8CDA"
+				"1DFC7DC123A3D830"
+				"7C9AC873CB7209D9"
+				"24585C3114095227"
+				"4F87B7DA47087F97"
+			]
+			description: [
+				"{gtlcore.quest.gtl.quest.47a332d8c189a51b.description.0000}"
+				""
+				"{gtlcore.quest.gtl.quest.47a332d8c189a51b.description.0002}"
+				""
+				"{gtlcore.quest.gtl.quest.47a332d8c189a51b.description.0004}"
+				"{gtlcore.quest.gtl.quest.47a332d8c189a51b.description.0005}"
+				"{gtlcore.quest.gtl.quest.47a332d8c189a51b.description.0006}"
+			]
+			hide_dependency_lines: true
+			icon: "gtceu:molecular_assembler_matrix"
+			icon_scale: 2.0d
+			id: "47A332D8C189A51B"
+			optional: true
+			shape: "rsquare"
+			subtitle: "{gtlcore.quest.gtl.quest.47a332d8c189a51b.subtitle}"
+			tasks: [
+				{
+					id: "412C806531848D9A"
+					item: "gtceu:molecular_assembler_matrix"
+					type: "item"
+				}
+				{
+					id: "5EDAAC48DD8F65C1"
+					item: "gtceu:me_molecular_assembler_io"
+					type: "item"
+				}
+				{
+					id: "70CF8CCA0B5D814F"
+					item: "gtceu:me_craft_speed_core"
+					type: "item"
+				}
+				{
+					id: "0DF940A83B251F62"
+					item: "gtceu:me_craft_parallel_core"
+					type: "item"
+				}
+				{
+					id: "354C4D4C1F092764"
+					item: "gtceu:me_craft_pattern_container"
+					type: "item"
+				}
+			]
+			title: "{gtlcore.quest.gtl.quest.47a332d8c189a51b.title}"
+			x: 12.5d
+			y: 12.0d
+		}
+	]
+	subtitle: ["{gtlcore.quest.gtl.chapter.2366beb7a81c122d.subtitle.0000}"]
+	title: "{gtlcore.quest.gtl.chapter.2366beb7a81c122d.title}"
+}

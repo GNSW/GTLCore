@@ -1,9 +1,0 @@
-{
-  "parent": "ae2:item/display_base",
-  "textures": {
-    "front": "ae2:part/terminal",
-    "front_bright": "gtlcore:part/emitter_manager_terminal_bright",
-    "front_medium": "gtlcore:part/emitter_manager_terminal_medium",
-    "front_dark": "gtlcore:part/emitter_manager_terminal_dark"
-  }
-}

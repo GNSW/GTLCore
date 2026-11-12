@@ -1,0 +1,12 @@
+{
+	id: "437C11CC2AABE7CF"
+	loot_size: 1
+	order_index: 8
+	rewards: [
+		{ count: 16, item: "gtceu:item_filter" }
+		{ count: 16, item: "gtceu:item_tag_filter" }
+		{ count: 16, item: "gtceu:fluid_filter" }
+		{ count: 16, item: "gtceu:fluid_tag_filter" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.437c11cc2aabe7cf.title}"
+}

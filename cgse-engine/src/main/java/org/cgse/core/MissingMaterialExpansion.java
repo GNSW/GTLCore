@@ -65,6 +65,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
     private RefillPairCounts.Choice<K> jointChoice;
     private RefillPairCounts<K> pair;
     private boolean simpleSourcesOnly;
+    private boolean preferredTargetPlateau, preferCompleteTarget;
     private boolean protectProductionCredit;
     private boolean goalConstruction;
     private final Set<K> crossedCycle = new HashSet<>();
@@ -102,7 +103,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
             // Terminal-only bills already satisfy expansion's boundary contract.
             // Their word still needs a startup check in PRESERVE mode: a raw
             // bill alone does not prove that the final cycle token survives.
-            if (original.preserveSeeds()) checkOriginal = true;
+            if (original.preserveSeeds() && compiler.mode() == GraphMode.FULL) checkOriginal = true;
             else { result = original; phase = Phase.PRUNE; }
         }
     }
@@ -240,14 +241,15 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         }
         if (cycleSearch != null) {
             if (!cycleSearch.step()) return false;
-            result = cycleSearch.result(); cycleSearch.close(); cycleSearch = null; return explainBoundary();
+            result = cycleSearch.result();
+            cycleSearch.close(); cycleSearch = null; return explainBoundary();
         }
         if (phase == Phase.PRUNE) {
             phase = Phase.DONE;
             // This terminal bill was complete before entering this pass. Do
             // not spend a mandatory work unit just to decline optional work.
             pruning = new RefillWordPruning<>(result, stock, external, forceCraft, ignoreTargetStock, budget,
-                    budget.remainingWork() >= 512 ? pruningAllowance() : 0).startupCatalog(compiler.catalog(), excluded);
+                    budget.remainingWork() >= 512 ? pruningAllowance() : 0).startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded).graphMode(compiler.mode());
         }
         if (pruning != null) {
             if (!pruning.step()) return false;
@@ -283,6 +285,8 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
                 repairStartup();
                 return false;
             }
+            if (verification.summary().delta(candidate.target()).compareTo(BigInteger.valueOf(candidate.amount())) >= 0)
+                candidate.markNetProductionVerified();
             result = candidate; phase = Phase.DONE;
             budget.note("missing_expansion", "backward_requirements; prefixes=" + prefix.size() + "; missing_keys=" + result.missingExact().size());
             if (!allowMixed && mixtureOpportunity && !result.feasible() && budget.remainingWork() >= 512) {
@@ -312,7 +316,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
     }
 
     private boolean verifyStartup() {
-        if (startupChecked || !candidate.preserveSeeds()) return true;
+        if (compiler.mode() == GraphMode.ACYCLIC || startupChecked || !candidate.preserveSeeds()) return true;
         if (!startupNeeded) {
             // The immutable compiler already indexes every available producer,
             // including unused bindings. A guard can only close a net-consumed
@@ -358,7 +362,7 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
             return true;
         }
         if (startupGuard == null) {
-            Collection<GraphRecipe<K>> available = compiler.catalog();
+            Collection<GraphRecipe<K>> available = compiler.verificationCatalog();
             if (!excluded.isEmpty()) {
                 reserve(48L * available.size());
                 var allowed = new ArrayList<GraphRecipe<K>>();
@@ -701,13 +705,13 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
             // parent keeps its charged verifier alive through the child's work.
             var known = verification != null && candidate == result ? verification.summary() : null;
             pruning = new RefillWordPruning<>(result, stock, external, forceCraft, ignoreTargetStock, budget, pruningAllowance(), known)
-                    .startupCatalog(compiler.catalog(), excluded);
+                    .startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded).graphMode(compiler.mode());
             return false;
         }
         return searchCycles();
     }
     private boolean searchCycles() {
-        if (!cycleSearchEnabled || cycleSearchTried || order == null || result.feasible() || budget.remainingWork() < 4096) return explainBoundary();
+        if (compiler.mode() == GraphMode.ACYCLIC || !cycleSearchEnabled || cycleSearchTried || order == null || result.feasible() || budget.remainingWork() < 4096) return explainBoundary();
         cycleSearchTried = true;
         cycleSearch = new RefillSupplySearch<>(result, order, stock, external, forceCraft, ignoreTargetStock, budget).tradeoffs(compiler, excluded);
         return false;
@@ -848,7 +852,12 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
                 deficit(expanding, before(source, expanding, proposal.partialRuns), targetDelta.add(gain(source, original.target()).multiply(proposal.partialRuns)))
                         .compareTo(deficit(expanding, required.getOrDefault(expanding, BigInteger.ZERO), targetDelta)) < 0)
             partialOpportunity = true;
-        if (selected == null || proposal.funded && !selected.funded) finishComparison(true);
+        boolean displacesCompleteTarget = selected != null && forceCraft && expanding.equals(original.target()) &&
+                targetProduction.signum() > 0 && preferred(expanding, selected.recipe) &&
+                selected.delta.compareTo(targetProduction) >= 0 && proposal.delta.compareTo(targetProduction) < 0 &&
+                proposal.funded && !selected.funded;
+        if (displacesCompleteTarget) preferredTargetPlateau = true;
+        if (selected == null || proposal.funded && !selected.funded && !(preferCompleteTarget && displacesCompleteTarget)) finishComparison(true);
         else if (!selected.funded && proposal.pair != null && preferred(expanding, proposal.recipe)) finishComparison(true);
         else if (!selected.funded && preferred(expanding, proposal.recipe) != preferred(expanding, selected.recipe))
             finishComparison(preferred(expanding, proposal.recipe));
@@ -984,7 +993,12 @@ final class MissingMaterialExpansion<K> implements AutoCloseable {
         if (jointSearch != null && !jointSearchDone) return jointSearch.result();
         return cycleSearch == null ? result : cycleSearch.result();
     }
+    boolean productionVerifiedResult(GraphPlan<K> plan) {
+        return plan != null && plan.netProductionVerified();
+    }
     BigInteger prefixProduction() { return targetDelta; }
+    boolean preferredTargetPlateau() { return preferredTargetPlateau; }
+    MissingMaterialExpansion<K> preferCompleteTarget() { preferCompleteTarget = true; return this; }
     /** A parent retaining this completed alternative takes its conservative
      * builder charge; close still releases verifier/child scratch separately. */
     long takeResultCharge() {

@@ -150,7 +150,13 @@ final class CountShellCompilation<K> implements AutoCloseable {
             budget.check();
             if (fixed[i] == null) recipes.add(source.recipes.get(i));
         }
-        return RecipeCountModel.forShell(recipes, remainingGoals, source.stock, source.external, budget);
+        var model = RecipeCountModel.forShell(recipes, remainingGoals, source.stock, source.external, budget);
+        if (model != null) {
+            model.verificationRecipes = source.verificationRecipes;
+            model.graphMode = source.graphMode;
+            model.verificationExcluded = source.verificationExcluded;
+        }
+        return model;
     }
 
     BigInteger[] restoreAndCheck(RecipeCountModel<K> source, BigInteger[] candidate) {

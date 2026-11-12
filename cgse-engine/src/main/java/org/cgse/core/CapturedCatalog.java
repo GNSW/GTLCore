@@ -236,6 +236,7 @@ public final class CapturedCatalog<K> {
         private boolean allocationView;
         private CatalogIndex<K> indexing;
         private GraphPlanningWork<K> solving;
+        private GraphMode graphMode = GraphMode.FULL;
         private CatalystPolicy catalystPolicy = CatalystPolicy.STOCK;
         private Coverage coverage = new Coverage(0, List.of(), false);
         private Result<K> result;
@@ -255,9 +256,16 @@ public final class CapturedCatalog<K> {
             this.budget = budget;
         }
 
+        public Work graphMode(GraphMode mode) {
+            if (producerLookup || entry != 0 || phase != 0) throw new IllegalStateException("Planning already started");
+            graphMode = Objects.requireNonNull(mode);
+            if (mode == GraphMode.ACYCLIC) catalystPolicy = CatalystPolicy.MINIMAL;
+            return this;
+        }
+
         public Work catalysts(CatalystPolicy policy) {
             if (entry != 0 || phase != 0) throw new IllegalStateException("Planning already started");
-            catalystPolicy = Objects.requireNonNull(policy);
+            catalystPolicy = graphMode == GraphMode.ACYCLIC ? CatalystPolicy.MINIMAL : Objects.requireNonNull(policy);
             return this;
         }
 
@@ -417,7 +425,7 @@ public final class CapturedCatalog<K> {
                 }
                 discover(target);
                 for (K key : requiredSeeds.keySet()) discover(key);
-                if (stateFamilies) {
+                if (stateFamilies && graphMode == GraphMode.FULL) {
                     stateStarted = budget.nodes(); stateAllowance = budget.remainingWork() / 2;
                     var hint = stateSupports == null ? null : stateSupports.select(target, requiredSeeds.keySet(), budget);
                     if (hint != null) {
@@ -621,7 +629,7 @@ public final class CapturedCatalog<K> {
                 // A new immutable compiler owns this exact coverage. Never import
                 // restricted negative clauses, closures or sessions into the next one.
                 solving = new GraphPlanningWork<>(indexing.result(), target, amount, stock, external, requiredSeeds,
-                        preserve, forceCraft, budget).catalysts(catalystPolicy)
+                        preserve, forceCraft, budget, graphMode).catalysts(catalystPolicy)
                         .missingPreview(!allocationView && (coverage.complete() || conditionalPreviews && !remaining));
                 indexing = null;
                 solveStarted = budget.searchWork();
@@ -640,6 +648,10 @@ public final class CapturedCatalog<K> {
                 // imported from the reduced support into the canonical view.
                 allocationView = false;
                 phase = 2;
+            } else if (graphMode == GraphMode.ACYCLIC && remaining && budget.remainingWork() > 0) {
+                // Expand the original captured domains, then call the same primary solver again.
+                // Direct captured state/flow/reachable engines do not own this mode.
+                continueExpansion();
             } else if (remaining && budget.remainingWork() > 0 && expandable(plan.result())) {
                 if (!reachableTried) {
                     reachableTried = true;
@@ -651,7 +663,7 @@ public final class CapturedCatalog<K> {
                 var reason = plan.result();
                 if (!coverage.complete() && negative(reason)) reason = conditionalPreviews && !plan.missingExact().isEmpty() ?
                         GraphPlan.Result.INCOMPLETE_MODEL : GraphPlan.Result.UNKNOWN;
-                if (reason == GraphPlan.Result.INCOMPLETE_MODEL && stateFamilies && budget.remainingWork() >= 4096) {
+                if (graphMode == GraphMode.FULL && reason == GraphPlan.Result.INCOMPLETE_MODEL && stateFamilies && budget.remainingWork() >= 4096) {
                     refillCandidate = plan;
                     refillRecovery = new CapturedRefillRecovery<>(CapturedCatalog.this, entries, plan, stock, external,
                             requiredSeeds, forceCraft, catalystPolicy, budget);
@@ -661,6 +673,7 @@ public final class CapturedCatalog<K> {
         }
 
         private void beginInputAllocation() {
+            if (graphMode == GraphMode.ACYCLIC) { continueExpansion(); return; }
             for (var state : active.values()) {
                 budget.compilationCheck();
                 if (state.domain.hasNext() && !state.allocationTried) {
@@ -803,7 +816,7 @@ public final class CapturedCatalog<K> {
 
         private void finish(GraphPlan<K> plan, GraphPlan.Result reason) {
             boolean conditional = conditionalPreviews && reason == GraphPlan.Result.INCOMPLETE_MODEL && !plan.missingExact().isEmpty();
-            if (preserve && (plan.feasible() || conditional || coverage.complete() && !plan.missingExact().isEmpty()) &&
+            if (graphMode == GraphMode.FULL && preserve && (plan.feasible() || conditional || coverage.complete() && !plan.missingExact().isEmpty()) &&
                     (allocationView || !coverage.complete())) {
                 if (limitedHandoff) {
                     finishUnchecked(new GraphPlan<>(target, amount, preserve, new PlanStep.Sequence(List.of()), Map.of(), Map.of(),
@@ -854,7 +867,9 @@ public final class CapturedCatalog<K> {
         }
 
         private void finishUnchecked(GraphPlan<K> plan, GraphPlan.Result reason) {
-            if ((!coverage.complete() || allocationView) && budget.failureDetail().startsWith("PROVEN_INFEASIBLE:"))
+            if (graphMode == GraphMode.ACYCLIC) reason = plan.feasible() ?
+                    GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : GraphPlan.Result.INCOMPLETE_MODEL;
+            if ((graphMode == GraphMode.ACYCLIC || !coverage.complete() || allocationView) && budget.failureDetail().startsWith("PROVEN_INFEASIBLE:"))
                 budget.failureDetail("RESTRICTED_PROOF_NOT_TRANSFERRED: result=" + reason);
             // A funded refill witness is useful even when omitted candidates
             // prevent an infeasibility proof. Keep that scope explicit and never
@@ -866,7 +881,7 @@ public final class CapturedCatalog<K> {
                     preview ? plan.initialExact() : Map.of(), preview ? plan.seeds() : Map.of(),
                     preview ? plan.missingExact() : Map.of(), reason, budget.nodes(), System.nanoTime() - started);
             if (preview) answer.withMissingSourcesFrom(plan);
-            if (coverage.complete() && !allocationView) answer = answer.withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives());
+            if (graphMode == GraphMode.FULL && coverage.complete() && !allocationView) answer = answer.withSeedOptimality(plan.seedOptimality()).withAlternatives(plan.alternatives());
             if (conditional) {
                 budget.failureDetail("CONDITIONAL_REFILL: verified when supplied; omitted alternatives may need less or no refill");
                 budget.note("candidate_refill", "verified; missing_keys=" + answer.missingExact().size() + "; infeasibility_proven=false");
@@ -907,7 +922,8 @@ public final class CapturedCatalog<K> {
             if (retained != null && retained.feasible()) finish(retained, GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL);
             else if (retained != null && !retained.missingExact().isEmpty() && !allocationView &&
                     (coverage.complete() || conditionalPreviews && !remaining) &&
-                    (retained.result() == GraphPlan.Result.MISSING_INPUT || retained.result() == GraphPlan.Result.MISSING_SEED))
+                    (retained.result() == GraphPlan.Result.MISSING_INPUT || retained.result() == GraphPlan.Result.MISSING_SEED ||
+                            graphMode == GraphMode.ACYCLIC && retained.conditionalPreview()))
                 finish(retained, coverage.complete() ? retained.result() : GraphPlan.Result.INCOMPLETE_MODEL);
             // Only the canonical model with complete relevant capture coverage
             // can close the order. A completed root proof must survive the same

@@ -10,6 +10,9 @@ import java.util.*;
 final class RecipeCountModel<K> implements AutoCloseable {
 
     final List<GraphRecipe<K>> recipes;
+    List<GraphRecipe<K>> verificationRecipes;
+    GraphMode graphMode = GraphMode.FULL;
+    Set<String> verificationExcluded = Set.of();
     final List<K> keys;
     final Map<K, Integer> ids;
     final Map<K, Long> stock;
@@ -22,6 +25,10 @@ final class RecipeCountModel<K> implements AutoCloseable {
     CountRecoveryTemplates<K> recoveryTemplates;
     CountRowTemplates rowTemplates;
     private long memory;
+
+    GraphCompiler<K> derivedCompiler(List<GraphRecipe<K>> recipes) {
+        return new GraphCompiler<>(recipes, graphMode, verificationRecipes == null ? recipes : verificationRecipes);
+    }
 
     static <K> RecipeCountModel<K> create(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
                                           Map<K, Long> seeds, Set<K> external, Set<String> excluded, boolean force,
@@ -64,7 +71,10 @@ final class RecipeCountModel<K> implements AutoCloseable {
                 }
                 workspace += bytes;
                 var model = new RecipeCountModel<>(cached, stock, external, budget, goals(target, amount, seeds));
-                model.recoveryTemplates = compiler.recoveryTemplates;
+                model.verificationRecipes = compiler.verificationCatalog();
+            model.graphMode = compiler.mode();
+            model.verificationExcluded = excluded;
+            model.recoveryTemplates = compiler.recoveryTemplates;
                 model.rowTemplates = compiler.rowTemplates;
                 if (force && !external.contains(target)) model.requireProduction(target, amount);
                 model.memory = workspace;
@@ -87,6 +97,9 @@ final class RecipeCountModel<K> implements AutoCloseable {
             workspace += sparseBytes;
             var model = new RecipeCountModel<>(recipes, keys, stock, external, budget, goals(target, amount, seeds),
                     compiler.catalogIndex(), compiler.reuseCountCatalogs() ? compiler : null);
+            model.verificationRecipes = compiler.verificationCatalog();
+            model.graphMode = compiler.mode();
+            model.verificationExcluded = excluded;
             model.recoveryTemplates = compiler.recoveryTemplates;
             model.rowTemplates = compiler.rowTemplates;
             if (force && !external.contains(target)) model.requireProduction(target, amount);

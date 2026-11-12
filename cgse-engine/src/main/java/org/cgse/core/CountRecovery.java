@@ -256,7 +256,7 @@ final class CountRecovery<K> implements AutoCloseable {
                 Math.min(1_000_000, budget.remainingWork() / 8);
         viewMaximum = Math.min(4_000_000, budget.remainingWork() / 4);
         GraphCompiler<K> compiler = template == null ? null : template.compiler(recipes);
-        if (compiler == null) compiler = new GraphCompiler<>(List.copyOf(recipes));
+        if (compiler == null) compiler = owner.model.derivedCompiler(List.copyOf(recipes));
         search = new IntegerCountSearch<>(compiler, owner.target, owner.amount,
                 pricedFuel && fuel != null ? fuel.pricedStock() : entryActive ? entryStock : owner.stock,
                 owner.seeds, owner.external, Set.of(), owner.preserve, owner.force, budget, owner.started, null, false);

@@ -150,7 +150,7 @@ final class PlanReuseVerification<K> implements AutoCloseable {
         if (!preserve) return accept();
         // An old PRESERVE flag and an empty seed map are not evidence that
         // the current inventory can restart the plan's consumed cycles.
-        startup = new SeedStartupGuard<>(compiler.catalog(), verification.summary(), stock, proposed.seeds(),
+        startup = new SeedStartupGuard<>(compiler.verificationCatalog(), verification.summary(), stock, proposed.seeds(),
                 external, target, amount, budget);
         phase = 6;
         return false;

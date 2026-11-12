@@ -59,7 +59,7 @@ final class GraphSupplyView<K> implements AutoCloseable {
                 }
                 order.put(key, List.copyOf(producers));
             }
-            compiler = new GraphCompiler<>(List.copyOf(catalog), Collections.unmodifiableMap(order));
+            compiler = new GraphCompiler<>(List.copyOf(catalog), Collections.unmodifiableMap(order), source.mode(), source.verificationCatalog());
         } catch (RuntimeException | Error failure) { close(); throw failure; }
     }
     private void requireRoom() {

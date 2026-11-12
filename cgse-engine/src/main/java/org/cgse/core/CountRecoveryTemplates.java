@@ -28,8 +28,8 @@ final class CountRecoveryTemplates<K> {
             this.goals = goals;
             external = Set.copyOf(model.external);
             this.weight = weight;
-            completeCompiler = new GraphCompiler<>(this.recipes);
-            retainedCompiler = this.retained.equals(this.recipes) ? completeCompiler : new GraphCompiler<>(this.retained);
+            completeCompiler = model.derivedCompiler(this.recipes);
+            retainedCompiler = this.retained.equals(this.recipes) ? completeCompiler : model.derivedCompiler(this.retained);
         }
 
         GraphCompiler<K> compiler(Collection<GraphRecipe<K>> view) {

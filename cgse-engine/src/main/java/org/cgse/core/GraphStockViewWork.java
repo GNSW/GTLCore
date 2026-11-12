@@ -147,13 +147,13 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             // A final-validator rejection belongs to this witness. Keep the
             // compiled graph for a different execution policy before changing
             // its sources; identical counts do not imply identical execution.
-            if (!triedTargetSeedConsumption && !preserve && force && !external.contains(target) &&
+            if (compiler.mode() == GraphMode.FULL && !triedTargetSeedConsumption && !preserve && force && !external.contains(target) &&
                     graph.regions().stream().anyMatch(region -> region.cyclic() && region.recipes().size() > 1 &&
                             region.recipes().stream().anyMatch(recipe -> recipe.executionOutputs().containsKey(target)))) {
                 triedTargetSeedConsumption = true;
                 solving = new GraphSolve<>(graph, target, amount, stock, external, seeds, preserve, force,
-                        budget, started, policy, stock).program(compiler.demandProgram(graph, budget))
-                        .startupCatalog(compiler.catalog(), baseExcluded)
+                        budget, started, policy, stock, compiler.mode()).program(compiler.demandProgram(graph, budget))
+                        .startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), baseExcluded)
                         .scoutRegions().deferMissingStartup().allowTargetSeedConsumption(true);
                 budget.note("stock_view", "retry_rejected_witness; same_sources; variant=" + variant);
                 return false;
@@ -177,8 +177,8 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             graphMemory = bytes;
             triedTargetSeedConsumption = false;
             solving = new GraphSolve<>(graph, target, amount, stock, external, seeds, preserve, force,
-                    budget, started, policy, stock).program(compiler.demandProgram(graph, budget))
-                    .startupCatalog(compiler.catalog(), baseExcluded).scoutRegions().deferMissingStartup();
+                    budget, started, policy, stock, compiler.mode()).program(compiler.demandProgram(graph, budget))
+                    .startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), baseExcluded).scoutRegions().deferMissingStartup();
             return false;
         }
         GraphCompiler.Region<K> unresolved = null;
@@ -269,7 +269,7 @@ final class GraphStockViewWork<K> implements AutoCloseable {
             }
             if (!refined && (candidate.result() == GraphPlan.Result.MISSING_INPUT ||
                     candidate.result() == GraphPlan.Result.MISSING_SEED) && (variant < 6 || variant >= 8)) {
-                if (variant == 9 && !entryChecked) {
+                if (compiler.mode() == GraphMode.FULL && variant == 9 && !entryChecked) {
                     entryRepair = new GraphSeedEntries<>(compiler, graph, candidate.missingExact().keySet(), stock,
                             external, excluded, triedSources, budget, Math.min(16_384, budget.remainingWork()));
                     repairCandidate = candidate;

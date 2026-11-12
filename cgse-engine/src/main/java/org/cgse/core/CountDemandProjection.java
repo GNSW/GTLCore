@@ -32,6 +32,8 @@ final class CountDemandProjection implements AutoCloseable {
     private final List<int[]> blocks = new ArrayList<>();
     private final Map<Integer, Map<Integer, ExactRational>> expressions = new LinkedHashMap<>();
     private final LinkedHashMap<Map<Integer, BigInteger>, BigInteger> projected = new LinkedHashMap<>();
+    private final Map<Map<Integer, BigInteger>, List<Integer>> projectedRoots = new LinkedHashMap<>();
+    private final Map<Integer, ExactLinearProgram.Constraint> neutralRows = new HashMap<>();
     private List<ExactLinearProgram.Constraint> reduced;
     private BigInteger[] costs;
     private final CountNumericRelaxation.Session numeric;
@@ -39,9 +41,11 @@ final class CountDemandProjection implements AutoCloseable {
     private CountDemandResidual residual;
     private BigInteger[] roundedCounts, roundingSeed;
     private long roundingSeedMemory;
+    private long neutralMemory;
     private int phase, block, cursor, updates, validation;
+    private int neutralReleases;
     private long visitStart;
-    private boolean done;
+    private boolean done, stockPivoted;
 
     CountDemandProjection(int variables, List<ExactLinearProgram.Constraint> rows,
                           PlanningBudget budget, long allowance) {
@@ -167,7 +171,10 @@ final class CountDemandProjection implements AutoCloseable {
                     var answer = numeric.solve(free.size(), reduced, costs, budget,
                             Math.max(1, Math.min(262144, remaining())));
                     if (answer == null) { if (!numeric.pending()) throw new Limit(); }
-                    else if (answer.point() == null || answer.phaseOneInfeasible()) throw new Limit();
+                    else if (answer.point() == null || answer.phaseOneInfeasible()) {
+                        if (releaseNumericalAssumption(answer.dual())) return false;
+                        throw new Limit();
+                    }
                     else { restore(answer.point()); numeric.close(); phase = 5; }
                 }
                 case 5 -> {
@@ -284,9 +291,50 @@ final class CountDemandProjection implements AutoCloseable {
             free.add(v); var expression = new LinkedHashMap<Integer, ExactRational>(); put(expression, v, ExactRational.ONE);
             expressions.put(v, expression);
         }
-        if (free.size() > freeVariableLimit) throw new Limit();
+        if (free.size() > freeVariableLimit) {
+            if (repairPivots && !stockPivoted && stockPivots()) { buildExpressions(); return; }
+            throw new Limit();
+        }
         freeIndex = new int[variables]; Arrays.fill(freeIndex, -1);
         for (int i = 0; i < free.size(); i++) freeIndex[free.get(i)] = i;
+    }
+
+    private boolean stockPivots() {
+        // Existing successful projections never enter this extra candidate.
+        // Abundant intermediate stock otherwise leaves whole single-producer
+        // chains free. Propose preserving that stock, using zero net material
+        // equalities, while keeping the original inequalities for validation.
+        stockPivoted = true;
+        long bytes = 256L + 160L * variables + 4L * variables;
+        if (!budget.tryReserve(bytes)) throw new Limit();
+        neutralMemory = bytes;
+        int[] produced = new int[variables];
+        for (var row : rows) for (var term : row.terms().entrySet()) {
+            hit(); if (term.getValue().signum() < 0) produced[term.getKey()]++;
+        }
+        int added = 0;
+        for (int r = 0; r < rows.size(); r++) {
+            var row = rows.get(r);
+            if (row.upper().signum() <= 0) continue;
+            int producer = -1;
+            for (var term : row.terms().entrySet()) {
+                hit();
+                if (term.getValue().signum() < 0) {
+                    if (producer >= 0) { producer = -2; break; }
+                    producer = term.getKey();
+                }
+            }
+            if (producer < 0 || produced[producer] != 1 || pivot[producer] >= 0) continue;
+            neutralRows.put(r, row);
+            rows.set(r, new ExactLinearProgram.Constraint(row.terms(), BigInteger.ZERO));
+            pivot[producer] = r;
+            added++;
+        }
+        budget.note("count_demand_stock_projection", "optional_neutral_pivots=" + added + "; previous_free=" + free.size());
+        if (added == 0) return false;
+        free.clear(); blocks.clear(); expressions.clear(); projected.clear(); projectedRoots.clear(); freeIndex = null;
+        budget.release(memory - projectionBase); memory = projectionBase;
+        return true;
     }
 
     private void releasePivot(int variable) {
@@ -296,8 +344,14 @@ final class CountDemandProjection implements AutoCloseable {
         // the original integer rows still decide whether any candidate is valid.
         // Each retry removes a pivot and spends the same finite allowance.
         budget.note("count_demand_repivot", "released_optional_equality; variable=" + variable + "; row=" + pivot[variable]);
+        // Releasing a neutral equality also restores its stock allowance.
+        // Leaving the zero RHS behind would retain the rejected assumption.
+        var neutral = neutralRows.remove(pivot[variable]);
+        if (neutral != null) rows.set(pivot[variable], neutral);
         pivot[variable] = -1;
-        free.clear(); blocks.clear(); expressions.clear(); projected.clear();
+        numeric.close();
+        free.clear(); blocks.clear(); expressions.clear(); projected.clear(); projectedRoots.clear();
+        reduced = null; costs = null;
         freeIndex = null;
         budget.release(memory - projectionBase);
         memory = projectionBase;
@@ -377,7 +431,65 @@ final class CountDemandProjection implements AutoCloseable {
     private void project(ExactLinearProgram.Constraint row) {
         var value = new LinkedHashMap<Integer, ExactRational>();
         for (var t : row.terms().entrySet()) { hit(); add(value, expressions.get(t.getKey()), ExactRational.of(t.getValue())); }
+        // A raw capacity can contradict a stock-preserving equality before
+        // the later nonnegative-pivot check. Relax that optional equality,
+        // rather than rejecting a physically funded use of existing stock.
+        int constants = value.containsKey(-1) ? 1 : 0;
+        if (value.size() == constants && value.getOrDefault(-1, ExactRational.ZERO)
+                .compareTo(ExactRational.of(row.upper())) > 0 && releaseNeutral(row.terms().keySet())) return;
         constrain(value, row.upper());
+    }
+
+    private boolean releaseNeutral(Collection<Integer> roots) {
+        if (neutralRows.isEmpty() || neutralReleases >= 128) return false;
+        int variable = neutralAncestor(roots);
+        if (variable < 0) return false;
+        neutralReleases++;
+        budget.note("count_demand_stock_release", "variable=" + variable + "; row=" + pivot[variable]);
+        releasePivot(variable);
+        return true;
+    }
+
+    private int neutralAncestor(Collection<Integer> roots) {
+        long bytes = 256L + 40L * variables;
+        if (!budget.tryReserve(bytes)) throw new Limit();
+        try {
+            var pending = new ArrayDeque<Integer>();
+            var seen = new BitSet();
+            for (int root : roots) {
+                hit(); if (!seen.get(root)) { seen.set(root); pending.addLast(root); }
+            }
+            while (!pending.isEmpty()) {
+                hit(); int v = pending.removeFirst(), r = pivot[v];
+                if (r < 0) continue;
+                if (neutralRows.containsKey(r)) return v;
+                for (int k : rows.get(r).terms().keySet()) {
+                    hit(); if (!seen.get(k)) { seen.set(k); pending.addLast(k); }
+                }
+            }
+            return -1;
+        } finally { budget.release(bytes); }
+    }
+
+    private boolean releaseNumericalAssumption(double[] dual) {
+        if (dual == null || dual.length != reduced.size() || neutralRows.isEmpty()) return false;
+        // A numerical ray only ranks assumptions to relax. It never proves a
+        // shortage or infeasibility of the original request. Tiny nonzero
+        // weights remain relevant after scaling very large exact coefficients.
+        long bytes = 128L + 32L * dual.length;
+        if (!budget.tryReserve(bytes)) throw new Limit();
+        try {
+            var order = new ArrayList<Integer>();
+            for (int i = 0; i < dual.length; i++) {
+                hit(); if (Double.isFinite(dual[i]) && dual[i] != 0) order.add(i);
+            }
+            order.sort((a, b) -> { hit(); return Double.compare(Math.abs(dual[b]), Math.abs(dual[a])); });
+            for (int i : order) {
+                hit(); var roots = projectedRoots.get(reduced.get(i).terms());
+                if (roots != null && releaseNeutral(roots)) return true;
+            }
+            return false;
+        } finally { budget.release(bytes); }
     }
 
     private void constrain(Map<Integer, ExactRational> terms, BigInteger upper) {
@@ -397,6 +509,11 @@ final class CountDemandProjection implements AutoCloseable {
         BigInteger divisor = common;
         integers.replaceAll((k, v) -> v.divide(divisor)); b = floor(b, common); bounded(b);
         BigInteger old = projected.get(integers);
+        if (!neutralRows.isEmpty() && (old == null || b.compareTo(old) < 0)) {
+            Collection<Integer> roots = phase == 2 ? rows.get(cursor - 1).terms().keySet() : List.of(cursor - 1);
+            reserve(128L + 32L * roots.size());
+            projectedRoots.put(integers, List.copyOf(roots));
+        }
         if (old == null) { reserve(128L + 192L * integers.size()); projected.put(integers, b); }
         else if (b.compareTo(old) < 0) projected.put(integers, b);
         if (projected.size() > 2048) throw new Limit();
@@ -537,7 +654,8 @@ final class CountDemandProjection implements AutoCloseable {
 
     private void clearWorkspace() {
         numeric.close(); budget.release(memory); memory = 0;
-        columns.clear(); rows.clear(); blocks.clear(); queue.clear(); expressions.clear(); projected.clear();
+        columns.clear(); rows.clear(); blocks.clear(); queue.clear(); expressions.clear(); projected.clear(); projectedRoots.clear();
+        neutralRows.clear(); budget.release(neutralMemory); neutralMemory = 0;
         free.clear(); reduced = null; costs = null; canonical = pivot = freeIndex = null;
         low = high = debts = counts = roundedCounts = null; proposal = original;
     }

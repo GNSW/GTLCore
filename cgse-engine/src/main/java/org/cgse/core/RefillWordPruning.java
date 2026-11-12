@@ -23,6 +23,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
     private final PlanningBudget budget;
     private Collection<GraphRecipe<K>> startupRecipes;
     private Set<String> startupExcluded = Set.of();
+    private GraphMode graphMode = GraphMode.FULL;
     private final long started, allowance;
     private final String retainedFailure;
     private final Map<K, BigInteger> inventory = new LinkedHashMap<>(), required = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
@@ -97,6 +98,11 @@ final class RefillWordPruning<K> implements AutoCloseable {
         return this;
     }
 
+    RefillWordPruning<K> graphMode(GraphMode mode) {
+        if (allocated) throw new IllegalStateException("Refill pruning already started");
+        graphMode = Objects.requireNonNull(mode); return this;
+    }
+
     boolean step() {
         try {
             budget.checkpoint();
@@ -129,7 +135,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
             if (phase == Phase.VERIFY) {
                 if (startup == null && !verification.step()) return false;
                 if (forceCraft && verification.summary().delta(original.target()).compareTo(targetCredit) < 0) return finish();
-                if (candidate.preserveSeeds()) {
+                if (candidate.preserveSeeds() && graphMode == GraphMode.FULL) {
                     if (startup == null) startup = new SeedStartupGuard<>(startupRecipes, startupExcluded, verification.summary(),
                             stock, candidate.seeds(), external, candidate.target(), candidate.amount(), budget);
                     if (!startup.step()) return false;
@@ -140,6 +146,8 @@ final class RefillWordPruning<K> implements AutoCloseable {
                     // count reduction would erase that startup capability.
                     if (lost) return finish();
                 }
+                if (verification.summary().delta(original.target()).compareTo(BigInteger.valueOf(original.amount())) >= 0)
+                    candidate.markNetProductionVerified();
                 return complete(true);
             }
             if (phase == Phase.BLOCKS) {
@@ -212,7 +220,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
                 factored = GraphPlan.ownedRefill(result, periods.result(), result.recipes(), result.initialExact(), result.missingExact(), result.result(), budget.nodes());
                 periodPruning = new RefillWordPruning<>(factored, stock, external, forceCraft, ignoreTargetStock, budget,
                         allowance - (budget.nodes() - started), blockPruning.verification.summary())
-                        .startupCatalog(startupRecipes, startupExcluded);
+                        .startupCatalog(startupRecipes, startupExcluded).graphMode(graphMode);
                 periodPruning.allowBlocks = false; periodPruning.inheritedStructure = true;
                 periodPruning.compactCursors = true; periodPruning.reuseUnit = true;
                 phase = Phase.PERIOD_PRUNE; return false;
@@ -594,7 +602,7 @@ final class RefillWordPruning<K> implements AutoCloseable {
         boolean scheduledFloor = budget.nodes() - started >= 2048;
         if (known == null && result == original) known = verifiedOriginal;
         blockPruning = new RefillWordPruning<>(regrouped, stock, external, forceCraft, ignoreTargetStock, budget,
-                allowance - (budget.nodes() - started), known).startupCatalog(startupRecipes, startupExcluded);
+                allowance - (budget.nodes() - started), known).startupCatalog(startupRecipes, startupExcluded).graphMode(graphMode);
         // This is the same quality pass, not a fresh work-scaled preview. The
         // parent's reached floor permits its child to omit empty handoffs too.
         blockPruning.compactCursors = compactCursors || scheduledFloor;

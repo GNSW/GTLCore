@@ -8,6 +8,7 @@ import java.util.*;
 /** Joint exact-count search over supports proposed by different demand views. */
 final class GraphSupportNeighborhood<K> implements AutoCloseable {
 
+    private final GraphCompiler<K> sourceCompiler;
     private final K target;
     private final long amount, started;
     private final Map<K, Long> stock, seeds;
@@ -25,6 +26,7 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
 
     GraphSupportNeighborhood(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock, Set<K> external,
                              Map<K, Long> seeds, Set<String> excluded, boolean preserve, boolean force, PlanningBudget budget, long started) {
+        this.sourceCompiler = compiler;
         this.target = target;
         this.amount = amount;
         this.stock = stock;
@@ -139,7 +141,7 @@ final class GraphSupportNeighborhood<K> implements AutoCloseable {
                 // This is a restricted positive-witness neighborhood. It owns
                 // its compiler, arithmetic cuts and count continuations. No
                 // negative result or learned clause escapes to the full catalog.
-                var compiler = new GraphCompiler<>(recipes);
+                var compiler = new GraphCompiler<>(recipes, sourceCompiler.mode(), sourceCompiler.verificationCatalog());
                 search = new IntegerCountSearch<>(compiler, target, amount, stock, seeds, external, Set.of(),
                         preserve, force, budget, started);
                 if (!search.admitted() && residual.releaseRankings() > 0) {

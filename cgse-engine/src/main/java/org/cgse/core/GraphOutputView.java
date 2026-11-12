@@ -169,8 +169,8 @@ final class GraphOutputView<K> implements AutoCloseable {
                     // and verify every prefix against the original recipes,
                     // including the omitted outputs and physical amount limits.
                     restoring = new AllocationSearch.Candidate<>(plan.steps(), originals, target, amount, stock,
-                            seeds, external, preserve, force, false, budget, started)
-                            .startupCatalog(compiler.catalog(), excluded);
+                            seeds, external, preserve, force, false, budget, started, compiler.mode())
+                            .startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded);
                     return false;
                 }
             }
@@ -184,7 +184,7 @@ final class GraphOutputView<K> implements AutoCloseable {
                 checking = null;
                 if (!blocked)
                     solving = new GraphSolve<>(checkedGraph, target, amount, stock, external, seeds, preserve, force,
-                            budget, started, policy, stock).startupCatalog(compiler.catalog(), excluded).scoutRegions();
+                            budget, started, policy, stock, compiler.mode()).startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded).scoutRegions();
                 else budget.note("output_view", "selected_graph_blocked; trial=" + next + "; no_negative_transfer");
                 checkedGraph = null;
                 if (!blocked) return false;
@@ -239,7 +239,7 @@ final class GraphOutputView<K> implements AutoCloseable {
                     index++;
                 }
             }
-            compiling = new GraphCompiler<>(recipes, order).begin(target, seeds.keySet(), choices, excluded, budget);
+            compiling = new GraphCompiler<>(recipes, order, compiler.mode(), compiler.verificationCatalog()).begin(target, seeds.keySet(), choices, excluded, budget);
             budget.note("output_view", "restricted_credit; trial=" + next + "; no_negative_transfer");
             return false;
         } catch (PlanningBudget.Exhausted failure) {

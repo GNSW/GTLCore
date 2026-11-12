@@ -365,6 +365,11 @@ public final class CraftingEngineRouter {
         }
 
         @Override
+        public PlanningBudget activeBudget() {
+            return planning == null ? budget : planning.activeBudget();
+        }
+
+        @Override
         public ICraftingPlan result() {
             return result;
         }

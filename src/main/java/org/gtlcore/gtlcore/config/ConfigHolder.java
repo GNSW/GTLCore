@@ -117,6 +117,11 @@ public class ConfigHolder {
         public boolean jeiTagGrouping = true;
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.recipeTreeCraftDelayTicks.comment")
+        @Configurable.Range(min = 1, max = 100)
+        public int recipeTreeCraftDelayTicks = 5;
+
+        @Configurable
         @Configurable.Range(min = 0, max = 2000)
         @Configurable.Comment("config.gtlcore.option.jeiGroupHoverDelay.comment")
         public int jeiGroupHoverDelay = 200;

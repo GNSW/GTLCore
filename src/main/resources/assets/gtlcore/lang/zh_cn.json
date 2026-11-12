@@ -1762,5 +1762,8 @@
   "gtlcore.jei.recipe_tree.empty.random_tree": "Ctrl + R：随机选择一个配方",
   "gtlcore.jei.recipe_tree.empty.random_tree_input": "或点击配方旁的树形按钮",
   "config.gtlcore.option.recipeTreeCraftDelayTicks": "合成树合成速度（tick）",
-  "config.gtlcore.option.recipeTreeCraftDelayTicks.comment": "链式合成每次合成动作的等待 tick 数，默认 5；越小越快。"
+  "config.gtlcore.option.recipeTreeCraftDelayTicks.comment": "链式合成每次合成动作的等待 tick 数，默认 5；越小越快。",
+  "gtlcore.machine.render_disabled": "渲染动画：关",
+  "gtlcore.machine.render_enabled": "渲染动画：开",
+  "gtlcore.machine.render_toggle": "切换渲染动画开关"
 }

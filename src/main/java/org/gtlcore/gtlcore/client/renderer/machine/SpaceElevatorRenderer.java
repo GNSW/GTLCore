@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.client.renderer.machine;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.api.machine.IGTLRenderDisabled;
 import org.gtlcore.gtlcore.client.ClientUtil;
 import org.gtlcore.gtlcore.client.renderer.RenderBufferHelper;
 import org.gtlcore.gtlcore.common.machine.multiblock.electric.SpaceElevatorMachine;
@@ -38,7 +39,8 @@ public class SpaceElevatorRenderer extends WorkableCasingMachineRenderer {
     public void render(BlockEntity blockEntity, float partialTicks, PoseStack poseStack, MultiBufferSource buffer,
                        int combinedLight, int combinedOverlay) {
         if (blockEntity instanceof IMachineBlockEntity machineBlockEntity &&
-                machineBlockEntity.getMetaMachine() instanceof SpaceElevatorMachine machine && machine.isFormed()) {
+                machineBlockEntity.getMetaMachine() instanceof SpaceElevatorMachine machine && machine.isFormed() &&
+                !IGTLRenderDisabled.isRenderDisabled(machine)) {
             float tick = RenderUtil.getSmoothTick(machine, partialTicks);
             double x = 0.5, y = 1, z = 0.5;
             switch (machine.getFrontFacing()) {

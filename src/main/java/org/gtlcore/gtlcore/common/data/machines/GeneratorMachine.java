@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.pattern.GTLPredicates;
 import org.gtlcore.gtlcore.client.renderer.machine.AnnihilateGeneratorRenderer;
 import org.gtlcore.gtlcore.common.data.*;
 import org.gtlcore.gtlcore.common.data.machines.structure.GeneratorMachineStructure;
+import org.gtlcore.gtlcore.common.machine.multiblock.electric.AnnihilateGeneratorMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.generator.ChemicalEnergyDevourerMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.generator.DysonSphereMachine;
 import org.gtlcore.gtlcore.common.machine.multiblock.generator.GeneratorArrayMachine;
@@ -344,7 +345,7 @@ public class GeneratorMachine {
             .workableCasingRenderer(GTCEu.id("block/casings/solid/machine_casing_solid_steel"), GTCEu.id("block/multiblock/processing_array"))
             .register();
 
-    public final static MultiblockMachineDefinition ANNIHILATE_GENERATOR = REGISTRATE.multiblock("annihilate_generator", WorkableElectricMultiblockMachine::new)
+    public final static MultiblockMachineDefinition ANNIHILATE_GENERATOR = REGISTRATE.multiblock("annihilate_generator", AnnihilateGeneratorMachine::new)
             .rotationState(RotationState.ALL)
             .recipeType(GTLRecipeTypes.ANNIHILATE_GENERATOR_RECIPES)
             .tooltips(Component.translatable("gtceu.machine.perfect_oc"))

@@ -1,8 +1,10 @@
 package org.gtlcore.gtlcore.common.machine.multiblock.electric;
 
+import org.gtlcore.gtlcore.api.machine.IGTLRenderDisabled;
 import org.gtlcore.gtlcore.api.machine.multiblock.NoEnergyMultiblockMachine;
 import org.gtlcore.gtlcore.utils.MachineIO;
 
+import com.gregtechceu.gtceu.api.gui.fancy.ConfiguratorPanel;
 import com.gregtechceu.gtceu.api.machine.ConditionalSubscriptionHandler;
 import com.gregtechceu.gtceu.api.machine.IMachineBlockEntity;
 import com.gregtechceu.gtceu.api.machine.MetaMachine;
@@ -158,5 +160,11 @@ public class HarmonyMachine extends NoEnergyMultiblockMachine implements IMachin
             textList.add(Component.translatable("tooltip.gtlcore.hydrogen_storage", FormattingUtil.formatNumbers(hydrogen)));
             textList.add(Component.translatable("tooltip.gtlcore.helium_storage", FormattingUtil.formatNumbers(helium)));
         }
+    }
+
+    @Override
+    public void attachConfigurators(ConfiguratorPanel panel) {
+        super.attachConfigurators(panel);
+        IGTLRenderDisabled.attachConfigurator(panel, (IGTLRenderDisabled) this);
     }
 }

@@ -1762,5 +1762,8 @@
   "gtlcore.jei.recipe_tree.empty.random_tree": "Ctrl + R: pick a random recipe",
   "gtlcore.jei.recipe_tree.empty.random_tree_input": "or click the tree button next to a recipe",
   "config.gtlcore.option.recipeTreeCraftDelayTicks": "Recipe Tree Craft Speed (ticks)",
-  "config.gtlcore.option.recipeTreeCraftDelayTicks.comment": "Ticks to wait per chained crafting action, default 5. Lower is faster."
+  "config.gtlcore.option.recipeTreeCraftDelayTicks.comment": "Ticks to wait per chained crafting action, default 5. Lower is faster.",
+  "gtlcore.machine.render_disabled": "Rendering: off",
+  "gtlcore.machine.render_enabled": "Rendering: on",
+  "gtlcore.machine.render_toggle": "Toggle rendering animation"
 }

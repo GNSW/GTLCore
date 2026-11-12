@@ -12,6 +12,7 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
     private int compareOption;
     private boolean retainTrades;
     private MissingMaterialExpansion<K> canonical;
+    private RefillDeficitNormalization<K> canonicalDeficits;
     private RefillPreviewSelection<K> canonicalSelection;
     private RefillRescheduling<K> rescheduling;
     private RefillFrontier<K> canonicalFrontier;
@@ -119,7 +120,7 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                 } else {
                     canonicalFrontier = null; canonicalOptions = null;
                     rescheduling = new RefillRescheduling<>(result, stock, external, force, ignoreTargetStock,
-                            compiler.catalog(), excluded, budget);
+                            compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded, budget).graphMode(compiler.mode());
                 }
                 return false;
             }
@@ -133,10 +134,18 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
             }
             if (canonical != null) {
                 if (canonicalSelection == null) {
-                    if (!canonical.step()) return false;
-                    var next = canonical.result();
+                    if (canonicalDeficits == null) {
+                        if (!canonical.step()) return false;
+                        canonicalDeficits = new RefillDeficitNormalization<>(canonical.result(), stock, external,
+                                ignoreTargetStock, budget);
+                    }
+                    if (!canonicalDeficits.step()) return false;
+                    var next = canonicalDeficits.result();
+                    memory += canonicalDeficits.takeResultCharge();
+                    canonicalDeficits.close(); canonicalDeficits = null;
                     proposal = next.feasible() ? next : GraphPlan.ownedRefill(next, next.steps(), next.recipes(),
-                            next.initialExact(), next.missingExact(), original.result(), budget.nodes()).withAlternatives(next.alternatives());
+                            next.initialExact(), next.missingExact(), original.result(), budget.nodes())
+                            .withMissingSourcesFrom(next).withAlternatives(next.alternatives());
                     canonicalSelection = new RefillPreviewSelection<>(result, proposal, budget);
                 }
                 if (!canonicalSelection.step()) return false;
@@ -183,7 +192,7 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
             if (restoring != null) {
                 if (!restoring.step()) return false;
                 proposal = restoring.plan;
-                if (proposal != null && proposal.feasible() && original.preserveSeeds()) {
+                if (compiler.mode() == GraphMode.FULL && proposal != null && proposal.feasible() && original.preserveSeeds()) {
                     restoredSummary = restoring.summary;
                     reserve(128L * (restoredSummary.required().size() + (long) restoredSummary.delta().size() + restoredSummary.peak().size()));
                 }
@@ -365,13 +374,11 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
                             boolean better = deficits.isEmpty() || proposedProduced == 0 ||
                                     concentrated && proposedTotal.compareTo(currentTotal) <= 0;
                             if (better || (concentrated || retainTrades) && result.alternatives().size() < 4) {
-                                var next = new GraphPlan<>(original.target(), original.amount(), original.preserveSeeds(),
-                                        proposal.steps(), proposal.recipes(), proposal.initialExact(), proposal.seeds(), deficits,
-                                        deficits.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : original.result(),
-                                        budget.nodes(), original.planningNanos());
+                                var next = GraphPlan.ownedRefill(proposal, proposal.steps(), proposal.recipes(), proposal.initialExact(), deficits,
+                                        deficits.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : original.result(), budget.nodes());
                                 proposal = next; preferCandidate = better; compareOption = -1;
-                                if (proposal.preserveSeeds()) {
-                                    Collection<GraphRecipe<K>> available = compiler.catalog();
+                                if (compiler.mode() == GraphMode.FULL && proposal.preserveSeeds()) {
+                                    Collection<GraphRecipe<K>> available = compiler.verificationCatalog();
                                     if (!excluded.isEmpty()) {
                                         reserve(48L * available.size());
                                         var allowed = new ArrayList<GraphRecipe<K>>();
@@ -463,8 +470,8 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
     private void restoreTrial() {
         PlanStep word = coordinateTrial ? new PlanStep.Sequence(List.of(proposal.steps(), result.steps())) : proposal.steps();
         restoring = new AllocationSearch.Candidate<>(word, supplyView.originals(), original.target(), original.amount(),
-                trialStock, result.seeds(), supplied, original.preserveSeeds(), force, true, budget, System.nanoTime())
-                .startupCatalog(compiler.catalog(), excluded);
+                trialStock, result.seeds(), supplied, original.preserveSeeds(), force, true, budget, System.nanoTime(), compiler.mode())
+                .startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded);
         if (work != null) { work.close(); work = null; }
         if (!prefixProposal) prefixGoal = null;
     }
@@ -487,6 +494,7 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
         if (work != null) { work.close(); work = null; }
         if (rescheduling != null) { result = rescheduling.result(); rescheduling.close(); rescheduling = null; }
         if (canonical != null) { canonical.close(); canonical = null; }
+        if (canonicalDeficits != null) { canonicalDeficits.close(); canonicalDeficits = null; }
         canonicalSelection = null; canonicalFrontier = null; canonicalOptions = null;
         budget.failureDetail(failure);
         if (!terminalTried && phase >= 2 && compiler.catalog().size() > 512 && !terminal.isEmpty() &&
@@ -512,6 +520,7 @@ final class RefillPlanningSearch<K> implements AutoCloseable {
         restoredSummary = null;
         if (supplyView != null) { supplyView.close(); supplyView = null; }
         if (canonical != null) canonical.close(); canonical = null; canonicalSelection = null;
+        if (canonicalDeficits != null) { canonicalDeficits.close(); canonicalDeficits = null; }
         if (rescheduling != null) { rescheduling.close(); rescheduling = null; }
         if (terminalSearch != null) { terminalSearch.close(); terminalSearch = null; }
         terminalFrontier = null; terminalOptions = null;

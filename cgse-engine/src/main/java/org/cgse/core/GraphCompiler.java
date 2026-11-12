@@ -18,6 +18,8 @@ import java.util.IdentityHashMap;
 public final class GraphCompiler<K> {
 
     private final GraphRecipeCatalog<K> catalog;
+    private final GraphMode mode;
+    private final List<GraphRecipe<K>> verificationCatalog;
     private final Map<K, List<GraphRecipe<K>>> producers;
     private final Map<CacheKey<K>, Compiled<K>> cache = new LinkedHashMap<>(16, 0.75f, true);
     private final Map<CountKey<K>, CountCatalog<K>> countCatalogs = new LinkedHashMap<>(16, 0.75f, true);
@@ -219,7 +221,14 @@ public final class GraphCompiler<K> {
     }
 
     public GraphCompiler(List<GraphRecipe<K>> catalog) {
+        this(catalog, GraphMode.FULL, null);
+    }
+
+    /** Derived search catalogs keep their parent's scope and physical verification model. */
+    GraphCompiler(List<GraphRecipe<K>> catalog, GraphMode mode, List<GraphRecipe<K>> verificationCatalog) {
         this.catalog = new GraphRecipeCatalog<>(catalog);
+        this.mode = java.util.Objects.requireNonNull(mode);
+        this.verificationCatalog = verificationCatalog == null ? this.catalog : verificationCatalog;
         this.producers = new LinkedHashMap<>();
         Set<String> ids = new HashSet<>();
         for (GraphRecipe<K> recipe : this.catalog) {
@@ -227,11 +236,48 @@ public final class GraphCompiler<K> {
             for (K output : recipe.executionOutputs().keySet()) producers.computeIfAbsent(output, key -> new ArrayList<>()).add(recipe);
         }
         producers.replaceAll((key, values) -> List.copyOf(values));
+        this.catalog.producedKeys(producers.keySet());
     }
 
     GraphCompiler(List<GraphRecipe<K>> catalog, Map<K, List<GraphRecipe<K>>> producers) {
+        this(catalog, producers, GraphMode.FULL, null);
+    }
+
+    GraphCompiler(List<GraphRecipe<K>> catalog, Map<K, List<GraphRecipe<K>>> producers,
+                  List<GraphRecipe<K>> verificationCatalog) {
+        this(catalog, producers, GraphMode.ACYCLIC, verificationCatalog);
+    }
+
+    /** Borrow an already frozen producer index without rebuilding it. */
+    GraphCompiler(List<GraphRecipe<K>> catalog, Map<K, List<GraphRecipe<K>>> producers,
+                  GraphMode mode, List<GraphRecipe<K>> verificationCatalog) {
         this.catalog = new GraphRecipeCatalog<>(catalog);
         this.producers = producers;
+        this.mode = java.util.Objects.requireNonNull(mode);
+        this.verificationCatalog = verificationCatalog == null ? this.catalog : verificationCatalog;
+        this.catalog.producedKeys(producers.keySet());
+    }
+
+    public GraphMode mode() { return mode; }
+
+    /** Original physical model, for preservation verification only. */
+    public List<GraphRecipe<K>> verificationCatalog() { return verificationCatalog; }
+
+    /** Whether original physical producer membership has its immutable O(1) index.
+     * Unknown foreign verification lists must remain UNASSESSED at boundaries. */
+    public boolean verificationProducerIndexAvailable() {
+        return verificationCatalog instanceof GraphRecipeCatalog<?> indexed && indexed.producerIndexAvailable();
+    }
+
+    /** O(1) original-model membership; check index availability before treating
+     * a false result as evidence that a resource is a terminal raw input. */
+    public boolean hasVerificationProducer(K key) {
+        return verificationCatalog instanceof GraphRecipeCatalog<?> indexed && indexed.hasProducer(key);
+    }
+
+    public GraphDomainCompilation<K> beginDomain(K target, Set<K> additional,
+                                                GraphMode mode, PlanningBudget budget) {
+        return new GraphDomainCompilation<>(this, target, additional, mode, budget);
     }
 
     public List<GraphRecipe<K>> producers(K key) {

@@ -30,13 +30,20 @@ final class RefillTerminalSearch<K> implements AutoCloseable {
     RefillTerminalSearch(GraphCompiler<K> compiler, GraphPlan<K> original, Map<K, Long> stock,
                          Set<K> external, Set<K> terminal, Set<String> excluded, boolean force,
                          PlanningBudget budget) {
+        this(compiler, original, stock, external, terminal, excluded, force, budget,
+                Math.min(4_194_304, budget.remainingWork() / 4));
+    }
+
+    RefillTerminalSearch(GraphCompiler<K> compiler, GraphPlan<K> original, Map<K, Long> stock,
+                         Set<K> external, Set<K> terminal, Set<String> excluded, boolean force,
+                         PlanningBudget budget, long maximumWork) {
         this.compiler = compiler; this.original = original; this.stock = stock;
         this.external = external; this.terminal = terminal; this.excluded = excluded;
         this.force = force; this.budget = budget;
         requestedSeeds = original.seeds();
         // This positive-only tail does not borrow the established quality
         // pass's share. Every stage still consumes the request's hard cap.
-        allowance = Math.min(4_194_304, budget.remainingWork() / 4);
+        allowance = Math.min(Math.max(0, maximumWork), budget.remainingWork());
     }
 
     RefillTerminalSearch<K> requestedSeeds(Map<K, Long> seeds) { requestedSeeds = seeds; return this; }
@@ -68,8 +75,8 @@ final class RefillTerminalSearch<K> implements AutoCloseable {
                 proposal = search.result(); search.close(); search = null;
                 if (proposal == null || !proposal.feasible()) return finish();
                 restoring = new AllocationSearch.Candidate<>(proposal.steps(), view.originals(), original.target(), original.amount(),
-                        stock, requestedSeeds, supplied, original.preserveSeeds(), force, true, budget, System.nanoTime())
-                        .startupCatalog(compiler.catalog(), excluded);
+                        stock, requestedSeeds, supplied, original.preserveSeeds(), force, true, budget, System.nanoTime(), compiler.mode())
+                        .startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded);
                 return false;
             }
             if (restoring != null) {
@@ -93,10 +100,8 @@ final class RefillTerminalSearch<K> implements AutoCloseable {
                 }
             }
             if (funding.hasNext()) return false;
-            result = new GraphPlan<>(original.target(), original.amount(), original.preserveSeeds(),
-                    proposal.steps(), proposal.recipes(), proposal.initialExact(), proposal.seeds(), deficits,
-                    deficits.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : original.result(),
-                    budget.nodes(), original.planningNanos());
+            result = GraphPlan.ownedRefill(proposal, proposal.steps(), proposal.recipes(), proposal.initialExact(), deficits,
+                    deficits.isEmpty() ? GraphPlan.Result.FEASIBLE_NOT_PROVEN_OPTIMAL : original.result(), budget.nodes());
             return finish();
         } catch (PlanningBudget.Exhausted limit) {
             if (limit.limit() != PlanningBudget.Limit.MEMORY_LIMIT) throw limit;

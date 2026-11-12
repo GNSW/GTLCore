@@ -78,7 +78,9 @@ final class RefillSupplySearch<K> implements AutoCloseable {
 
     /** Main planning opts in only after its existing supply refinements. */
     RefillSupplySearch<K> tradeoffs(GraphCompiler<K> compiler, Set<String> excluded) {
-        tradeoffCompiler = compiler; tradeoffExcluded = excluded; return this;
+        tradeoffCompiler = compiler; tradeoffExcluded = excluded;
+        if (compiler.mode() == GraphMode.ACYCLIC) phase = Phase.DONE;
+        return this;
     }
 
     boolean step() {
@@ -156,7 +158,7 @@ final class RefillSupplySearch<K> implements AutoCloseable {
                 if (!verifying.step()) return false;
                 if (candidate.preserveSeeds()) {
                     if (startup == null) startup = new SeedStartupGuard<>(
-                            tradeoffCompiler == null ? bindings.values() : tradeoffCompiler.catalog(),
+                            tradeoffCompiler == null ? bindings.values() : tradeoffCompiler.verificationCatalog(),
                             tradeoffCompiler == null ? Set.of() : tradeoffExcluded, verifying.summary(),
                             stock, candidate.seeds(), external, candidate.target(), candidate.amount(), budget);
                     if (!startup.step()) return false;
@@ -167,6 +169,10 @@ final class RefillSupplySearch<K> implements AutoCloseable {
                     // alone cannot protect that implicit startup material.
                     if (lost) { rejectCandidate(); return false; }
                 }
+                // This exact funded word and startup contract are complete.
+                // Net production is ForceCraftProof's sufficient physical proof.
+                if (verifying.summary().delta(candidate.target()).compareTo(BigInteger.valueOf(candidate.amount())) >= 0)
+                    candidate.markNetProductionVerified();
                 if (trading) {
                     verifying.close(); verifying = null;
                     if (candidate.feasible()) { frontier.offer(candidate); phase = Phase.FRONTIER; }
@@ -466,6 +472,7 @@ final class RefillSupplySearch<K> implements AutoCloseable {
         return true;
     }
     GraphPlan<K> result() { return result; }
+    boolean productionVerifiedResult(GraphPlan<K> plan) { return plan != null && plan.netProductionVerified(); }
     private void reserve(long bytes) { budget.reserve(bytes); memory += bytes; }
     @Override public void close() {
         endRoot(); phase = Phase.DONE;

@@ -20,7 +20,7 @@ final class GraphSourceScout {
                                              Map<K, Long> stock, Set<K> external, Set<K> seeds,
                                              boolean force, PlanningBudget budget) {
         long started = budget.threadWork(), allowance = Math.min(131_072, budget.remainingWork() / 16);
-        if (allowance < 24_576) return List.of();
+        if (allowance < 1024) return List.of();
         long memory = 0;
         try (var ranking = GraphSourceRanking.create(compiler, stock, external, target, force, budget, allowance)) {
             if (ranking == null) return List.of();

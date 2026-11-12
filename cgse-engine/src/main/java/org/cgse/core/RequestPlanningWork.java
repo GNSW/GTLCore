@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 /**
  * One order's solve, craft-less probes, retained feasible result and bounded
- * ordinary fallback. Catalog capture and host-specific plan assembly stay outside.
+ * FULL/ACYCLIC primary solves. Catalog capture and host-specific plan assembly stay outside.
  */
 public final class RequestPlanningWork<K> implements PlanningScheduler.Work<GraphPlan<K>> {
 
@@ -34,9 +34,12 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     public record FallbackReport<K>(K target, long amount, GraphPlan.Result trigger,
                                     GraphPlan.Result result, long nodes, long elapsedNanos) {}
 
-    /** Ordinary fallback has its own budget, with no worker multiplier or refund of primary work. */
+    /** Legacy host API. Both graph modes now use the primary budget configuration. */
+    @Deprecated
     public record FallbackLimits(long milliseconds, long maxWork, long maxBytes) {
-        public static final FallbackLimits DEFAULT = new FallbackLimits(250, 131_072, 16L << 20);
+        // Retain the old public constant for binary/source compatibility only.
+        // These values do not configure either of the two primary solves.
+        public static final FallbackLimits DEFAULT = new FallbackLimits(0, 131_072, 16L << 20);
 
         public FallbackLimits {
             if (milliseconds < 0 || milliseconds > Long.MAX_VALUE / 1_000_000L || maxWork <= 0 || maxBytes <= 0)
@@ -44,7 +47,7 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         }
     }
 
-    /** Both accounts remain explicit: fallback spends a separate allowance after primary search stops. */
+    /** Both solve accounts remain explicit; legacy field names preserve the host API. */
     public record CostReport(PlanningBudget.Metrics primary, PlanningCostTrace.Snapshot primaryPipeline,
                              PlanningBudget.Metrics fallback, PlanningCostTrace.Snapshot fallbackPipeline) {}
 
@@ -77,9 +80,14 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private boolean completed;
     private boolean partialSearch, tryEstimate, tryNeighbor;
     private boolean fallbackAttempted, fallbackMode;
-    private FallbackLimits fallbackLimits = FallbackLimits.DEFAULT;
     private PlanningBudget.Metrics fallbackMetrics;
     private PlanningCostTrace.Snapshot fallbackPipeline;
+    private PlanningScheduler.Work<GraphPlan<K>> fallbackWork;
+    private BooleanSupplier fallbackStep;
+    private PlanningBudget fallbackBudget;
+    private GraphPlan.Result fallbackTrigger;
+    private RuntimeException fallbackFailure;
+    private boolean advancing;
     private long low, high, middle, estimatedAmount;
 
     public RequestPlanningWork(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
@@ -117,18 +125,19 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
                 this.emitable, recoverySeeds);
     }
 
-    /** Configure before submitting the request; active work keeps its captured limits. */
+    /** Compatibility with existing adapters. Separate fallback caps no longer apply. */
+    @Deprecated
     public RequestPlanningWork<K> fallbackLimits(FallbackLimits limits) {
         if (current != null || selected != null || reuseAttempted || fallbackAttempted)
             throw new IllegalStateException("Planning already started");
-        fallbackLimits = java.util.Objects.requireNonNull(limits);
+        java.util.Objects.requireNonNull(limits);
         return this;
     }
 
     /**
      * Retain the whole captured candidate domain, not only the compiler's first
      * concrete window. Configure before submitting this request. The compiler
-     * remains available for explicitly marked ordinary fallback previews.
+     * is not substituted for the captured catalog during the ACYCLIC attempt.
      */
     public RequestPlanningWork<K> capturedCatalog(CapturedCatalog<K> catalog) {
         if (current != null || selected != null || reuseAttempted) throw new IllegalStateException("Planning already started");
@@ -188,11 +197,31 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
 
     @Override
     public boolean advance(PlanningScheduler.Slice slice) {
+        if (completed) return true;
+        if (fallbackWork != null) return advanceFallback(slice);
+        advancing = true;
+        try {
+            return advancePrimary(slice);
+        } catch (PlanningBudget.Exhausted limit) {
+            limited(limit);
+            return completed;
+        } catch (java.util.concurrent.CompletionException failure) {
+            Throwable cause = failure;
+            while (cause instanceof java.util.concurrent.CompletionException && cause.getCause() != null) cause = cause.getCause();
+            if (!(cause instanceof PlanningBudget.Exhausted limit)) throw failure;
+            limited(limit);
+            return completed;
+        } finally {
+            advancing = false;
+        }
+    }
+
+    private boolean advancePrimary(PlanningScheduler.Slice slice) {
         if (current == null) {
             current = calculation(amount);
         }
         if (!current.advance(slice)) return false;
-        GraphPlan<K> candidate = current.result();
+        GraphPlan<K> candidate = scopedPreview(current.result(), currentIncomplete);
         if (!partialSearch) {
             selected = candidate;
             selectedIncomplete = currentIncomplete;
@@ -315,12 +344,14 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     }
 
     private boolean finish() {
+        selected = scopedPreview(selected, selectedIncomplete);
         if (!selected.feasible() && !selected.conditionalPreview() && (selected.missingExact().isEmpty() || selectedIncomplete && !fallbackMode)) {
             // Coverage applies before every negative exit, including a completed
             // child proof without a refill preview. Exhausted search and omitted
             // alternatives are separate reasons, not interchangeable budgets.
             GraphPlan.Result reason = failureReason();
             if (!fallback(reason)) throw limitOrUnknown(reason);
+            if (fallbackWork != null) return false;
         }
         if (selected.feasible() && selectedIncomplete) {
             // A restricted positive witness is valid, but its seed/material
@@ -334,50 +365,143 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         return true;
     }
 
-    /** One bounded ordinary expansion, never another cycle solver or a legacy engine request. */
+    /** The same primary algorithms receive a fresh, globally acyclic recipe domain. */
     private boolean fallback(GraphPlan.Result reason) {
         if (!fallbackEnabled || fallbackAttempted || cancelled.getAsBoolean()) return false;
         if (!switch (reason) {
-            case UNKNOWN, INFEASIBLE, INCOMPLETE_MODEL, TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT -> true;
+            case UNKNOWN, INCOMPLETE_MODEL, TIMEOUT, SEARCH_LIMIT, MEMORY_LIMIT, GRAPH_LIMIT -> true;
             default -> false;
         }) return false;
         fallbackAttempted = true;
-        // Stop count-search siblings before releasing their state. Fallback has
-        // its own small allowance, not a refund of spent work.
+        // Stop siblings, release the old frontier, and restart only the model.
+        // No spent work, timeout or internal cancellation is inherited.
         budget.cancel();
         if (current != null) {
             current.close();
             current = null;
         }
-        PlanningBudget quick = new PlanningBudget(fallbackLimits.milliseconds(), fallbackLimits.maxWork(),
-                fallbackLimits.maxBytes(), cancelled, System::nanoTime).shareMemory(budget);
-        if (budget.metricsEnabled()) quick.enableMetrics();
+        fallbackTrigger = reason;
+        if (fallbackFailure == null) fallbackFailure = limitOrUnknown(reason);
+        fallbackBudget = budget.independentSolve(cancelled);
+        fallbackWork = acyclicCalculation();
+        budget.note("fallback", "mode=ACYCLIC; same_primary_limits; trigger=" + reason);
+        // Public limited() remains synchronous for callers outside the
+        // scheduler. Scheduled requests resume the identical state in advance.
+        if (!advancing) while (!advanceFallback(null)) {}
+        return true;
+    }
+
+    private PlanningScheduler.Work<GraphPlan<K>> acyclicCalculation() {
+        if (capturedCatalog != null) {
+            var work = capturedCatalog.begin(target, amount, available, emitable, recoverySeeds,
+                    preserve, checkpoint == null && !directEmission, fallbackBudget)
+                    .graphMode(GraphMode.ACYCLIC).catalysts(CatalystPolicy.MINIMAL).conditionalPreviews(true);
+            fallbackStep = work::step;
+            return new PlanningScheduler.Work<>() {
+                public boolean advance(PlanningScheduler.Slice slice) { return work.advance(slice); }
+                public GraphPlan<K> result() { return work.result().plan(); }
+                public GraphPlan<K> limited(PlanningBudget.Exhausted limit) { return work.limited(limit).plan(); }
+                public CompletableFuture<?> waitingFor() { return work.waitingFor(); }
+                public void close() { work.close(); }
+            };
+        }
+        // The restricted domain has no cyclic catalysts to optimize. Keep
+        // explicit final inventory requirements, without a seed-policy search.
+        var work = new GraphPlanningWork<>(compiler, target, amount, available, emitable, recoverySeeds,
+                preserve, checkpoint == null && !directEmission, fallbackBudget, GraphMode.ACYCLIC);
+        fallbackStep = work::step;
+        return work;
+    }
+
+    private boolean advanceFallback(PlanningScheduler.Slice slice) {
         try {
-            try (var costs = quick.trace(PlanningCostTrace.Origin.FALLBACK, PlanningCostTrace.Stage.SEARCH)) {
-                selected = GraphFallback.plan(compiler, target, amount, available, emitable,
-                        recoverySeeds, preserve, checkpoint == null && !directEmission, quick);
+            GraphPlan<K> candidate;
+            try (var timing = slice == null ? fallbackBudget.work(fallbackBudget.phase()) : null;
+                 var costs = fallbackBudget.trace(PlanningCostTrace.Origin.FALLBACK, PlanningCostTrace.Stage.SEARCH)) {
+                // The queue/admission owner stays the same, but both local
+                // slicing and parallel children must charge the NEW account.
+                boolean done = slice == null ? fallbackStep.getAsBoolean() : fallbackWork.advance(slice.withBudget(fallbackBudget));
+                if (!done) return false;
+                candidate = fallbackWork.result();
             }
-            fallbackMode = true;
-            budget.note("fallback", "cycle_solving=false; reason=" + reason + "; work=" + quick.nodes() + "; result=" + selected.result());
-            fallbackReporter.accept(new FallbackReport<>(target, amount, reason, selected.result(), quick.nodes(), quick.elapsedNanos()));
-            return true;
+            return acceptFallback(candidate);
         } catch (PlanningBudget.Exhausted exhausted) {
-            budget.note("fallback", "cycle_solving=false; trigger=" + reason + "; stopped=" + exhausted.limit() + "; work=" + quick.nodes());
-            return false;
+            if (fallbackWork == null) throw exhausted;
+            return fallbackLimited(exhausted);
+        } catch (java.util.concurrent.CompletionException failure) {
+            Throwable cause = failure;
+            while (cause instanceof java.util.concurrent.CompletionException && cause.getCause() != null) cause = cause.getCause();
+            if (cause instanceof PlanningBudget.Exhausted limit) return fallbackLimited(limit);
+            closeFallback();
+            throw failure;
+        } catch (RuntimeException | Error failure) {
+            closeFallback();
+            throw failure;
         } finally {
-            fallbackMetrics = quick.metrics();
-            fallbackPipeline = quick.pipelineMetrics();
+            // Existing hosts observe the request's original account for UI
+            // progress; publish the active phase without transferring its work.
+            if (fallbackBudget != null) budget.phase(completed ? PlanningBudget.Phase.COMPLETE : fallbackBudget.phase());
+        }
+    }
+
+    private boolean fallbackLimited(PlanningBudget.Exhausted limit) {
+        budget.note("fallback", "mode=ACYCLIC; trigger=" + fallbackTrigger + "; stopped=" + limit.limit() + "; work=" + fallbackBudget.nodes());
+        try {
+            return acceptFallback(fallbackWork.limited(limit));
+        } finally {
+            closeFallback();
+        }
+    }
+
+    private boolean acceptFallback(GraphPlan<K> candidate) {
+        if (candidate != null && (candidate.feasible() || verifiedRefill(candidate, true))) {
+            // A completed primary incumbent always wins over a failed second
+            // attempt. Normally it already ended the request before this phase.
+            if (selected == null || !selected.feasible() && !verifiedRefill(selected, selectedIncomplete)) {
+                selected = candidate;
+                selectedIncomplete = true;
+                fallbackMode = true;
+            }
+            budget.note("fallback", "mode=ACYCLIC; cycle_solving=false; work=" + fallbackBudget.nodes() + "; result=" + selected.result());
+            fallbackReporter.accept(new FallbackReport<>(target, amount, fallbackTrigger, selected.result(),
+                    fallbackBudget.nodes(), fallbackBudget.elapsedNanos()));
+            closeFallback();
+            return finish();
+        }
+        budget.note("fallback", "mode=ACYCLIC; restricted_failure=" + (candidate == null ? "UNKNOWN" : candidate.result()));
+        closeFallback();
+        if (selected != null && (selected.feasible() || verifiedRefill(selected, selectedIncomplete))) return finish();
+        // A failed subset proves nothing about the original domain. Preserve
+        // the full attempt's resource/unknown classification and diagnostic.
+        throw fallbackFailure;
+    }
+
+    private void closeFallback() {
+        if (fallbackBudget != null) fallbackBudget.cancel();
+        if (fallbackWork != null) fallbackWork.close();
+        fallbackWork = null;
+        fallbackStep = null;
+        if (fallbackBudget != null) {
+            fallbackMetrics = fallbackBudget.metrics();
+            fallbackPipeline = fallbackBudget.pipelineMetrics();
         }
     }
 
     @Override
     public void close() {
         if (current != null) current.close();
+        closeFallback();
     }
 
     @Override
     public CompletableFuture<?> waitingFor() {
+        if (fallbackWork != null) return fallbackWork.waitingFor();
         return current == null ? null : current.waitingFor();
+    }
+
+    @Override
+    public PlanningBudget activeBudget() {
+        return fallbackWork == null ? budget : fallbackBudget;
     }
 
     @Override
@@ -387,9 +511,14 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
 
     @Override
     public GraphPlan<K> limited(PlanningBudget.Exhausted limit) {
+        if (fallbackWork != null) {
+            if (!advancing) while (!advanceFallback(null)) {}
+            return selected;
+        }
+        selected = scopedPreview(selected, selectedIncomplete);
         if (current != null) {
-            GraphPlan<K> retained = current.limited(limit);
-            if (retained.feasible()) {
+            GraphPlan<K> retained = scopedPreview(current.limited(limit), currentIncomplete);
+            if (retained.feasible() && (selected == null || !selected.feasible() || retained.amount() >= selected.amount())) {
                 selected = retained;
                 selectedIncomplete = currentIncomplete;
             } else if (verifiedRefill(retained, currentIncomplete) &&
@@ -411,7 +540,9 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
         }
         if (selected == null || !selected.feasible() && !verifiedRefill(selected, selectedIncomplete) &&
                 (!partialSearch || selected.missingExact().isEmpty())) {
+            fallbackFailure = limit;
             if (!fallback(GraphPlan.Result.valueOf(limit.limit().name()))) throw limit;
+            if (fallbackWork != null) return selected;
             finish();
             return selected;
         }
@@ -423,5 +554,17 @@ public final class RequestPlanningWork<K> implements PlanningScheduler.Work<Grap
     private boolean verifiedRefill(GraphPlan<K> plan, boolean incomplete) {
         return plan.conditionalPreview() || !incomplete && !plan.missingExact().isEmpty() &&
                 (plan.result() == GraphPlan.Result.MISSING_INPUT || plan.result() == GraphPlan.Result.MISSING_SEED);
+    }
+
+    /** A verified word from incomplete capture is still a valid conditional
+     * bill. Missing producer alternatives remove necessity/optimality claims,
+     * not its physical witness, and do not trigger a second solve. */
+    private GraphPlan<K> scopedPreview(GraphPlan<K> plan, boolean incomplete) {
+        if (plan == null || !incomplete || plan.missingExact().isEmpty() ||
+                plan.result() != GraphPlan.Result.MISSING_INPUT && plan.result() != GraphPlan.Result.MISSING_SEED) return plan;
+        return new GraphPlan<>(plan.target(), plan.amount(), plan.preserveSeeds(), plan.steps(), plan.recipes(),
+                plan.initialExact(), plan.seeds(), plan.missingExact(), GraphPlan.Result.INCOMPLETE_MODEL,
+                plan.searchNodes(), plan.planningNanos()).withMissingSourcesFrom(plan)
+                .withAlternatives(plan.alternatives().stream().map(option -> scopedPreview(option, true)).toList());
     }
 }

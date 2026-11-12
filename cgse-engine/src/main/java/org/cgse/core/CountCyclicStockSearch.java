@@ -22,7 +22,11 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     private final Map<K, BigInteger> originalGoals = new LinkedHashMap<>();
     private final BitSet recipeComponents = new BitSet();
     private RecipeCountModel<K> model;
-    private CountDemandProjection projection;
+    private MissingStockAnalysis<K> startup;
+    private Set<String> unreachable = Set.of();
+    private long reachabilityMemory;
+    private int startupCursor, unreachableCounts;
+    private CountRefinedProjection<K> projection, originalProjection;
     private CountScheduleTopology<K> topology;
     private CountSchedule<K> schedule;
     private CountReverseSchedule<K> reverse;
@@ -36,6 +40,7 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     private long startupMemory;
     private int row, phase, retainedGoals;
     private boolean tightened, originalTried, reverseTried, reverseCandidate, startupTried, done;
+    private boolean projectionPending, projectionScheduled;
 
     CountCyclicStockSearch(GraphCompiler<K> compiler, K target, long amount, Map<K, Long> stock,
                            Set<K> external, Map<K, Long> seeds, Set<String> excluded,
@@ -63,13 +68,48 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
                 if (!budget.tryReserve(bytes)) return finish();
                 memory = bytes;
                 for (var recipe : model.recipes) { budget.check(); recipes.put(recipe.id(), recipe); }
+                startup = new MissingStockAnalysis<>(compiler, target, stock, external,
+                        seeds.keySet(), excluded, force, budget);
+                phase = 3;
+                return false;
+            }
+            if (startup != null) {
+                if (!startup.step()) return false;
+                long bytes = 128L + 128L * compiler.catalog().size();
+                if (!budget.tryReserve(bytes)) return finish();
+                reachabilityMemory = bytes;
+                unreachable = startup.unreachableRecipes();
+                startup.close(); startup = null;
+                return false;
+            }
+            if (phase == 3) {
+                if (startupCursor < model.recipes.size()) {
+                    budget.check(); int index = startupCursor++;
+                    if (unreachable.contains(model.recipes.get(index).id())) {
+                        if (!budget.tryReserve(256)) return finish();
+                        memory += 256;
+                        // The model owns this row list; cached coefficient
+                        // maps stay immutable. A self-returning credential has
+                        // zero net demand but cannot start from absent stock.
+                        model.constraints.add(new ExactLinearProgram.Constraint(
+                                Map.of(index, BigInteger.ONE), BigInteger.ZERO));
+                        unreachableCounts++;
+                    }
+                    return false;
+                }
+                unreachable = Set.of();
+                budget.release(reachabilityMemory); reachabilityMemory = 0;
+                if (unreachableCounts > 0)
+                    budget.note("count_cyclic_startup", "unreachable_recipes=" + unreachableCounts);
                 phase = 1;
                 return project();
             }
-            if (projection != null) {
+            if (projection != null && projectionPending) {
                 if (!projection.step()) return false;
-                counts = projection.result(); projection.close(); projection = null;
-                if (counts == null) return tryOriginal();
+                projectionPending = false;
+                BigInteger[] proposed = projection.result();
+                if (proposed == null) return tryOriginal();
+                counts = proposed;
                 if (originalCounts == null) originalCounts = counts;
                 topology = new CountScheduleTopology<>(model, counts, budget, true);
                 return false;
@@ -87,6 +127,7 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
                     phase = 2;
                 } else {
                     topology.close(); topology = null;
+                    projectionScheduled = true;
                     schedule = CountSchedule.componentBalanced(model, counts, components, budget, 512);
                 }
                 return false;
@@ -98,6 +139,7 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
                 if (originalRows.isEmpty()) return tryOriginal();
                 tightened = true; retainedGoals = originalRows.size();
                 budget.note("count_cyclic_stock", "optional_terminal_goals=" + retainedGoals);
+                originalProjection = projection; projection = null;
                 return project();
             }
             if (reverse != null) return stepReverse();
@@ -124,7 +166,7 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
                 // extra caller seed contract or a synthetic inventory credit.
                 reverseCandidate = false;
                 candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
-                        activeSeeds(), external, preserve, force, false, budget, started).productionContract(seeds);
+                        activeSeeds(), external, preserve, force, false, budget, started, compiler.mode()).startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded).productionContract(seeds);
                 return false;
             }
             return finish();
@@ -148,8 +190,10 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
         // Abundant stock leaves optional producers free during propagation.
         // Use a bounded wider projection here so a smaller order does not lose
         // this candidate solely because its exact lower bounds fix fewer runs.
-        projection = new CountDemandProjection(model.recipes.size(), model.constraints, budget,
+        if (projection != null) projection.close();
+        projection = new CountRefinedProjection<>(model, budget,
                 Math.max(0, allowance - work) * 3 / 4, 512, true);
+        projectionPending = true; projectionScheduled = false;
         return false;
     }
 
@@ -177,13 +221,27 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     }
 
     private boolean tryOriginal() {
-        if (originalTried) return completeStartup();
+        if (originalTried) {
+            if (projectionScheduled && projection != null && projection.reject()) {
+                projectionPending = true; projectionScheduled = false; reverseTried = false;
+                return false;
+            }
+            return completeStartup();
+        }
+        // Full-stock terminal goals are optional. Their failed candidate must
+        // not spend the original count vector's physical scheduling turn on
+        // extra refinement. Only refine after trying the original domain.
         if (originalCounts == null || originalComponents == null) return finish();
         originalTried = true;
         reverseTried = false;
+        if (originalProjection != null) {
+            if (projection != null) projection.close();
+            projection = originalProjection; originalProjection = null;
+        }
         restore();
         counts = originalCounts;
         phase = 1;
+        projectionPending = false; projectionScheduled = true;
         schedule = CountSchedule.componentBalanced(model, counts, originalComponents, budget, 512);
         return false;
     }
@@ -262,7 +320,7 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
         if (word == null) return afterReverse();
         reverseCandidate = true;
         candidate = new AllocationSearch.Candidate<>(word, recipes, target, amount, stock,
-                activeSeeds(), external, preserve, force, false, budget, started).productionContract(seeds);
+                activeSeeds(), external, preserve, force, false, budget, started, compiler.mode()).startupCatalog(compiler.mode() == GraphMode.FULL ? compiler.verificationCatalog() : compiler.catalog(), excluded).productionContract(seeds);
         return false;
     }
 
@@ -291,10 +349,14 @@ final class CountCyclicStockSearch<K> implements AutoCloseable {
     GraphPlan<K> result() { return result; }
 
     @Override public void close() {
+        if (startup != null) startup.close(); startup = null;
+        unreachable = Set.of();
+        budget.release(reachabilityMemory); reachabilityMemory = 0;
         if (candidate != null) candidate.close(); candidate = null;
         if (schedule != null) schedule.close(); schedule = null;
         if (reverse != null) reverse.close(); reverse = null;
         if (projection != null) projection.close(); projection = null;
+        if (originalProjection != null) originalProjection.close(); originalProjection = null;
         if (topology != null) topology.close(); topology = null;
         restore();
         if (model != null) model.close(); model = null;

@@ -117,7 +117,7 @@ final class RefillProducerOrder<K> implements AutoCloseable {
             }
         } else if (phase == 3 || phase == 5) {
             if (propagate()) {
-                if (phase == 5) return true;
+                if (phase == 5 || compiler.mode() == GraphMode.ACYCLIC) return true;
                 next = 0; phase = 4;
             }
         } else components();

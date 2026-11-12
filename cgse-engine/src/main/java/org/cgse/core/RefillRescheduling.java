@@ -14,6 +14,7 @@ final class RefillRescheduling<K> implements AutoCloseable {
     private final Collection<GraphRecipe<K>> available;
     private final Set<String> excluded;
     private final boolean force;
+    private GraphMode graphMode = GraphMode.FULL;
     private final PlanningBudget budget;
     private final String failure;
     private final long allowance;
@@ -48,6 +49,10 @@ final class RefillRescheduling<K> implements AutoCloseable {
         // This pass repairs final-seed rounding. Larger domains retain their
         // completed bill and their other existing search opportunities.
         done = plan.seeds().isEmpty() || plan.recipes().size() > 256 || allowance < 512;
+    }
+
+    RefillRescheduling<K> graphMode(GraphMode mode) {
+        graphMode = Objects.requireNonNull(mode); return this;
     }
 
     boolean step() {
@@ -88,7 +93,7 @@ final class RefillRescheduling<K> implements AutoCloseable {
                 PlanStep word = searching.result(); searching.close(); searching = null;
                 if (word != null)
                     assembling = new AllocationSearch.Candidate<>(word, original.recipes(), original.target(), original.amount(),
-                            stock, original.seeds(), external, original.preserveSeeds(), force, true, budget, System.nanoTime())
+                            stock, original.seeds(), external, original.preserveSeeds(), force, true, budget, System.nanoTime(), graphMode)
                             .startupCatalog(available, excluded);
                 return false;
             }

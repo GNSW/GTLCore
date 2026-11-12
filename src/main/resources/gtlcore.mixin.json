@@ -320,6 +320,7 @@
     "gtm.api.recipe.RecipeHelperOverclockMixin",
     "gtm.api.recipe.condition.CleanroomConditionMixin",
     "gtm.cover.ConveyorCoverMixin",
+    "gtm.cover.MachineControllerCoverAccessorMixin",
     "gtm.cover.FluidRegulatorCoverMixin",
     "gtm.cover.InfiniteWaterCoverMixin",
     "gtm.cover.PumpCoverMixin",

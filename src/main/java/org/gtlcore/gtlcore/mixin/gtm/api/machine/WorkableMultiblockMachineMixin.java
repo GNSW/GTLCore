@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.machine.trait.*;
 import org.gtlcore.gtlcore.api.machine.trait.MEPart.IMEFilterIOPartMachine;
 import org.gtlcore.gtlcore.api.machine.trait.MEPart.IMEPatternPartMachine;
 import org.gtlcore.gtlcore.api.recipe.RecipeResult;
+import org.gtlcore.gtlcore.mixin.gtm.cover.MachineControllerCoverAccessorMixin;
 import org.gtlcore.gtlcore.utils.datastructure.FirstFlagRecipePartSet;
 
 import com.gregtechceu.gtceu.api.block.ActiveBlock;
@@ -20,6 +21,7 @@ import com.gregtechceu.gtceu.api.machine.trait.RecipeLogic;
 import com.gregtechceu.gtceu.api.recipe.GTRecipe;
 import com.gregtechceu.gtceu.api.recipe.logic.OCParams;
 import com.gregtechceu.gtceu.api.recipe.logic.OCResult;
+import com.gregtechceu.gtceu.common.cover.MachineControllerCover;
 import com.gregtechceu.gtceu.common.machine.multiblock.part.FluidHatchPartMachine;
 import com.gregtechceu.gtceu.integration.ae2.machine.MEOutputBusPartMachine;
 import com.gregtechceu.gtceu.integration.ae2.machine.MEOutputHatchPartMachine;
@@ -66,6 +68,13 @@ public abstract class WorkableMultiblockMachineMixin extends MultiblockControlle
     @Inject(method = "onStructureFormed", at = @At("TAIL"), remap = false)
     public void onStructureFormed(CallbackInfo ci) {
         if (this.getLevel() instanceof ServerLevel sl) {
+            // Invalidating the structure resets SUSPEND to IDLE. Reapply every control
+            // cover synchronously, without waiting for another redstone neighbor update.
+            for (var cover : getCoverContainer().getCovers()) {
+                if (cover instanceof MachineControllerCover) {
+                    ((MachineControllerCoverAccessorMixin) cover).gtlcore$updateInput();
+                }
+            }
             sl.getServer().execute(this::upDate);
         }
     }

@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#forge:diesel",
+      "required": false
+    },
+    {
+      "id": "#forge:biodiesel",
+      "required": false
+    }
+  ]
+}

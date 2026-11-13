@@ -3,7 +3,9 @@ package org.gtlcore.gtlcore.mixin.gtm.api.pattern;
 import org.gtlcore.gtlcore.api.pattern.AdvancedBlockPattern;
 import org.gtlcore.gtlcore.api.pattern.BlockPatternAccessor;
 import org.gtlcore.gtlcore.api.pattern.FixedPatternLayout;
+import org.gtlcore.gtlcore.api.pattern.PatternCapacityState;
 import org.gtlcore.gtlcore.api.pattern.PatternLayoutSearch;
+import org.gtlcore.gtlcore.api.pattern.PatternMatchLayout;
 import org.gtlcore.gtlcore.api.pattern.PreviewMatcherTiming;
 import org.gtlcore.gtlcore.api.pattern.StructureDetectionScope;
 import org.gtlcore.gtlcore.api.pattern.WorldPatternMatcher;
@@ -12,6 +14,7 @@ import org.gtlcore.gtlcore.mixin.gtm.api.machine.IMultiblockStateInvoker;
 
 import com.gregtechceu.gtceu.api.block.ActiveBlock;
 import com.gregtechceu.gtceu.api.block.MetaMachineBlock;
+import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.machine.IMachineBlockEntity;
 import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
 import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiPart;
@@ -27,6 +30,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import it.unimi.dsi.fastutil.longs.*;
 import it.unimi.dsi.fastutil.objects.*;
 import org.spongepowered.asm.mixin.*;
@@ -34,6 +39,7 @@ import org.spongepowered.asm.mixin.*;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
@@ -63,6 +69,28 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
     @Shadow(remap = false)
     @Final
     protected int[] centerOffset;
+
+    @Unique
+    private volatile PatternMatchLayout gtlcore$matchLayout;
+
+    @WrapMethod(method = "checkPatternAt(Lcom/gregtechceu/gtceu/api/pattern/MultiblockState;Z)Z", remap = false)
+    private boolean gtlcore$trackMatchCapacity(MultiblockState state, boolean savePredicate, Operation<Boolean> original) {
+        if (!WorldPatternMatcher.useFixedLayout(state) ||
+                this.aisleRepetitions.length != this.fingerLength ||
+                FixedPatternLayout.repetitions(this.aisleRepetitions) == null) {
+            return original.call(state, savePredicate);
+        }
+        var hints = ((PatternCapacityState) state).gtlcore$getCapacityHints();
+        hints.begin((BlockPattern) (Object) this);
+        boolean completed = false;
+        try {
+            boolean matched = original.call(state, savePredicate);
+            completed = true;
+            return matched;
+        } finally {
+            hints.finish(state, completed);
+        }
+    }
 
     @Shadow(remap = false)
     protected abstract BlockPos setActualRelativeOffset(int x, int y, int z, Direction facing, Direction upwardsFacing, boolean isFlipped);
@@ -102,6 +130,17 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
     @Unique
     private boolean gtlcore$checkPatternAt(MultiblockState worldState, BlockPos centerPos, Direction frontFacing,
                                            Direction upwardsFacing, boolean isFlipped, boolean savePredicate) {
+        PatternMatchLayout layout = gtlcore$matchLayout;
+        if (layout == null) {
+            // Pattern factories memoize built definitions. Only immutable layout data is shared,
+            // never world state or a controller's orientation. Concurrent first checks may compile twice.
+            layout = new PatternMatchLayout(this.blockMatches, this.palmLength, this.thumbLength, this.centerOffset);
+            gtlcore$matchLayout = layout;
+        }
+        var traversal = new PatternMatchLayout.Traversal(layout, centerPos,
+                setActualRelativeOffset(1, 0, 0, frontFacing, upwardsFacing, isFlipped),
+                setActualRelativeOffset(0, 1, 0, frontFacing, upwardsFacing, isFlipped),
+                setActualRelativeOffset(0, 0, 1, frontFacing, upwardsFacing, isFlipped));
         int[] fixedRepetitions = StructureDetectionScope.configuredRepetitions(worldState, this.aisleRepetitions);
         if (fixedRepetitions == null && (PreviewMatcherTiming.useFixedLayout(worldState) ||
                 WorldPatternMatcher.useFixedLayout(worldState))) {
@@ -123,21 +162,18 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
                 ((IMultiblockStateInvoker) worldState).cleanState();
                 System.arraycopy(fixedRepetitions, 0, matchedRepetitions, 0, this.fingerLength);
                 matched = FixedPatternLayout.match(fixedRepetitions, startZ,
-                        (aisle, z) -> gtlcore$matchSlice(worldState, centerPos, frontFacing, upwardsFacing,
-                                isFlipped, savePredicate, aisle, z)) &&
+                        (aisle, z) -> gtlcore$matchSlice(worldState, traversal, savePredicate, aisle, z)) &&
                         gtlcore$hasRequiredGlobalCounts(worldState);
             } else if (incremental) {
                 matched = PatternLayoutSearch.match(this.aisleRepetitions, startZ, matchedRepetitions,
                         new PatternLayoutSearch.Checks(
                                 ((IMultiblockStateInvoker) worldState)::cleanState,
-                                (aisle, z) -> gtlcore$matchSlice(worldState, centerPos, frontFacing, upwardsFacing,
-                                        isFlipped, savePredicate, aisle, z),
+                                (aisle, z) -> gtlcore$matchSlice(worldState, traversal, savePredicate, aisle, z),
                                 () -> gtlcore$hasRequiredGlobalCounts(worldState),
                                 () -> worldState.error == MultiblockState.UNLOAD_ERROR,
                                 PreviewMatcherTiming::replay, PreviewMatcherTiming::replayedSlice));
             } else {
-                matched = gtlcore$matchAisles(worldState, centerPos, frontFacing, upwardsFacing, isFlipped,
-                        savePredicate, startZ, 0, startZ, matchedRepetitions);
+                matched = gtlcore$matchAisles(worldState, traversal, savePredicate, startZ, 0, startZ, matchedRepetitions);
             }
             if (matched) {
                 worldState.setError(null);
@@ -155,8 +191,8 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
     }
 
     @Unique
-    private boolean gtlcore$matchAisles(MultiblockState worldState, BlockPos centerPos, Direction frontFacing,
-                                        Direction upwardsFacing, boolean isFlipped, boolean savePredicate, int startZ,
+    private boolean gtlcore$matchAisles(MultiblockState worldState, PatternMatchLayout.Traversal traversal,
+                                        boolean savePredicate, int startZ,
                                         int aisle, int z, int[] repetitions) {
         if (aisle == 0 && worldState instanceof IMultiblockStateInvoker stateGet) stateGet.cleanState();
 
@@ -164,8 +200,7 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
         int maxRepetitions = this.aisleRepetitions[aisle][1];
         int validRepetitions = 0;
         while (validRepetitions < maxRepetitions &&
-                gtlcore$matchSlice(worldState, centerPos, frontFacing, upwardsFacing, isFlipped, savePredicate, aisle,
-                        z + validRepetitions)) {
+                gtlcore$matchSlice(worldState, traversal, savePredicate, aisle, z + validRepetitions)) {
             validRepetitions++;
         }
         if (worldState.error == MultiblockState.UNLOAD_ERROR) return false;
@@ -173,14 +208,12 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
         for (int count = validRepetitions; count >= minRepetitions; count--) {
             repetitions[aisle] = count;
             Arrays.fill(repetitions, aisle + 1, repetitions.length, 0);
-            if (!gtlcore$replayLayout(worldState, centerPos, frontFacing, upwardsFacing, isFlipped, savePredicate,
-                    startZ, aisle, repetitions)) {
+            if (!gtlcore$replayLayout(worldState, traversal, savePredicate, startZ, aisle, repetitions)) {
                 if (worldState.error == MultiblockState.UNLOAD_ERROR) return false;
                 continue;
             }
             if (aisle + 1 < this.fingerLength) {
-                if (gtlcore$matchAisles(worldState, centerPos, frontFacing, upwardsFacing, isFlipped, savePredicate,
-                        startZ, aisle + 1, z + count, repetitions)) {
+                if (gtlcore$matchAisles(worldState, traversal, savePredicate, startZ, aisle + 1, z + count, repetitions)) {
                     return true;
                 }
                 if (worldState.error == MultiblockState.UNLOAD_ERROR) return false;
@@ -193,8 +226,8 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
     }
 
     @Unique
-    private boolean gtlcore$replayLayout(MultiblockState worldState, BlockPos centerPos, Direction frontFacing,
-                                         Direction upwardsFacing, boolean isFlipped, boolean savePredicate, int startZ,
+    private boolean gtlcore$replayLayout(MultiblockState worldState, PatternMatchLayout.Traversal traversal,
+                                         boolean savePredicate, int startZ,
                                          int lastAisle, int[] repetitions) {
         PreviewMatcherTiming.replay();
         WorldPatternTiming.replay(worldState);
@@ -204,8 +237,7 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
             for (int repeat = 0; repeat < repetitions[aisle]; repeat++, z++) {
                 PreviewMatcherTiming.replayedSlice();
                 WorldPatternTiming.replayedSlice(worldState);
-                if (!gtlcore$matchSlice(worldState, centerPos, frontFacing, upwardsFacing, isFlipped, savePredicate,
-                        aisle, z)) {
+                if (!gtlcore$matchSlice(worldState, traversal, savePredicate, aisle, z)) {
                     return false;
                 }
             }
@@ -214,48 +246,58 @@ public abstract class BlockPatternMixin implements BlockPatternAccessor {
     }
 
     @Unique
-    private boolean gtlcore$matchSlice(MultiblockState worldState, BlockPos centerPos, Direction frontFacing,
-                                       Direction upwardsFacing, boolean isFlipped, boolean savePredicate, int aisle,
-                                       int z) {
+    private boolean gtlcore$matchSlice(MultiblockState worldState, PatternMatchLayout.Traversal traversal,
+                                       boolean savePredicate, int aisle, int z) {
         PreviewMatcherTiming.slice();
         WorldPatternTiming.slice(worldState);
         Map<SimplePredicate, Integer> layerCount = worldState.getLayerCount();
         layerCount.clear();
         PatternMatchContext matchContext = worldState.getMatchContext();
-        for (int b = 0, y = -this.centerOffset[1]; b < this.thumbLength; b++, y++) {
-            for (int a = 0, x = -this.centerOffset[0]; a < this.palmLength; a++, x++) {
-                worldState.setError(null);
-                TraceabilityPredicate predicate = this.blockMatches[aisle][b][a];
-                if (predicate.isAny()) continue;
-                BlockPos pos = setActualRelativeOffset(x, y, z, frontFacing, upwardsFacing, isFlipped)
-                        .offset(centerPos.getX(), centerPos.getY(), centerPos.getZ());
-                if (!(worldState instanceof IMultiblockStateInvoker stateGet) || !stateGet.updateState(pos, predicate)) {
-                    return false;
-                }
-                if (predicate.addCache()) {
-                    worldState.addPosCache(pos);
-                    if (savePredicate) {
-                        matchContext.getOrCreate("predicates", Object2ObjectOpenHashMap::new).put(pos, predicate);
+        var slice = traversal.slice(aisle);
+        var stateGet = (IMultiblockStateInvoker) worldState;
+        // Keep these references local to the slice: repetition replay clears the entire match context.
+        Map<BlockPos, TraceabilityPredicate> predicates = null;
+        Set<IMultiPart> parts = null;
+        LongSet activeBlocks = null;
+        Long2ObjectOpenHashMap<IO> ioMap = null;
+        for (int cell = 0; cell < slice.size(); cell++) {
+            worldState.setError(null);
+            TraceabilityPredicate predicate = slice.predicates()[cell];
+            BlockPos pos = traversal.position(slice.xs()[cell], slice.ys()[cell], z);
+            if (!stateGet.updateState(pos, predicate)) return false;
+            long packedPos = pos.asLong();
+            if (predicate.addCache()) {
+                worldState.addPosCache(pos);
+                if (savePredicate) {
+                    if (predicates == null) {
+                        predicates = matchContext.getOrCreate("predicates", () -> new Object2ObjectOpenHashMap<>(slice.size()));
                     }
+                    predicates.put(pos, predicate);
                 }
-                boolean canPartShared = true;
-                if (worldState.getTileEntity() instanceof IMachineBlockEntity machineBlockEntity &&
-                        machineBlockEntity.getMetaMachine() instanceof IMultiPart part) {
-                    if (part.isFormed() && !part.canShared() && !part.hasController(worldState.controllerPos)) {
-                        canPartShared = false;
-                        worldState.setError(new PatternStringError("multiblocked.pattern.error.share"));
-                    } else {
-                        matchContext.getOrCreate("parts", ObjectOpenHashSet::new).add(part);
-                    }
-                }
-                if (worldState.getBlockState().getBlock() instanceof ActiveBlock) {
-                    matchContext.getOrCreate("vaBlocks", LongOpenHashSet::new).add(worldState.getPos().asLong());
-                }
-                if (!predicate.test(worldState) || !canPartShared) return false;
-                matchContext.getOrCreate("ioMap", Long2ObjectOpenHashMap::new).put(worldState.getPos().asLong(),
-                        worldState.io);
             }
+            boolean canPartShared = true;
+            if (worldState.getTileEntity() instanceof IMachineBlockEntity machineBlockEntity &&
+                    machineBlockEntity.getMetaMachine() instanceof IMultiPart part) {
+                if (part.isFormed() && !part.canShared() && !part.hasController(worldState.controllerPos)) {
+                    canPartShared = false;
+                    worldState.setError(new PatternStringError("multiblocked.pattern.error.share"));
+                } else {
+                    if (parts == null) parts = matchContext.getOrCreate("parts", ObjectOpenHashSet::new);
+                    parts.add(part);
+                }
+            }
+            if (worldState.getBlockState().getBlock() instanceof ActiveBlock) {
+                if (activeBlocks == null) activeBlocks = matchContext.getOrCreate("vaBlocks",
+                        ((PatternCapacityState) worldState).gtlcore$getCapacityHints()::newActiveBlocks);
+                activeBlocks.add(packedPos);
+            }
+            if (!predicate.test(worldState) || !canPartShared) return false;
+            if (ioMap == null) {
+                ioMap = matchContext.getOrCreate("ioMap", () -> ((PatternCapacityState) worldState).gtlcore$getCapacityHints().newIoMap(slice.size()));
+            }
+            ioMap.put(packedPos, worldState.io);
         }
+        if (slice.trailingAny()) worldState.setError(null);
         for (var entry : layerCount.entrySet()) {
             if (entry.getValue() < entry.getKey().minLayerCount) {
                 worldState.setError(new SinglePredicateError(entry.getKey(), 3));

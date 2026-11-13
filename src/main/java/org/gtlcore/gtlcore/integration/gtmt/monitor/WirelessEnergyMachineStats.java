@@ -41,18 +41,22 @@ public final class WirelessEnergyMachineStats {
         Runtime runtime = SERVERS.computeIfAbsent(server, ignored -> new Runtime());
         UUID account = TeamUtil.getTeamUUID(user);
         Key key = new Key(account, level.dimension().location().toString(), machine.getPos().immutable());
-        Row old = runtime.pending.get(key);
-        BigInteger sum = energy.add(old == null ? BigInteger.ZERO : old.energy());
-        runtime.pending.put(key, new Row(Component.translatable(machine.getBlockState().getBlock().getDescriptionId()),
-                key.dimension(), key.pos(), sum, 20));
+        Accumulator accumulator = runtime.pending.get(key);
+        String descriptionId = machine.getBlockState().getBlock().getDescriptionId();
+        if (accumulator == null) {
+            runtime.pending.put(key, new Accumulator(descriptionId, energy));
+        } else {
+            accumulator.energy = accumulator.energy.add(energy);
+            accumulator.descriptionId = descriptionId;
+        }
     }
 
     public static void publish(MinecraftServer server, long tick) {
         Runtime runtime = SERVERS.computeIfAbsent(server, ignored -> new Runtime());
         long elapsed = runtime.lastTick < 0 ? 20 : Math.max(1, tick - runtime.lastTick);
         runtime.published = new HashMap<>();
-        runtime.pending.forEach((key, row) -> runtime.published.put(key,
-                new Row(row.name(), row.dimension(), row.pos(), row.energy(), elapsed)));
+        runtime.pending.forEach((key, accumulator) -> runtime.published.put(key,
+                new Row(Component.translatable(accumulator.descriptionId), key.dimension(), key.pos(), accumulator.energy, elapsed)));
         runtime.pending.clear();
         runtime.lastTick = tick;
     }
@@ -83,9 +87,20 @@ public final class WirelessEnergyMachineStats {
         }
     }
 
+    private static final class Accumulator {
+
+        private String descriptionId;
+        private BigInteger energy;
+
+        private Accumulator(String descriptionId, BigInteger energy) {
+            this.descriptionId = descriptionId;
+            this.energy = energy;
+        }
+    }
+
     private static final class Runtime {
 
-        private final Map<Key, Row> pending = new HashMap<>();
+        private final Map<Key, Accumulator> pending = new HashMap<>();
         private Map<Key, Row> published = Map.of();
         private long lastTick = -1;
     }

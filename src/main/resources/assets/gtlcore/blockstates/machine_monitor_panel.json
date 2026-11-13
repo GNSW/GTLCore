@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "gtlcore:block/machine_monitor_panel"
+    },
+    "facing=south": {
+      "model": "gtlcore:block/machine_monitor_panel"
+    },
+    "facing=east": {
+      "model": "gtlcore:block/machine_monitor_panel"
+    },
+    "facing=west": {
+      "model": "gtlcore:block/machine_monitor_panel"
+    }
+  }
+}

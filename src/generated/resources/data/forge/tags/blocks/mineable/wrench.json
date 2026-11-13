@@ -77,6 +77,7 @@
     "gtlcore:component_assembly_line_casing_uiv",
     "gtlcore:component_assembly_line_casing_uxv",
     "gtlcore:component_assembly_line_casing_opv",
-    "gtlcore:component_assembly_line_casing_max"
+    "gtlcore:component_assembly_line_casing_max",
+    "gtlcore:machine_monitor_panel"
   ]
 }

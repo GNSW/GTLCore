@@ -33,6 +33,7 @@ public class ClientProxy extends CommonProxy {
         org.gtlcore.gtlcore.client.plushie.PlushieHeadClient.register();
         org.gtlcore.gtlcore.client.ftbquests.QuestTranslationsClient.init();
         org.gtlcore.gtlcore.client.monitor.EnergyMonitorRenderer.register(FMLJavaModLoadingContext.get().getModEventBus());
+        org.gtlcore.gtlcore.client.monitor.MachineMonitorClient.register();
         WirelessAeClient.register(FMLJavaModLoadingContext.get().getModEventBus());
         HarmonyAnimationRenderer.register(FMLJavaModLoadingContext.get().getModEventBus());
     }

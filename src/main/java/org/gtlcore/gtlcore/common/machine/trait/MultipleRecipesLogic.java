@@ -8,6 +8,7 @@ import org.gtlcore.gtlcore.api.machine.trait.IRecipeStatus;
 import org.gtlcore.gtlcore.api.recipe.IAdvancedContentModifier;
 import org.gtlcore.gtlcore.api.recipe.IGTRecipe;
 import org.gtlcore.gtlcore.api.recipe.RecipeResult;
+import org.gtlcore.gtlcore.integration.monitor.MachineMonitorEntries;
 
 import com.gregtechceu.gtceu.api.capability.recipe.*;
 import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
@@ -19,6 +20,7 @@ import com.gregtechceu.gtceu.api.recipe.content.Content;
 import com.gregtechceu.gtceu.data.recipe.builder.GTRecipeBuilder;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Getter;
@@ -98,6 +100,7 @@ public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IR
         if (maxEUt <= 0) return null;
         var iterator = lookupRecipeIterator();
         GTRecipe output = GTRecipeBuilder.ofRaw().buildRawRecipe();
+        ListTag monitorInputs = new ListTag();
         output.outputs.put(ItemRecipeCapability.CAP, new ObjectArrayList<>());
         output.outputs.put(FluidRecipeCapability.CAP, new ObjectArrayList<>());
         double totalEu = 0;
@@ -113,6 +116,7 @@ public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IR
             ((IGTRecipe) match).setRealParallels(p);
             match = getRecipeOutputChance(machine, match);
             if (handleRecipeInput(machine, match)) {
+                monitorInputs.addAll(MachineMonitorEntries.inputs(match));
                 remain -= p;
                 totalEu += getTotalEuOfRecipe(match) * euMultiplier;
                 var item = match.outputs.get(ItemRecipeCapability.CAP);
@@ -133,6 +137,8 @@ public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IR
                 List.of(new Content(eut, 10000, 10000, 0, null, null)));
         output.duration = (int) Math.max(d, 20);
         IGTRecipe.of(output).setHasTick(true);
+        // Display metadata only: never add already-consumed inputs to the executable task.
+        output.data.put(MachineMonitorEntries.BATCH_INPUTS, MachineMonitorEntries.merge(monitorInputs));
         return output;
     }
 

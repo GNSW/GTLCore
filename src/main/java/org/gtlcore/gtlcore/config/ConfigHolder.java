@@ -416,6 +416,25 @@ public class ConfigHolder {
     public static class PerformanceOptions {
 
         @Configurable
+        @Configurable.Range(min = 1)
+        @Configurable.Comment("config.gtlcore.option.machineMonitorStructureBlocksPerTick.comment")
+        public int machineMonitorStructureBlocksPerTick = 16 * 16;
+
+        @Configurable
+        @Configurable.Range(min = 1, max = 20)
+        @Configurable.Comment("config.gtlcore.option.machineMonitorUpdatesPerSecond.comment")
+        public int machineMonitorUpdatesPerSecond = 10;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.multiblockRetryBackoff.comment")
+        public boolean multiblockRetryBackoff = true;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.multiblockRetryMaxSeconds.comment")
+        @Configurable.Range(min = 1, max = Integer.MAX_VALUE)
+        public int multiblockRetryMaxSeconds = 10;
+
+        @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2CraftingServiceUpdateInterval.comment")
         @Configurable.Range(min = 1, max = 16)
         public int ae2CraftingServiceUpdateInterval = 4;
@@ -469,6 +488,10 @@ public class ConfigHolder {
     }
 
     public static class DiagnosticsOptions {
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.multiblockRetryLogging.comment")
+        public boolean multiblockRetryLogging = false;
 
         @Configurable
         public DebugLoggingOptions debugLogging = new DebugLoggingOptions();

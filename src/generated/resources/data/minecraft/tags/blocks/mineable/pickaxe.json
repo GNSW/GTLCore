@@ -77,6 +77,7 @@
     "gtlcore:component_assembly_line_casing_max",
     "gtlcore:wireless_network_core",
     "gtlcore:wireless_grid_energy_monitor",
-    "travelanchors:travel_anchor"
+    "travelanchors:travel_anchor",
+    "gtlcore:machine_monitor_panel"
   ]
 }

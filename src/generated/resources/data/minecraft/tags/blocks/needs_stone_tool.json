@@ -1,5 +1,6 @@
 {
   "values": [
-    "gtlcore:law_filter_casing"
+    "gtlcore:law_filter_casing",
+    "gtlcore:machine_monitor_panel"
   ]
 }

@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.integration.jade;
 
 import org.gtlcore.gtlcore.integration.jade.provider.*;
+import org.gtlcore.gtlcore.integration.monitor.MachineMonitorBlock;
 
 import com.gregtechceu.gtceu.api.block.MetaMachineBlock;
 import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
@@ -38,6 +39,7 @@ public class GTLJadePlugin implements IWailaPlugin {
     @Override
     public void registerClient(IWailaClientRegistration registration) {
         registration.registerBlockComponent(new EnergyMonitorProvider(), org.gtlcore.gtlcore.integration.gtmt.monitor.EnergyMonitorBlock.class);
+        registration.registerBlockComponent(new MachineMonitorProvider(), MachineMonitorBlock.class);
         var meInventoryAmountProvider = new MeInventoryAmountProvider();
         registration.addConfig(meInventoryAmountProvider.getUid(), true);
         registration.registerBlockComponent(meInventoryAmountProvider, Block.class);

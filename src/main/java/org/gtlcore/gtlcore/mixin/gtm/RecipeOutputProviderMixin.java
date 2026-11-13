@@ -1,13 +1,9 @@
 package org.gtlcore.gtlcore.mixin.gtm;
 
-import org.gtlcore.gtlcore.api.recipe.ingredient.LongIngredient;
 import org.gtlcore.gtlcore.utils.GTLUtil;
 import org.gtlcore.gtlcore.utils.NumberUtils;
-import org.gtlcore.gtlcore.utils.Registries;
 
-import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.machine.trait.RecipeLogic;
-import com.gregtechceu.gtceu.api.recipe.RecipeHelper;
 import com.gregtechceu.gtceu.integration.jade.provider.CapabilityBlockProvider;
 import com.gregtechceu.gtceu.integration.jade.provider.RecipeOutputProvider;
 
@@ -21,7 +17,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,9 +28,7 @@ import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.IElementHelper;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author EasterFG on 2025/3/8
@@ -56,89 +49,9 @@ public abstract class RecipeOutputProviderMixin extends CapabilityBlockProvider<
     @Override
     protected void write(CompoundTag data, RecipeLogic recipeLogic) {
         if (recipeLogic.isWorking()) {
-            data.putBoolean("Working", recipeLogic.isWorking());
+            data.putBoolean("Working", true);
             var recipe = recipeLogic.getLastRecipe();
-            if (recipe != null) {
-                Map<String, CompoundTag> cache = new HashMap<>();
-                // int count = 0;
-                ListTag itemTags = new ListTag();
-                for (Ingredient outputContent : RecipeHelper.getOutputContents(recipe, ItemRecipeCapability.CAP)) {
-                    final var stack = outputContent.getItems()[0];
-                    if (stack == null || stack.isEmpty()) continue;
-                    String sid = Registries.getItemId(stack);
-                    if (outputContent instanceof LongIngredient longIngredient) {
-                        if (cache.containsKey(sid)) {
-                            CompoundTag tag = cache.get(sid);
-                            if (tag != null) {
-                                long amount = tag.getLong("Count");
-                                if (amount > 0) {
-                                    tag.putLong("Count", NumberUtils.saturatedAdd(amount, longIngredient.getActualAmount()));
-                                }
-                            }
-                        } else {
-                            var itemTag = new CompoundTag();
-                            itemTag.putString("id", sid);
-                            itemTag.putLong("Count", longIngredient.getActualAmount());
-                            if (stack.getTag() != null) {
-                                itemTag.put("tag", stack.getTag().copy());
-                            }
-                            cache.put(sid, itemTag);
-                            itemTags.add(itemTag);
-                        }
-                    } else {
-                        if (cache.containsKey(sid)) {
-                            CompoundTag tag = cache.get(sid);
-                            if (tag != null) {
-                                long amount = tag.getLong("Count");
-                                if (amount > 0) {
-                                    tag.putLong("Count", NumberUtils.saturatedAdd(amount, stack.getCount()));
-                                }
-                            }
-                        } else {
-                            var itemTag = new CompoundTag();
-                            itemTag.putString("id", sid);
-                            itemTag.putLong("Count", stack.getCount());
-                            if (stack.getTag() != null) {
-                                itemTag.put("tag", stack.getTag().copy());
-                            }
-                            cache.put(sid, itemTag);
-                            itemTags.add(itemTag);
-                        }
-                    }
-                }
-                if (!itemTags.isEmpty()) {
-                    data.put("OutputItems", itemTags);
-                }
-                ListTag fluidTags = new ListTag();
-                for (var stack : RecipeHelper.getOutputFluids(recipe)) {
-                    if (stack != null && !stack.isEmpty()) {
-                        var fid = Registries.getFluidId(stack);
-                        if (cache.containsKey(fid)) {
-                            CompoundTag tag = cache.get(fid);
-                            if (tag != null) {
-                                long amount = tag.getLong("Amount");
-                                if (amount > 0) {
-                                    tag.putLong("Amount", NumberUtils.saturatedAdd(amount, stack.getAmount()));
-                                }
-                            }
-                        } else {
-                            var fluidTag = new CompoundTag();
-                            fluidTag.putString("FluidName", fid);
-                            fluidTag.putLong("Amount", stack.getAmount());
-
-                            if (stack.getTag() != null) {
-                                fluidTag.put("Tag", stack.getTag().copy());
-                            }
-                            cache.put(fid, fluidTag);
-                            fluidTags.add(fluidTag);
-                        }
-                    }
-                }
-                if (!fluidTags.isEmpty()) {
-                    data.put("OutputFluids", fluidTags);
-                }
-                // data.putInt("ExtraOutput", count);
-            }
+            if (recipe != null) org.gtlcore.gtlcore.integration.monitor.MachineMonitorEntries.writeJadeOutputs(data, recipe);
         }
     }
 

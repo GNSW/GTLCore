@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.common.machine.multiblock.electric;
 
+import org.gtlcore.gtlcore.api.pattern.PatternRetryController;
+import org.gtlcore.gtlcore.api.pattern.PatternRetryState;
 import org.gtlcore.gtlcore.common.machine.multiblock.part.ae.MECraftingCPUInterfacePartMachine;
 import org.gtlcore.gtlcore.integration.ae2.crafting.transfinite.TransfiniteCraftingCPU;
 import org.gtlcore.gtlcore.utils.NumberUtils;
@@ -13,7 +15,6 @@ import com.gregtechceu.gtceu.api.machine.feature.IFancyUIMachine;
 import com.gregtechceu.gtceu.api.machine.feature.multiblock.IDisplayUIMachine;
 import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiPart;
 import com.gregtechceu.gtceu.api.machine.multiblock.MultiblockControllerMachine;
-import com.gregtechceu.gtceu.api.pattern.MultiblockWorldSavedData;
 
 import com.lowdragmc.lowdraglib.gui.modular.ModularUI;
 import com.lowdragmc.lowdraglib.gui.texture.GuiTextureGroup;
@@ -33,7 +34,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 
 import appeng.api.config.Actionable;
@@ -57,7 +57,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -75,14 +74,8 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
     private static final String NBT_CPU_ID = "Id";
     private static final String NBT_CPU_BYTES = "Bytes";
     private static final String NBT_CPU_STATE = "State";
-    private static final long ASYNC_PATTERN_CHECK_INTERVAL = 4L;
-    /**
-     * Ticks after loading during which the structure is checked every tick instead of every
-     * {@link #ASYNC_PATTERN_CHECK_INTERVAL} ticks. This array is large enough that the throttled cadence can
-     * leave it unformed noticeably long after entering the world, so it is polled hard for the first
-     * 5 seconds and then falls back to the normal interval.
-     */
-    private static final int EAGER_CHECK_TICKS = 100;
+    /** Keep the existing 100 scheduler periods (250 ms each), not Minecraft ticks. */
+    private static final int EAGER_CHECK_PERIODS = 100;
     private static final int UI_WIDTH = 198;
     private static final int UI_HEIGHT = 208;
     private static final int MAIN_PAGE_WIDTH = 190;
@@ -112,9 +105,8 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
     @Nullable
     private MECraftingCPUInterfacePartMachine networkInterface;
     private TransfiniteCraftingCPU capacityCpu;
-    private final AtomicBoolean patternCheckQueued = new AtomicBoolean();
-    /** Remaining ticks of the post-load eager check window; decremented from the async check thread. */
-    private final AtomicInteger eagerCheckTicks = new AtomicInteger();
+    /** Remaining scheduler periods of the post-load eager check window. */
+    private final AtomicInteger eagerCheckPeriods = new AtomicInteger();
 
     public TransfiniteComputationArrayMachine(IMachineBlockEntity holder) {
         super(holder);
@@ -126,85 +118,15 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
         restoreCpus();
         // Entering the world should settle the structure as soon as possible, so prioritise it over the
         // throttled cadence until it forms or the window runs out.
-        this.eagerCheckTicks.set(!isFormed() || this.networkInterface == null ? EAGER_CHECK_TICKS : 0);
+        this.eagerCheckPeriods.set(!isFormed() || this.networkInterface == null ? EAGER_CHECK_PERIODS : 0);
     }
 
     @Override
     public void asyncCheckPattern(long periodID) {
-        if (isFormed() && !getMultiblockState().hasError() && this.networkInterface != null) {
-            return;
-        }
-        boolean eager = this.eagerCheckTicks.get() > 0 && this.eagerCheckTicks.getAndDecrement() > 0;
-        if (!eager && Math.floorMod(getHolder().getOffset() + periodID, ASYNC_PATTERN_CHECK_INTERVAL) != 0) {
-            return;
-        }
-        if (!this.patternCheckQueued.compareAndSet(false, true)) {
-            return;
-        }
-        if (!(getLevel() instanceof ServerLevel serverLevel)) {
-            this.patternCheckQueued.set(false);
-            return;
-        }
-        long startedGameTime = serverLevel.getGameTime();
-        boolean formedBefore = isFormed();
-
-        if (isInValid()) {
-
-            this.patternCheckQueued.set(false);
-            return;
-        }
-        if (getLevel() != serverLevel) {
-
-            this.patternCheckQueued.set(false);
-            return;
-        }
-
-        final boolean matched;
-        try {
-            matched = checkPatternWithTryLock();
-        } catch (RuntimeException | Error exception) {
-
-            this.patternCheckQueued.set(false);
-            throw exception;
-        }
-        if (!matched) {
-
-            this.patternCheckQueued.set(false);
-            return;
-        }
-
-        this.eagerCheckTicks.set(0);
-        try {
-            serverLevel.getServer().execute(() -> {
-                getPatternLock().lock();
-                try {
-                    if (isInValid()) {
-
-                        return;
-                    }
-                    if (getLevel() != serverLevel) {
-
-                        return;
-                    }
-
-                    setFlipped(getMultiblockState().isNeededFlip());
-                    onStructureFormed();
-                    var savedData = MultiblockWorldSavedData.getOrCreate(serverLevel);
-                    savedData.addMapping(getMultiblockState());
-                    savedData.removeAsyncLogic(this);
-                } catch (RuntimeException | Error exception) {
-
-                    throw exception;
-                } finally {
-                    getPatternLock().unlock();
-                    this.patternCheckQueued.set(false);
-                }
-            });
-        } catch (RuntimeException | Error exception) {
-
-            this.patternCheckQueued.set(false);
-            throw exception;
-        }
+        if (isFormed() && !getMultiblockState().hasError() && this.networkInterface != null) return;
+        boolean eager = this.eagerCheckPeriods.get() > 0 && this.eagerCheckPeriods.getAndDecrement() > 0;
+        if (!eager && Math.floorMod(getHolder().getOffset() + periodID, PatternRetryState.NORMAL_PERIODS) != 0) return;
+        ((PatternRetryController) this).gtlcore$queueFormationCheck(periodID, eager, this.networkInterface == null);
     }
 
     public long getParallelism() {
@@ -447,6 +369,7 @@ public class TransfiniteComputationArrayMachine extends MultiblockControllerMach
 
     @Override
     public void onStructureFormed() {
+        this.eagerCheckPeriods.set(0);
         try {
             super.onStructureFormed();
 

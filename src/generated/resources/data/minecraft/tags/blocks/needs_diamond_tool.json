@@ -2,7 +2,6 @@
   "values": [
     "gtlcore:fusion_casing_mk4",
     "gtlcore:fusion_casing_mk5",
-    "gtlcore:wireless_network_core",
-    "gtlcore:wireless_network_bookmark"
+    "gtlcore:wireless_network_core"
   ]
 }

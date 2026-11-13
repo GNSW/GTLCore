@@ -43,7 +43,7 @@
 				"{gtlcore.quest.gtl.quest.262671ac71b36736.description.0027}"
 			]
 			hide_dependent_lines: true
-			icon: "gtlcore:structure_detect"
+			icon: "gtceu:super_particle_collider"
 			icon_scale: 1.3d
 			id: "262671AC71B36736"
 			rewards: [{

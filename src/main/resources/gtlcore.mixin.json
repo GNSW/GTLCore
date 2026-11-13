@@ -132,6 +132,7 @@
     "gtm.MultiblockInfoCategoryMixin"
   ],
   "mixins": [
+    "gtm.api.machine.MetaMachineRenderDisabledMixin",
     "ftbquests.QuestTranslationReloadMixin",
     "toolbelt.ToolBeltInventoryMixin",
     "toolbelt.ToolBeltItemMixin",

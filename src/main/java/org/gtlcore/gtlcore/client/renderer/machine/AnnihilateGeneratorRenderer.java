@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.client.renderer.machine;
 
+import org.gtlcore.gtlcore.api.machine.IGTLRenderDisabled;
 import org.gtlcore.gtlcore.client.ClientUtil;
 import org.gtlcore.gtlcore.utils.RenderUtil;
 
@@ -36,7 +37,8 @@ public class AnnihilateGeneratorRenderer extends WorkableCasingMachineRenderer {
     public void render(BlockEntity blockEntity, float partialTicks, PoseStack poseStack, MultiBufferSource buffer,
                        int combinedLight, int combinedOverlay) {
         if (blockEntity instanceof IMachineBlockEntity machineBlockEntity &&
-                machineBlockEntity.getMetaMachine() instanceof WorkableElectricMultiblockMachine machine && machine.isActive()) {
+                machineBlockEntity.getMetaMachine() instanceof WorkableElectricMultiblockMachine machine && machine.isActive() &&
+                !IGTLRenderDisabled.isRenderDisabled(machine)) {
             float tick = RenderUtil.getSmoothTick(machine, partialTicks);
             double x = 0.5, y = 36.5, z = 0.5;
             switch (machine.getFrontFacing()) {

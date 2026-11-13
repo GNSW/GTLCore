@@ -84,7 +84,7 @@ final class MachineMonitorView {
         label(canvas, "status", 11, HEADER_HEIGHT + 11);
         canvas.right(Component.translatable("monitor.gtlcore.machine.state." + status), 142, HEADER_HEIGHT + 11, status.equals("working") ? GREEN : MUTED, 50);
         label(canvas, "type", 158, HEADER_HEIGHT + 11);
-        canvas.right(state.contains("RecipeType") ? Component.translatable(state.getString("RecipeType")) : Component.literal("—"), 289, HEADER_HEIGHT + 11, TEXT, 89);
+        canvas.right(state.contains("RecipeType") ? Component.literal(state.getString("RecipeType")) : Component.literal("—"), 289, HEADER_HEIGHT + 11, TEXT, 89);
         label(canvas, "progress", 11, HEADER_HEIGHT + 35);
         boolean hasRecipe = state.getBoolean("HasRecipe");
         boolean computation = state.getBoolean("Computation");
@@ -99,7 +99,7 @@ final class MachineMonitorView {
         canvas.fitted(time, 11, HEADER_HEIGHT + 48, MUTED, 131, false);
         canvas.rect(11, HEADER_HEIGHT + 64, 131, 5, 0x272A2F, Layer.PROGRESS_TRACK);
         canvas.rect(11, HEADER_HEIGHT + 64, (float) (131 * ratio), 5, GREEN, Layer.PROGRESS_FILL);
-        label(canvas, "energy", 158, HEADER_HEIGHT + 35);
+        label(canvas, display.state.contains("SteamConversion") ? "steam" : "energy", 158, HEADER_HEIGHT + 35);
         Component energy = hasRecipe ? energy(state, false) : Component.literal("—");
         if (Minecraft.getInstance().font.width(energy) > 131) energy = energy(state, true);
         canvas.fitted(energy, 158, HEADER_HEIGHT + 48, TEXT, 131, false);
@@ -153,6 +153,16 @@ final class MachineMonitorView {
                 canvas.fitted(Component.literal(row.amount(true)), left + 96, y, TEXT, 30, true);
                 canvas.fitted(Component.literal(row.rate(display.state, true)), left + 131, y, MUTED, 33, true);
             }
+        }
+        if (rows.size() > MachineMonitorPackets.ROWS_PER_PAGE) {
+            int trackX = left + 137;
+            int trackY = ROWS_TOP - 2;
+            int trackH = MachineMonitorPackets.ROWS_PER_PAGE * ROW_HEIGHT;
+            int maxStart = Math.max(1, rows.size() - MachineMonitorPackets.ROWS_PER_PAGE);
+            int barH = Math.max(6, trackH * MachineMonitorPackets.ROWS_PER_PAGE / rows.size());
+            int barY = trackY + (trackH - barH) * Math.min(Math.max(start, 0), maxStart) / maxStart;
+            canvas.rect(trackX, trackY, 2, trackH, 0x40000000, Layer.PANEL);
+            canvas.rect(trackX, barY, 2, barH, 0xFFC8D0DC, Layer.PANEL);
         }
     }
 

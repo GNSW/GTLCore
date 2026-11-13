@@ -9,6 +9,9 @@
     },
     {
       "item": "minecraft:quartz"
+    },
+    {
+      "item": "laserio:logic_chip"
     }
   ],
   "result": {

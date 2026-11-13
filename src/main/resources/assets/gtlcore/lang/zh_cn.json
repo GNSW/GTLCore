@@ -1818,5 +1818,8 @@
   "monitor.gtlcore.machine.amount": "数量：%s",
   "monitor.gtlcore.machine.variable_chance": "概率产物；实际数量由配方概率逻辑决定，不展示保证产出速率。",
   "monitor.gtlcore.machine.name": "机器：%s",
-  "monitor.gtlcore.machine.location": "X: %s / Y: %s / Z: %s · %s"
+  "monitor.gtlcore.machine.location": "X: %s / Y: %s / Z: %s · %s",
+  "monitor.gtlcore.machine.label.steam": "蒸汽消耗",
+  "monitor.gtlcore.machine.close": "退出",
+  "monitor.gtlcore.machine.rate": "速率：%s"
 }

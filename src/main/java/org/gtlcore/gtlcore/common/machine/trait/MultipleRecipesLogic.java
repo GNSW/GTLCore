@@ -8,6 +8,7 @@ import org.gtlcore.gtlcore.api.machine.trait.IRecipeStatus;
 import org.gtlcore.gtlcore.api.recipe.IAdvancedContentModifier;
 import org.gtlcore.gtlcore.api.recipe.IGTRecipe;
 import org.gtlcore.gtlcore.api.recipe.RecipeResult;
+import org.gtlcore.gtlcore.integration.monitor.IMonitorRecipeInputs;
 import org.gtlcore.gtlcore.integration.monitor.MachineMonitorEntries;
 
 import com.gregtechceu.gtceu.api.capability.recipe.*;
@@ -32,13 +33,23 @@ import static org.gtlcore.gtlcore.api.recipe.IParallelLogic.*;
 import static org.gtlcore.gtlcore.api.recipe.RecipeRunnerHelper.*;
 
 @Getter
-public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IRecipeStatus {
+public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IRecipeStatus, IMonitorRecipeInputs {
 
     private final ParallelMachine parallel;
 
     private final BiPredicate<CompoundTag, IRecipeLogicMachine> dataCheck;
 
     private static final int MAX_THREADS = 64;
+
+    @Override
+    public ListTag monitorInputs() {
+        GTRecipe recipe = getLastRecipe();
+        if (recipe == null) return new ListTag();
+        if (recipe.data.contains(MachineMonitorEntries.BATCH_INPUTS)) {
+            return recipe.data.getList(MachineMonitorEntries.BATCH_INPUTS, CompoundTag.TAG_COMPOUND).copy();
+        }
+        return MachineMonitorEntries.inputs(recipe);
+    }
 
     private double reductionEUt;
 

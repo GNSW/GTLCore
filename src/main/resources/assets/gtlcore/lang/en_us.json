@@ -1818,5 +1818,8 @@
   "monitor.gtlcore.machine.amount": "Amount: %s",
   "monitor.gtlcore.machine.variable_chance": "Chance output; the recipe chance logic determines the actual amount. No guaranteed rate.",
   "monitor.gtlcore.machine.name": "Machine: %s",
-  "monitor.gtlcore.machine.location": "X: %s / Y: %s / Z: %s · %s"
+  "monitor.gtlcore.machine.location": "X: %s / Y: %s / Z: %s · %s",
+  "monitor.gtlcore.machine.label.steam": "Steam use",
+  "monitor.gtlcore.machine.close": "Close",
+  "monitor.gtlcore.machine.rate": "Rate: %s"
 }

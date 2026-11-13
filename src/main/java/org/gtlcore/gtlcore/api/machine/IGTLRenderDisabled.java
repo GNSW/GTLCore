@@ -22,11 +22,11 @@ public interface IGTLRenderDisabled {
 
     static void attachConfigurator(ConfiguratorPanel panel, IGTLRenderDisabled machine) {
         panel.attachConfigurators(new IFancyConfiguratorButton.Toggle(
-                new ItemStackTexture(Items.ENDER_PEARL),
                 new ItemStackTexture(Items.ENDER_EYE),
+                new ItemStackTexture(Items.ENDER_PEARL),
                 machine::gtlcore$isRenderDisabled,
                 (clickData, pressed) -> machine.gtlcore$toggleRenderDisabled())
                 .setTooltipsSupplier(pressed -> List.of(Component.translatable(
-                        pressed ? "gtlcore.machine.render_enabled" : "gtlcore.machine.render_disabled"))));
+                        pressed ? "gtlcore.machine.render_disabled" : "gtlcore.machine.render_enabled"))));
     }
 }

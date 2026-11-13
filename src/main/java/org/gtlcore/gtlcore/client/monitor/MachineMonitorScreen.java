@@ -19,6 +19,8 @@ final class MachineMonitorScreen extends Screen {
     private int inputStart;
     private int outputStart;
     private int scrollPage = -1;
+    private boolean draggingScroll;
+    private int dragSide;
 
     MachineMonitorScreen(BlockPos master, BlockPos clicked) {
         super(Component.translatable("block.gtlcore.machine_monitor_panel"));
@@ -29,18 +31,8 @@ final class MachineMonitorScreen extends Screen {
     @Override
     protected void init() {
         int y = height - 27;
-        addRenderableWidget(Button.builder(Component.literal("‹"), button -> page(-1)).bounds(width / 2 - 125, y, 25, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("›"), button -> page(1)).bounds(width / 2 - 95, y, 25, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("monitor.gtlcore.machine.unlink"), button -> MachineMonitorPackets.action(clicked, 0, true)).bounds(width / 2 - 55, y, 90, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> onClose()).bounds(width / 2 + 45, y, 80, 20).build());
-    }
-
-    private void page(int delta) {
-        var display = MachineMonitorClient.display(master);
-        if (display != null) {
-            scrollPage = -1;
-            MachineMonitorPackets.action(clicked, display.state.getInt("Page") + delta, false);
-        }
+        addRenderableWidget(Button.builder(Component.translatable("monitor.gtlcore.machine.unlink"), button -> MachineMonitorPackets.action(clicked, 0, true)).bounds(width / 2 - 94, y, 90, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("monitor.gtlcore.machine.close"), button -> onClose()).bounds(width / 2 + 4, y, 90, 20).build());
     }
 
     private void syncScroll(MachineMonitorClient.Display display) {
@@ -63,6 +55,61 @@ final class MachineMonitorScreen extends Screen {
 
     private float viewLeft(float scale) {
         return (width - MachineMonitorView.WIDTH * scale) / 2;
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            var display = MachineMonitorClient.display(master);
+            if (display != null && display.state.getBoolean("HasRecipe")) {
+                float scale = viewScale();
+                double x = (mouseX - viewLeft(scale)) / scale;
+                double y = (mouseY - VIEW_TOP) / scale;
+                int trackY = MachineMonitorView.ROWS_TOP;
+                int trackH = MachineMonitorPackets.ROWS_PER_PAGE * MachineMonitorView.ROW_HEIGHT;
+                int side = Math.abs(x - 148) <= 3 ? 0 : (Math.abs(x - 295) <= 3 ? 1 : -1);
+                if (side >= 0 && y >= trackY - 2 && y <= trackY + trackH) {
+                    draggingScroll = true;
+                    dragSide = side;
+                    applyScrollDrag(display, y);
+                    return true;
+                }
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (draggingScroll && button == 0) {
+            var display = MachineMonitorClient.display(master);
+            if (display != null) {
+                float scale = viewScale();
+                applyScrollDrag(display, (mouseY - VIEW_TOP) / scale);
+                return true;
+            }
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        draggingScroll = false;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void applyScrollDrag(MachineMonitorClient.Display display, double y) {
+        int trackY = MachineMonitorView.ROWS_TOP;
+        int trackH = MachineMonitorPackets.ROWS_PER_PAGE * MachineMonitorView.ROW_HEIGHT;
+        double fraction = Math.max(0, Math.min(1, (y - trackY) / trackH));
+        int count = dragSide == 0 ? display.inputs.size() : display.outputs.size();
+        int maxStart = Math.max(0, count - MachineMonitorPackets.ROWS_PER_PAGE);
+        int start = (int) Math.round(fraction * maxStart);
+        if (dragSide == 0) {
+            inputStart = start;
+        } else {
+            outputStart = start;
+        }
     }
 
     @Override
@@ -166,7 +213,7 @@ final class MachineMonitorScreen extends Screen {
         else if (row.chance > 0 && row.chance < row.maxChance) {
             lines.add(Component.translatable("monitor.gtlcore.machine.variable_chance"));
         } else if (!display.state.getBoolean("Computation") || row.tick) {
-            lines.add(Component.literal(row.rate(display.state, false)));
+            lines.add(Component.translatable("monitor.gtlcore.machine.rate", row.rate(display.state, false)));
         }
         graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
     }

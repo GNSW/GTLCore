@@ -13,6 +13,7 @@ import com.gregtechceu.gtceu.api.machine.multiblock.MultiblockControllerMachine;
 import com.gregtechceu.gtceu.api.pattern.BlockPattern;
 import com.gregtechceu.gtceu.api.pattern.TraceabilityPredicate;
 
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -22,6 +23,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
@@ -34,11 +36,15 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.client.settings.KeyConflictContext;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,8 +81,20 @@ import java.util.Set;
  * <li>a rebuild is capped by {@link #MAX_CELL_VISITS}, and the refresh cadence backs off when a
  * rebuild is expensive, so an enormous structure can never stall a frame.</li>
  * </ul>
+ *
+ * <p>
+ * The overlay can also be switched off for the session with the
+ * {@code key.gtlcore.toggle_socket_preview} key binding (unbound by default, configured in the
+ * vanilla controls screen). The config option stays the master switch; the key binding can only
+ * turn the overlay off when the config allows it.
  */
 public final class SocketPreview {
+
+    private static final String TOGGLE_KEY = "key.gtlcore.toggle_socket_preview";
+    private static final String KEY_CATEGORY = "key.categories.gtlcore";
+    private static final String MESSAGE_ENABLED = "message.gtlcore.socket_preview.enabled";
+    private static final String MESSAGE_DISABLED = "message.gtlcore.socket_preview.disabled";
+    private static final String MESSAGE_CONFIG_DISABLED = "message.gtlcore.socket_preview.config_disabled";
 
     private static final int SCAN_RADIUS_CHUNKS = 6;
     private static final double CONTROLLER_RANGE_SQ = 96.0D * 96.0D;
@@ -129,10 +147,25 @@ public final class SocketPreview {
     private static int lastBuildRange;
     private static long lastBuildNanos;
 
+    private static KeyMapping toggleKey;
+    /** Session-local switch flipped by the key binding; the config option stays the master switch. */
+    private static boolean enabledByKey = true;
+
     private SocketPreview() {}
+
+    /**
+     * Registers the overlay toggle. It is intentionally unbound by default, so nothing happens
+     * until a player assigns a key to it in the controls screen.
+     */
+    public static void registerKeyMapping(RegisterKeyMappingsEvent event) {
+        toggleKey = new KeyMapping(TOGGLE_KEY, KeyConflictContext.IN_GAME, InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN, KEY_CATEGORY);
+        event.register(toggleKey);
+    }
 
     public static void tick() {
         try {
+            pollToggleKey();
             tickUnsafe();
         } catch (Throwable failure) {
             if (!errorLogged) {
@@ -140,6 +173,31 @@ public final class SocketPreview {
                 GTLCore.LOGGER.error("Socket preview scan failed; the overlay is now idle", failure);
             }
             clear();
+        }
+    }
+
+    private static void pollToggleKey() {
+        KeyMapping key = toggleKey;
+        if (key == null) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        while (key.consumeClick()) {
+            if (minecraft == null || minecraft.screen != null) {
+                continue;
+            }
+            boolean configEnabled = isConfigEnabled();
+            enabledByKey = !enabledByKey;
+            if (!isEnabled()) {
+                clear();
+            }
+            LocalPlayer player = minecraft.player;
+            if (player == null) {
+                continue;
+            }
+            player.displayClientMessage(Component.translatable(
+                    !configEnabled ? MESSAGE_CONFIG_DISABLED : enabledByKey ? MESSAGE_ENABLED : MESSAGE_DISABLED),
+                    true);
         }
     }
 
@@ -354,6 +412,10 @@ public final class SocketPreview {
     }
 
     public static boolean isEnabled() {
+        return isConfigEnabled() && enabledByKey;
+    }
+
+    private static boolean isConfigEnabled() {
         return ConfigHolder.INSTANCE == null ||
                 ConfigHolder.INSTANCE.graphics.socketPreview.socketPreviewEnabled;
     }

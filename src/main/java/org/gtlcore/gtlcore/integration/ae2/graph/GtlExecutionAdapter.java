@@ -15,10 +15,12 @@ import org.cgse.core.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Main-thread bridge to registered effective patterns and their real provider slots. */
 public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey> {
@@ -27,6 +29,8 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
     private final CraftingLink link;
     private final Map<String, IPatternDetails> bindings = new HashMap<>();
     private final Map<String, Integer> rotations = new HashMap<>();
+    /** Bindings already searched in this provider generation; the registry scan is a last resort. */
+    private final Set<String> scannedBindings = new HashSet<>();
     private long epoch = Long.MIN_VALUE;
     private CraftingService service;
     private IEnergyService energy;
@@ -52,6 +56,7 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
         if (version != epoch) {
             bindings.clear();
             rotations.clear();
+            scannedBindings.clear();
             epoch = version;
         }
     }
@@ -143,6 +148,24 @@ public final class GtlExecutionAdapter implements GraphJobRuntime.Adapter<AEKey>
             if (matches(pattern, recipe, true)) {
                 bindings.put(recipe.binding(), pattern);
                 return pattern;
+            }
+        }
+        // Last resort: AE only indexes a pattern under its primary output. A provider
+        // refresh that did not re-index yet, or a primary-output key that went stale,
+        // leaves a still-registered pattern unreachable above; the job would then wait
+        // forever for a dispatch that can never happen. Sweep the live registry once per
+        // binding and provider generation, pruning by primary output first so the
+        // fingerprint comparison only runs for plausible handles.
+        if (scannedBindings.add(recipe.binding())) {
+            for (var pattern : ((GraphRequestTracker) service).gtlcore$registeredGraphPatterns()) {
+                if (pattern == null) continue;
+                var primary = pattern.getPrimaryOutput();
+                if (primary == null || !recipe.executionOutputs().containsKey(primary.what())) continue;
+                if (!PatternFingerprint.of(pattern).equals(recipe.binding())) continue;
+                if (matches(pattern, recipe, false)) {
+                    bindings.put(recipe.binding(), pattern);
+                    return pattern;
+                }
             }
         }
         return null;

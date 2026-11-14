@@ -37,6 +37,9 @@ import java.util.*;
 /** AE CPU compatibility shell; it never hands an executing graph task to legacy logic. */
 public final class GraphCpuController {
 
+    private static final long STALL_AUDIT_NANOS = 2_000_000_000L;
+    private static final int MAX_STALL_REPLANS = 3;
+
     private final GraphCpuHost host;
     private final long[] usedOps = new long[3];
     private GraphJobRuntime<AEKey> runtime;
@@ -59,6 +62,8 @@ public final class GraphCpuController {
     private Map<AEKey, List<String>> failedBindings = Map.of();
     private long providerGeneration = Long.MIN_VALUE;
     private Iterator<String> bindingsToCheck;
+    private long stallDispatches = -1, stallSinceNanos;
+    private int stallReplans;
     private String replanOrigin = "";
     private GraphPlan<AEKey> supplyPlan;
     private List<AEKey> wideSupply = List.of();
@@ -168,6 +173,9 @@ public final class GraphCpuController {
         progressVersion = -1;
         providerGeneration = Long.MIN_VALUE;
         observedVersion = -1;
+        stallDispatches = -1;
+        stallSinceNanos = 0;
+        stallReplans = 0;
         playerId = source.player().map(player -> player instanceof ServerPlayer serverPlayer ? IPlayerRegistry.getPlayerId(serverPlayer) : null).orElse(null);
         tracker = new ElapsedTimeTracker();
         var time = (ElapsedTimeTrackerAccessor) tracker;
@@ -323,6 +331,9 @@ public final class GraphCpuController {
         supplyPlan = null;
         wideSupply = List.of();
         supplyCursor = 0;
+        stallDispatches = -1;
+        stallSinceNanos = 0;
+        stallReplans = 0;
         adapter = null;
         link = null;
         host.output(null);
@@ -354,6 +365,9 @@ public final class GraphCpuController {
         wideSupply = List.of();
         supplyCursor = 0;
         providerGeneration = Long.MIN_VALUE;
+        stallDispatches = -1;
+        stallSinceNanos = 0;
+        stallReplans = 0;
         CompoundTag tag = parent.getCompound(GraphJobCodec.NBT_KEY);
         try {
             runtime = new GraphJobRuntime<>(GraphJobCodec.read(tag));
@@ -561,7 +575,11 @@ public final class GraphCpuController {
             startReplan(service);
             return;
         }
-        if (runtime.suspended() || bindingsToCheck == null) return;
+        if (runtime.suspended()) return;
+        if (bindingsToCheck == null) {
+            auditStalledBindings(service);
+            return;
+        }
         long deadline = System.nanoTime() + 1_000_000L;
         for (int checked = 0; checked < 32 && bindingsToCheck.hasNext(); checked++) {
             var recipe = runtime.plan().recipes().get(bindingsToCheck.next());
@@ -578,6 +596,54 @@ public final class GraphCpuController {
             if (System.nanoTime() - deadline >= 0) return;
         }
         if (!bindingsToCheck.hasNext()) bindingsToCheck = null;
+    }
+
+    /**
+     * A dispatch that cannot be bound to a live provider (the plan's pattern no longer
+     * resolves through AE's index, or no provider owns it) only ever returns a zero
+     * capacity, so the job would poll it forever without a provider edit. Confirm the
+     * failure and re-plan from a fresh snapshot instead of stalling silently.
+     */
+    private void auditStalledBindings(CraftingService service) {
+        if (runtime.suspended() || replanning.hasRequest() || replanning.waitingForDependency()) return;
+        if (stallReplans >= MAX_STALL_REPLANS) return;
+        long now = System.nanoTime();
+        long dispatches = runtime.dispatches();
+        if (dispatches != stallDispatches) {
+            stallDispatches = dispatches;
+            stallSinceNanos = now;
+            stallReplans = 0;
+            return;
+        }
+        if (now - stallSinceNanos < STALL_AUDIT_NANOS) return;
+        // Only a zero capacity caused by missing patterns can reach this state;
+        // busy providers, energy and inputs report their own reasons.
+        if (!runtime.reason().equals("WAIT_PROVIDER_OR_ENERGY")) return;
+        String reason = adapter.reason();
+        if (!reason.equals("PROVIDER_OFFLINE") && !reason.equals("PLAN_STALE_OR_PROVIDER_OFFLINE")) return;
+        String culprit = null;
+        var pending = runtime.pendingRuns().keySet().iterator();
+        long deadline = now + 1_000_000L;
+        for (int checked = 0; checked < 64 && pending.hasNext(); checked++) {
+            String id = pending.next();
+            var recipe = runtime.plan().recipes().get(id);
+            if (recipe == null) continue;
+            var pattern = adapter.resolve(recipe);
+            if (pattern == null || !service.getProviders(pattern).iterator().hasNext()) {
+                culprit = "recipe=" + id + " binding=" + recipe.binding() + " failure=" + adapter.bindingFailure() +
+                        " detail=" + adapter.bindingDetail() + " provider_revision=" +
+                        ((GraphRequestTracker) service).gtlcore$graphProviderGeneration();
+                break;
+            }
+            if (System.nanoTime() - deadline >= 0) return;
+        }
+        if (culprit == null) return;
+        stallReplans++;
+        stallSinceNanos = now;
+        replanOrigin = "stalled_binding " + culprit;
+        GTLCore.LOGGER.warn("[Graph Crafting] job={} stuck dispatch, replan={}/{} origin={}",
+                link.getCraftingID(), stallReplans, MAX_STALL_REPLANS, replanOrigin);
+        startReplan(service);
     }
 
     private final class ReplanHost implements ReplanCoordinator.Host<AEKey, ICraftingPlan> {

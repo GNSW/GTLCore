@@ -20,6 +20,7 @@ import com.lowdragmc.lowdraglib.gui.modular.IUIHolder;
 import com.lowdragmc.lowdraglib.gui.modular.ModularUI;
 import com.lowdragmc.lowdraglib.misc.ItemStackTransfer;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -27,6 +28,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -100,6 +102,13 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     private StructureExporter.ExportTask activeExport;
     private int syncCountdown;
 
+    /** 导出状态：0=就绪，1=导出中，2=完成，3=失败。 */
+    private int exportState;
+    private int exportProgress;
+    private String exportFile = "";
+    private String exportError = "";
+    private int exportSyncCountdown;
+
     public StructurePlacerBlockEntity(BlockPos pos, BlockState state) {
         this(GTLStructureContent.STRUCTURE_PLACER_ENTITY.get(), pos, state);
     }
@@ -139,8 +148,63 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         }
 
         if (activeExport != null && activeExport.tick(EXPORT_BUDGET_PER_TICK)) {
-            activeExport = null;
-            markChanged();
+            finishExport();
+        } else if (activeExport != null) {
+            exportProgress = activeExport.progressPercentage();
+            if (--exportSyncCountdown <= 0) {
+                exportSyncCountdown = SYNC_INTERVAL;
+                markChanged();
+            }
+        }
+    }
+
+    /** 导出任务结束：记录结果、同步 UI、通知附近玩家。 */
+    private void finishExport() {
+        StructureExporter.ExportTask task = activeExport;
+        activeExport = null;
+        exportProgress = 100;
+        exportSyncCountdown = 0;
+        if (task == null) return;
+        boolean ok = !task.isFailed();
+        if (ok) {
+            exportState = 2;
+            exportError = "";
+            exportFile = task.savedFileName();
+            GTLCore.LOGGER.info("Structure export finished: {} ({}x{}x{})",
+                    exportFile, task.outSizeX(), task.outSizeY(), task.outSizeZ());
+        } else {
+            exportState = 3;
+            exportFile = "";
+            exportError = task.failureMessage();
+            GTLCore.LOGGER.error("Structure export failed: {}", exportError);
+        }
+        announceExport(ok, task);
+        markChanged();
+    }
+
+    /** 导出结果聊天反馈：发给放置器 64 格内的玩家。 */
+    private void announceExport(boolean ok, @Nullable StructureExporter.ExportTask task) {
+        if (!(level instanceof ServerLevel serverLevel)) return;
+        Component message;
+        if (ok && task != null) {
+            message = Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_done_msg",
+                    "logs/platform/" + exportFile,
+                    task.outSizeX() + "x" + task.outSizeY() + "x" + task.outSizeZ())
+                    .withStyle(ChatFormatting.GREEN);
+        } else {
+            message = Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_failed_msg",
+                    Component.translatable(exportError))
+                    .withStyle(ChatFormatting.RED);
+        }
+        double x = worldPosition.getX() + 0.5D;
+        double y = worldPosition.getY() + 0.5D;
+        double z = worldPosition.getZ() + 0.5D;
+        for (ServerPlayer player : serverLevel.players()) {
+            if (player.distanceToSqr(x, y, z) <= 64.0D * 64.0D) {
+                player.displayClientMessage(message, false);
+            }
         }
     }
 
@@ -173,6 +237,11 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         activeExport = null;
         taskCompleted = true;
         progress = 0;
+        if (exportState == 1) {
+            // 存档载入时进行中的导出任务已丢失
+            exportState = 0;
+            exportProgress = 0;
+        }
         clampIndices();
         examineMaterials();
     }
@@ -234,6 +303,10 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         tag.putInt("speed", speed);
         tag.putBoolean("taskCompleted", taskCompleted);
         tag.putInt("progress", progress);
+        tag.putInt("exportState", exportState);
+        tag.putInt("exportProgress", exportProgress);
+        tag.putString("exportFile", exportFile);
+        tag.putString("exportError", exportError);
         return tag;
     }
 
@@ -257,6 +330,10 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         speed = tag.contains("speed") ? tag.getInt("speed") : 10;
         taskCompleted = !tag.contains("taskCompleted") || tag.getBoolean("taskCompleted");
         progress = tag.getInt("progress");
+        exportState = tag.getInt("exportState");
+        exportProgress = tag.getInt("exportProgress");
+        exportFile = tag.getString("exportFile");
+        exportError = tag.getString("exportError");
     }
 
     // -------------------------------------------------------------------------
@@ -441,13 +518,89 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         if (!(getLevel() instanceof ServerLevel serverLevel)) return;
         if (activeExport != null) return;
         BlockPos[] c = coords();
-        if (c[0] == null || c[1] == null) return;
+        if (c[0] == null || c[1] == null) {
+            exportState = 3;
+            exportProgress = 0;
+            exportFile = "";
+            exportError = "ui.quantum_chromodynamic_charge.structure.export_need_cards";
+            announceExport(false, null);
+            markChanged();
+            return;
+        }
+        exportState = 1;
+        exportProgress = 0;
+        exportFile = "";
+        exportError = "";
+        exportSyncCountdown = SYNC_INTERVAL;
         activeExport = new StructureExporter.ExportTask(serverLevel, c[0], c[1], xMirror, zMirror, rotation);
+        GTLCore.LOGGER.info("Structure export started: {} -> {} ({}x{}x{})",
+                c[0], c[1], activeExport.outSizeX(), activeExport.outSizeY(), activeExport.outSizeZ());
         markChanged();
     }
 
     public boolean isExporting() {
         return activeExport != null;
+    }
+
+    public int exportState() {
+        return exportState;
+    }
+
+    public int exportProgress() {
+        return exportProgress;
+    }
+
+    public String exportFileName() {
+        return exportFile;
+    }
+
+    public String exportError() {
+        return exportError;
+    }
+
+    /** 导出页状态行。 */
+    public Component exportStatusText() {
+        return switch (exportState) {
+            case 1 -> Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_progress", exportProgress);
+            case 2 -> Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_done", exportFile)
+                    .withStyle(ChatFormatting.GREEN);
+            case 3 -> Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_failed",
+                    Component.translatable(exportError))
+                    .withStyle(ChatFormatting.RED);
+            default -> Component.translatable("ui.quantum_chromodynamic_charge.structure.idle");
+        };
+    }
+
+    /** 单个坐标卡槽的坐标文本。 */
+    public Component exportCardText(int slot) {
+        BlockPos pos = slot >= 0 && slot < coordinateInventory.getSlots() ?
+                readCoord(coordinateInventory.getStackInSlot(slot)) : null;
+        if (pos == null) {
+            return Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_card_empty", slot + 1)
+                    .withStyle(ChatFormatting.GRAY);
+        }
+        return Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.export_card",
+                slot + 1, pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    /** 两张卡围成的区域尺寸文本。 */
+    public Component exportRegionText() {
+        BlockPos[] c = coords();
+        if (c[0] == null || c[1] == null) {
+            return Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.export_need_cards")
+                    .withStyle(ChatFormatting.RED);
+        }
+        int dx = Math.abs(c[0].getX() - c[1].getX()) + 1;
+        int dy = Math.abs(c[0].getY() - c[1].getY()) + 1;
+        int dz = Math.abs(c[0].getZ() - c[1].getZ()) + 1;
+        return Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.export_region", dx, dy, dz);
     }
 
     // -------------------------------------------------------------------------

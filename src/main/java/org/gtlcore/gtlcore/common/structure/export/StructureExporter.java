@@ -75,6 +75,8 @@ public final class StructureExporter {
         private int outX;
         private boolean finished;
         private boolean failed;
+        private String savedFileName = "";
+        private String failureMessage = "";
 
         public ExportTask(ServerLevel level, BlockPos pos1, BlockPos pos2,
                           boolean xMirror, boolean zMirror, int rotation) {
@@ -115,6 +117,34 @@ public final class StructureExporter {
 
         public boolean isFailed() {
             return failed;
+        }
+
+        /** 导出尺寸（含旋转/镜像后的输出尺寸）。 */
+        public int outSizeX() {
+            return outDx;
+        }
+
+        public int outSizeY() {
+            return dy;
+        }
+
+        public int outSizeZ() {
+            return outDz;
+        }
+
+        /** 用到的不重复方块状态数（含空气）。 */
+        public int distinctStates() {
+            return stateToChar.size();
+        }
+
+        /** 成功写盘后的文件名（如 {@code 20261115-015055-643.mbs}）；未完成时为空串。 */
+        public String savedFileName() {
+            return savedFileName;
+        }
+
+        /** 失败原因；未失败时为空串。 */
+        public String failureMessage() {
+            return failureMessage;
         }
 
         /** @return true 表示已完成（成功或失败） */
@@ -163,6 +193,7 @@ public final class StructureExporter {
                 return false;
             } catch (Exception e) {
                 failed = true;
+                failureMessage = e.toString();
                 GTLCore.LOGGER.error("Structure export failed", e);
                 return true;
             }
@@ -177,8 +208,10 @@ public final class StructureExporter {
 
             StructureFileIO.save(structurePath, zSlices.toArray(new String[0][]));
             StructureMappingIO.save(StructureMappingIO.invert(stateToChar), mappingPath);
-            GTLCore.LOGGER.info("Exported structure: {}", structurePath);
-            GTLCore.LOGGER.info("Exported mapping: {}", mappingPath);
+            savedFileName = structurePath.getFileName().toString();
+            GTLCore.LOGGER.info("Exported structure: {} ({}x{}x{}, {} states)",
+                    structurePath.toAbsolutePath(), outDx, dy, outDz, stateToChar.size());
+            GTLCore.LOGGER.info("Exported mapping: {}", mappingPath.toAbsolutePath());
         }
 
         private BlockState getCached(BlockPos pos) {

@@ -309,23 +309,26 @@ public final class StructurePlacerUI {
 
         panel.addWidget(sectionTitleWidget(6, 3,
                 "ui.quantum_chromodynamic_charge.structure.export_section"));
-        panel.addWidget(dynamicLabel(6, 18, 316, () -> Component.translatable(
+        panel.addWidget(dynamicLabel(6, 16, 316, () -> Component.translatable(
                 "ui.quantum_chromodynamic_charge.structure.export_hint")));
 
-        panel.addWidget(sectionTitleWidget(6, 50,
+        panel.addWidget(staticLabel(6, 40,
                 "ui.quantum_chromodynamic_charge.structure.export_slots"));
         for (int i = 0; i < StructurePlacerBlockEntity.COORD_SLOTS; i++) {
-            panel.addWidget(new SlotWidget(be.getCoordinateInventory(), i, 110 + i * 22, 46, true, true)
+            panel.addWidget(new SlotWidget(be.getCoordinateInventory(), i, 40 + i * 22, 36, true, true)
                     .setBackgroundTexture(GuiTextures.SLOT));
         }
+        panel.addWidget(dynamicLabel(86, 38, 234, () -> be.exportCardText(0)));
+        panel.addWidget(dynamicLabel(86, 52, 234, () -> be.exportCardText(1)));
 
-        panel.addWidget(dynamicLabel(6, 74, 316, () -> be.canExport() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.export_ready") : Component.translatable("ui.quantum_chromodynamic_charge.structure.export_need_cards")));
+        panel.addWidget(dynamicLabel(6, 72, 316, be::exportRegionText));
+        panel.addWidget(dynamicLabel(6, 88, 316, be::exportStatusText));
+        panel.addWidget(fixedLabel(6, 104, 316,
+                "ui.quantum_chromodynamic_charge.structure.export_dir"));
 
-        panel.addWidget(button(6, 90, 110, 18,
+        panel.addWidget(button(6, 118, 110, 18,
                 "ui.quantum_chromodynamic_charge.structure.export",
                 be::exportRegion));
-
-        panel.addWidget(dynamicLabel(6, 114, 316, () -> be.isExporting() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.exporting") : Component.empty()));
         return panel;
     }
 

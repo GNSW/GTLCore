@@ -45,6 +45,7 @@ public class CommonProxy {
         GTLStats.register(eventBus);
         GTLRecipes.register(eventBus);
         GTLPlushies.register(eventBus);
+        GTLStructureContent.register(eventBus);
         GTLWirelessAeContent.register(eventBus);
         org.gtlcore.gtlcore.integration.gtmt.monitor.EnergyMonitorContent.register(eventBus);
         org.gtlcore.gtlcore.integration.monitor.MachineMonitorContent.register(eventBus);
@@ -70,6 +71,8 @@ public class CommonProxy {
         GTLCreativeModeTabs.init();
         ConfigHolder.init();
         AreaShape.register();
+        // 触发内置结构预设加载（读取 classpath 下的 platforms/*.mbs）
+        org.gtlcore.gtlcore.common.structure.registry.StructureTemplateRegistry.presetCount();
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {

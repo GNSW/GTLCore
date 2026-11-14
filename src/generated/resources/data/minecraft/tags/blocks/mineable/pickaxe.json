@@ -78,6 +78,7 @@
     "gtlcore:wireless_network_core",
     "gtlcore:wireless_grid_energy_monitor",
     "travelanchors:travel_anchor",
-    "gtlcore:machine_monitor_panel"
+    "gtlcore:machine_monitor_panel",
+    "gtlcore:structure_placer"
   ]
 }

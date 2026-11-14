@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "gtlcore:item/material_elite_0",
+    "layer1": "gtlcore:item/material_elite_1"
+  }
+}

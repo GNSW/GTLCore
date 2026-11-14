@@ -1,0 +1,20 @@
+{
+  " ": {
+    "id": "minecraft:air",
+    "properties": {}
+  },
+  "A": {
+    "id": "minecraft:yellow_concrete",
+    "properties": {}
+  },
+  "B": {
+    "id": "minecraft:black_concrete",
+    "properties": {}
+  },
+  "C": {
+    "id": "minecraft:redstone_lamp",
+    "properties": {
+      "lit": "true"
+    }
+  }
+}

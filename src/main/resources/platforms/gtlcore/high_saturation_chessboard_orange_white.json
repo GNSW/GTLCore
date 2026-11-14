@@ -1,0 +1,22 @@
+{
+  " ": {
+    "id": "minecraft:air",
+    "properties": {}
+  },
+  "A": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "B": {
+    "id": "minecraft:orange_concrete",
+    "properties": {}
+  },
+  "C": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "D": {
+    "id": "minecraft:orange_concrete",
+    "properties": {}
+  }
+}

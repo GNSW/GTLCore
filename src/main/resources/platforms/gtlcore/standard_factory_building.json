@@ -1,0 +1,159 @@
+{
+  " ": {
+    "id": "minecraft:air",
+    "properties": {}
+  },
+  "A": {
+    "id": "minecraft:quartz_block",
+    "properties": {}
+  },
+  "B": {
+    "id": "minecraft:polished_diorite",
+    "properties": {}
+  },
+  "C": {
+    "id": "minecraft:red_sandstone_wall",
+    "properties": {
+      "east": "none",
+      "north": "none",
+      "south": "tall",
+      "up": "true",
+      "waterlogged": "false",
+      "west": "none"
+    }
+  },
+  "D": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "E": {
+    "id": "minecraft:red_sandstone_wall",
+    "properties": {
+      "east": "tall",
+      "north": "none",
+      "south": "none",
+      "up": "true",
+      "waterlogged": "false",
+      "west": "none"
+    }
+  },
+  "F": {
+    "id": "minecraft:snow_block",
+    "properties": {}
+  },
+  "G": {
+    "id": "minecraft:red_sandstone_wall",
+    "properties": {
+      "east": "none",
+      "north": "none",
+      "south": "none",
+      "up": "true",
+      "waterlogged": "false",
+      "west": "tall"
+    }
+  },
+  "H": {
+    "id": "minecraft:red_sandstone_wall",
+    "properties": {
+      "east": "none",
+      "north": "tall",
+      "south": "none",
+      "up": "true",
+      "waterlogged": "false",
+      "west": "none"
+    }
+  },
+  "I": {
+    "id": "minecraft:acacia_fence_gate",
+    "properties": {
+      "facing": "south",
+      "in_wall": "false",
+      "open": "false",
+      "powered": "false"
+    }
+  },
+  "J": {
+    "id": "minecraft:light_gray_concrete",
+    "properties": {}
+  },
+  "K": {
+    "id": "minecraft:acacia_fence_gate",
+    "properties": {
+      "facing": "east",
+      "in_wall": "false",
+      "open": "false",
+      "powered": "false"
+    }
+  },
+  "L": {
+    "id": "minecraft:acacia_fence_gate",
+    "properties": {
+      "facing": "west",
+      "in_wall": "false",
+      "open": "false",
+      "powered": "false"
+    }
+  },
+  "M": {
+    "id": "minecraft:cyan_stained_glass",
+    "properties": {}
+  },
+  "N": {
+    "id": "minecraft:acacia_fence_gate",
+    "properties": {
+      "facing": "north",
+      "in_wall": "false",
+      "open": "false",
+      "powered": "false"
+    }
+  },
+  "O": {
+    "id": "minecraft:polished_diorite_slab",
+    "properties": {
+      "type": "bottom",
+      "waterlogged": "false"
+    }
+  },
+  "P": {
+    "id": "minecraft:iron_trapdoor",
+    "properties": {
+      "facing": "north",
+      "half": "bottom",
+      "open": "false",
+      "powered": "false",
+      "waterlogged": "false"
+    }
+  },
+  "Q": {
+    "id": "minecraft:iron_trapdoor",
+    "properties": {
+      "facing": "east",
+      "half": "bottom",
+      "open": "false",
+      "powered": "false",
+      "waterlogged": "false"
+    }
+  },
+  "R": {
+    "id": "minecraft:diorite_wall",
+    "properties": {
+      "east": "low",
+      "north": "none",
+      "south": "none",
+      "up": "false",
+      "waterlogged": "false",
+      "west": "low"
+    }
+  },
+  "S": {
+    "id": "minecraft:diorite_wall",
+    "properties": {
+      "east": "none",
+      "north": "low",
+      "south": "low",
+      "up": "false",
+      "waterlogged": "false",
+      "west": "none"
+    }
+  }
+}

@@ -1,0 +1,459 @@
+package org.gtlcore.gtlcore.client.gui;
+
+import org.gtlcore.gtlcore.client.gui.widget.MaterialPreviewWidget;
+import org.gtlcore.gtlcore.client.gui.widget.StructureSelector;
+import org.gtlcore.gtlcore.common.block.StructurePlacerBlockEntity;
+import org.gtlcore.gtlcore.common.structure.registry.StructureTemplateRegistry;
+import org.gtlcore.gtlcore.common.structure.transform.StructureTransform;
+
+import com.gregtechceu.gtceu.api.gui.GuiTextures;
+
+import com.lowdragmc.lowdraglib.gui.modular.ModularUI;
+import com.lowdragmc.lowdraglib.gui.texture.GuiTextureGroup;
+import com.lowdragmc.lowdraglib.gui.texture.IGuiTexture;
+import com.lowdragmc.lowdraglib.gui.texture.TextTexture;
+import com.lowdragmc.lowdraglib.gui.widget.ButtonWidget;
+import com.lowdragmc.lowdraglib.gui.widget.LabelWidget;
+import com.lowdragmc.lowdraglib.gui.widget.SlotWidget;
+import com.lowdragmc.lowdraglib.gui.widget.TabButton;
+import com.lowdragmc.lowdraglib.gui.widget.TabContainer;
+import com.lowdragmc.lowdraglib.gui.widget.WidgetGroup;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+
+import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+/**
+ * 结构放置器界面：蓝图 / 材料 / 设置 / 导出四个标签页。
+ * <p>
+ * 布局按实机可读性重排：加宽窗口、设置页双栏（无需滚动）、蓝图与材料页均带材料图标预览。
+ * 文案全部在客户端按方块实体状态即时渲染，操作按钮通过 LDLib 客户端 action 交给服务端执行，
+ * 界面状态由方块实体更新包同步。
+ * </p>
+ */
+public final class StructurePlacerUI {
+
+    private static final int WIDTH = 344;
+    private static final int HEIGHT = 258;
+
+    private static final int CONTENT_X = 8;
+    private static final int CONTENT_Y = 30;
+    private static final int CONTENT_W = 328;
+    private static final int CONTENT_H = 142;
+
+    private static final int TAB_W = 80;
+    private static final int TAB_H = 18;
+    private static final int TAB_STEP = 82;
+
+    private static final int BOTTOM_Y = 176;
+    private static final int DEPLOY_W = 104;
+    private static final int DEPLOY_H = 74;
+    private static final int INV_X = 120;
+
+    private StructurePlacerUI() {}
+
+    public static ModularUI create(StructurePlacerBlockEntity be, Player player) {
+        ModularUI ui = new ModularUI(WIDTH, HEIGHT, be, player).background(GuiTextures.BACKGROUND);
+
+        ui.widget(buildTabs(be));
+        ui.widget(buildDeployPanel(be));
+        ui.widget(buildPlayerInventory(player));
+        return ui;
+    }
+
+    // -------------------------------------------------------------------------
+    // 标签容器
+    // -------------------------------------------------------------------------
+
+    private static TabContainer buildTabs(StructurePlacerBlockEntity be) {
+        TabContainer tabs = new TabContainer(CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H);
+        // 不使用带伪标签缺口的 GT 背景，标签按钮自己绘制在容器上方
+        tabs.setBackground(IGuiTexture.EMPTY);
+
+        tabs.addTab(tabButton(0, "ui.quantum_chromodynamic_charge.structure.tab.blueprint"),
+                buildBlueprintTab(be));
+        tabs.addTab(tabButton(TAB_STEP, "ui.quantum_chromodynamic_charge.structure.tab.material"),
+                buildMaterialTab(be));
+        tabs.addTab(tabButton(TAB_STEP * 2, "ui.quantum_chromodynamic_charge.structure.tab.settings"),
+                buildSettingsTab(be));
+        tabs.addTab(tabButton(TAB_STEP * 3, "ui.quantum_chromodynamic_charge.structure.tab.export"),
+                buildExportTab(be));
+        return tabs;
+    }
+
+    private static TabButton tabButton(int x, String langKey) {
+        TabButton button = new TabButton(x, -22, TAB_W, TAB_H);
+        button.setTexture(
+                new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture(langKey)),
+                new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture(langKey, 0xFFFFD54F)));
+        return button;
+    }
+
+    private static WidgetGroup contentPanel() {
+        WidgetGroup panel = new WidgetGroup(0, 0, CONTENT_W, CONTENT_H);
+        panel.setBackground(GuiTextures.DISPLAY);
+        return panel;
+    }
+
+    // -------------------------------------------------------------------------
+    // 蓝图页：选择器 + 摘要 + 材料预览
+    // -------------------------------------------------------------------------
+
+    private static WidgetGroup buildBlueprintTab(StructurePlacerBlockEntity be) {
+        WidgetGroup panel = contentPanel();
+
+        panel.addWidget(staticLabel(6, 5, "ui.quantum_chromodynamic_charge.structure.preset"));
+        panel.addWidget(staticLabel(6, 27, "ui.quantum_chromodynamic_charge.structure.template"));
+        panel.addWidget(sectionTitleWidget(6, 47, "ui.quantum_chromodynamic_charge.structure.summary"));
+
+        panel.addWidget(dynamicLabel(6, 58, 168, be::blueprintSummaryPreset));
+        panel.addWidget(dynamicLabel(6, 78, 168, be::blueprintSummaryTemplate));
+        panel.addWidget(dynamicLabel(6, 98, 168, be::blueprintSummaryTypeSize));
+        panel.addWidget(dynamicLabel(6, 118, 168, () -> Component.empty()
+                .append(be.blueprintSummarySource())
+                .append(Component.literal("  "))
+                .append(be.blueprintSummaryIndex())));
+
+        panel.addWidget(sectionTitleWidget(182, 47,
+                "ui.quantum_chromodynamic_charge.structure.material.preview"));
+        panel.addWidget(new MaterialPreviewWidget(182, 60, 140, 80, be::materialPreviewEntries));
+
+        // 下拉最后添加，保证弹出层绘制在摘要文本之上
+        panel.addWidget(new StructureSelector(
+                64, 3, 258,
+                () -> StructureTemplateRegistry.presetCount(),
+                be::getPresetIndex,
+                index -> StructureTemplateRegistry.presetCount() > index ? StructureTemplateRegistry.getPreset(index).title() : Component.literal("-"),
+                be::setPresetIndex));
+
+        panel.addWidget(new StructureSelector(
+                64, 25, 258,
+                () -> {
+                    if (StructureTemplateRegistry.presetCount() <= 0) return 0;
+                    return StructureTemplateRegistry.getPreset(be.getPresetIndex()).structures().size();
+                },
+                be::getStructureIndex,
+                index -> {
+                    if (StructureTemplateRegistry.presetCount() <= 0) return Component.literal("-");
+                    List<org.gtlcore.gtlcore.common.structure.model.StructureDefinition.Structure> list = StructureTemplateRegistry.getPreset(be.getPresetIndex()).structures();
+                    if (index < 0 || index >= list.size()) return Component.literal("-");
+                    return StructurePlacerBlockEntity.structureDropdownLabel(list.get(index));
+                },
+                be::setStructureIndex));
+
+        return panel;
+    }
+
+    // -------------------------------------------------------------------------
+    // 材料页：图标预览 + 明细 + 装卸 + 槽位
+    // -------------------------------------------------------------------------
+
+    private static WidgetGroup buildMaterialTab(StructurePlacerBlockEntity be) {
+        WidgetGroup panel = contentPanel();
+
+        panel.addWidget(staticLabel(6, 3, "ui.quantum_chromodynamic_charge.structure.material.summary"));
+        panel.addWidget(new MaterialPreviewWidget(6, 20, 160, 60, be::materialPreviewEntries));
+
+        panel.addWidget(dynamicLabel(172, 20, 152, () -> lineFor(be,
+                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.FRAME)));
+        panel.addWidget(dynamicLabel(172, 34, 152, () -> lineFor(be,
+                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.PLATE)));
+        panel.addWidget(dynamicLabel(172, 48, 152, () -> lineFor(be,
+                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.FINISH)));
+        panel.addWidget(dynamicLabel(172, 64, 152, () -> be.isMaterialsAdequate() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.material.adequate") : Component.translatable("ui.quantum_chromodynamic_charge.structure.material.insufficient")));
+
+        panel.addWidget(button(240, 80, 80, 18,
+                "ui.quantum_chromodynamic_charge.structure.material.load",
+                be::loadingMaterial));
+        panel.addWidget(button(240, 100, 80, 18,
+                "ui.quantum_chromodynamic_charge.structure.material.unload",
+                be::unloadingMaterial));
+
+        panel.addWidget(slotGrid(be, 6, 80, StructurePlacerBlockEntity.MATERIAL_COLS,
+                StructurePlacerBlockEntity.MATERIAL_SLOTS));
+        return panel;
+    }
+
+    private static Component lineFor(StructurePlacerBlockEntity be,
+                                     org.gtlcore.gtlcore.common.structure.material.StructureMaterialType type) {
+        Component line = Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.material.line",
+                type.displayName(), be.bankValue(type), be.costValue(type));
+        return be.costValue(type) > 0 || be.bankValue(type) > 0 ? line : Component.empty();
+    }
+
+    private static WidgetGroup slotGrid(StructurePlacerBlockEntity be, int x, int y, int cols, int size) {
+        WidgetGroup grid = new WidgetGroup(x, y, cols * 18, (size / cols) * 18);
+        for (int i = 0; i < size; i++) {
+            int col = i % cols;
+            int row = i / cols;
+            grid.addWidget(new SlotWidget(be.getMaterialInventory(), i, col * 18, row * 18, true, true)
+                    .setBackgroundTexture(GuiTextures.SLOT));
+        }
+        return grid;
+    }
+
+    // -------------------------------------------------------------------------
+    // 设置页：双栏，无需滚动
+    // -------------------------------------------------------------------------
+
+    private static WidgetGroup buildSettingsTab(StructurePlacerBlockEntity be) {
+        WidgetGroup panel = contentPanel();
+
+        // 左栏：偏移 / 放置边界 / 变换（镜像）
+        panel.addWidget(sectionTitleWidget(6, 3,
+                "ui.quantum_chromodynamic_charge.structure.offset_section"));
+        panel.addWidget(offsetRow(be, "X", 0, 15));
+        panel.addWidget(offsetRow(be, "Y", 1, 33));
+        panel.addWidget(offsetRow(be, "Z", 2, 51));
+
+        panel.addWidget(sectionTitleWidget(6, 71,
+                "ui.quantum_chromodynamic_charge.structure.boundary"));
+        panel.addWidget(dynamicLabel(6, 84, 164, () -> {
+            if (StructureTemplateRegistry.presetCount() <= 0) {
+                return Component.translatable("ui.quantum_chromodynamic_charge.structure.no_presets");
+            }
+            StructureTransform.BlockPosBounds b = be.placementBounds();
+            return Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.bounds_compact",
+                    b.min().getX(), b.min().getY(), b.min().getZ(),
+                    b.max().getX(), b.max().getY(), b.max().getZ());
+        }));
+
+        panel.addWidget(sectionTitleWidget(6, 104,
+                "ui.quantum_chromodynamic_charge.structure.transform_section"));
+        panel.addWidget(toggleCell(6, 116, 80,
+                "ui.quantum_chromodynamic_charge.structure.x_mirror", be::isXMirror, be::setXMirror));
+        panel.addWidget(toggleCell(90, 116, 80,
+                "ui.quantum_chromodynamic_charge.structure.z_mirror", be::isZMirror, be::setZMirror));
+
+        // 右栏：放置选项 / 旋转与速度
+        panel.addWidget(sectionTitleWidget(180, 3,
+                "ui.quantum_chromodynamic_charge.structure.place_options_section"));
+        panel.addWidget(toggleCell(180, 15, 72,
+                "ui.quantum_chromodynamic_charge.structure.skip_air", be::isSkipAir, be::setSkipAir));
+        panel.addWidget(toggleCell(254, 15, 72,
+                "ui.quantum_chromodynamic_charge.structure.skip_occupied", be::isSkipOccupied,
+                be::setSkipOccupied));
+        panel.addWidget(toggleCell(180, 33, 72,
+                "ui.quantum_chromodynamic_charge.structure.update_light", be::isUpdateLight,
+                be::setUpdateLight));
+        panel.addWidget(toggleCell(254, 33, 72,
+                "ui.quantum_chromodynamic_charge.structure.update_heightmap", be::isUpdateHeightmap,
+                be::setUpdateHeightmap));
+
+        panel.addWidget(sectionTitleWidget(180, 55,
+                "ui.quantum_chromodynamic_charge.structure.rotation_speed"));
+        panel.addWidget(staticLabel(180, 71, "ui.quantum_chromodynamic_charge.structure.rotation"));
+        panel.addWidget(dynamicLabel(222, 71, 26, () -> Component.literal(be.getRotation() + "°")));
+        panel.addWidget(button(250, 67, 64, 18, "§e+90°", be::cycleRotation));
+
+        panel.addWidget(staticLabel(180, 93, "ui.quantum_chromodynamic_charge.structure.speed"));
+        panel.addWidget(dynamicLabel(222, 93, 24, () -> Component.literal(String.valueOf(be.getSpeed()))));
+        panel.addWidget(button(248, 89, 18, 18, "-", () -> be.nudgeSpeed(-1)));
+        panel.addWidget(button(268, 89, 18, 18, "+", () -> be.nudgeSpeed(1)));
+
+        return panel;
+    }
+
+    private static WidgetGroup offsetRow(StructurePlacerBlockEntity be, String axis, int axisId, int y) {
+        WidgetGroup row = new WidgetGroup(0, y, CONTENT_W, 18);
+        row.addWidget(staticLabel(6, 5, Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.offset", axis)));
+        row.addWidget(dynamicLabel(34, 5, 26, () -> Component.literal(String.valueOf(offsetValue(be, axisId)))));
+        int[] deltas = { -5, -1, 1, 5 };
+        for (int i = 0; i < deltas.length; i++) {
+            int delta = deltas[i];
+            String text = (delta > 0 ? "+" : "") + delta;
+            row.addWidget(button(60 + i * 26, 0, 24, 18, text, () -> be.nudgeOffset(axisId, delta)));
+        }
+        return row;
+    }
+
+    private static int offsetValue(StructurePlacerBlockEntity be, int axis) {
+        return switch (axis) {
+            case 0 -> be.getOffsetX();
+            case 1 -> be.getOffsetY();
+            case 2 -> be.getOffsetZ();
+            default -> 0;
+        };
+    }
+
+    private static WidgetGroup toggleCell(int x, int y, int width, String langKey,
+                                          BooleanSupplier state, Consumer<Boolean> setter) {
+        WidgetGroup cell = new WidgetGroup(x, y, width, 18);
+        cell.addWidget(fixedLabel(0, 5, width - 26, langKey));
+        TextTexture text = new TextTexture(() -> state.getAsBoolean() ? "§aON" : "§cOFF");
+        cell.addWidget(new ButtonWidget(width - 26, 0, 24, 18,
+                new GuiTextureGroup(GuiTextures.BUTTON, text),
+                click -> {
+                    if (!click.isRemote) {
+                        setter.accept(!state.getAsBoolean());
+                    }
+                }));
+        return cell;
+    }
+
+    // -------------------------------------------------------------------------
+    // 导出页
+    // -------------------------------------------------------------------------
+
+    private static WidgetGroup buildExportTab(StructurePlacerBlockEntity be) {
+        WidgetGroup panel = contentPanel();
+
+        panel.addWidget(sectionTitleWidget(6, 3,
+                "ui.quantum_chromodynamic_charge.structure.export_section"));
+        panel.addWidget(dynamicLabel(6, 18, 316, () -> Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.export_hint")));
+
+        panel.addWidget(sectionTitleWidget(6, 50,
+                "ui.quantum_chromodynamic_charge.structure.export_slots"));
+        for (int i = 0; i < StructurePlacerBlockEntity.COORD_SLOTS; i++) {
+            panel.addWidget(new SlotWidget(be.getCoordinateInventory(), i, 110 + i * 22, 46, true, true)
+                    .setBackgroundTexture(GuiTextures.SLOT));
+        }
+
+        panel.addWidget(dynamicLabel(6, 74, 316, () -> be.canExport() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.export_ready") : Component.translatable("ui.quantum_chromodynamic_charge.structure.export_need_cards")));
+
+        panel.addWidget(button(6, 90, 110, 18,
+                "ui.quantum_chromodynamic_charge.structure.export",
+                be::exportRegion));
+
+        panel.addWidget(dynamicLabel(6, 114, 316, () -> be.isExporting() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.exporting") : Component.empty()));
+        return panel;
+    }
+
+    // -------------------------------------------------------------------------
+    // 底栏：状态 + 放置
+    // -------------------------------------------------------------------------
+
+    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be) {
+        WidgetGroup panel = new WidgetGroup(CONTENT_X, BOTTOM_Y, DEPLOY_W, DEPLOY_H);
+        panel.setBackground(GuiTextures.BACKGROUND_INVERSE);
+
+        panel.addWidget(dynamicLabel(6, 6, DEPLOY_W - 12, be::statusText));
+        panel.addWidget(button(8, DEPLOY_H - 26, DEPLOY_W - 16, 18,
+                "ui.quantum_chromodynamic_charge.structure.place",
+                be::startPlacement));
+        return panel;
+    }
+
+    private static WidgetGroup buildPlayerInventory(Player player) {
+        Inventory inventory = player.getInventory();
+        WidgetGroup group = new WidgetGroup(INV_X, BOTTOM_Y, 162, 74);
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int index = 9 + row * 9 + col;
+                group.addWidget(new SlotWidget(inventory, index, col * 18, row * 18, true, true)
+                        .setLocationInfo(true, false)
+                        .setBackgroundTexture(GuiTextures.SLOT));
+            }
+        }
+        for (int col = 0; col < 9; col++) {
+            group.addWidget(new SlotWidget(inventory, col, col * 18, 56, true, true)
+                    .setLocationInfo(true, true)
+                    .setBackgroundTexture(GuiTextures.SLOT));
+        }
+        return group;
+    }
+
+    // -------------------------------------------------------------------------
+    // 通用控件
+    // -------------------------------------------------------------------------
+
+    private static LabelWidget staticLabel(int x, int y, String langKey) {
+        LabelWidget label = new LabelWidget(x, y, Component.translatable(langKey));
+        label.setClientSideWidget();
+        return label;
+    }
+
+    private static LabelWidget staticLabel(int x, int y, Component component) {
+        LabelWidget label = new LabelWidget(x, y, component);
+        label.setClientSideWidget();
+        return label;
+    }
+
+    private static LabelWidget fixedLabel(int x, int y, int width, String langKey) {
+        LabelWidget label = new LabelWidget(x, y, () -> shorten(Component.translatable(langKey).getString(), width));
+        label.setClientSideWidget();
+        return label;
+    }
+
+    private static LabelWidget dynamicLabel(int x, int y, int width, Supplier<Component> supplier) {
+        LabelWidget label = new LabelWidget(x, y, () -> wrap(supplier.get(), width));
+        label.setClientSideWidget();
+        return label;
+    }
+
+    private static LabelWidget dynamicLabel(int x, int y, Supplier<Component> supplier) {
+        LabelWidget label = new LabelWidget(x, y, () -> supplier.get().getString());
+        label.setClientSideWidget();
+        return label;
+    }
+
+    private static LabelWidget sectionTitleWidget(int x, int y, String langKey) {
+        LabelWidget label = new LabelWidget(x, y, Component.translatable(langKey)
+                .withStyle(net.minecraft.ChatFormatting.YELLOW));
+        label.setClientSideWidget();
+        return label;
+    }
+
+    private static ButtonWidget button(int x, int y, int width, int height, String text, Runnable serverAction) {
+        return new ButtonWidget(x, y, width, height,
+                new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture(text)),
+                click -> {
+                    if (!click.isRemote) {
+                        serverAction.run();
+                    }
+                });
+    }
+
+    /** 客户端宽度换行：中文按实际像素宽度切分。 */
+    private static String wrap(Component component, int maxWidth) {
+        String text = component.getString();
+        if (text.isEmpty()) return "";
+        var font = Minecraft.getInstance().font;
+        StringBuilder out = new StringBuilder(text.length() + 8);
+        int lineWidth = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                out.append('\n');
+                lineWidth = 0;
+                continue;
+            }
+            int charWidth = font.width(String.valueOf(c));
+            if (lineWidth > 0 && lineWidth + charWidth > maxWidth) {
+                out.append('\n');
+                lineWidth = 0;
+            }
+            out.append(c);
+            lineWidth += charWidth;
+        }
+        return out.toString();
+    }
+
+    /** 单行标签按像素宽度截断，超长以省略号结尾。 */
+    private static String shorten(String text, int maxWidth) {
+        var font = Minecraft.getInstance().font;
+        if (font.width(text) <= maxWidth) return text;
+        String ellipsis = "…";
+        int budget = maxWidth - font.width(ellipsis);
+        StringBuilder out = new StringBuilder();
+        int width = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            int charWidth = font.width(String.valueOf(c));
+            if (width + charWidth > budget) break;
+            out.append(c);
+            width += charWidth;
+        }
+        return out + ellipsis;
+    }
+}

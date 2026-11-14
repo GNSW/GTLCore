@@ -1784,32 +1784,6 @@
 			x: -2.0d
 			y: 8.0d
 		}
-		{
-			dependencies: ["2C6F506ADD78F277"]
-			icon: "gtlcore:machine_monitor_panel"
-			id: "56C47B1C5B4B7198"
-			optional: true
-			rewards: [{
-				id: "4ADF03C336BFF9CD"
-				item: "gtceu:silver_credit"
-				type: "item"
-			}]
-			subtitle: "外置jade显示"
-			tasks: [
-				{
-					id: "37CC078888BD9B0A"
-					item: "gtlcore:machine_monitor_panel"
-					type: "item"
-				}
-				{
-					id: "50F6F83DE0C878E3"
-					item: "gtlcore:machine_monitor_linker"
-					type: "item"
-				}
-			]
-			x: 15.5d
-			y: 1.0d
-		}
 	]
 	subtitle: ["{gtlcore.quest.gtl.chapter.77f8039ace718c6c.subtitle.0000}"]
 	title: "{gtlcore.quest.gtl.chapter.77f8039ace718c6c.title}"

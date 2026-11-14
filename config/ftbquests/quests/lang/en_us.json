@@ -654,7 +654,7 @@
   "gtlcore.quest.gtl.quest.19f11b0fd7a04a57.title": "Ostrum Vein",
   "gtlcore.quest.gtl.quest.19f3e6426c5c7fcd.title": "Sodium Hydroxide Solution",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0000": "Connecting a Wireless ME Network Core to an ME Network allows all &dME hatches&r to &bwirelessly connect&r to the ME Network associated with that block",
-  "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0002": "After bookmarking a Wireless ME Network with a Wireless ME Network Bookmark, &bsneak-placing&r an ME hatch will automatically link it to the bookmarked network",
+  "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0002": "When you crouch to place an &b&rME compartment, it will automatically connect that compartment to the network selected via the wireless ME network connector on the player’s person.",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0004": "The Bookmark block does not need to be connected to any ME Network; it can simply be placed standalone",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0006": "Click a bookmarked Wireless ME Network again to unbookmark it",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0008": "Note: If an ME hatch is connected via cable to a network that also has another ME hatch linked to a Wireless ME Network or a Wireless ME Network Core, the former will always display the latter's linked/configured network in its wireless UI and cannot be disconnected from it",

@@ -654,7 +654,7 @@
   "gtlcore.quest.gtl.quest.19f11b0fd7a04a57.title": "紫金矿脉",
   "gtlcore.quest.gtl.quest.19f3e6426c5c7fcd.title": "氢氧化钠溶液",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0000": "将无线ME网络核心连接至ME网络后便可使所有的&dME仓室&r&b无线连接&r至该方块对应的ME网络",
-  "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0002": "使用无线ME网络收藏器收藏一个无线ME网络后可以在&b蹲下放置&rME仓室时直接让这个仓室连接至收藏的网络",
+  "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0002": "在&b蹲下放置&rME仓室时会直接让这个仓室连接至玩家身上的无线ME网络连接器中选择的网络",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0004": "收藏器并不用连接到任何ME网络中，单独放出来就可以",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0006": "再次点击已收藏的无线ME网络可取消收藏",
   "gtlcore.quest.gtl.quest.1a00c09ecee31233.description.0008": "注意：如果一个ME仓室通过线缆连接进入一个网络且这个网络有另外一个ME仓室连入了无线ME网络或者有一个无线ME网络核心，则前者会一直在无线连接的UI中显示后者连接/设置的网络且无法断开",

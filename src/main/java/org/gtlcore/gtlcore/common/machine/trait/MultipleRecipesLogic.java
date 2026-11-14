@@ -111,6 +111,9 @@ public class MultipleRecipesLogic extends RecipeLogic implements ILockRecipe, IR
             if (p <= 0) continue;
             else if (p > 1) match = match.copy(IAdvancedContentModifier.preciseMultiplier(p), false);
             ((IGTRecipe) match).setRealParallels(p);
+            // p 来自 ME 库存快照；若网络已经付不起放大后的输入，真实抽取会先扣走一部分再失败，
+            // 而真实抽取无法回滚。先做一次纯模拟校验，失败就跳过该配方，不消耗任何物品。
+            if (!matchConsumedRecipeInput(machine, match)) continue;
             match = getRecipeOutputChance(machine, match);
             if (handleRecipeInput(machine, match)) {
                 remain -= p;

@@ -12,6 +12,7 @@ import com.gregtechceu.gtceu.common.machine.multiblock.electric.research.Researc
 import com.gregtechceu.gtceu.common.machine.multiblock.primitive.PrimitiveWorkableMachine;
 
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 
 import java.util.*;
 
@@ -27,6 +28,39 @@ public class RecipeRunnerHelper {
     public static boolean matchRecipeInput(IRecipeCapabilityHolder holder, GTRecipe recipe) {
         if (recipe.inputs.isEmpty()) return true;
         return handleRecipe(IO.IN, holder, recipe.inputs, Collections.emptyMap(), false, recipe, true).isSuccess();
+    }
+
+    /**
+     * 只对真实处理会抽取的输入做模拟：{@code chance == 0} 的内容（催化剂、模具、电路等）真实处理阶段
+     * 不会扣取，但批处理会把它们和普通输入一起放大；若一并模拟，放大后的数量会被误判为不足。
+     */
+    public static boolean matchConsumedRecipeInput(IRecipeCapabilityHolder holder, GTRecipe recipe) {
+        return matchRecipeInput(holder, consumableInputs(recipe));
+    }
+
+    private static GTRecipe consumableInputs(GTRecipe recipe) {
+        boolean needsFilter = false;
+        for (var contents : recipe.inputs.values()) {
+            for (var content : contents) {
+                if (content.chance == 0) {
+                    needsFilter = true;
+                    break;
+                }
+            }
+            if (needsFilter) break;
+        }
+        if (!needsFilter) return recipe;
+
+        GTRecipe filtered = recipe.copy();
+        filtered.inputs.clear();
+        for (var entry : recipe.inputs.entrySet()) {
+            List<Content> kept = new ObjectArrayList<>(entry.getValue().size());
+            for (var content : entry.getValue()) {
+                if (content.chance != 0) kept.add(content);
+            }
+            if (!kept.isEmpty()) filtered.inputs.put(entry.getKey(), kept);
+        }
+        return filtered;
     }
 
     public static boolean matchRecipeOutput(IRecipeCapabilityHolder holder, GTRecipe recipe) {

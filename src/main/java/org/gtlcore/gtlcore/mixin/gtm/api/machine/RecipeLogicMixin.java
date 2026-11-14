@@ -4,12 +4,15 @@ import org.gtlcore.gtlcore.api.machine.ISuspendableMachine;
 import org.gtlcore.gtlcore.api.machine.computation.ComputationRecipes;
 import org.gtlcore.gtlcore.api.machine.trait.ILockRecipe;
 import org.gtlcore.gtlcore.api.machine.trait.IRecipeStatus;
+import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
 import org.gtlcore.gtlcore.api.recipe.BatchProcessing;
 import org.gtlcore.gtlcore.api.recipe.IGTRecipe;
 import org.gtlcore.gtlcore.api.recipe.RecipeResult;
 
+import com.gregtechceu.gtceu.api.capability.recipe.FluidRecipeCapability;
 import com.gregtechceu.gtceu.api.capability.recipe.IO;
 import com.gregtechceu.gtceu.api.capability.recipe.IRecipeCapabilityHolder;
+import com.gregtechceu.gtceu.api.capability.recipe.ItemRecipeCapability;
 import com.gregtechceu.gtceu.api.capability.recipe.RecipeCapability;
 import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
 import com.gregtechceu.gtceu.api.machine.feature.ITieredMachine;
@@ -118,10 +121,36 @@ public abstract class RecipeLogicMixin implements ILockRecipe, IRecipeStatus {
     @Overwrite(remap = false)
     protected boolean handleRecipeIO(GTRecipe recipe, IO io) {
         if (!(this.machine.hasProxies() && io != IO.BOTH)) return false;
-        if (io == IO.IN && !BatchProcessing.applyInPlace(this.machine.self(), this.lastOriginRecipe, recipe))
-            return false;
+        if (io == IO.IN) {
+            if (!BatchProcessing.applyInPlace(this.machine.self(), this.lastOriginRecipe, recipe)) return false;
+            // 批处理只会在配方已匹配之后把输入放大，而真实抽取不是事务性的：库存若在这期间被别的网络
+            // （存储总线正对未配置的 ME 接口时即可抽取整张网络）或终端拿走，必须在这里的模拟阶段就
+            // 失败，而不是先扣走一部分输入、再让配方启动失败——那部分物品会被直接吞掉。
+            // 失败时顺手作废库存快照，让下一次尝试用实时模拟重算批处理/并行数量，而不是抱着同一份
+            // 过期快照连续失败到 AE2 缓存刷新（默认 8 tick）为止。
+            if (!matchConsumedRecipeInput(this.machine, recipe)) {
+                gtlcore$invalidateStockSnapshots(this.machine);
+                return false;
+            }
+        }
         return handleRecipeInput(this.machine, recipe);
     }
+
+    @Unique
+    private static void gtlcore$invalidateStockSnapshots(IRecipeCapabilityHolder holder) {
+        var proxies = holder.getCapabilitiesProxy();
+        if (proxies == null) return;
+        for (var capability : STOCK_CAPABILITIES) {
+            var handlers = proxies.get(IO.IN, capability);
+            if (handlers == null) continue;
+            for (var handler : handlers) {
+                if (handler instanceof IOptimizedMEList stock) stock.setChanged(true);
+            }
+        }
+    }
+
+    @Unique
+    private static final List<RecipeCapability<?>> STOCK_CAPABILITIES = List.of(ItemRecipeCapability.CAP, FluidRecipeCapability.CAP);
 
     /**
      * @author .

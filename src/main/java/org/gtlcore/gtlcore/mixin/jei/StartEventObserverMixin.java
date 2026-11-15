@@ -1,11 +1,10 @@
 package org.gtlcore.gtlcore.mixin.jei;
 
-import mezz.jei.forge.events.PermanentEventSubscriptions;
-import mezz.jei.forge.startup.StartEventObserver;
-
 import net.minecraftforge.client.event.TagsUpdatedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 
+import mezz.jei.forge.events.PermanentEventSubscriptions;
+import mezz.jei.forge.startup.StartEventObserver;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;

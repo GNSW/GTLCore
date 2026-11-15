@@ -124,14 +124,10 @@ public final class StructurePlacerUI {
                 "ui.quantum_chromodynamic_charge.structure.material.preview"));
         panel.addWidget(new MaterialPreviewWidget(182, 60, 140, 80, be::materialPreviewEntries));
 
-        // 下拉最后添加，保证弹出层绘制在摘要文本之上
-        panel.addWidget(new StructureSelector(
-                64, 3, 258,
-                () -> StructureTemplateRegistry.presetCount(),
-                be::getPresetIndex,
-                index -> StructureTemplateRegistry.presetCount() > index ? StructureTemplateRegistry.getPreset(index).title() : Component.literal("-"),
-                be::setPresetIndex));
-
+        // 注意：下拉框必须最后添加（绘制顺序 = 添加顺序），且靠上的下拉最后添加：
+        // 靠上的下拉展开时列表向下铺开，会盖住下面的控件，所以它必须最后绘制。
+        // 不能运行期调整 widgets 顺序：LDLib 的客户端 action 用“控件在父组中的下标”定位目标控件，
+        // 只在客户端改动顺序会让服务端处理到错误的控件（曾导致预设库切不动、却改了结构下标）。
         panel.addWidget(new StructureSelector(
                 64, 25, 258,
                 () -> {
@@ -146,6 +142,13 @@ public final class StructurePlacerUI {
                     return StructurePlacerBlockEntity.structureDropdownLabel(list.get(index));
                 },
                 be::setStructureIndex));
+
+        panel.addWidget(new StructureSelector(
+                64, 3, 258,
+                () -> StructureTemplateRegistry.presetCount(),
+                be::getPresetIndex,
+                index -> StructureTemplateRegistry.presetCount() > index ? StructureTemplateRegistry.getPreset(index).title() : Component.literal("-"),
+                be::setPresetIndex));
 
         return panel;
     }

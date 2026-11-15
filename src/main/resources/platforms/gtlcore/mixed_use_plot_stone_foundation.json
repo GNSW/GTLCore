@@ -1,0 +1,78 @@
+{
+  " ": {
+    "id": "minecraft:air",
+    "properties": {}
+  },
+  "A": {
+    "id": "minecraft:gray_concrete",
+    "properties": {}
+  },
+  "B": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "C": {
+    "id": "minecraft:polished_granite",
+    "properties": {}
+  },
+  "D": {
+    "id": "minecraft:polished_diorite",
+    "properties": {}
+  },
+  "E": {
+    "id": "minecraft:bricks",
+    "properties": {}
+  },
+  "F": {
+    "id": "minecraft:polished_diorite_stairs",
+    "properties": {}
+  },
+  "G": {
+    "id": "minecraft:polished_andesite_slab",
+    "properties": {}
+  },
+  "H": {
+    "id": "minecraft:smooth_stone",
+    "properties": {}
+  },
+  "I": {
+    "id": "minecraft:polished_deepslate",
+    "properties": {}
+  },
+  "J": {
+    "id": "minecraft:grass_block",
+    "properties": {}
+  },
+  "K": {
+    "id": "minecraft:moss_block",
+    "properties": {}
+  },
+  "L": {
+    "id": "minecraft:cyan_terracotta",
+    "properties": {}
+  },
+  "M": {
+    "id": "minecraft:verdant_froglight",
+    "properties": {}
+  },
+  "N": {
+    "id": "minecraft:iron_trapdoor",
+    "properties": {}
+  },
+  "O": {
+    "id": "minecraft:pearlescent_froglight",
+    "properties": {}
+  },
+  "P": {
+    "id": "minecraft:yellow_terracotta",
+    "properties": {}
+  },
+  "Q": {
+    "id": "minecraft:smooth_quartz_slab",
+    "properties": {}
+  },
+  "R": {
+    "id": "minecraft:ochre_froglight",
+    "properties": {}
+  }
+}

@@ -28,6 +28,8 @@ public class ClientProxy extends CommonProxy {
                 org.gtlcore.gtlcore.client.renderer.item.PlushieColors::register);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(
                 org.gtlcore.gtlcore.client.renderer.item.PlushieColors::registerBlocks);
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(
+                org.gtlcore.gtlcore.client.renderer.item.StructureMaterialColors::register);
         BloomClient.init();
         PlushieMusicClient.register();
         org.gtlcore.gtlcore.client.plushie.PlushieHeadClient.register();

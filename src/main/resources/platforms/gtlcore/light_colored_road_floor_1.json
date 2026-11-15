@@ -1,0 +1,34 @@
+{
+  " ": {
+    "id": "minecraft:air",
+    "properties": {}
+  },
+  "A": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "B": {
+    "id": "minecraft:black_concrete",
+    "properties": {}
+  },
+  "C": {
+    "id": "minecraft:yellow_concrete",
+    "properties": {}
+  },
+  "D": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "E": {
+    "id": "minecraft:black_concrete",
+    "properties": {}
+  },
+  "F": {
+    "id": "minecraft:yellow_concrete",
+    "properties": {}
+  },
+  "G": {
+    "id": "minecraft:shroomlight",
+    "properties": {}
+  }
+}

@@ -1,0 +1,70 @@
+{
+  " ": {
+    "id": "minecraft:air",
+    "properties": {}
+  },
+  "A": {
+    "id": "minecraft:gray_concrete",
+    "properties": {}
+  },
+  "B": {
+    "id": "minecraft:white_concrete",
+    "properties": {}
+  },
+  "C": {
+    "id": "minecraft:polished_granite",
+    "properties": {}
+  },
+  "D": {
+    "id": "minecraft:polished_diorite",
+    "properties": {}
+  },
+  "E": {
+    "id": "minecraft:bricks",
+    "properties": {}
+  },
+  "F": {
+    "id": "minecraft:polished_diorite_stairs",
+    "properties": {}
+  },
+  "G": {
+    "id": "minecraft:polished_andesite_slab",
+    "properties": {}
+  },
+  "H": {
+    "id": "minecraft:black_concrete",
+    "properties": {}
+  },
+  "I": {
+    "id": "minecraft:grass_block",
+    "properties": {}
+  },
+  "J": {
+    "id": "minecraft:moss_block",
+    "properties": {}
+  },
+  "K": {
+    "id": "minecraft:cyan_terracotta",
+    "properties": {}
+  },
+  "L": {
+    "id": "minecraft:verdant_froglight",
+    "properties": {}
+  },
+  "M": {
+    "id": "minecraft:iron_trapdoor",
+    "properties": {}
+  },
+  "N": {
+    "id": "minecraft:pearlescent_froglight",
+    "properties": {}
+  },
+  "O": {
+    "id": "minecraft:yellow_terracotta",
+    "properties": {}
+  },
+  "P": {
+    "id": "minecraft:smooth_quartz_slab",
+    "properties": {}
+  }
+}

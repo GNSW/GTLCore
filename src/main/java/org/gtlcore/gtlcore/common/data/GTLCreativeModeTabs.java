@@ -1,6 +1,9 @@
 package org.gtlcore.gtlcore.common.data;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.common.structure.material.StructureMaterialTier;
+import org.gtlcore.gtlcore.common.structure.material.StructureMaterialType;
+import org.gtlcore.gtlcore.common.structure.material.StructureMaterials;
 
 import com.gregtechceu.gtceu.common.data.GTCreativeModeTabs;
 
@@ -19,6 +22,14 @@ public class GTLCreativeModeTabs {
                 output.accept(GTLItems.FISHBIG_TM.get());
                 output.accept(GTLItems.PIG_PLUSHIE.get());
                 output.accept(GTLItems.SLIM_PIG_PLUSHIE.get());
+                // 结构放置器与结构材料组件（DeferredRegister）
+                output.accept(GTLStructureContent.STRUCTURE_PLACER_ITEM.get());
+                output.accept(GTLStructureContent.COORDINATE_POSITIONING_CARD.get());
+                for (StructureMaterialType type : StructureMaterialType.values()) {
+                    for (StructureMaterialTier tier : StructureMaterialTier.values()) {
+                        output.accept(StructureMaterials.item(type, tier));
+                    }
+                }
             })
                     .title(REGISTRATE.addLang("itemGroup", GTLCore.id("creative_tab"), "GTL Core"))
                     .icon(GTLItems.MEGA_ULTIMATE_BATTERY::asStack)

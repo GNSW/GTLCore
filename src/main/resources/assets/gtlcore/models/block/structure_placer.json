@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "gtlcore:block/structure_placer/side",
+    "front": "gtlcore:block/structure_placer/front",
+    "side": "gtlcore:block/structure_placer/side"
+  }
+}

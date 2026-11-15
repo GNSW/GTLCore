@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "gtlcore:item/coordinate_positioning_card"
+  }
+}

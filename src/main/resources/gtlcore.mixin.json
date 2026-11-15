@@ -91,6 +91,7 @@
     "gtm.gui.PatternPreviewWidgetMixin",
     "gtm.gui.ProspectingMapWidgetMixin",
     "gtm.gui.ProspectingTextureMixin",
+    "jei.StartEventObserverMixin",
     "jei.ClientConfigMixin",
     "jei.FtbJeiIntegrationMixin",
     "jei.FtbQuestsJeiIntegrationMixin",

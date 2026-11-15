@@ -1,6 +1,6 @@
 package org.gtlcore.gtlcore.mixin.jei;
 
-import net.minecraftforge.client.event.TagsUpdatedEvent;
+import net.minecraftforge.event.TagsUpdatedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 
 import mezz.jei.forge.events.PermanentEventSubscriptions;

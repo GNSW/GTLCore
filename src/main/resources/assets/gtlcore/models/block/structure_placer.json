@@ -1,8 +1,45 @@
 {
-  "parent": "minecraft:block/orientable",
+  "parent": "minecraft:block/block",
   "textures": {
-    "top": "gtlcore:block/structure_placer/side",
-    "front": "gtlcore:block/structure_placer/front",
-    "side": "gtlcore:block/structure_placer/side"
-  }
+    "particle": "gtlcore:block/structure_placer/side",
+    "all": "gtlcore:block/structure_placer/side",
+    "overlay_0": "gtlcore:block/structure_placer/overlay_front_0",
+    "overlay_1": "gtlcore:block/structure_placer/overlay_front_1",
+    "overlay_2": "gtlcore:block/structure_placer/overlay_front_2"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "down": { "texture": "#all", "cullface": "down" },
+        "up": { "texture": "#all", "cullface": "up" },
+        "north": { "texture": "#all", "cullface": "north" },
+        "south": { "texture": "#all", "cullface": "south" },
+        "west": { "texture": "#all", "cullface": "west" },
+        "east": { "texture": "#all", "cullface": "east" }
+      }
+    },
+    {
+      "from": [-0.001, -0.001, -0.001],
+      "to": [16.001, 16.001, 0],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_0", "cullface": "north" }
+      }
+    },
+    {
+      "from": [-0.001, -0.001, -0.001],
+      "to": [16.001, 16.001, 0],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_1", "cullface": "north", "emissivity": 15 }
+      }
+    },
+    {
+      "from": [-0.001, -0.001, -0.001],
+      "to": [16.001, 16.001, 0],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_2", "cullface": "north", "emissivity": 15 }
+      }
+    }
+  ]
 }

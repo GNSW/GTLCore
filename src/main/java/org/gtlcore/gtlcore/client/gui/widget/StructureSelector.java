@@ -16,7 +16,6 @@ import net.minecraft.network.chat.Component;
 
 import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 import java.util.function.IntSupplier;
@@ -97,7 +96,14 @@ public class StructureSelector extends WidgetGroup {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.isMouseOverElement(mouseX, mouseY) && (popup == null || !popup.isMouseOverElement(mouseX, mouseY))) {
+        // 展开状态：落在列表区域内的点击一律归本控件处理，
+        // 不能再往兄弟控件传递（列表向下展开会压在下方控件上，
+        // 传下去会误触发那个控件的点击，表现为“点预设项却打开了样板下拉”）。
+        if (open && popup.isMouseOverElement(mouseX, mouseY)) {
+            super.mouseClicked(mouseX, mouseY, button);
+            return true;
+        }
+        if (super.isMouseOverElement(mouseX, mouseY)) {
             if (open) {
                 close();
             } else {
@@ -113,32 +119,7 @@ public class StructureSelector extends WidgetGroup {
         rebuildRows();
         open = true;
         popup.setVisible(true).setActive(true);
-        bringToFront();
         if (getGui() != null) setFocus(true);
-    }
-
-    /**
-     * 展开时把自身移到父组控件列表末尾。
-     * <p>
-     * LDLib 的绘制/命中顺序就是父组 {@code widgets} 的顺序，下拉列表是本控件的子控件，
-     * 若本控件不是父组最后一个控件（例如下面还有第二个下拉框/说明文字），
-     * 展开后的列表会被后绘制的兄弟控件盖住。
-     * </p>
-     * <p>
-     * 这里直接调整父组列表顺序，而不是 removeWidget/addWidget：
-     * 后者会清空 gui/parent 并触发重排，可能打断正在进行的交互。
-     * </p>
-     */
-    private void bringToFront() {
-        WidgetGroup parentGroup = getParent();
-        if (parentGroup == null) return;
-        List<Widget> siblings = parentGroup.widgets;
-        int lastIndex = siblings.size() - 1;
-        if (lastIndex < 0 || siblings.get(lastIndex) == this) return;
-        int index = siblings.indexOf(this);
-        if (index < 0) return;
-        siblings.remove(index);
-        siblings.add(this);
     }
 
     private void close() {
@@ -158,11 +139,16 @@ public class StructureSelector extends WidgetGroup {
         int size = Math.max(0, sizeSupplier.getAsInt());
         int height = Math.min(MAX_POPUP_HEIGHT, Math.max(ROW_HEIGHT, size * ROW_HEIGHT));
         popup.setSize(new Size(getSize().width, height));
+        int current = valueSupplier.getAsInt();
 
         for (int i = 0; i < size; i++) {
             int index = i;
             SelectableWidgetGroup row = new SelectableWidgetGroup(0, i * ROW_HEIGHT, getSize().width, ROW_HEIGHT);
             row.setHoverTexture(new ColorRectTexture(0x40FFFFFF));
+            if (index == current) {
+                // 当前选中项高亮，避免“点没点上都看不出来”
+                row.setBackground(new ColorRectTexture(0x33FFD966));
+            }
             LabelWidget label = new LabelWidget(3, 3, () -> {
                 Component component = labelFunction.apply(index);
                 return truncate(component == null ? "" : component.getString(), 22);

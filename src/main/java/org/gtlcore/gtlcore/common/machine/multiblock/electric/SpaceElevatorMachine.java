@@ -238,6 +238,9 @@ public class SpaceElevatorMachine extends TierCasingMachine
             if (valid) {
                 @SuppressWarnings("unchecked")
                 IModularMachineModule<SpaceElevatorMachine, ?> module = (IModularMachineModule<SpaceElevatorMachine, ?>) machine;
+                if (module.getHost() == this && getModuleSet().contains(module)) {
+                    continue;
+                }
                 module.connectToHost(this);
 
             }

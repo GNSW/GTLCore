@@ -44,10 +44,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * @author EasterFG on 2024/10/13
@@ -195,7 +195,7 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
     @Unique
     private Map<PatternProviderTarget, Direction> gtlcore$targetDirections() {
         if (gtlcore$targetDirections == null) {
-            gtlcore$targetDirections = new IdentityHashMap<>();
+            gtlcore$targetDirections = new WeakHashMap<>();
         }
         return gtlcore$targetDirections;
     }
@@ -217,7 +217,7 @@ public abstract class PatternProviderLogicMixin implements IAutoExpandSettings, 
     @Inject(method = "findAdapter", at = @At("RETURN"), remap = false)
     private void gtlcore$recordTargetDirection(Direction direction, CallbackInfoReturnable<PatternProviderTarget> cir) {
         var target = cir.getReturnValue();
-        if (target != null) {
+        if (target != null && gtlcore$autoExpand) {
             gtlcore$targetDirections().put(target, direction);
         }
     }

@@ -24,6 +24,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -61,9 +63,19 @@ public final class StructurePlacerUI {
     public static ModularUI create(StructurePlacerBlockEntity be, Player player) {
         ModularUI ui = new ModularUI(WIDTH, HEIGHT, be, player).background(GuiTextures.BACKGROUND);
 
+        // 预览浮层只在客户端创建：里面的 SceneWidget 需要客户端渲染器。
+        // 浮层整体最后加入且内部控件都标记为客户端控件，因此不会往服务端发 action，
+        // 服务端也不会去解析它的下标。
+        StructurePreviewPanel preview = player.level().isClientSide ?
+                new StructurePreviewPanel(be, WIDTH, HEIGHT) : null;
+
         ui.widget(buildTabs(be));
-        ui.widget(buildDeployPanel(be));
+        ui.widget(buildDeployPanel(be, preview));
         ui.widget(buildPlayerInventory(player));
+        if (preview != null) {
+            // 最后添加：绘制在最上层，不影响前面控件的 action 下标
+            ui.widget(preview);
+        }
         return ui;
     }
 
@@ -119,6 +131,8 @@ public final class StructurePlacerUI {
                 .append(be.blueprintSummarySource())
                 .append(Component.literal("  "))
                 .append(be.blueprintSummaryIndex())));
+        panel.addWidget(fixedLabel(6, 130, 168,
+                "ui.quantum_chromodynamic_charge.structure.bounds_hint"));
 
         panel.addWidget(sectionTitleWidget(182, 47,
                 "ui.quantum_chromodynamic_charge.structure.material.preview"));
@@ -339,11 +353,17 @@ public final class StructurePlacerUI {
     // 底栏：状态 + 放置
     // -------------------------------------------------------------------------
 
-    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be) {
+    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be,
+                                                @Nullable StructurePreviewPanel preview) {
         WidgetGroup panel = new WidgetGroup(CONTENT_X, BOTTOM_Y, DEPLOY_W, DEPLOY_H);
         panel.setBackground(GuiTextures.BACKGROUND_INVERSE);
 
+        Runnable openPreview = preview == null ? () -> {} : preview::show;
         panel.addWidget(dynamicLabel(6, 6, DEPLOY_W - 12, be::statusText));
+        // 预览：纯客户端浮层，不经过服务端（服务端这个按钮只是占位，保持下标一致）
+        panel.addWidget(clientButton(8, 26, DEPLOY_W - 16, 16,
+                "ui.quantum_chromodynamic_charge.structure.preview",
+                openPreview));
         panel.addWidget(button(8, DEPLOY_H - 26, DEPLOY_W - 16, 18,
                 "ui.quantum_chromodynamic_charge.structure.place",
                 be::startPlacement));
@@ -418,6 +438,20 @@ public final class StructurePlacerUI {
                         serverAction.run();
                     }
                 });
+    }
+
+    /** 只在客户端执行的按钮（预览浮层之类的纯客户端功能）。 */
+    private static ButtonWidget clientButton(int x, int y, int width, int height, String text, Runnable clientAction) {
+        ButtonWidget button = new ButtonWidget(x, y, width, height,
+                new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture(text)),
+                click -> {
+                    if (click.isRemote) {
+                        clientAction.run();
+                    }
+                });
+        // 客户端控件不会向服务端发送 action 包
+        button.setClientSideWidget();
+        return button;
     }
 
     /** 客户端宽度换行：中文按实际像素宽度切分。 */

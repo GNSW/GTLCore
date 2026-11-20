@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.integration.ae2.crafting;
 
+import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+
 import appeng.api.config.Actionable;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
 import appeng.api.networking.security.IActionSource;
@@ -193,6 +195,10 @@ public final class ManualCraftingInventoryLock {
 
         long available = getPhysicalAvailableAmount(storage, what, source);
         long extractable = subtractClamped(available, reservedForOthers);
+        // A second bus may revisit this network within the same simulation.
+        // Physical availability probes are isolated, so also subtract what that
+        // simulation has already taken through this network's reservation limit.
+        extractable = subtractClamped(extractable, NetworkExtractionSimulation.extractedFromNetwork(storage, what));
         long allowed = Math.min(requested, extractable);
         if (allowed < requested) {
             ManualCraftingInventoryLockLogger.extractionLimited(

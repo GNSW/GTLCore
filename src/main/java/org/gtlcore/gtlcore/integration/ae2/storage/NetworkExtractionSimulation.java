@@ -96,6 +96,7 @@ public final class NetworkExtractionSimulation {
     }
 
     private static final class Context {
+
         private final Map<Object, Map<Object, Long>> extracted = new IdentityHashMap<>();
         private final Map<Object, Map<Object, Long>> networks = new IdentityHashMap<>();
         private long networkVisits;

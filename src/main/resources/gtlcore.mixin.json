@@ -219,6 +219,7 @@
     "ae2.storage.CompositeStorageMixin",
     "ae2.storage.DelegatingMEInventoryMixin",
     "ae2.storage.NetworkStorageMixin",
+    "ae2.gui.StorageBusFilterMenuMixin",
     "ae2.ticking.ServerGridRepoMixin",
     "ae2.ticking.TickHandlerMixin",
     "ae2wtlib.ItemWUTMixin",

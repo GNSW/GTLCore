@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.common.block;
 
+import org.gtlcore.gtlcore.client.render.StructureBoundsPreview;
+
 import com.lowdragmc.lowdraglib.gui.factory.BlockEntityUIFactory;
 
 import net.minecraft.core.BlockPos;
@@ -69,6 +71,13 @@ public class StructurePlacerBlock extends HorizontalDirectionalBlock implements 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
                                  InteractionHand hand, BlockHitResult hitResult) {
+        // 潜行右键：客户端高亮即将放置结构的包围盒（不打开界面）
+        if (player.isShiftKeyDown()) {
+            if (level.isClientSide) {
+                StructureBoundsPreview.show(level, pos);
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        }
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
             if (level.getBlockEntity(pos) instanceof StructurePlacerBlockEntity placer) {
                 placer.markChanged();

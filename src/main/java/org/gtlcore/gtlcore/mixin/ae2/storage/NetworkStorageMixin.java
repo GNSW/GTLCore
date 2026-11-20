@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
+import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
 
@@ -11,6 +12,7 @@ import appeng.api.storage.MEStorage;
 import appeng.me.storage.NetworkStorage;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -68,6 +70,9 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     @WrapMethod(method = "extract", remap = false)
     private long gtlcore$trackExtraction(AEKey what, long amount, Actionable mode, IActionSource source,
                                          Operation<Long> original) {
+        if (mode == Actionable.SIMULATE) {
+            return NetworkExtractionSimulation.network(this, what, () -> original.call(what, amount, mode, source));
+        }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);
         }
@@ -81,6 +86,18 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             throw failure;
         }
         return extracted;
+    }
+
+    @WrapOperation(method = "extract",
+                   remap = false,
+                   at = @At(value = "INVOKE", target = "Lappeng/api/storage/MEStorage;extract(Lappeng/api/stacks/AEKey;JLappeng/api/config/Actionable;Lappeng/api/networking/security/IActionSource;)J"))
+    private long gtlcore$simulateMountedExtraction(MEStorage storage, AEKey what, long amount, Actionable mode,
+                                                   IActionSource source, Operation<Long> original) {
+        if (mode != Actionable.SIMULATE) {
+            return original.call(storage, what, amount, mode, source);
+        }
+        return NetworkExtractionSimulation.mounted(storage, what, amount,
+                requested -> original.call(storage, what, requested, mode, source));
     }
 
     @ModifyVariable(method = "extract", at = @At("HEAD"), argsOnly = true, ordinal = 0, remap = false)
@@ -100,11 +117,18 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
 
     @Override
     public long gtlcore$getAvailableAmount(AEKey what, IActionSource source) {
+        return NetworkExtractionSimulation.isolated(() -> NetworkExtractionSimulation.network(
+                () -> gtlcore$simulateAvailableAmount(what, source)));
+    }
+
+    @Unique
+    private long gtlcore$simulateAvailableAmount(AEKey what, IActionSource source) {
         long available = 0;
         for (List<MEStorage> priorityStorages : priorityInventory.values()) {
             for (MEStorage storage : priorityStorages) {
                 long remaining = Long.MAX_VALUE - available;
-                long stored = storage.extract(what, remaining, Actionable.SIMULATE, source);
+                long stored = NetworkExtractionSimulation.mounted(storage, what, remaining,
+                        requested -> storage.extract(what, requested, Actionable.SIMULATE, source));
                 if (stored >= remaining) {
                     return Long.MAX_VALUE;
                 }

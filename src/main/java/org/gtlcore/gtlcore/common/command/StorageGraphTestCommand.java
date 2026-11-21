@@ -56,11 +56,11 @@ public final class StorageGraphTestCommand {
 
     private static MEStorage storage(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        BlockHitResult hit = (BlockHitResult) player.pick(16.0D, 0.0F, false);
-        if (hit.getType() != HitResult.Type.BLOCK) {
+        HitResult hit = player.pick(16.0D, 0.0F, false);
+        if (!(hit instanceof BlockHitResult blockHit)) {
             return null;
         }
-        IGridNode node = GridHelper.getExposedNode(player.level(), hit.getBlockPos(), hit.getDirection());
+        IGridNode node = GridHelper.getExposedNode(player.level(), blockHit.getBlockPos(), blockHit.getDirection());
         if (node == null) {
             return null;
         }

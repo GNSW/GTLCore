@@ -135,7 +135,6 @@ public final class StorageGraphManager {
                 return false;
             }
         }
-        out.clear();
         out.addAll(unique);
         return true;
     }
@@ -146,14 +145,21 @@ public final class StorageGraphManager {
         }
         StorageGraphSnapshot snapshot = collect(root);
         KeyCounter opaque = new KeyCounter();
+        long remaining = amount;
         long unique = 0L;
         for (Source graphSource : snapshot.sources()) {
             if (graphSource.physical() == null) {
                 continue;
             }
             if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE) {
-                unique = saturatingAdd(unique,
-                        graphSource.physical().extract(what, amount, Actionable.SIMULATE, source));
+                if (remaining <= 0L) {
+                    continue;
+                }
+                long got = graphSource.physical().extract(what, remaining, Actionable.SIMULATE, source);
+                if (got > 0L) {
+                    unique = saturatingAdd(unique, got);
+                    remaining -= got;
+                }
             } else {
                 graphSource.physical().getAvailableStacks(opaque);
             }
@@ -172,9 +178,9 @@ public final class StorageGraphManager {
             return -1L;
         }
         StorageGraphSnapshot snapshot = collect(root);
-        KeyCounter opaque = new KeyCounter();
         long remaining = amount;
         long unique = 0L;
+        boolean opaqueMayAccept = false;
         for (Source graphSource : snapshot.sources()) {
             if (graphSource.physical() == null) {
                 continue;
@@ -188,11 +194,11 @@ public final class StorageGraphManager {
                     unique = saturatingAdd(unique, got);
                     remaining -= got;
                 }
-            } else {
-                graphSource.physical().getAvailableStacks(opaque);
+            } else if (!opaqueMayAccept && remaining > 0L && graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source) > 0L) {
+                opaqueMayAccept = true;
             }
         }
-        if (keyCounterTotal(opaque) > 0L) {
+        if (opaqueMayAccept) {
             StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
             if (compatFallback()) {
                 return -1L;

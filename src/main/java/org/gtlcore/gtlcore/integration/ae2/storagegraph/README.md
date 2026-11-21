@@ -204,11 +204,14 @@ ME 终端应显示两条独立条目、各 32，且日志没有 `compat fallback
 
 ## 8. 已知限制（PR-3 前）
 
+- **ON 目前仅用于诊断验证，默认不开启**；是否放开应等 PR-3 的 `RoutePredicate`/合法路径实现；
 - `MODULATE` 的 extract/insert 仍走 AE2 原版；图的路由、priority、`isPreferredStorageFor`、过滤、access 尚未进入执行路径（PR-3）；
 - ON 下 `fillUniqueIfExact` 直接读叶子，可能绕过过滤/只写总线（PR-3 route 语义补）；
 - `OPAQUE` 默认回退原版；`COMPAT_FALLBACK=false` 为严格模式，会忽略 OPAQUE 库存；
-- `SourceRegistry` 在 `unmount` 时不清理旧条目（强引用旧对象，反复拆连会累积；只影响内存，不影响库存正确性）；
+- `SIMULATE EXTRACT` 已按 `remaining` 递减（多个独立来源不会超量）；`getAvailableStacks` 保持 AE2 累加语义（不清空调用方计数器）；`SIMULATE INSERT` 对 OPAQUE 做空位探测（空箱子也会触发回退），OFF 模式直接走原版；
+- `SourceRegistry` 在 `unmount` 时清理节点条目（`onRemoved`）；`EXTERNAL` 条目与 id 计数不复用（id 单调递增）；
 - SHADOW 的 `probeInsertUnique` 只统计 FINITE 且不 cap 到 `amount`，仅用于诊断对比；
+- `collect` 超过 `MAX_NODES`/`MAX_DEPTH` 时仍返回已采集部分（无 incomplete 状态）；
 - G09–G25 目前是手工 + 单点验证，自动化差分/性质测试未做；
 - `/gtltest` 是调试命令，不保证长期 API 兼容。
 

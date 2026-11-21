@@ -51,6 +51,15 @@ public final class SourceRegistry {
         }
     }
 
+    public static void onRemoved(MEStorage node) {
+        if (node == null) {
+            return;
+        }
+        synchronized (ENTRIES) {
+            ENTRIES.remove(node);
+        }
+    }
+
     public static void reset() {
         synchronized (ENTRIES) {
             ENTRIES.clear();

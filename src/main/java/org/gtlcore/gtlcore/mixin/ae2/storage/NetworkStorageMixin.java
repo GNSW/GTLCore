@@ -3,6 +3,7 @@ package org.gtlcore.gtlcore.mixin.ae2.storage;
 import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
@@ -52,6 +53,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
         StorageGraphManager.onTopologyChanged();
+        SourceRegistry.onRemoved(storage);
     }
 
     @Inject(method = "getAvailableStacks", at = @At("HEAD"), remap = false)
@@ -61,7 +63,12 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
 
     @WrapMethod(method = "getAvailableStacks", remap = false)
     private void gtlcore$shadowAvailableStacks(KeyCounter out, Operation<Void> original) {
-        if (StorageGraphManager.mode() == StorageGraphMode.ON && StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
+        StorageGraphMode mode = StorageGraphManager.mode();
+        if (mode == StorageGraphMode.OFF) {
+            original.call(out);
+            return;
+        }
+        if (mode == StorageGraphMode.ON && StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
             return;
         }
         long legacyBefore = StorageGraphManager.keyCounterTotal(out);

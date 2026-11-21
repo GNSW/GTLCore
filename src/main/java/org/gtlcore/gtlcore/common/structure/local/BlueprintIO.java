@@ -368,39 +368,43 @@ public final class BlueprintIO {
         return state.setValue(property, (Comparable) value);
     }
 
-    /** 方块状态 -> 图案字符，跳过需要转义的字符。 */
+    /** 方块状态 -> 图案字符；字符池覆盖几乎所有可见字符，容量足够装下任意建造。 */
     private static final class Palette {
 
-        /** 可用字符池：去掉空格、引号、括号、逗号等解析器特殊字符。 */
-        private static final char[] POOL = buildPool();
-
-        private static char[] buildPool() {
-            String skip = "()[],./\\\"'` ";
-            StringBuilder builder = new StringBuilder(90);
-            for (char c = '!'; c <= '~'; c++) {
-                if (skip.indexOf(c) < 0) builder.append(c);
-            }
-            return builder.toString().toCharArray();
-        }
+        /** 解析器/写文件时需要转义的字符：逗号、括号、引号、斜杠、反引号。 */
+        private static final String ILLEGAL = "()/\\\"'`";
 
         private final Char2ReferenceOpenHashMap<BlockState> byChar = new Char2ReferenceOpenHashMap<>();
         private final java.util.Map<BlockState, Character> byState = new java.util.HashMap<>();
-        private int nextIndex;
+        private char next = 'A';
 
         Palette() {
             byChar.put(AIR, Blocks.AIR.defaultBlockState());
+            byState.put(Blocks.AIR.defaultBlockState(), AIR);
         }
 
         char charAt(BlockState state) {
             Character existing = byState.get(state);
             if (existing != null) return existing;
-            if (nextIndex >= POOL.length) {
-                throw new IllegalStateException("too many distinct block states: " + byState.size());
-            }
-            char current = POOL[nextIndex++];
+            char current = nextAllowed();
             byState.put(state, current);
             byChar.put(current, state);
             return current;
+        }
+
+        /** 从当前游标向后找一个可安全使用的字符（跳过空格、控制字符与转义字符）。 */
+        private char nextAllowed() {
+            while (true) {
+                char candidate = next++;
+                if (candidate > 0xFDFF) {
+                    throw new IllegalStateException("too many distinct block states: " + byState.size());
+                }
+                if (candidate == AIR) continue;
+                if (Character.isISOControl(candidate)) continue;
+                if (candidate < 0x21) continue;
+                if (ILLEGAL.indexOf(candidate) >= 0) continue;
+                return candidate;
+            }
         }
 
         Char2ReferenceOpenHashMap<BlockState> mapping() {

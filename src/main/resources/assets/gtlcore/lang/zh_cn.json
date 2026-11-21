@@ -1857,6 +1857,7 @@
   "ui.quantum_chromodynamic_charge.structure.browser.risky.text": "%s（%s MB）读取可能卡顿或崩溃，仍要继续？",
   "ui.quantum_chromodynamic_charge.structure.browser.risky.confirm": "继续",
   "ui.quantum_chromodynamic_charge.structure.browser.risky.cancel": "取消",
+  "ui.quantum_chromodynamic_charge.structure.browser.load_failed": "蓝图 %s 读取失败：%s",
   "ui.quantum_chromodynamic_charge.structure.blueprint.local_cost": "材料：框架 %s 点（每 1 方块 1 点，取整到 10）",
   "ui.quantum_chromodynamic_charge.structure.desc.1x1_black_embed_blue": "1×1 黑嵌蓝",
   "ui.quantum_chromodynamic_charge.structure.desc.1x1_blue_pink": "1×1 蓝·粉",

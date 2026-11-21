@@ -1857,6 +1857,7 @@
   "ui.quantum_chromodynamic_charge.structure.browser.risky.text": "%s (%s MB) may stutter or crash the game. Continue?",
   "ui.quantum_chromodynamic_charge.structure.browser.risky.confirm": "Continue",
   "ui.quantum_chromodynamic_charge.structure.browser.risky.cancel": "Cancel",
+  "ui.quantum_chromodynamic_charge.structure.browser.load_failed": "Failed to load blueprint %s: %s",
   "ui.quantum_chromodynamic_charge.structure.blueprint.local_cost": "Frame points: %s (1 per block, rounded to 10)",
   "ui.quantum_chromodynamic_charge.structure.desc.1x1_black_embed_blue": "1×1 black embed blue",
   "ui.quantum_chromodynamic_charge.structure.desc.1x1_blue_pink": "1×1 blue·pink",

@@ -314,8 +314,12 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
             try {
                 previewBundle(BlueprintIO.load(file));
             } catch (Exception | OutOfMemoryError failure) {
-                // 安全上限读不动：先问一句，确认后再强制读取
-                askConfirm(path, fileBytes(path), () -> previewForced(path));
+                if (sizeRelated(failure)) {
+                    // 只是超过安全上限：先问一句，确认后再强制读取
+                    askConfirm(path, fileBytes(path), () -> previewForced(path));
+                } else {
+                    reportFailure(path, failure);
+                }
             }
             return;
         }
@@ -332,7 +336,7 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
             previewBundle(BlueprintIO.loadForced(file));
         } catch (Exception | OutOfMemoryError failure) {
             GTLCore.LOGGER.warn("Forced preview failed: {} / {}", path, failure.toString());
-            toast(Component.translatable("ui.quantum_chromodynamic_charge.structure.browser.missing"));
+            reportFailure(path, failure);
         }
     }
 
@@ -353,10 +357,14 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
                 action.applyLocal(path, bundle.sizeX(), bundle.sizeY(), bundle.sizeZ(), bundle.blocks());
                 setVisible(false);
             } catch (Exception | OutOfMemoryError failure) {
-                askConfirm(path, fileBytes(path), () -> {
-                    action.applyLocalForced(path);
-                    setVisible(false);
-                });
+                if (sizeRelated(failure)) {
+                    askConfirm(path, fileBytes(path), () -> {
+                        action.applyLocalForced(path);
+                        setVisible(false);
+                    });
+                } else {
+                    reportFailure(path, failure);
+                }
             }
             return;
         }
@@ -607,6 +615,26 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
     /** 直接用一个已解析的蓝图构建预览（用于确认后的超大蓝图）。 */
     private void previewBundle(BlueprintBundle.Bundle bundle) {
         buildScene(bundle.pattern(), bundle.palette(), bundle.sizeX(), bundle.sizeY(), bundle.sizeZ());
+    }
+
+    /** 是否只是「超出安全上限」；这类才值得弹崩溃确认框。 */
+    private static boolean sizeRelated(Throwable failure) {
+        if (failure instanceof OutOfMemoryError) return true;
+        String message = failure.getMessage();
+        return message != null && message.contains("too large");
+    }
+
+    /** 解析失败：直接在聊天栏说明原因，避免玩家以为点了没反应。 */
+    private void reportFailure(String path, Throwable failure) {
+        GTLCore.LOGGER.warn("Blueprint load failed: {} / {}", path, failure.toString());
+        String reason = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+        if (reason.length() > 80) reason = reason.substring(0, 80) + "…";
+        var player = Minecraft.getInstance().player;
+        if (player != null) {
+            player.displayClientMessage(Component.translatable(
+                    "ui.quantum_chromodynamic_charge.structure.browser.load_failed", path, reason)
+                    .withStyle(ChatFormatting.RED), false);
+        }
     }
 
     private void toast(Component message) {

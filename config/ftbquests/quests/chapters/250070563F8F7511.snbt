@@ -2513,9 +2513,11 @@
 		}
 		{
 			dependencies: ["52A0EE026A3D3A79"]
+			description: ["{gtlcore.quest.gtl.quest.4d091931b877f39d.description.0002}"]
 			icon: "gtlcore:structure_placer"
 			id: "4D091931B877F39D"
 			optional: true
+			subtitle: "{gtlcore.quest.gtl.quest.4d091931b877f39d.subtitle}"
 			tasks: [
 				{
 					id: "456DDDFC01002144"

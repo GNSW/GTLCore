@@ -1633,6 +1633,7 @@
 		}
 		{
 			can_repeat: true
+			dependencies: ["4D091931B877F39D"]
 			icon: "gtlcore:structure_component_frame_basic"
 			id: "097447A3AF42B973"
 			optional: true
@@ -1655,6 +1656,7 @@
 		}
 		{
 			can_repeat: true
+			dependencies: ["4D091931B877F39D"]
 			icon: "gtlcore:structure_component_plate_advanced"
 			id: "2B7BBDF03730C26F"
 			optional: true
@@ -1676,6 +1678,7 @@
 		}
 		{
 			can_repeat: true
+			dependencies: ["4D091931B877F39D"]
 			icon: "gtlcore:structure_component_finish_elite"
 			id: "03FAFEF1D7BF934D"
 			optional: true

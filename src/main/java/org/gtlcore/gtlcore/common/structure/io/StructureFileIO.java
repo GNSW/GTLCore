@@ -117,6 +117,13 @@ public final class StructureFileIO {
         }
     }
 
+    /** 从本地文件读取（本地蓝图）。 */
+    public static PatternData load(Path path) throws IOException {
+        try (InputStream in = Files.newInputStream(path)) {
+            return load(in);
+        }
+    }
+
     public static PatternData loadResource(String classpathPath) throws IOException {
         InputStream in = StructureFileIO.class.getClassLoader().getResourceAsStream(classpathPath);
         if (in == null) {

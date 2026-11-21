@@ -20,6 +20,7 @@ import it.unimi.dsi.fastutil.objects.Reference2CharLinkedOpenHashMap;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -50,19 +51,30 @@ public final class StructureMappingIO {
             }
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-                JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
-                Char2ReferenceOpenHashMap<BlockState> map = new Char2ReferenceOpenHashMap<>();
-                for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
-                    String key = entry.getKey();
-                    if (key == null || key.isEmpty()) continue;
-                    map.put(key.charAt(0), deserializeState(entry.getValue().getAsJsonObject()));
-                }
-                return map;
+                return parse(reader);
             }
         } catch (Exception e) {
             GTLCore.LOGGER.error("Failed to load mapping from {}", resLoc, e);
             return new Char2ReferenceOpenHashMap<>();
         }
+    }
+
+    /** 从本地文件加载映射（本地蓝图）；失败抛 {@link IOException}。 */
+    public static Char2ReferenceOpenHashMap<BlockState> load(Path path) throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            return parse(reader);
+        }
+    }
+
+    private static Char2ReferenceOpenHashMap<BlockState> parse(BufferedReader reader) {
+        JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+        Char2ReferenceOpenHashMap<BlockState> map = new Char2ReferenceOpenHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+            String key = entry.getKey();
+            if (key == null || key.isEmpty()) continue;
+            map.put(key.charAt(0), deserializeState(entry.getValue().getAsJsonObject()));
+        }
+        return map;
     }
 
     public static void save(Map<Character, BlockState> mapping, Path path) {
@@ -89,7 +101,7 @@ public final class StructureMappingIO {
         return charToState;
     }
 
-    private static JsonObject serializeState(BlockState src) {
+    public static JsonObject serializeState(BlockState src) {
         JsonObject obj = new JsonObject();
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(src.getBlock());
         obj.addProperty("id", id.toString());
@@ -101,7 +113,7 @@ public final class StructureMappingIO {
         return obj;
     }
 
-    private static BlockState deserializeState(JsonObject obj) {
+    public static BlockState deserializeState(JsonObject obj) {
         Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(obj.get("id").getAsString()));
         if (block == null || block == Blocks.AIR) {
             return Blocks.AIR.defaultBlockState();

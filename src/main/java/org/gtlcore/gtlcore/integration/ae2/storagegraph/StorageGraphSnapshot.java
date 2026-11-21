@@ -12,10 +12,14 @@ public record StorageGraphSnapshot(
                                    int unverifiedAliasCount,
                                    List<Edge> edges,
                                    List<Source> sources,
-                                   boolean complete) {
+                                   GraphStatus status) {
 
     public StorageGraphSnapshot {
         edges = List.copyOf(edges);
         sources = List.copyOf(sources);
+    }
+
+    public boolean complete() {
+        return status == GraphStatus.COMPLETE;
     }
 }

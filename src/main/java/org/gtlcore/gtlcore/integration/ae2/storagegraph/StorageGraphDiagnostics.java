@@ -31,10 +31,10 @@ public final class StorageGraphDiagnostics {
         }
         lastLogNanos = now;
         GTLCore.LOGGER.info(
-                "[StorageGraph] epoch={} policy={} rawMounts={} uniqueSources={} aliasGroups={} opaqueSources={} complete={}",
+                "[StorageGraph] epoch={} policy={} rawMounts={} uniqueSources={} aliasGroups={} opaqueSources={} status={}",
                 snapshot.topologyEpoch(), snapshot.policyEpoch(), snapshot.rawMountCount(),
                 snapshot.uniqueSourceCount(), snapshot.aliasGroupCount(), snapshot.opaqueSourceCount(),
-                snapshot.complete());
+                snapshot.status());
     }
 
     public static void logTopologyChange(long epoch) {
@@ -162,8 +162,8 @@ public final class StorageGraphDiagnostics {
         }
         lastIncompleteLogNanos = now;
         GTLCore.LOGGER.info(
-                "[StorageGraph] incomplete graph sources={} edges={} rawMounts={}; falling back to native AE2",
-                snapshot.sources().size(), snapshot.edges().size(), snapshot.rawMountCount());
+                "[StorageGraph] incomplete graph status={} sources={} edges={} rawMounts={}; falling back to native AE2",
+                snapshot.status(), snapshot.sources().size(), snapshot.edges().size(), snapshot.rawMountCount());
     }
 
     public static void resetThrottle() {

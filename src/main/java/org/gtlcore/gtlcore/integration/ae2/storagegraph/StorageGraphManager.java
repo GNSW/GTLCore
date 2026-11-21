@@ -427,7 +427,7 @@ public final class StorageGraphManager {
                 .append(" nodes=").append(snapshot.sources().size())
                 .append(" edges=").append(snapshot.edges().size())
                 .append(" cycles=").append(cycleCount(snapshot))
-                .append(" complete=").append(snapshot.complete())
+                .append(" status=").append(snapshot.status())
                 .append('\n');
         for (Source source : snapshot.sources()) {
             out.append("source ").append(Long.toHexString(source.identityHash()))
@@ -486,6 +486,8 @@ public final class StorageGraphManager {
         int depth = 0;
         visited.put(root, Boolean.TRUE);
         queue.add(root);
+        boolean nodeLimitReached = false;
+        boolean depthLimitReached = false;
         while (!queue.isEmpty() && visited.size() <= MAX_NODES && depth <= MAX_DEPTH) {
             int levelSize = queue.size();
             depth++;
@@ -493,6 +495,10 @@ public final class StorageGraphManager {
                 MEStorage node = queue.poll();
                 StorageGraphAdapter adapter = StorageGraphAdapterRegistry.find(node);
                 for (StorageGraphAdapter.ChildEdge child : adapter.children(node)) {
+                    if (visited.size() >= MAX_NODES && !visited.containsKey(child.child())) {
+                        nodeLimitReached = true;
+                        break;
+                    }
                     edges.add(new Edge(edgeId++, System.identityHashCode(node), System.identityHashCode(child.child()),
                             child.kind(), child.policy(), child.nativeOrder()));
                     parentCount.merge(child.child(), 1, Integer::sum);
@@ -508,8 +514,23 @@ public final class StorageGraphManager {
                         queue.add(child.child());
                     }
                 }
+                if (nodeLimitReached) {
+                    break;
+                }
+            }
+            if (nodeLimitReached) {
+                break;
             }
         }
+        if (!queue.isEmpty()) {
+            if (nodeLimitReached || visited.size() > MAX_NODES) {
+                nodeLimitReached = true;
+            } else {
+                depthLimitReached = true;
+            }
+        }
+        GraphStatus status = nodeLimitReached ? GraphStatus.INCOMPLETE_NODE_LIMIT
+                : depthLimitReached ? GraphStatus.INCOMPLETE_DEPTH_LIMIT : GraphStatus.COMPLETE;
 
         Map<SourceId, Source> sourceMap = new java.util.LinkedHashMap<>();
         for (MEStorage node : visited.keySet()) {
@@ -538,9 +559,8 @@ public final class StorageGraphManager {
             }
         }
         int uniqueSources = sources.size() - opaqueSources;
-        boolean complete = queue.isEmpty();
         StorageGraphSnapshot snapshot = new StorageGraphSnapshot(epoch, policyEpoch, edges.size(), uniqueSources,
-                aliasGroups, opaqueSources, unverifiedAliases, edges, sources, complete);
+                aliasGroups, opaqueSources, unverifiedAliases, edges, sources, status);
         StorageGraphDiagnostics.logSnapshot(snapshot);
         StorageGraphDiagnostics.logSources(sources);
         return snapshot;

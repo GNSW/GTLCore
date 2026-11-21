@@ -212,7 +212,8 @@ ME 终端应显示两条独立条目、各 32，且日志没有 `compat fallback
 - `SourceRegistry` 在 `unmount` 时清理节点条目（`onRemoved`）；`EXTERNAL` 条目与 id 计数不复用（id 单调递增）；
 - SHADOW 的 `probeInsertUnique` 只统计 FINITE 且不 cap 到 `amount`，仅用于诊断对比；
 - 空 `NetworkStorage` 不再被当作 `OPAQUE` 物理来源（`isPhysicalSource=false`），不会自我递归；
-- `collect` 超过 `MAX_NODES`/`MAX_DEPTH` 时 `snapshot.complete()=false`，ON 的 `getAvailableStacks`/`SIMULATE EXTRACT/INSERT` 会回退原版并记录 `incomplete graph`；
+- `collect` 的节点预算是硬限制（每条边入队前检查），超限时 `snapshot.status()` 为 `INCOMPLETE_NODE_LIMIT`/`INCOMPLETE_DEPTH_LIMIT`，ON 的 `getAvailableStacks`/`SIMULATE EXTRACT/INSERT` 会回退原版并记录 `incomplete graph status=...`；
+- `status=COMPLETE` 只表示拓扑完整，不代表访问策略已验证（`PolicySnapshot` 仍是 `unknown()`，过滤/方向/优先级要等 PR-3）；回退原版不等于修复重复库存，二者在验收中必须分开记录；
 - G09–G25 目前是手工 + 单点验证，自动化测试尚未落地（参考 `GTLCore_StorageGraph_Automated_Testing_Guide.md`，目标是 `src/verification` + `runVreGameTest`）；
 - `/gtltest` 是调试命令，不保证长期 API 兼容。
 

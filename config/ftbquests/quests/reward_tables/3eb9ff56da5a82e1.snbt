@@ -1,0 +1,11 @@
+{
+	id: "3EB9FF56DA5A82E1"
+	loot_size: 1
+	order_index: 17
+	rewards: [
+		{ count: 3, item: "gtlcore:structure_component_frame_advanced" }
+		{ count: 3, item: "gtlcore:structure_component_plate_advanced" }
+		{ count: 3, item: "gtlcore:structure_component_finish_advanced" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.3eb9ff56da5a82e1.title}"
+}

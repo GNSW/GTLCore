@@ -1631,6 +1631,71 @@
 			x: -7.0d
 			y: -5.0d
 		}
+		{
+			can_repeat: true
+			icon: "gtlcore:structure_component_frame_basic"
+			id: "097447A3AF42B973"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "7A49FF5637E94A9B"
+				table_id: 2281870704265719626L
+				type: "choice"
+			}]
+			tasks: [{
+				consume_items: true
+				count: 4L
+				id: "079612DD11A549EA"
+				item: "gtceu:silver_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.097447a3af42b973.title}"
+			x: 4.5d
+			y: -5.5d
+		}
+		{
+			can_repeat: true
+			icon: "gtlcore:structure_component_plate_advanced"
+			id: "2B7BBDF03730C26F"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "2C1F540A5EEB77E5"
+				table_id: 4519924449538638561L
+				type: "choice"
+			}]
+			tasks: [{
+				consume_items: true
+				id: "58F6A70070D2EC65"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.2b7bbdf03730c26f.title}"
+			x: 4.5d
+			y: -4.0d
+		}
+		{
+			can_repeat: true
+			icon: "gtlcore:structure_component_finish_elite"
+			id: "03FAFEF1D7BF934D"
+			optional: true
+			rewards: [{
+				exclude_from_claim_all: true
+				id: "3A35A8930A4A81DB"
+				table_id: 5672565001072120222L
+				type: "choice"
+			}]
+			tasks: [{
+				consume_items: true
+				count: 4L
+				id: "6971A5A128F0ACFF"
+				item: "gtceu:gold_credit"
+				type: "item"
+			}]
+			title: "{gtlcore.quest.gtl.quest.03fafef1d7bf934d.title}"
+			x: 4.5d
+			y: -2.5d
+		}
 	]
 	title: "{gtlcore.quest.gtl.chapter.606a554994c6b31d.title}"
 }

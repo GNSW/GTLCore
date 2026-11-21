@@ -2511,6 +2511,27 @@
 			x: 0.5d
 			y: -1.0d
 		}
+		{
+			dependencies: ["52A0EE026A3D3A79"]
+			icon: "gtlcore:structure_placer"
+			id: "4D091931B877F39D"
+			optional: true
+			tasks: [
+				{
+					id: "456DDDFC01002144"
+					item: "gtlcore:structure_placer"
+					type: "item"
+				}
+				{
+					id: "73FF749E8A18431A"
+					item: "gtlcore:coordinate_positioning_card"
+					optional_task: true
+					type: "item"
+				}
+			]
+			x: 1.5d
+			y: 2.0d
+		}
 	]
 	subtitle: ["{gtlcore.quest.gtl.chapter.250070563f8f7511.subtitle.0000}"]
 	title: "{gtlcore.quest.gtl.chapter.250070563f8f7511.title}"

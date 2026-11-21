@@ -1,0 +1,11 @@
+{
+	id: "1FAAD550CF20EF4A"
+	loot_size: 1
+	order_index: 16
+	rewards: [
+		{ count: 3, item: "gtlcore:structure_component_frame_basic" }
+		{ count: 3, item: "gtlcore:structure_component_plate_basic" }
+		{ count: 3, item: "gtlcore:structure_component_finish_basic" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.1faad550cf20ef4a.title}"
+}

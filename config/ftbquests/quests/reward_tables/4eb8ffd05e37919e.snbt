@@ -1,0 +1,11 @@
+{
+	id: "4EB8FFD05E37919E"
+	loot_size: 1
+	order_index: 18
+	rewards: [
+		{ count: 3, item: "gtlcore:structure_component_frame_elite" }
+		{ count: 3, item: "gtlcore:structure_component_plate_elite" }
+		{ count: 3, item: "gtlcore:structure_component_finish_elite" }
+	]
+	title: "{gtlcore.quest.gtl.reward_table.4eb8ffd05e37919e.title}"
+}

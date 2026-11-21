@@ -38,8 +38,6 @@ public final class LocalBlueprintLibrary {
 
     private static final String MARKER_NAMESPACE = "gtlcore";
     private static final String MARKER_PREFIX = "local/";
-    /** 材料折算比例：多少方块算 1 点。 */
-    public static final int BLOCKS_PER_POINT = 1;
 
     private static volatile List<Entry> entries = List.of();
     private static volatile List<String> directories = List.of();
@@ -117,14 +115,9 @@ public final class LocalBlueprintLibrary {
         return BlueprintIO.baseName(path.substring(path.lastIndexOf('/') + 1));
     }
 
-    /**
-     * 蓝图方块数 -> 材料点数：每 {@value #BLOCKS_PER_POINT} 方块 1 点（不足也按 1 点），
-     * 再向上取整到 10 的倍数。
-     */
+    /** 蓝图方块数 -> 材料点数（与内置预设共用同一折算规则）。 */
     public static int materialCostOf(int blocks) {
-        if (blocks <= 0) return 0;
-        int points = (blocks + BLOCKS_PER_POINT - 1) / BLOCKS_PER_POINT;
-        return (points + 9) / 10 * 10;
+        return StructureMaterialType.pointsForBlocks(blocks);
     }
 
     /** 用已知的尺寸与方块数构造结构定义（扫描阶段不解析，因此元数据来自应用/预览时读取的结果）。 */

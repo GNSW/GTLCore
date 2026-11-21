@@ -134,6 +134,7 @@ public final class StructureDefinition {
                 return this;
             }
 
+            /** 已废弃：材料需求统一按方块数折算（只消耗框架组件），这里的点数不再生效。 */
             public Builder materials(StructureMaterialType type, int count) {
                 materials.set(type, count);
                 return this;
@@ -193,8 +194,23 @@ public final class StructureDefinition {
                 return new Structure(
                         name, type, displayName, description, source,
                         resource, symbolMap,
-                        materials, extraMaterials,
+                        automaticCost(data), extraMaterials,
                         data.sizeX(), data.sizeY(), data.sizeZ());
+            }
+
+            /** 材料需求统一按方块数折算（只消耗框架组件），调用方传入的固定点数不再使用。 */
+            private static StructureMaterialTable automaticCost(StructureFileIO.PatternData data) {
+                int blocks = 0;
+                for (String[] aisle : data.pattern()) {
+                    for (String row : aisle) {
+                        for (int i = 0; i < row.length(); i++) {
+                            if (row.charAt(i) != ' ') blocks++;
+                        }
+                    }
+                }
+                StructureMaterialTable cost = StructureMaterialTable.empty();
+                cost.set(StructureMaterialType.FRAME, StructureMaterialType.pointsForBlocks(blocks));
+                return cost;
             }
         }
     }

@@ -196,10 +196,6 @@ public final class StructurePlacerUI {
 
         panel.addWidget(dynamicLabel(172, 20, 152, () -> lineFor(be,
                 org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.FRAME)));
-        panel.addWidget(dynamicLabel(172, 34, 152, () -> lineFor(be,
-                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.PLATE)));
-        panel.addWidget(dynamicLabel(172, 48, 152, () -> lineFor(be,
-                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.FINISH)));
         panel.addWidget(dynamicLabel(172, 64, 152, () -> be.isMaterialsAdequate() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.material.adequate") : Component.translatable("ui.quantum_chromodynamic_charge.structure.material.insufficient")));
 
         panel.addWidget(button(240, 80, 80, 18,

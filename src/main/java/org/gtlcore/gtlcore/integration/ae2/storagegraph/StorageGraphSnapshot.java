@@ -11,7 +11,8 @@ public record StorageGraphSnapshot(
                                    int opaqueSourceCount,
                                    int unverifiedAliasCount,
                                    List<Edge> edges,
-                                   List<Source> sources) {
+                                   List<Source> sources,
+                                   boolean complete) {
 
     public StorageGraphSnapshot {
         edges = List.copyOf(edges);

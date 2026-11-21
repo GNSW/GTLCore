@@ -24,4 +24,11 @@ public interface StorageGraphAdapter {
     List<ChildEdge> children(MEStorage storage);
 
     SourceKind sourceKind(MEStorage storage);
+
+    /**
+     * 容器节点（如空 NetworkStorage）即使没有子节点也不是物理来源。
+     */
+    default boolean isPhysicalSource(MEStorage storage) {
+        return true;
+    }
 }

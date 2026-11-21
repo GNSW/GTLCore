@@ -211,8 +211,9 @@ ME 终端应显示两条独立条目、各 32，且日志没有 `compat fallback
 - `SIMULATE EXTRACT` 已按 `remaining` 递减（多个独立来源不会超量）；`getAvailableStacks` 保持 AE2 累加语义（不清空调用方计数器）；`SIMULATE INSERT` 对 OPAQUE 做空位探测（空箱子也会触发回退），OFF 模式直接走原版；
 - `SourceRegistry` 在 `unmount` 时清理节点条目（`onRemoved`）；`EXTERNAL` 条目与 id 计数不复用（id 单调递增）；
 - SHADOW 的 `probeInsertUnique` 只统计 FINITE 且不 cap 到 `amount`，仅用于诊断对比；
-- `collect` 超过 `MAX_NODES`/`MAX_DEPTH` 时仍返回已采集部分（无 incomplete 状态）；
-- G09–G25 目前是手工 + 单点验证，自动化差分/性质测试未做；
+- 空 `NetworkStorage` 不再被当作 `OPAQUE` 物理来源（`isPhysicalSource=false`），不会自我递归；
+- `collect` 超过 `MAX_NODES`/`MAX_DEPTH` 时 `snapshot.complete()=false`，ON 的 `getAvailableStacks`/`SIMULATE EXTRACT/INSERT` 会回退原版并记录 `incomplete graph`；
+- G09–G25 目前是手工 + 单点验证，自动化测试尚未落地（参考 `GTLCore_StorageGraph_Automated_Testing_Guide.md`，目标是 `src/verification` + `runVreGameTest`）；
 - `/gtltest` 是调试命令，不保证长期 API 兼容。
 
 ## 9. 涉及文件

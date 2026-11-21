@@ -17,6 +17,7 @@ public final class StorageGraphDiagnostics {
     private static long lastSimulateLogNanos;
     private static long lastInsertLogNanos;
     private static long lastFallbackLogNanos;
+    private static long lastIncompleteLogNanos;
 
     private StorageGraphDiagnostics() {}
 
@@ -30,9 +31,10 @@ public final class StorageGraphDiagnostics {
         }
         lastLogNanos = now;
         GTLCore.LOGGER.info(
-                "[StorageGraph] epoch={} policy={} rawMounts={} uniqueSources={} aliasGroups={} opaqueSources={}",
+                "[StorageGraph] epoch={} policy={} rawMounts={} uniqueSources={} aliasGroups={} opaqueSources={} complete={}",
                 snapshot.topologyEpoch(), snapshot.policyEpoch(), snapshot.rawMountCount(),
-                snapshot.uniqueSourceCount(), snapshot.aliasGroupCount(), snapshot.opaqueSourceCount());
+                snapshot.uniqueSourceCount(), snapshot.aliasGroupCount(), snapshot.opaqueSourceCount(),
+                snapshot.complete());
     }
 
     public static void logTopologyChange(long epoch) {
@@ -150,6 +152,20 @@ public final class StorageGraphDiagnostics {
                 uniqueSources, opaqueSources);
     }
 
+    public static void logIncomplete(StorageGraphSnapshot snapshot) {
+        if (snapshot == null || !isLoggingEnabled()) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (now - lastIncompleteLogNanos < MIN_INTERVAL_NANOS) {
+            return;
+        }
+        lastIncompleteLogNanos = now;
+        GTLCore.LOGGER.info(
+                "[StorageGraph] incomplete graph sources={} edges={} rawMounts={}; falling back to native AE2",
+                snapshot.sources().size(), snapshot.edges().size(), snapshot.rawMountCount());
+    }
+
     public static void resetThrottle() {
         lastLogNanos = 0L;
         lastTopologyLogNanos = 0L;
@@ -159,6 +175,7 @@ public final class StorageGraphDiagnostics {
         lastSimulateLogNanos = 0L;
         lastInsertLogNanos = 0L;
         lastFallbackLogNanos = 0L;
+        lastIncompleteLogNanos = 0L;
     }
 
     private static boolean isLoggingEnabled() {

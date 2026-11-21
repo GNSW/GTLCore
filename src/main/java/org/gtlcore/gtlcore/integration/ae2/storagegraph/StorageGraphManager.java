@@ -117,6 +117,10 @@ public final class StorageGraphManager {
             return false;
         }
         StorageGraphSnapshot snapshot = collect(root);
+        if (!snapshot.complete()) {
+            StorageGraphDiagnostics.logIncomplete(snapshot);
+            return false;
+        }
         KeyCounter unique = new KeyCounter();
         KeyCounter opaque = new KeyCounter();
         for (Source source : snapshot.sources()) {
@@ -144,6 +148,10 @@ public final class StorageGraphManager {
             return -1L;
         }
         StorageGraphSnapshot snapshot = collect(root);
+        if (!snapshot.complete()) {
+            StorageGraphDiagnostics.logIncomplete(snapshot);
+            return -1L;
+        }
         KeyCounter opaque = new KeyCounter();
         long remaining = amount;
         long unique = 0L;
@@ -178,6 +186,10 @@ public final class StorageGraphManager {
             return -1L;
         }
         StorageGraphSnapshot snapshot = collect(root);
+        if (!snapshot.complete()) {
+            StorageGraphDiagnostics.logIncomplete(snapshot);
+            return -1L;
+        }
         long remaining = amount;
         long unique = 0L;
         boolean opaqueMayAccept = false;
@@ -194,7 +206,8 @@ public final class StorageGraphManager {
                     unique = saturatingAdd(unique, got);
                     remaining -= got;
                 }
-            } else if (!opaqueMayAccept && remaining > 0L && graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source) > 0L) {
+            } else if (!opaqueMayAccept && remaining > 0L
+                    && graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source) > 0L) {
                 opaqueMayAccept = true;
             }
         }
@@ -414,6 +427,7 @@ public final class StorageGraphManager {
                 .append(" nodes=").append(snapshot.sources().size())
                 .append(" edges=").append(snapshot.edges().size())
                 .append(" cycles=").append(cycleCount(snapshot))
+                .append(" complete=").append(snapshot.complete())
                 .append('\n');
         for (Source source : snapshot.sources()) {
             out.append("source ").append(Long.toHexString(source.identityHash()))
@@ -500,7 +514,7 @@ public final class StorageGraphManager {
         Map<SourceId, Source> sourceMap = new java.util.LinkedHashMap<>();
         for (MEStorage node : visited.keySet()) {
             StorageGraphAdapter adapter = StorageGraphAdapterRegistry.find(node);
-            if (!adapter.children(node).isEmpty()) {
+            if (!adapter.isPhysicalSource(node) || !adapter.children(node).isEmpty()) {
                 continue;
             }
             long externalKey = externalKeys.getOrDefault(node, 0L);
@@ -524,8 +538,9 @@ public final class StorageGraphManager {
             }
         }
         int uniqueSources = sources.size() - opaqueSources;
+        boolean complete = queue.isEmpty();
         StorageGraphSnapshot snapshot = new StorageGraphSnapshot(epoch, policyEpoch, edges.size(), uniqueSources,
-                aliasGroups, opaqueSources, unverifiedAliases, edges, sources);
+                aliasGroups, opaqueSources, unverifiedAliases, edges, sources, complete);
         StorageGraphDiagnostics.logSnapshot(snapshot);
         StorageGraphDiagnostics.logSources(sources);
         return snapshot;

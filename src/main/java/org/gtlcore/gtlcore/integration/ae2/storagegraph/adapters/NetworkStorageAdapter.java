@@ -25,4 +25,9 @@ public final class NetworkStorageAdapter implements StorageGraphAdapter {
     public SourceKind sourceKind(MEStorage storage) {
         return SourceKind.OPAQUE;
     }
+
+    @Override
+    public boolean isPhysicalSource(MEStorage storage) {
+        return false;
+    }
 }

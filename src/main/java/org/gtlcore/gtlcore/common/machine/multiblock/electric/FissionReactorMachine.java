@@ -196,7 +196,7 @@ public class FissionReactorMachine extends WorkableElectricMultiblockMachine imp
                 }
             }
             if (getRecipeLogic().isWorking()) {
-                int required = recipeHeat * parallel * heat / 1500;
+                int required = Math.max(1, recipeHeat * parallel * heat / 1500);
                 int surplus = ((cooler - (coolerAdjacent / 3)) * 8) - required;
                 boolean isCooler = false;
                 if (surplus >= 0) {

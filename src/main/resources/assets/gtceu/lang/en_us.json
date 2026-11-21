@@ -729,7 +729,7 @@
   "gtceu.machine.fission_reactor.tooltip.4": "Coolant coefficients: Distilled Water: 800, Sodium-Potassium Alloy: 20",
   "gtceu.machine.fission_reactor.tooltip.5": "Reactor cooling has the following parameters:",
   "gtceu.machine.fission_reactor.tooltip.6": "Minimum coolant demand and maximum coolant supply",
-  "gtceu.machine.fission_reactor.tooltip.7": "Minimum demand = recipe heat production x actual parallel count x current temperature/1500",
+  "gtceu.machine.fission_reactor.tooltip.7": "Minimum demand = max(1, recipe heat production x actual parallel count x current temperature/1500)",
   "gtceu.machine.fission_reactor.tooltip.8": "Maximum supply = (coolant components - (adjacent count/3)) x 8",
   "gtceu.machine.fission_reactor.tooltip.9": "When supply >= demand, coolant consumption conditions are met, consume provided coolant, consumption = demand x coolant coefficient, and prevent reactor heating",
   "gtceu.machine.flotation_cell_regulator.tooltip.0": "Industrial-grade flotation cell",

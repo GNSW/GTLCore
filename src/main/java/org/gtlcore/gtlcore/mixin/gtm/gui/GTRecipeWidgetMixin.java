@@ -10,6 +10,10 @@ import com.gregtechceu.gtceu.integration.GTRecipeWidget;
 import com.gregtechceu.gtceu.utils.FormattingUtil;
 import com.gregtechceu.gtceu.utils.GTUtil;
 
+import com.lowdragmc.lowdraglib.gui.widget.LabelWidget;
+import com.lowdragmc.lowdraglib.gui.widget.Widget;
+import com.lowdragmc.lowdraglib.gui.widget.WidgetGroup;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 
@@ -96,5 +100,49 @@ public abstract class GTRecipeWidgetMixin {
         }
 
         return texts;
+    }
+
+    @Inject(method = "setRecipeWidget", at = @At("RETURN"), remap = false)
+    private void gtlcore$separateResearchAndComputation(CallbackInfo ci) {
+        WidgetGroup self = (WidgetGroup) (Object) this;
+        var widgets = self.widgets;
+        LabelWidget research = null;
+        LabelWidget computation = null;
+        String researchPrefix = Component.translatable("gtceu.recipe.research").getString();
+        for (Widget widget : widgets) {
+            if (!(widget instanceof LabelWidget label)) continue;
+            String text = gtlcore$textOf(label);
+            if (text == null) continue;
+            if (text.startsWith(researchPrefix)) {
+                research = label;
+            } else if (text.contains("CWU/t")) {
+                computation = label;
+            }
+        }
+        if (research == null || computation == null) return;
+        int base = research.getPositionY();
+        if (base != computation.getPositionY()) return;
+        for (Widget widget : widgets) {
+            if (widget instanceof LabelWidget label && label != research && label.getPositionY() > base) {
+                label.setSelfPositionY(label.getPositionY() + 10);
+            }
+        }
+        research.setSelfPositionY(base + 10);
+    }
+
+    @Unique
+    private static String gtlcore$textOf(LabelWidget label) {
+        try {
+            var componentField = LabelWidget.class.getDeclaredField("component");
+            componentField.setAccessible(true);
+            Component component = (Component) componentField.get(label);
+            if (component != null) return component.getString();
+            var supplierField = LabelWidget.class.getDeclaredField("textSupplier");
+            supplierField.setAccessible(true);
+            var supplier = (java.util.function.Supplier<String>) supplierField.get(label);
+            return supplier == null ? null : supplier.get();
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
     }
 }

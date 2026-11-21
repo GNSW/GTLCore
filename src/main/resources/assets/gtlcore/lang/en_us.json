@@ -1965,6 +1965,7 @@
   "ui.quantum_chromodynamic_charge.structure.z_mirror": "Z Mirror",
   "block.gtlcore.structure_placer": "Structure Placer",
   "item.gtlcore.coordinate_positioning_card": "Coordinate Positioning Card",
+  "tooltip.gtlcore.coordinate_positioning_card.help": "Right-click a block to record its position; sneak-right-click to clear. Put two cards into a structure placer's export slots to export the marked region.",
   "item.gtlcore.structure_component_frame_basic": "Structure Component Frame Basic",
   "item.gtlcore.structure_component_frame_advanced": "Structure Component Frame Advanced",
   "item.gtlcore.structure_component_frame_elite": "Structure Component Frame Elite",
@@ -1974,6 +1975,9 @@
   "item.gtlcore.structure_component_finish_basic": "Structure Component Finish Basic",
   "item.gtlcore.structure_component_finish_advanced": "Structure Component Finish Advanced",
   "item.gtlcore.structure_component_finish_elite": "Structure Component Finish Elite",
+  "item.gtlcore.structure_component.tooltip.type": "Type: %s",
+  "item.gtlcore.structure_component.tooltip.points": "Points: %s",
+  "item.gtlcore.structure_component.tooltip.usage": "Insert into a structure placer's material slots to add points of this type.",
   "ui.quantum_chromodynamic_charge.structure.material.preview": "Material preview",
   "ui.quantum_chromodynamic_charge.structure.rotation_speed": "Rotation & Speed"
 }

@@ -91,6 +91,8 @@ public class SpaceElevatorModuleMachine extends WorkableElectricMultiblockMachin
         updateConnectionSubscription();
         getSpaceElevatorTier();
         recipeLogic.updateTickSubscription();
+        recipeLogic.markLastRecipeDirty();
+        recipeLogic.setStatus(RecipeLogic.Status.IDLE);
     }
 
     @Override

@@ -1,0 +1,31 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "A": {
+      "item": "gtceu:double_wrought_iron_plate"
+    },
+    "B": {
+      "item": "laserio:logic_chip"
+    },
+    "C": {
+      "item": "minecraft:blue_dye"
+    },
+    "D": {
+      "item": "minecraft:diamond_pickaxe"
+    },
+    "E": {
+      "item": "minecraft:diamond_axe"
+    },
+    "F": {
+      "item": "minecraft:diamond_shovel"
+    }
+  },
+  "pattern": [
+    "ACA",
+    "DBE",
+    "AFA"
+  ],
+  "result": {
+    "item": "gtlcore:structure_placer"
+  }
+}

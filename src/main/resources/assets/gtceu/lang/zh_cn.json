@@ -729,7 +729,7 @@
   "gtceu.machine.fission_reactor.tooltip.4": "冷却液系数：蒸馏水：800，钠钾合金：20",
   "gtceu.machine.fission_reactor.tooltip.5": "反应堆冷却有如下参数：",
   "gtceu.machine.fission_reactor.tooltip.6": "最低冷却液需求量和最高冷却液供给量",
-  "gtceu.machine.fission_reactor.tooltip.7": "最低需求量=配方产热x实际并行数量x当前温度/1500",
+  "gtceu.machine.fission_reactor.tooltip.7": "最低需求量=max(1,配方产热x实际并行数量x当前温度/1500)",
   "gtceu.machine.fission_reactor.tooltip.8": "最高供给量=(冷却组件-(相邻数/3))x8",
   "gtceu.machine.fission_reactor.tooltip.9": "当供给量>=需求量时达到消耗冷却液条件，消耗提供的冷却液，消耗量为需求量x冷却液系数，并阻止反应堆升温",
   "gtceu.machine.flotation_cell_regulator.tooltip.0": "工业级浮游选矿池",

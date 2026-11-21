@@ -39,6 +39,8 @@ final class CountSchedule<K> implements AutoCloseable {
     private long orderedAway;
     private Result result;
     private CountRecurrence<K> recurrence;
+    private CountPeriodSchedule<K> period;
+    private boolean periodTried;
     private CountBoundedSchedule<K> bounded;
     private CountChainSchedule<K> chains;
     private boolean chainsTried;
@@ -61,6 +63,7 @@ final class CountSchedule<K> implements AutoCloseable {
 
     private enum WitnessSource {
         RECURRENCE,
+        PERIOD,
         GREEDY,
         EXACT,
         BOUNDED,
@@ -196,6 +199,13 @@ final class CountSchedule<K> implements AutoCloseable {
     private boolean stepMeasured() {
         budget.check();
         if (result != null) return true;
+        if (period != null) {
+            if (!period.step()) return false;
+            witness = period.witness();
+            period.close(); period = null;
+            if (witness != null) { witnessSource = WitnessSource.PERIOD; return finish(Result.WITNESS); }
+            return nextAttempt();
+        }
         if (chains != null) {
             if (!chains.step()) return false;
             witness = chains.witness();
@@ -461,6 +471,13 @@ final class CountSchedule<K> implements AutoCloseable {
             return false;
         }
         if (preferredOnly) return finish(Result.UNKNOWN);
+        // Preserve recurrence and the first cheap physical scan. A short-period
+        // candidate precedes general order retries only when that scan stalls.
+        if (!periodTried && model.graphMode == GraphMode.FULL) {
+            periodTried = true;
+            period = new CountPeriodSchedule<>(model, original, budget);
+            return false;
+        }
         if (!guidedTried && !smallMultiset()) {
             guidedTried = true;
             guidedOrder = new CountScheduleOrder<>(model, summaries, budget);
@@ -809,7 +826,7 @@ final class CountSchedule<K> implements AutoCloseable {
         witness = null;
         budget.note("count_schedule_order", "assembly_rejected; same_counts_alternative_order");
         switch (witnessSource) {
-            case RECURRENCE -> reset();
+            case RECURRENCE, PERIOD -> reset();
             case CHAINS -> {
                 chains.close();
                 chains = null;
@@ -907,6 +924,7 @@ final class CountSchedule<K> implements AutoCloseable {
 
     @Override
     public void close() {
+        if (period != null) { period.close(); period = null; }
         if (readyOrder != null) { readyOrder.close(); readyOrder = null; }
         if (word != null) { word.close(); word = null; }
         if (chains != null) { chains.close(); chains = null; }

@@ -49,6 +49,8 @@ public class CoordinatePositioningCardItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        tooltip.add(Component.translatable("tooltip.gtlcore.coordinate_positioning_card.help")
+                .withStyle(ChatFormatting.GRAY));
         BlockPos pos = getCoordinate(stack);
         if (pos != null) {
             tooltip.add(Component.translatable(

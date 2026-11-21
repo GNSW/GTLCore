@@ -1,13 +1,16 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
+import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.me.storage.NetworkStorage;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -41,20 +44,58 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private void gtlcore$bumpThroughputTopologyOnMount(int priority, MEStorage storage, CallbackInfo ci) {
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
+        StorageGraphManager.onTopologyChanged();
     }
 
     @Inject(method = "unmount", at = @At("RETURN"), remap = false)
     private void gtlcore$bumpThroughputTopologyOnUnmount(MEStorage storage, CallbackInfo ci) {
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
+        StorageGraphManager.onTopologyChanged();
+    }
+
+    @Inject(method = "getAvailableStacks", at = @At("HEAD"), remap = false)
+    private void gtlcore$observeStorageGraph(KeyCounter out, CallbackInfo ci) {
+        StorageGraphManager.onAccess((MEStorage) (Object) this);
+    }
+
+    @WrapMethod(method = "getAvailableStacks", remap = false)
+    private void gtlcore$shadowAvailableStacks(KeyCounter out, Operation<Void> original) {
+        if (StorageGraphManager.mode() == StorageGraphMode.ON && StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
+            return;
+        }
+        long legacyBefore = StorageGraphManager.keyCounterTotal(out);
+        StorageGraphManager.logMounts(priorityInventory);
+        StorageGraphManager.enterNested();
+        try {
+            original.call(out);
+        } finally {
+            StorageGraphManager.exitNested();
+        }
+        long legacyAfter = StorageGraphManager.keyCounterTotal(out);
+        StorageGraphManager.shadowAvailableStacks((MEStorage) (Object) this, out, legacyBefore, legacyAfter);
     }
 
     @WrapMethod(method = "insert", remap = false)
     private long gtlcore$trackInsert(AEKey what, long amount, Actionable mode, IActionSource source,
                                      Operation<Long> original) {
+        if (mode == Actionable.SIMULATE) {
+            if (StorageGraphManager.mode() == StorageGraphMode.ON) {
+                long unique = StorageGraphManager.insertUniqueIfExact((MEStorage) (Object) this, what, amount,
+                        source);
+                if (unique >= 0L) {
+                    return unique;
+                }
+            }
+            long legacy = original.call(what, amount, mode, source);
+            StorageGraphManager.shadowInsert((MEStorage) (Object) this, what, amount, mode, source, legacy);
+            return legacy;
+        }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);
         }
+        StorageGraphManager.InsertProbe insertProbe = StorageGraphManager.probeInsertUnique(
+                (MEStorage) (Object) this, what, amount, source);
         ThroughputMonitorStorageTracker.beginInsert((MEStorage) (Object) this, source);
         long inserted;
         try {
@@ -64,6 +105,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             ThroughputMonitorStorageTracker.abortOperation();
             throw failure;
         }
+        StorageGraphManager.logInsert(inserted, insertProbe, what, amount);
         return inserted;
     }
 
@@ -71,7 +113,23 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackExtraction(AEKey what, long amount, Actionable mode, IActionSource source,
                                          Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            return NetworkExtractionSimulation.network(this, what, () -> original.call(what, amount, mode, source));
+            if (StorageGraphManager.mode() == StorageGraphMode.ON) {
+                long unique = StorageGraphManager.simulateUniqueIfExact((MEStorage) (Object) this, what, amount,
+                        source);
+                if (unique >= 0L) {
+                    return unique;
+                }
+            }
+            StorageGraphManager.enterNested();
+            long legacy;
+            try {
+                legacy = NetworkExtractionSimulation.network(this, what,
+                        () -> original.call(what, amount, mode, source));
+            } finally {
+                StorageGraphManager.exitNested();
+            }
+            StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
+            return legacy;
         }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);

@@ -1,5 +1,7 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
 
@@ -25,6 +27,8 @@ public abstract class CompositeStorageMixin implements ThroughputStorageView {
     @Inject(method = "setStorages", at = @At("RETURN"), remap = false)
     private void gtlcore$invalidateThroughputTopology(Map<AEKeyType, MEStorage> storages, CallbackInfo ci) {
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
+        SourceRegistry.onDelegateChanged((MEStorage) (Object) this);
+        StorageGraphManager.onTopologyChanged();
     }
 
     @Override

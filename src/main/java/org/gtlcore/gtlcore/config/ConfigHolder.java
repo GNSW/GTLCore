@@ -313,6 +313,18 @@ public class ConfigHolder {
         public AEGraphSeedPolicy ae2GraphSeedPolicy = AEGraphSeedPolicy.PRESERVE;
 
         @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphMode.comment")
+        public StorageGraphMode ae2StorageGraphMode = StorageGraphMode.OFF;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphLogging.comment")
+        public boolean ae2StorageGraphLogging = false;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphCompatFallback.comment")
+        public boolean ae2StorageGraphCompatFallback = true;
+
+        @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2GraphByteCostMode.comment")
         public CraftingCostModel.Mode ae2GraphByteCostMode = CraftingCostModel.Mode.COMPACT;
 

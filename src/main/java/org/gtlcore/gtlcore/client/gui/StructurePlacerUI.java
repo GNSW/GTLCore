@@ -1,9 +1,9 @@
 package org.gtlcore.gtlcore.client.gui;
 
+import org.gtlcore.gtlcore.client.gui.widget.BlueprintActionWidget;
 import org.gtlcore.gtlcore.client.gui.widget.MaterialPreviewWidget;
-import org.gtlcore.gtlcore.client.gui.widget.StructureSelector;
 import org.gtlcore.gtlcore.common.block.StructurePlacerBlockEntity;
-import org.gtlcore.gtlcore.common.structure.registry.StructureTemplateRegistry;
+import org.gtlcore.gtlcore.common.structure.local.LocalBlueprintLibrary;
 import org.gtlcore.gtlcore.common.structure.transform.StructureTransform;
 
 import com.gregtechceu.gtceu.api.gui.GuiTextures;
@@ -63,19 +63,29 @@ public final class StructurePlacerUI {
     public static ModularUI create(StructurePlacerBlockEntity be, Player player) {
         ModularUI ui = new ModularUI(WIDTH, HEIGHT, be, player).background(GuiTextures.BACKGROUND);
 
-        // 预览浮层只在客户端创建：里面的 SceneWidget 需要客户端渲染器。
-        // 浮层整体最后加入且内部控件都标记为客户端控件，因此不会往服务端发 action，
-        // 服务端也不会去解析它的下标。
-        StructurePreviewPanel preview = player.level().isClientSide ?
-                new StructurePreviewPanel(be, WIDTH, HEIGHT) : null;
+        // 蓝图选择的动作中转控件：两端都有、下标固定，客户端覆盖页通过它把选择结果交给服务端
+        BlueprintActionWidget action = new BlueprintActionWidget(be);
+        // 槽位访问控制：shift 点击只进当前标签页的格子（下标需要同步给服务端）
+        StructurePlacerWorkspace workspace = new StructurePlacerWorkspace();
+        // 蓝图选择覆盖页只在客户端创建：里面的 SceneWidget 需要客户端渲染器。
+        // 覆盖页最后加入且整体是客户端控件，不会影响前面控件的 action 下标。
+        BlueprintBrowserPanel browser = player.level().isClientSide ?
+                new BlueprintBrowserPanel(be, action, WIDTH, HEIGHT) : null;
 
-        ui.widget(buildTabs(be));
-        ui.widget(buildDeployPanel(be, preview));
-        ui.widget(buildPlayerInventory(player));
-        if (preview != null) {
-            // 最后添加：绘制在最上层，不影响前面控件的 action 下标
-            ui.widget(preview);
+        WidgetGroup tabs = buildTabs(be, action, browser, workspace);
+        WidgetGroup deploy = buildDeployPanel(be);
+        WidgetGroup inventory = buildPlayerInventory(player);
+        ui.widget(tabs);
+        ui.widget(deploy);
+        ui.widget(inventory);
+        if (browser != null) {
+            // 覆盖页打开时隐藏这些底层控件，避免它们的悬停提示画到覆盖页上
+            browser.setUnderlying(tabs, deploy, inventory);
+            // 最后添加：绘制在最上层
+            ui.widget(browser);
         }
+        workspace.setActiveTab(StructurePlacerWorkspace.TAB_BLUEPRINT);
+        be.attachWorkspace(workspace);
         return ui;
     }
 
@@ -83,19 +93,36 @@ public final class StructurePlacerUI {
     // 标签容器
     // -------------------------------------------------------------------------
 
-    private static TabContainer buildTabs(StructurePlacerBlockEntity be) {
+    private static TabContainer buildTabs(StructurePlacerBlockEntity be, BlueprintActionWidget action,
+                                          @Nullable BlueprintBrowserPanel browser,
+                                          StructurePlacerWorkspace workspace) {
         TabContainer tabs = new TabContainer(CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H);
         // 不使用带伪标签缺口的 GT 背景，标签按钮自己绘制在容器上方
         tabs.setBackground(IGuiTexture.EMPTY);
 
-        tabs.addTab(tabButton(0, "ui.quantum_chromodynamic_charge.structure.tab.blueprint"),
-                buildBlueprintTab(be));
-        tabs.addTab(tabButton(TAB_STEP, "ui.quantum_chromodynamic_charge.structure.tab.material"),
-                buildMaterialTab(be));
-        tabs.addTab(tabButton(TAB_STEP * 2, "ui.quantum_chromodynamic_charge.structure.tab.settings"),
-                buildSettingsTab(be));
-        tabs.addTab(tabButton(TAB_STEP * 3, "ui.quantum_chromodynamic_charge.structure.tab.export"),
-                buildExportTab(be));
+        List<WidgetGroup> pages = new java.util.ArrayList<>(4);
+        WidgetGroup blueprint = buildBlueprintTab(be, action, browser);
+        WidgetGroup material = buildMaterialTab(be, workspace);
+        WidgetGroup settings = buildSettingsTab(be);
+        WidgetGroup export = buildExportTab(be, workspace);
+        pages.add(blueprint);
+        pages.add(material);
+        pages.add(settings);
+        pages.add(export);
+
+        tabs.addTab(tabButton(0, "ui.quantum_chromodynamic_charge.structure.tab.blueprint"), blueprint);
+        tabs.addTab(tabButton(TAB_STEP, "ui.quantum_chromodynamic_charge.structure.tab.material"), material);
+        tabs.addTab(tabButton(TAB_STEP * 2, "ui.quantum_chromodynamic_charge.structure.tab.settings"), settings);
+        tabs.addTab(tabButton(TAB_STEP * 3, "ui.quantum_chromodynamic_charge.structure.tab.export"), export);
+
+        // 切换页时只放开该页格子的放入权限，并把下标同步给服务端（shift 点击在服务端判定）
+        tabs.setOnChanged((oldPage, newPage) -> {
+            int index = pages.indexOf(newPage);
+            if (index < 0) index = pages.indexOf(oldPage);
+            if (index < 0) return;
+            workspace.setActiveTab(index);
+            action.setTab(index);
+        });
         return tabs;
     }
 
@@ -114,23 +141,24 @@ public final class StructurePlacerUI {
     }
 
     // -------------------------------------------------------------------------
-    // 蓝图页：选择器 + 摘要 + 材料预览
+    // 蓝图页：蓝图选择入口 + 摘要 + 材料预览（预览在蓝图选择覆盖页里）
     // -------------------------------------------------------------------------
 
-    private static WidgetGroup buildBlueprintTab(StructurePlacerBlockEntity be) {
+    private static WidgetGroup buildBlueprintTab(StructurePlacerBlockEntity be, BlueprintActionWidget action,
+                                                 @Nullable BlueprintBrowserPanel browser) {
         WidgetGroup panel = contentPanel();
 
-        panel.addWidget(staticLabel(6, 5, "ui.quantum_chromodynamic_charge.structure.preset"));
-        panel.addWidget(staticLabel(6, 27, "ui.quantum_chromodynamic_charge.structure.template"));
+        // 共享空控件放最前：两端下标一致，蓝图覆盖页里的动态行只通过它发动作
+        panel.addWidget(action);
+
+        panel.addWidget(staticLabel(6, 5, "ui.quantum_chromodynamic_charge.structure.blueprint"));
+        panel.addWidget(pickButton(be, browser));
         panel.addWidget(sectionTitleWidget(6, 47, "ui.quantum_chromodynamic_charge.structure.summary"));
 
-        panel.addWidget(dynamicLabel(6, 58, 168, be::blueprintSummaryPreset));
-        panel.addWidget(dynamicLabel(6, 78, 168, be::blueprintSummaryTemplate));
-        panel.addWidget(dynamicLabel(6, 98, 168, be::blueprintSummaryTypeSize));
-        panel.addWidget(dynamicLabel(6, 118, 168, () -> Component.empty()
-                .append(be.blueprintSummarySource())
-                .append(Component.literal("  "))
-                .append(be.blueprintSummaryIndex())));
+        panel.addWidget(dynamicLabel(6, 58, 168, be::blueprintCurrentLine));
+        panel.addWidget(dynamicLabel(6, 78, 168, be::blueprintSourceLine));
+        panel.addWidget(dynamicLabel(6, 98, 168, be::blueprintSizeLine));
+        panel.addWidget(dynamicLabel(6, 118, 168, be::blueprintCostLine));
         panel.addWidget(fixedLabel(6, 130, 168,
                 "ui.quantum_chromodynamic_charge.structure.bounds_hint"));
 
@@ -138,40 +166,29 @@ public final class StructurePlacerUI {
                 "ui.quantum_chromodynamic_charge.structure.material.preview"));
         panel.addWidget(new MaterialPreviewWidget(182, 60, 140, 80, be::materialPreviewEntries));
 
-        // 注意：下拉框必须最后添加（绘制顺序 = 添加顺序），且靠上的下拉最后添加：
-        // 靠上的下拉展开时列表向下铺开，会盖住下面的控件，所以它必须最后绘制。
-        // 不能运行期调整 widgets 顺序：LDLib 的客户端 action 用“控件在父组中的下标”定位目标控件，
-        // 只在客户端改动顺序会让服务端处理到错误的控件（曾导致预设库切不动、却改了结构下标）。
-        panel.addWidget(new StructureSelector(
-                64, 25, 258,
-                () -> {
-                    if (StructureTemplateRegistry.presetCount() <= 0) return 0;
-                    return StructureTemplateRegistry.getPreset(be.getPresetIndex()).structures().size();
-                },
-                be::getStructureIndex,
-                index -> {
-                    if (StructureTemplateRegistry.presetCount() <= 0) return Component.literal("-");
-                    List<org.gtlcore.gtlcore.common.structure.model.StructureDefinition.Structure> list = StructureTemplateRegistry.getPreset(be.getPresetIndex()).structures();
-                    if (index < 0 || index >= list.size()) return Component.literal("-");
-                    return StructurePlacerBlockEntity.structureDropdownLabel(list.get(index));
-                },
-                be::setStructureIndex));
-
-        panel.addWidget(new StructureSelector(
-                64, 3, 258,
-                () -> StructureTemplateRegistry.presetCount(),
-                be::getPresetIndex,
-                index -> StructureTemplateRegistry.presetCount() > index ? StructureTemplateRegistry.getPreset(index).title() : Component.literal("-"),
-                be::setPresetIndex));
-
         return panel;
+    }
+
+    /** 蓝图选择入口：显示当前蓝图，点击展开蓝图选择覆盖页（纯客户端）。 */
+    private static ButtonWidget pickButton(StructurePlacerBlockEntity be, @Nullable BlueprintBrowserPanel browser) {
+        ButtonWidget button = new ButtonWidget(6, 20, CONTENT_W - 12, 20,
+                new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture(
+                        () -> shorten(be.blueprintCurrentLine().getString() + "  ▸", CONTENT_W - 26))),
+                click -> {
+                    if (click.isRemote && browser != null) browser.show();
+                });
+        button.setClientSideWidget();
+        button.setHoverTooltips(Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.browser.hint",
+                LocalBlueprintLibrary.FOLDER));
+        return button;
     }
 
     // -------------------------------------------------------------------------
     // 材料页：图标预览 + 明细 + 装卸 + 槽位
     // -------------------------------------------------------------------------
 
-    private static WidgetGroup buildMaterialTab(StructurePlacerBlockEntity be) {
+    private static WidgetGroup buildMaterialTab(StructurePlacerBlockEntity be, StructurePlacerWorkspace workspace) {
         WidgetGroup panel = contentPanel();
 
         panel.addWidget(staticLabel(6, 3, "ui.quantum_chromodynamic_charge.structure.material.summary"));
@@ -179,10 +196,6 @@ public final class StructurePlacerUI {
 
         panel.addWidget(dynamicLabel(172, 20, 152, () -> lineFor(be,
                 org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.FRAME)));
-        panel.addWidget(dynamicLabel(172, 34, 152, () -> lineFor(be,
-                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.PLATE)));
-        panel.addWidget(dynamicLabel(172, 48, 152, () -> lineFor(be,
-                org.gtlcore.gtlcore.common.structure.material.StructureMaterialType.FINISH)));
         panel.addWidget(dynamicLabel(172, 64, 152, () -> be.isMaterialsAdequate() ? Component.translatable("ui.quantum_chromodynamic_charge.structure.material.adequate") : Component.translatable("ui.quantum_chromodynamic_charge.structure.material.insufficient")));
 
         panel.addWidget(button(240, 80, 80, 18,
@@ -193,7 +206,7 @@ public final class StructurePlacerUI {
                 be::unloadingMaterial));
 
         panel.addWidget(slotGrid(be, 6, 80, StructurePlacerBlockEntity.MATERIAL_COLS,
-                StructurePlacerBlockEntity.MATERIAL_SLOTS));
+                StructurePlacerBlockEntity.MATERIAL_SLOTS, workspace));
         return panel;
     }
 
@@ -205,13 +218,16 @@ public final class StructurePlacerUI {
         return be.costValue(type) > 0 || be.bankValue(type) > 0 ? line : Component.empty();
     }
 
-    private static WidgetGroup slotGrid(StructurePlacerBlockEntity be, int x, int y, int cols, int size) {
+    private static WidgetGroup slotGrid(StructurePlacerBlockEntity be, int x, int y, int cols, int size,
+                                        StructurePlacerWorkspace workspace) {
         WidgetGroup grid = new WidgetGroup(x, y, cols * 18, (size / cols) * 18);
         for (int i = 0; i < size; i++) {
             int col = i % cols;
             int row = i / cols;
-            grid.addWidget(new SlotWidget(be.getMaterialInventory(), i, col * 18, row * 18, true, true)
-                    .setBackgroundTexture(GuiTextures.SLOT));
+            SlotWidget slot = new SlotWidget(be.getMaterialInventory(), i, col * 18, row * 18, true, true)
+                    .setBackgroundTexture(GuiTextures.SLOT);
+            workspace.addMaterialSlot(slot);
+            grid.addWidget(slot);
         }
         return grid;
     }
@@ -233,7 +249,7 @@ public final class StructurePlacerUI {
         panel.addWidget(sectionTitleWidget(6, 71,
                 "ui.quantum_chromodynamic_charge.structure.boundary"));
         panel.addWidget(dynamicLabel(6, 84, 164, () -> {
-            if (StructureTemplateRegistry.presetCount() <= 0) {
+            if (be.presetCount() <= 0) {
                 return Component.translatable("ui.quantum_chromodynamic_charge.structure.no_presets");
             }
             StructureTransform.BlockPosBounds b = be.placementBounds();
@@ -321,7 +337,7 @@ public final class StructurePlacerUI {
     // 导出页
     // -------------------------------------------------------------------------
 
-    private static WidgetGroup buildExportTab(StructurePlacerBlockEntity be) {
+    private static WidgetGroup buildExportTab(StructurePlacerBlockEntity be, StructurePlacerWorkspace workspace) {
         WidgetGroup panel = contentPanel();
 
         panel.addWidget(sectionTitleWidget(6, 3,
@@ -332,8 +348,11 @@ public final class StructurePlacerUI {
         panel.addWidget(staticLabel(6, 40,
                 "ui.quantum_chromodynamic_charge.structure.export_slots"));
         for (int i = 0; i < StructurePlacerBlockEntity.COORD_SLOTS; i++) {
-            panel.addWidget(new SlotWidget(be.getCoordinateInventory(), i, 40 + i * 22, 36, true, true)
-                    .setBackgroundTexture(GuiTextures.SLOT));
+            SlotWidget slot = new SlotWidget(be.getCoordinateInventory(), i, 40 + i * 22, 36, true, true)
+                    .setBackgroundTexture(GuiTextures.SLOT);
+            // 导出页只接受坐标定位卡（坐标背包自身也有过滤器，这里再限制为仅该页可放入）
+            workspace.addCardSlot(slot);
+            panel.addWidget(slot);
         }
         panel.addWidget(dynamicLabel(86, 38, 234, () -> be.exportCardText(0)));
         panel.addWidget(dynamicLabel(86, 52, 234, () -> be.exportCardText(1)));
@@ -353,17 +372,12 @@ public final class StructurePlacerUI {
     // 底栏：状态 + 放置
     // -------------------------------------------------------------------------
 
-    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be,
-                                                @Nullable StructurePreviewPanel preview) {
+    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be) {
         WidgetGroup panel = new WidgetGroup(CONTENT_X, BOTTOM_Y, DEPLOY_W, DEPLOY_H);
         panel.setBackground(GuiTextures.BACKGROUND_INVERSE);
 
-        Runnable openPreview = preview == null ? () -> {} : preview::show;
         panel.addWidget(dynamicLabel(6, 6, DEPLOY_W - 12, be::statusText));
-        // 预览：纯客户端浮层，不经过服务端（服务端这个按钮只是占位，保持下标一致）
-        panel.addWidget(clientButton(8, 26, DEPLOY_W - 16, 16,
-                "ui.quantum_chromodynamic_charge.structure.preview",
-                openPreview));
+        panel.addWidget(dynamicLabel(6, 24, DEPLOY_W - 12, be::blueprintCurrentLine));
         panel.addWidget(button(8, DEPLOY_H - 26, DEPLOY_W - 16, 18,
                 "ui.quantum_chromodynamic_charge.structure.place",
                 be::startPlacement));
@@ -438,20 +452,6 @@ public final class StructurePlacerUI {
                         serverAction.run();
                     }
                 });
-    }
-
-    /** 只在客户端执行的按钮（预览浮层之类的纯客户端功能）。 */
-    private static ButtonWidget clientButton(int x, int y, int width, int height, String text, Runnable clientAction) {
-        ButtonWidget button = new ButtonWidget(x, y, width, height,
-                new GuiTextureGroup(GuiTextures.BUTTON, new TextTexture(text)),
-                click -> {
-                    if (click.isRemote) {
-                        clientAction.run();
-                    }
-                });
-        // 客户端控件不会向服务端发送 action 包
-        button.setClientSideWidget();
-        return button;
     }
 
     /** 客户端宽度换行：中文按实际像素宽度切分。 */

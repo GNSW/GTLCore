@@ -4,16 +4,17 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 
 /**
- * 结构材料类型（可扩展枚举）。
+ * 结构材料类型。
  * <p>
- * {@link #index()}（ordinal）作银行/需求数组下标；序列化名用于存档与物品 id 片段。
+ * 现在只保留框架组件；{@link #index()}（ordinal）作银行/需求数组下标，序列化名用于存档与物品 id 片段。
  * </p>
  */
 public enum StructureMaterialType implements StringRepresentable {
 
-    FRAME("frame", "框架", 0xaa66fd3c),
-    PLATE("plate", "板材", 0xaa3844f4),
-    FINISH("finish", "饰面", 0xaae700ef);
+    FRAME("frame", "框架", 0xaa66fd3c);
+
+    /** 材料折算比例：多少方块算 1 点。 */
+    public static final int BLOCKS_PER_POINT = 1;
 
     private final String name;
     private final String nameCn;
@@ -48,6 +49,16 @@ public enum StructureMaterialType implements StringRepresentable {
 
     public Component displayName() {
         return Component.translatable(langKey());
+    }
+
+    /**
+     * 方块数 -> 材料点数：每 {@value #BLOCKS_PER_POINT} 方块 1 点（不足也按 1 点），
+     * 再向上取整到 10 的倍数。
+     */
+    public static int pointsForBlocks(int blocks) {
+        if (blocks <= 0) return 0;
+        int points = (blocks + BLOCKS_PER_POINT - 1) / BLOCKS_PER_POINT;
+        return (points + 9) / 10 * 10;
     }
 
     public static int count() {

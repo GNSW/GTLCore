@@ -1,5 +1,6 @@
 {
   "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout_mipped",
   "textures": {
     "particle": "gtlcore:block/structure_placer/side",
     "all": "gtlcore:block/structure_placer/side",
@@ -21,24 +22,24 @@
       }
     },
     {
-      "from": [-0.001, -0.001, -0.001],
-      "to": [16.001, 16.001, 0],
+      "from": [0, 0, -0.001],
+      "to": [16, 16, 0],
       "faces": {
         "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_0", "cullface": "north" }
       }
     },
     {
-      "from": [-0.001, -0.001, -0.001],
-      "to": [16.001, 16.001, 0],
+      "from": [0, 0, -0.002],
+      "to": [16, 16, -0.001],
       "faces": {
-        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_1", "cullface": "north", "emissivity": 15 }
+        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_1", "cullface": "north" }
       }
     },
     {
-      "from": [-0.001, -0.001, -0.001],
-      "to": [16.001, 16.001, 0],
+      "from": [0, 0, -0.003],
+      "to": [16, 16, -0.002],
       "faces": {
-        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_2", "cullface": "north", "emissivity": 15 }
+        "north": { "uv": [0, 0, 16, 16], "texture": "#overlay_2", "cullface": "north" }
       }
     }
   ]

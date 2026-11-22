@@ -9,9 +9,10 @@ import com.lowdragmc.lowdraglib.gui.texture.ResourceTexture;
 import net.minecraft.client.gui.GuiGraphics;
 
 /** Keeps the small preview's existing expand icon and resource-pack-aware button. */
-final class PreviewButtonTexture implements IGuiTexture {
+public final class PreviewButtonTexture implements IGuiTexture {
 
-    static final IGuiTexture EXPAND = new PreviewButtonTexture();
+    /** 与 JEI 多方块预览一致的「展开/全屏」按钮图标。 */
+    public static final IGuiTexture EXPAND = new PreviewButtonTexture();
     static final IGuiTexture INFO = LDLib.isJeiLoaded() ?
             new ResourceTexture("jei:textures/jei/atlas/gui/icons/info.png") : Icons.INFORMATION;
     static final IGuiTexture PATTERN_MATERIALS = new ResourceTexture(

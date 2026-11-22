@@ -37,7 +37,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 分 tick 结构放置：批量写 section，保留原版（GTO）的批量语义。
+ * 分 tick 结构放置：批量写 section
  * <p>
  * 无 BlockEntity 的方块直接写 {@link LevelChunkSection}，并按开关更新光照/高度图；
  * 带 BlockEntity 的位置回退到 {@link net.minecraft.world.level.Level#setBlock}。

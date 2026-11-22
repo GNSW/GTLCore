@@ -3,7 +3,7 @@ package org.gtlcore.gtlcore.common.structure.io;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * platforms 资源路径约定（与 GTO 一致）：
+ * platforms 资源路径约定：
  * {@code platforms/<namespace>/<path>[.mbs|.json]}
  */
 public final class StructureResources {

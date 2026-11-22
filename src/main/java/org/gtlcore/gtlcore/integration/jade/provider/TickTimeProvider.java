@@ -19,11 +19,6 @@ import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 
-/**
- * 代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public class TickTimeProvider extends CapabilityBlockProvider<IPerformanceDisplayMachine> {
 
     public TickTimeProvider() {

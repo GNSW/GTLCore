@@ -10,11 +10,6 @@ import net.minecraft.network.chat.Component;
 
 import org.jetbrains.annotations.Nullable;
 
-/**
- * 思路参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public record RecipeResult(boolean isSuccess, @Nullable Component reason) {
 
     public static void of(IRecipeLogicMachine machine, RecipeResult result) {

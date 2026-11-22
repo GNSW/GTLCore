@@ -29,7 +29,7 @@ import java.util.zip.GZIPOutputStream;
  * 单文件蓝图 {@code .gtcpf}：gzip 压缩的 JSON，内含图案、方块调色板与元数据。
  * <p>
  * 结构：{@code {format, version, name, created, size:[x,y,z], pattern:[[row,...],...], palette:{char:state}}}，
- * 其中 {@code pattern[z][y]} 是沿 X 的一行字符，与 GTO 的 {@code .mbs} 语义一致。
+ * 其中 {@code pattern[z][y]} 是沿 X 的一行字符，与 {@code .mbs} 语义一致。
  * 图案与映射打包成一个文件，便于分享和文件夹管理。
  * </p>
  */

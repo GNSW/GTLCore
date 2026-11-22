@@ -18,11 +18,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-/**
- * 部分代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public final class RecipeRunner {
 
     private static final Comparator<RecipeHandlePart> OUTPUT_HANDLER_COMPARATOR = RecipeHandlePart.COMPARATOR.reversed();

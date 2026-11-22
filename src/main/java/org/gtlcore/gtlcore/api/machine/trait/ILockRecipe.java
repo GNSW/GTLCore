@@ -10,11 +10,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.*;
 
-/**
- * 代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public interface ILockRecipe {
 
     default boolean isLock() {

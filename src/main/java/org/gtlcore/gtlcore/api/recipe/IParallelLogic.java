@@ -29,11 +29,6 @@ import it.unimi.dsi.fastutil.objects.*;
 import java.util.*;
 import java.util.function.Predicate;
 
-/**
- * 部分代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public interface IParallelLogic {
 
     static GTRecipe getRecipeOutputChance(IRecipeCapabilityHolder holder, GTRecipe recipe) {

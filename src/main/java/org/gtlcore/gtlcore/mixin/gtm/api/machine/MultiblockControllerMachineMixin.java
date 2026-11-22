@@ -33,11 +33,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
-/**
- * 代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 @Mixin(MultiblockControllerMachine.class)
 public abstract class MultiblockControllerMachineMixin extends MetaMachine implements IMultiController, PatternRetryController {
 

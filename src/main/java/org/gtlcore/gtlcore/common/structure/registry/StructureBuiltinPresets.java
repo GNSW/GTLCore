@@ -13,7 +13,7 @@ import static org.gtlcore.gtlcore.common.structure.model.StructureDefinition.Str
 import static org.gtlcore.gtlcore.common.structure.registry.StructureTemplateRegistry.tr;
 
 /**
- * 内置预设数据（GTO 移植 + demo）。注册 API 见 {@link StructureTemplateRegistry}。
+ * 内置预设数据。注册 API 见 {@link StructureTemplateRegistry}。
  */
 final class StructureBuiltinPresets {
 
@@ -35,13 +35,13 @@ final class StructureBuiltinPresets {
     private StructureBuiltinPresets() {}
 
     static void registerAll() {
-        registerGtoLibraries();
+        registerPlatformLibraries();
     }
 
-    private static void registerGtoLibraries() {
+    private static void registerPlatformLibraries() {
         StructureTemplateRegistry.register(Preset.preset("platform_standard_library_alpha")
                 .displayName(tr("preset.alpha", "平台标准预设库-α", "Platform Standard Library-α"))
-                .description(tr("preset.alpha.desc", "高饱和棋盘/嵌板等（GTO 移植）", "High-sat chessboard/panel (from GTO)"))
+                .description(tr("preset.alpha.desc", "高饱和棋盘/嵌板等（from gto）", "High-sat chessboard/panel (from gto)"))
                 .addStructure(s("high_saturation_chessboard_1_blue_pink", "high_saturation_chessboard_1",
                         "high_saturation_chessboard_blue_pink.json", TYPE_PLATFORM,
                         NAME_CHESSBOARD, "1×1 蓝·粉", "1×1 blue·pink", "阿龙-还有一件事", FRAME, 144))
@@ -81,7 +81,7 @@ final class StructureBuiltinPresets {
 
         StructureTemplateRegistry.register(Preset.preset("platform_standard_library_beta")
                 .displayName(tr("preset.beta", "平台标准预设库-β", "Platform Standard Library-β"))
-                .description(tr("preset.beta.desc", "小/中/大地块地基（GTO 移植）", "Plot foundations (from GTO)"))
+                .description(tr("preset.beta.desc", "小/中/大地块地基（from gto）", "Plot foundations (from gto)"))
                 .addStructure(s("small_plot_stone_foundation", "small_plot_stone_foundation",
                         "small_plot_stone_foundation.json", TYPE_PLATFORM,
                         NAME_SMALL_PLOT, "3×3-石质地基", "3×3 plot-stone", "疏影", FRAME, 1296))

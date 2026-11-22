@@ -43,11 +43,6 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
-/**
- * 思路参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 @Mixin(BlockPattern.class)
 public abstract class BlockPatternMixin implements BlockPatternAccessor {
 

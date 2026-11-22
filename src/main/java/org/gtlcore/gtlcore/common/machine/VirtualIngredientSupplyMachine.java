@@ -49,8 +49,6 @@ import java.util.List;
 
 /**
  * Publishes an unlimited virtual ingredient to the ME network for every real stack parked inside.
- * <p>
- * Adapted from GTOCore's {@code VirtualItemProviderMachine} (com.gtocore.common.machine.noenergy).
  */
 public class VirtualIngredientSupplyMachine extends MetaMachine
                                             implements IUIMachine, IDropSaveMachine, IMachineModifyDrops, MEStorage,

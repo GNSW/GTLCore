@@ -20,11 +20,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-/**
- * 部分代码参考自GTO
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public interface IRecipeCapabilityMachine {
 
     @NotNull

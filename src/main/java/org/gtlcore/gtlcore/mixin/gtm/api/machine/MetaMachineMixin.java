@@ -46,11 +46,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * 代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 @Mixin(MetaMachine.class)
 public abstract class MetaMachineMixin implements IPerformanceDisplayMachine, ISuspendableMachine {
 

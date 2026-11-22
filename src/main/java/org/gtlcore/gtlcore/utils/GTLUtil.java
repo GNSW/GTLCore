@@ -34,11 +34,6 @@ public class GTLUtil {
         }
     }
 
-    /**
-     * 代码参考自gto
-     * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
-     */
-
     public static Tag serializeNBT(GTRecipe recipe) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", recipe.id.toString());

@@ -11,11 +11,6 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
-/**
- * 代码参考自gto
- * &#064;line <a href="https://github.com/GregTech-Odyssey/GTOCore">...</a>
- */
-
 public interface ICheckPatternMachine {
 
     ResourceTexture STRUCTURE_CHECK = new ResourceTexture(GTCEu.id("textures/gui/structure_check.png"));

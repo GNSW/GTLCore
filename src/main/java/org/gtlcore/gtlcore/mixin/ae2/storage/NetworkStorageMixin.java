@@ -98,6 +98,12 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             StorageGraphManager.shadowInsert((MEStorage) (Object) this, what, amount, mode, source, legacy);
             return legacy;
         }
+        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
+            long routed = StorageGraphManager.routeInsert((MEStorage) (Object) this, what, amount, mode, source);
+            if (routed > 0L) {
+                return routed;
+            }
+        }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);
         }
@@ -137,6 +143,12 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             }
             StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
             return legacy;
+        }
+        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
+            long routed = StorageGraphManager.routeExtract((MEStorage) (Object) this, what, amount, mode, source);
+            if (routed > 0L) {
+                return routed;
+            }
         }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);
@@ -178,6 +190,11 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             storages.addAll(priorityStorages);
         }
         return storages;
+    }
+
+    @Override
+    public NavigableMap<Integer, List<MEStorage>> gtlcore$getPriorityStorages() {
+        return priorityInventory;
     }
 
     @Override

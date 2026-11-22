@@ -206,8 +206,7 @@ public final class StorageGraphManager {
                     unique = saturatingAdd(unique, got);
                     remaining -= got;
                 }
-            } else if (!opaqueMayAccept && remaining > 0L
-                    && graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source) > 0L) {
+            } else if (!opaqueMayAccept && remaining > 0L && graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source) > 0L) {
                 opaqueMayAccept = true;
             }
         }
@@ -218,6 +217,14 @@ public final class StorageGraphManager {
             }
         }
         return unique;
+    }
+
+    public static long routeExtract(MEStorage root, AEKey what, long amount, Actionable mode, IActionSource source) {
+        return RouteExecutor.extract(root, what, amount, mode, source);
+    }
+
+    public static long routeInsert(MEStorage root, AEKey what, long amount, Actionable mode, IActionSource source) {
+        return RouteExecutor.insert(root, what, amount, mode, source);
     }
 
     private static boolean compatFallback() {
@@ -370,7 +377,7 @@ public final class StorageGraphManager {
         }
     }
 
-    private static long saturatingAdd(long a, long b) {
+    static long saturatingAdd(long a, long b) {
         long sum = a + b;
         return sum < 0 ? Long.MAX_VALUE : sum;
     }
@@ -480,6 +487,8 @@ public final class StorageGraphManager {
         IdentityHashMap<MEStorage, Boolean> visited = new IdentityHashMap<>();
         IdentityHashMap<MEStorage, Integer> parentCount = new IdentityHashMap<>();
         IdentityHashMap<MEStorage, Long> externalKeys = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, MEStorage> accessors = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, Integer> priorities = new IdentityHashMap<>();
         ArrayDeque<MEStorage> queue = new ArrayDeque<>();
         List<Edge> edges = new ArrayList<>();
         long edgeId = 0L;
@@ -494,6 +503,7 @@ public final class StorageGraphManager {
             for (int i = 0; i < levelSize; i++) {
                 MEStorage node = queue.poll();
                 StorageGraphAdapter adapter = StorageGraphAdapterRegistry.find(node);
+                StorageGraphAdapter.Recognition recognition = adapter.recognize(node);
                 for (StorageGraphAdapter.ChildEdge child : adapter.children(node)) {
                     if (visited.size() >= MAX_NODES && !visited.containsKey(child.child())) {
                         nodeLimitReached = true;
@@ -501,6 +511,19 @@ public final class StorageGraphManager {
                     }
                     edges.add(new Edge(edgeId++, System.identityHashCode(node), System.identityHashCode(child.child()),
                             child.kind(), child.policy(), child.nativeOrder()));
+                    int edgePriority = child.policy() == null ? 0 : child.policy().priority();
+                    if (edgePriority == 0) {
+                        edgePriority = priorities.getOrDefault(node, 0);
+                    }
+                    priorities.merge(child.child(), edgePriority, Math::max);
+                    if (recognition == StorageGraphAdapter.Recognition.FILTER_WRAPPER) {
+                        accessors.put(child.child(), node);
+                    } else {
+                        MEStorage inheritedAccessor = accessors.get(node);
+                        if (inheritedAccessor != null) {
+                            accessors.putIfAbsent(child.child(), inheritedAccessor);
+                        }
+                    }
                     parentCount.merge(child.child(), 1, Integer::sum);
                     if (child.externalKey() != 0L) {
                         externalKeys.put(child.child(), child.externalKey());
@@ -529,8 +552,7 @@ public final class StorageGraphManager {
                 depthLimitReached = true;
             }
         }
-        GraphStatus status = nodeLimitReached ? GraphStatus.INCOMPLETE_NODE_LIMIT
-                : depthLimitReached ? GraphStatus.INCOMPLETE_DEPTH_LIMIT : GraphStatus.COMPLETE;
+        GraphStatus status = nodeLimitReached ? GraphStatus.INCOMPLETE_NODE_LIMIT : depthLimitReached ? GraphStatus.INCOMPLETE_DEPTH_LIMIT : GraphStatus.COMPLETE;
 
         Map<SourceId, Source> sourceMap = new java.util.LinkedHashMap<>();
         for (MEStorage node : visited.keySet()) {
@@ -541,7 +563,8 @@ public final class StorageGraphManager {
             long externalKey = externalKeys.getOrDefault(node, 0L);
             SourceKind kind = adapter.sourceKind(node);
             SourceId id = SourceRegistry.idFor(node, externalKey);
-            sourceMap.putIfAbsent(id, new Source(id, kind, node, System.identityHashCode(node), epoch));
+            sourceMap.putIfAbsent(id, new Source(id, kind, node, accessors.get(node),
+                    System.identityHashCode(node), epoch, priorities.getOrDefault(node, 0)));
         }
         List<Source> sources = new ArrayList<>(sourceMap.values());
         int opaqueSources = 0;

@@ -482,12 +482,23 @@ public final class StorageGraphManager {
         done.add(node);
     }
 
+    private static List<SourceRoute> dedupeRoutes(List<SourceRoute> routes) {
+        IdentityHashMap<MEStorage, SourceRoute> unique = new IdentityHashMap<>();
+        for (SourceRoute route : routes) {
+            SourceRoute existing = unique.get(route.target());
+            if (existing == null || route.priority() > existing.priority()) {
+                unique.put(route.target(), route);
+            }
+        }
+        return new ArrayList<>(unique.values());
+    }
+
     private static StorageGraphSnapshot collect(MEStorage root) {
         long epoch = topologyEpoch;
         IdentityHashMap<MEStorage, Boolean> visited = new IdentityHashMap<>();
         IdentityHashMap<MEStorage, Integer> parentCount = new IdentityHashMap<>();
         IdentityHashMap<MEStorage, Long> externalKeys = new IdentityHashMap<>();
-        IdentityHashMap<MEStorage, MEStorage> accessors = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, List<SourceRoute>> routes = new IdentityHashMap<>();
         IdentityHashMap<MEStorage, Integer> priorities = new IdentityHashMap<>();
         ArrayDeque<MEStorage> queue = new ArrayDeque<>();
         List<Edge> edges = new ArrayList<>();
@@ -517,11 +528,12 @@ public final class StorageGraphManager {
                     }
                     priorities.merge(child.child(), edgePriority, Math::max);
                     if (recognition == StorageGraphAdapter.Recognition.FILTER_WRAPPER) {
-                        accessors.put(child.child(), node);
+                        routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
+                                .add(new SourceRoute(node, edgePriority, child.nativeOrder()));
                     } else {
-                        MEStorage inheritedAccessor = accessors.get(node);
-                        if (inheritedAccessor != null) {
-                            accessors.putIfAbsent(child.child(), inheritedAccessor);
+                        List<SourceRoute> inheritedRoutes = routes.get(node);
+                        if (inheritedRoutes != null && !inheritedRoutes.isEmpty()) {
+                            routes.computeIfAbsent(child.child(), key -> new ArrayList<>()).addAll(inheritedRoutes);
                         }
                     }
                     parentCount.merge(child.child(), 1, Integer::sum);
@@ -563,8 +575,18 @@ public final class StorageGraphManager {
             long externalKey = externalKeys.getOrDefault(node, 0L);
             SourceKind kind = adapter.sourceKind(node);
             SourceId id = SourceRegistry.idFor(node, externalKey);
-            sourceMap.putIfAbsent(id, new Source(id, kind, node, accessors.get(node),
-                    System.identityHashCode(node), epoch, priorities.getOrDefault(node, 0)));
+            List<SourceRoute> sourceRoutes = routes.get(node);
+            if (sourceRoutes == null || sourceRoutes.isEmpty()) {
+                sourceRoutes = List.of(new SourceRoute(node, priorities.getOrDefault(node, 0), 0));
+            } else {
+                sourceRoutes = dedupeRoutes(sourceRoutes);
+            }
+            int priority = 0;
+            for (SourceRoute route : sourceRoutes) {
+                priority = Math.max(priority, route.priority());
+            }
+            sourceMap.putIfAbsent(id, new Source(id, kind, node, sourceRoutes,
+                    System.identityHashCode(node), epoch, priority));
         }
         List<Source> sources = new ArrayList<>(sourceMap.values());
         int opaqueSources = 0;

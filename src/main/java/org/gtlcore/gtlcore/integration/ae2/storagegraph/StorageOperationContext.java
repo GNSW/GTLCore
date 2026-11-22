@@ -23,6 +23,7 @@ public final class StorageOperationContext {
     private final Map<SourceId, Boolean> touched = new HashMap<>();
     private final Map<SourceId, Long> consumed = new HashMap<>();
     private final Map<SourceId, Long> inserted = new HashMap<>();
+    private int depth;
 
     private StorageOperationContext(long operationId, long graphEpoch, Actionable mode, IActionSource actionSource) {
         this.operationId = operationId;
@@ -38,16 +39,21 @@ public final class StorageOperationContext {
     public static StorageOperationContext begin(Actionable mode, IActionSource actionSource, long graphEpoch) {
         StorageOperationContext existing = CURRENT.get();
         if (existing != null) {
+            existing.depth++;
             return existing;
         }
         StorageOperationContext context = new StorageOperationContext(
                 System.nanoTime(), graphEpoch, mode, actionSource);
+        context.depth = 1;
         CURRENT.set(context);
         return context;
     }
 
     public static void end(StorageOperationContext context) {
-        if (context != null && CURRENT.get() == context) {
+        if (context == null) {
+            return;
+        }
+        if (--context.depth <= 0 && CURRENT.get() == context) {
             CURRENT.remove();
         }
     }

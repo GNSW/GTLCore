@@ -100,7 +100,11 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
         }
         if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
             long routed = StorageGraphManager.routeInsert((MEStorage) (Object) this, what, amount, mode, source);
-            if (routed > 0L) {
+            if (routed >= 0L) {
+                if (routed > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
+                    ThroughputMonitorStorageTracker.beginInsert((MEStorage) (Object) this, source);
+                    ThroughputMonitorStorageTracker.endInsert((MEStorage) (Object) this, what, routed, source);
+                }
                 return routed;
             }
         }
@@ -146,7 +150,11 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
         }
         if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
             long routed = StorageGraphManager.routeExtract((MEStorage) (Object) this, what, amount, mode, source);
-            if (routed > 0L) {
+            if (routed >= 0L) {
+                if (routed > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
+                    ThroughputMonitorStorageTracker.beginExtraction((MEStorage) (Object) this, source);
+                    ThroughputMonitorStorageTracker.endExtraction((MEStorage) (Object) this, what, routed, source);
+                }
                 return routed;
             }
         }

@@ -5,7 +5,6 @@ import org.gtlcore.gtlcore.config.StorageGraphMode;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
-import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 
 import java.util.ArrayList;
@@ -29,22 +28,22 @@ public final class RouteExecutor {
         if (snapshot == null || !snapshot.complete()) {
             return -1L;
         }
-        KeyCounter opaque = new KeyCounter();
+        int candidates = 0;
         for (Source graphSource : snapshot.sources()) {
-            if (graphSource.kind() != SourceKind.FINITE && graphSource.kind() != SourceKind.INFINITE) {
-                if (graphSource.physical() != null) {
-                    graphSource.physical().getAvailableStacks(opaque);
-                }
+            if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE) {
+                candidates++;
+            } else {
+                StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
+                return -1L;
             }
         }
-        if (StorageGraphManager.keyCounterTotal(opaque) > 0L) {
-            StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
+        if (candidates == 0) {
             return -1L;
         }
         StorageOperationContext context = StorageOperationContext.begin(mode, source, snapshot.topologyEpoch());
         try {
             List<Source> ordered = new ArrayList<>(snapshot.sources());
-            ordered.sort(Comparator.comparingInt(Source::priority).reversed());
+            ordered.sort(Comparator.comparingInt(Source::priority));
             long remaining = amount;
             long extracted = 0L;
             for (Source graphSource : ordered) {
@@ -57,11 +56,14 @@ public final class RouteExecutor {
                 if (graphSource.physical() == null || !context.touch(graphSource.id())) {
                     continue;
                 }
-                long got = graphSource.routeTarget().extract(what, remaining, mode, source);
-                if (got > 0L) {
-                    extracted = StorageGraphManager.saturatingAdd(extracted, got);
-                    remaining -= got;
-                    context.addConsumed(graphSource.id(), got);
+                for (SourceRoute route : orderedRoutes(graphSource, true)) {
+                    long got = route.target().extract(what, remaining, mode, source);
+                    if (got > 0L) {
+                        extracted = StorageGraphManager.saturatingAdd(extracted, got);
+                        remaining -= got;
+                        context.addConsumed(graphSource.id(), got);
+                        break;
+                    }
                 }
             }
             return extracted;
@@ -78,15 +80,16 @@ public final class RouteExecutor {
         if (snapshot == null || !snapshot.complete()) {
             return -1L;
         }
-        boolean opaqueMayAccept = false;
+        int candidates = 0;
         for (Source graphSource : snapshot.sources()) {
-            if (graphSource.kind() != SourceKind.FINITE && graphSource.kind() != SourceKind.INFINITE && graphSource.physical() != null && graphSource.routeTarget().insert(what, amount, Actionable.SIMULATE, source) > 0L) {
-                opaqueMayAccept = true;
-                break;
+            if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE) {
+                candidates++;
+            } else {
+                StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
+                return -1L;
             }
         }
-        if (opaqueMayAccept) {
-            StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
+        if (candidates == 0) {
             return -1L;
         }
         StorageOperationContext context = StorageOperationContext.begin(mode, source, snapshot.topologyEpoch());
@@ -105,16 +108,29 @@ public final class RouteExecutor {
                 if (graphSource.physical() == null || !context.touch(graphSource.id())) {
                     continue;
                 }
-                long got = graphSource.routeTarget().insert(what, remaining, mode, source);
-                if (got > 0L) {
-                    inserted = StorageGraphManager.saturatingAdd(inserted, got);
-                    remaining -= got;
-                    context.addInserted(graphSource.id(), got);
+                for (SourceRoute route : orderedRoutes(graphSource, false)) {
+                    long got = route.target().insert(what, remaining, mode, source);
+                    if (got > 0L) {
+                        inserted = StorageGraphManager.saturatingAdd(inserted, got);
+                        remaining -= got;
+                        context.addInserted(graphSource.id(), got);
+                        break;
+                    }
                 }
             }
             return inserted;
         } finally {
             StorageOperationContext.end(context);
         }
+    }
+
+    private static List<SourceRoute> orderedRoutes(Source source, boolean ascending) {
+        List<SourceRoute> routes = new ArrayList<>(source.routes());
+        if (ascending) {
+            routes.sort(Comparator.comparingInt(SourceRoute::priority));
+        } else {
+            routes.sort(Comparator.comparingInt(SourceRoute::priority).reversed());
+        }
+        return routes;
     }
 }

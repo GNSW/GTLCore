@@ -2,10 +2,16 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
 import appeng.api.storage.MEStorage;
 
-public record Source(SourceId id, SourceKind kind, MEStorage physical, MEStorage accessor, long identityHash,
-                     long sourceEpoch, int priority) {
+import java.util.List;
+
+public record Source(SourceId id, SourceKind kind, MEStorage physical, List<SourceRoute> routes,
+                     long identityHash, long sourceEpoch, int priority) {
+
+    public Source {
+        routes = List.copyOf(routes);
+    }
 
     public MEStorage routeTarget() {
-        return accessor != null ? accessor : physical;
+        return routes.isEmpty() ? physical : routes.get(0).target();
     }
 }

@@ -348,13 +348,14 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
             Path file = LocalBlueprintLibrary.resolve(path);
             if (file == null || !Files.isRegularFile(file)) {
                 // 客户端没有文件（专用服务器）：让服务端自己解析
-                action.applyLocal(path, 0, 0, 0, 0);
+                action.applyLocal(path, 0, 0, 0, 0, "");
                 setVisible(false);
                 return;
             }
             try {
                 BlueprintBundle.Bundle bundle = BlueprintIO.load(file);
-                action.applyLocal(path, bundle.sizeX(), bundle.sizeY(), bundle.sizeZ(), bundle.blocks());
+                action.applyLocal(path, bundle.sizeX(), bundle.sizeY(), bundle.sizeZ(), bundle.blocks(),
+                        bundle.author());
                 setVisible(false);
             } catch (Exception | OutOfMemoryError failure) {
                 if (sizeRelated(failure)) {
@@ -504,8 +505,9 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
         for (String file : files) {
             boolean selected = file.equals(be.localBlueprintPath());
             long bytes = fileBytes(file);
-            int[] meta = be.localMeta().get(file);
-            String info = meta != null ? sizeText(meta[0], meta[1], meta[2]) : Math.max(1L, bytes / 1024L) + " KB";
+            var meta = be.localMeta().get(file);
+            String info = meta != null ? sizeText(meta.sizeX(), meta.sizeY(), meta.sizeZ()) :
+                    Math.max(1L, bytes / 1024L) + " KB";
             rows.add(new Row("f:" + file,
                     (selected ? "§e» " : "  ") + LocalBlueprintLibrary.displayName(file) + "  §7" + info,
                     false));

@@ -43,7 +43,7 @@ public final class BlueprintBundle {
     private static final Gson GSON = new Gson();
 
     /** 解析后的蓝图：尺寸、图案与字符→方块调色板。 */
-    public record Bundle(String name, int sizeX, int sizeY, int sizeZ,
+    public record Bundle(String name, String author, int sizeX, int sizeY, int sizeZ,
                          String[][] pattern, Char2ReferenceOpenHashMap<BlockState> palette) {
 
         /** 非空气方块数（材料点数按它等比折算）。 */
@@ -112,12 +112,13 @@ public final class BlueprintBundle {
                 throw new IOException("empty blueprint palette: " + file.getFileName());
             }
             String name = root.has("name") ? root.get("name").getAsString() : file.getFileName().toString();
-            return new Bundle(name, sizeX, sizeY, pattern.length, pattern, palette);
+            String author = root.has("author") ? root.get("author").getAsString() : "";
+            return new Bundle(name, author, sizeX, sizeY, pattern.length, pattern, palette);
         }
     }
 
-    /** 写出蓝图（单文件，自动创建上级目录）。 */
-    public static void save(Path file, String name, String[][] pattern,
+    /** 写出蓝图（单文件，自动创建上级目录）；author 为空时写空串。 */
+    public static void save(Path file, String name, String author, String[][] pattern,
                             Map<Character, BlockState> palette) throws IOException {
         int sizeX = pattern.length == 0 || pattern[0].length == 0 ? 0 : pattern[0][0].length();
         int sizeY = pattern.length == 0 ? 0 : pattern[0].length;
@@ -126,6 +127,7 @@ public final class BlueprintBundle {
         root.addProperty("format", FORMAT);
         root.addProperty("version", VERSION);
         root.addProperty("name", name);
+        root.addProperty("author", author == null ? "" : author);
         root.addProperty("created", LocalDateTime.now().toString());
         JsonArray size = new JsonArray();
         size.add(sizeX);

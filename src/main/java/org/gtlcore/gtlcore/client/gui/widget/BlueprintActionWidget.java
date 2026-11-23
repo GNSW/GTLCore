@@ -51,13 +51,14 @@ public final class BlueprintActionWidget extends Widget {
      * 选中本地蓝图：客户端已解析出尺寸/方块数时直接带上，服务端不必再读文件。
      * 尺寸传 0 表示客户端没读到，由服务端自己解析。
      */
-    public void applyLocal(String path, int sizeX, int sizeY, int sizeZ, int blocks) {
+    public void applyLocal(String path, int sizeX, int sizeY, int sizeZ, int blocks, String author) {
         writeClientAction(ACTION_LOCAL, buffer -> {
             buffer.writeUtf(path == null ? "" : path);
             buffer.writeVarInt(Math.max(0, sizeX));
             buffer.writeVarInt(Math.max(0, sizeY));
             buffer.writeVarInt(Math.max(0, sizeZ));
             buffer.writeVarInt(Math.max(0, blocks));
+            buffer.writeUtf(author == null ? "" : author);
         });
     }
 
@@ -95,7 +96,8 @@ public final class BlueprintActionWidget extends Widget {
             int sizeY = buffer.readVarInt();
             int sizeZ = buffer.readVarInt();
             int blocks = buffer.readVarInt();
-            be.applyLocal(path, sizeX, sizeY, sizeZ, blocks);
+            String author = buffer.readUtf();
+            be.applyLocal(path, sizeX, sizeY, sizeZ, blocks, author);
         } else if (id == ACTION_LOCAL_FORCED) {
             be.applyLocalForced(buffer.readUtf());
         }

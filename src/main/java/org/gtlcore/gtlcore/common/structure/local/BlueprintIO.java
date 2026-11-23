@@ -171,7 +171,7 @@ public final class BlueprintIO {
                 }
             }
         }
-        return grid.toBundle(name, palette);
+        return grid.toBundle(name, "", palette);
     }
 
     /** Litematica/MC 的位压缩读取：每个值占 bits 位，可跨两个 long。 */
@@ -229,7 +229,7 @@ public final class BlueprintIO {
             if (state == null || state.isAir()) continue;
             grid.set(pos[0], pos[1], pos[2], palette.charAt(state));
         }
-        return grid.toBundle(name, palette);
+        return grid.toBundle(name, "", palette);
     }
 
     private static int[] readPos(CompoundTag entry) {
@@ -301,7 +301,7 @@ public final class BlueprintIO {
             }
             index++;
         }
-        return grid.toBundle(name, palette);
+        return grid.toBundle(name, "", palette);
     }
 
     // -------------------------------------------------------------------------
@@ -441,7 +441,7 @@ public final class BlueprintIO {
             cells[x][y][z] = value;
         }
 
-        BlueprintBundle.Bundle toBundle(String name, Palette palette) {
+        BlueprintBundle.Bundle toBundle(String name, String author, Palette palette) {
             String[][] pattern = new String[sizeZ][sizeY];
             for (int z = 0; z < sizeZ; z++) {
                 for (int y = 0; y < sizeY; y++) {
@@ -452,7 +452,7 @@ public final class BlueprintIO {
                     pattern[z][y] = new String(row);
                 }
             }
-            return new BlueprintBundle.Bundle(name, sizeX, sizeY, sizeZ, pattern, palette.mapping());
+            return new BlueprintBundle.Bundle(name, author, sizeX, sizeY, sizeZ, pattern, palette.mapping());
         }
     }
 }

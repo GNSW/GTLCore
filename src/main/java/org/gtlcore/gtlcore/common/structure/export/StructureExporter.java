@@ -17,6 +17,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import it.unimi.dsi.fastutil.chars.CharOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2CharLinkedOpenHashMap;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -59,6 +60,8 @@ public final class StructureExporter {
         private final int rotation;
         private final boolean xMirror;
         private final boolean zMirror;
+        private final String blueprintName;
+        private final String blueprintAuthor;
 
         private final Reference2CharLinkedOpenHashMap<BlockState> stateToChar = new Reference2CharLinkedOpenHashMap<>();
         private char nextChar = nextValid('A');
@@ -78,8 +81,11 @@ public final class StructureExporter {
         private String failureMessage = "";
 
         public ExportTask(ServerLevel level, BlockPos pos1, BlockPos pos2,
-                          boolean xMirror, boolean zMirror, int rotation) {
+                          boolean xMirror, boolean zMirror, int rotation,
+                          String blueprintName, String blueprintAuthor) {
             this.level = level;
+            this.blueprintName = blueprintName == null ? "" : blueprintName.trim();
+            this.blueprintAuthor = blueprintAuthor == null ? "" : blueprintAuthor.trim();
             this.rotation = StructureTransform.normalizeRotation(rotation);
             this.xMirror = xMirror;
             this.zMirror = zMirror;
@@ -201,12 +207,26 @@ public final class StructureExporter {
         private void save() throws Exception {
             Path outDir = LocalBlueprintLibrary.defaultFolder();
             String stamp = LocalDateTime.now().format(TIMESTAMP);
-            Path blueprint = outDir.resolve(stamp + BlueprintBundle.EXTENSION);
-            BlueprintBundle.save(blueprint, stamp, zSlices.toArray(new String[0][]),
+            boolean custom = !blueprintName.isEmpty();
+            // 自定义名称时用名称做文件名；未设置则沿用时间戳（默认保存方式）
+            String fileBase = custom ? sanitizeFileName(blueprintName) : stamp;
+            Path blueprint = outDir.resolve(fileBase + BlueprintBundle.EXTENSION);
+            if (Files.exists(blueprint)) {
+                blueprint = outDir.resolve(fileBase + "-" + stamp + BlueprintBundle.EXTENSION);
+            }
+            String displayName = custom ? blueprintName : stamp;
+            BlueprintBundle.save(blueprint, displayName, blueprintAuthor, zSlices.toArray(new String[0][]),
                     StructureMappingIO.invert(stateToChar));
             savedFileName = blueprint.getFileName().toString();
             GTLCore.LOGGER.info("Exported blueprint: {} ({}x{}x{}, {} states)",
                     blueprint.toAbsolutePath(), outDx, dy, outDz, stateToChar.size());
+        }
+
+        /** 去掉文件名里不允许的字符，避免自定义名称写出非法路径。 */
+        private static String sanitizeFileName(String name) {
+            String cleaned = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+            if (cleaned.isEmpty()) return "blueprint";
+            return cleaned.length() > 48 ? cleaned.substring(0, 48) : cleaned;
         }
 
         private BlockState getCached(BlockPos pos) {

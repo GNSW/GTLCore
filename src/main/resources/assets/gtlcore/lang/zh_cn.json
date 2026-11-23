@@ -460,6 +460,8 @@
   "message.gtlcore.socket_preview.enabled": "手持仓室可视化接口预览：已开启",
   "message.gtlcore.socket_preview.disabled": "手持仓室可视化接口预览：已关闭",
   "message.gtlcore.socket_preview.config_disabled": "手持仓室可视化接口预览已在配置选项中禁用",
+  "message.gtlcore.socket_preview.indexing": "超级巨型结构：正在建立仓室预览索引，已检查 %1$s/%2$s 个位置（%3$s%%）",
+  "message.gtlcore.socket_preview.indexing_layout": "超级巨型结构：正在整理仓室预览索引（%1$s/%2$s 个位置，%3$s%%）",
   "gui.gtlcore.pattern_provider.auto_expand": "智能翻倍模式",
   "gui.gtlcore.pattern_provider.auto_expand.off": "按原始样板数量进行发配",
   "gui.gtlcore.pattern_provider.auto_expand.on": "根据请求量对处理样板进行翻倍",

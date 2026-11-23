@@ -11,10 +11,11 @@ import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiController;
 import com.gregtechceu.gtceu.api.machine.feature.multiblock.IMultiPart;
 import com.gregtechceu.gtceu.api.machine.multiblock.MultiblockControllerMachine;
 import com.gregtechceu.gtceu.api.pattern.BlockPattern;
-import com.gregtechceu.gtceu.api.pattern.TraceabilityPredicate;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -38,6 +39,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.client.gui.overlay.ForgeGui;
 import net.minecraftforge.client.settings.KeyConflictContext;
 
 import com.mojang.blaze3d.platform.InputConstants;
@@ -51,6 +53,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -59,27 +62,39 @@ import java.util.Set;
  * <p>
  * Only the single multiblock controller under the player's crosshair is rendered. A small area
  * is drawn: a configurable render radius (24 blocks by default) and a roughly 90 degree view cone,
- * capped at {@link #MAX_BOXES} nearest boxes. Controller discovery still uses a wider 13x13 chunk
- * area so a large multiblock whose controller is farther away can still be resolved from a casing
- * block; the discovery itself is invisible and only runs every 20 ticks. A box rebuild runs every
+ * capped at {@link #MAX_BOXES} nearest boxes. Controller discovery normally covers 13x13 chunks;
+ * while no target is known it widens to {@code (2 * WIDE_SCAN_RADIUS_CHUNKS + 1)} squared, because
+ * the controller of a hundred-thousand-block structure can sit far away from the casing the player
+ * is looking at. Discovery is invisible and only runs every 20 ticks. A box rebuild runs every
  * 4 ticks. Only block positions that are loaded, non-air and have at least one air neighbour are
  * considered, so a formed shell produces a readable set of sockets instead of the whole structure
  * volume.
  *
  * <p>
- * Everything on the scanning path is designed to be cheap for very large structures:
+ * Everything on the scanning path has bounded per-tick work, so cost no longer scales with the
+ * size of the structure:
  * <ul>
  * <li>the pattern cells come from {@link PatternSockets}, a flat section-indexed layout, so a
  * rebuild only walks the sections around the player instead of every cell of the multiblock;</li>
+ * <li>the layout itself is compiled in small time slices across ticks; until it is ready the
+ * overlay simply stays on the previous frame instead of stalling a tick;</li>
+ * <li>a transform-based bounding-box test rejects every multiblock the looked-at block cannot
+ * belong to before its layout is compiled at all;</li>
  * <li>sections are visited from the player outwards (Chebyshev rings). Once the nearest
  * {@link #MAX_BOXES} boxes are found, every farther ring is skipped;</li>
  * <li>the six neighbour block states of a cell are answered by a per-rebuild open-addressed
  * cache, which turns the ~13 {@code getBlockState} lookups per cell into one lookup per unique
  * position;</li>
+ * <li>cells are pre-filtered by the held item, so a rebuild only walks the sockets that can
+ * actually take the held part. On a hundred-thousand-cell structure this is the difference
+ * between exhausting the visit cap in the first few sections and covering the whole render
+ * range;</li>
  * <li>boxes are kept in pre-allocated primitive arrays with a bounded max-heap, so a rebuild of a
  * huge structure allocates nothing;</li>
- * <li>a rebuild is capped by {@link #MAX_CELL_VISITS}, and the refresh cadence backs off when a
- * rebuild is expensive, so an enormous structure can never stall a frame.</li>
+ * <li>a rebuild is capped by {@link #MAX_CELL_VISITS} and the refresh cadence backs off when a
+ * rebuild is expensive, so an enormous structure can never stall a frame. The cap is counted in
+ * cells rather than wall-clock time on purpose: a time cap would silently drop the far half of a
+ * dense wall and leave an incomplete highlight.</li>
  * </ul>
  *
  * <p>
@@ -87,6 +102,11 @@ import java.util.Set;
  * {@code key.gtlcore.toggle_socket_preview} key binding (unbound by default, configured in the
  * vanilla controls screen). The config option stays the master switch; the key binding can only
  * turn the overlay off when the config allows it.
+ *
+ * <p>
+ * While a mega structure (at least {@link PatternSockets#HUGE_LAYOUT_CELLS} pattern positions) is
+ * being indexed, {@link #renderProgressOverlay} draws a live progress line and bar so the player
+ * knows the preview is working instead of stalled.
  */
 public final class SocketPreview {
 
@@ -97,7 +117,15 @@ public final class SocketPreview {
     private static final String MESSAGE_CONFIG_DISABLED = "message.gtlcore.socket_preview.config_disabled";
 
     private static final int SCAN_RADIUS_CHUNKS = 6;
+    /**
+     * A hundred-thousand-block structure easily puts its controller farther away than the frequent
+     * 96-block search, and a casing can then not be attributed to any structure at all. When there
+     * is no target (and now and then while one exists) the search widens to this radius, which
+     * covers a 512x512 footprint.
+     */
+    private static final int WIDE_SCAN_RADIUS_CHUNKS = 16;
     private static final double CONTROLLER_RANGE_SQ = 96.0D * 96.0D;
+    private static final int WIDE_SCAN_INTERVAL_TICKS = 60;
     private static final int CONTROLLER_REFRESH_TICKS = 20;
     private static final int BOX_REFRESH_TICKS = 4;
     private static final int BOX_REFRESH_TICKS_SLOW = 8;
@@ -125,11 +153,14 @@ public final class SocketPreview {
     private static ClientLevel lastLevel;
     private static Item lastItem;
     private static MultiblockControllerMachine target;
+    /** Controller whose layout is being compiled for the current crosshair, kept only for the HUD. */
+    private static MultiblockControllerMachine pendingPreview;
     private static int tick;
     private static boolean errorLogged;
 
     private static BlockPos lastScanPos;
     private static int lastScanTick;
+    private static int lastWideScanTick;
 
     private static Vec3 lastSelectEye;
     private static Vec3 lastSelectLook;
@@ -165,6 +196,7 @@ public final class SocketPreview {
 
     public static void tick() {
         try {
+            PatternSockets.beginTick();
             pollToggleKey();
             tickUnsafe();
         } catch (Throwable failure) {
@@ -221,6 +253,8 @@ public final class SocketPreview {
             lastLevel = level;
             resetCaches();
         }
+        // Continue compiling any structure layout requested earlier, inside this tick's budget.
+        PatternSockets.advancePending();
 
         ItemStack held = player.getMainHandItem();
         MetaMachineItem part = PartItems.partMachine(held);
@@ -252,7 +286,14 @@ public final class SocketPreview {
             needScan = moved || invalidTarget || tick - lastScanTick >= interval;
         }
         if (needScan) {
-            refreshControllers(level, player);
+            // A huge structure can place its controller far outside the frequent search. Widen the
+            // search whenever no target is known (and periodically otherwise) so that looking at a
+            // casing still resolves the structure the player is standing in.
+            boolean wide = target == null || tick - lastWideScanTick >= WIDE_SCAN_INTERVAL_TICKS;
+            if (wide) {
+                lastWideScanTick = tick;
+            }
+            refreshControllers(level, player, wide);
             lastScanPos = player.blockPosition();
             lastScanTick = tick;
             lastResolvedValid = false;
@@ -272,12 +313,19 @@ public final class SocketPreview {
         boolean rangeChanged = renderRange != lastBuildRange;
         boolean viewChanged = !sameView(lastBuildEye, lastBuildLook, eye, look);
         int interval = viewChanged ? buildInterval() : 10;
+        if (itemChanged || targetChanged || rangeChanged) {
+            // Do not keep boxes of the previous target while a new layout is being compiled.
+            BOXES.clear();
+        }
         if (itemChanged || targetChanged || rangeChanged || tick - lastBuildTick >= interval) {
-            rebuildBoxes(level, player, part, selected, eye, look, renderRange);
-            lastBuildEye = eye;
-            lastBuildLook = look;
-            lastBuildTick = tick;
-            lastBuildRange = renderRange;
+            // While a structure layout is still compiling this returns false; retry next tick so
+            // the overlay appears the moment the layout is ready.
+            if (rebuildBoxes(level, player, part, selected, eye, look, renderRange)) {
+                lastBuildEye = eye;
+                lastBuildLook = look;
+                lastBuildTick = tick;
+                lastBuildRange = renderRange;
+            }
         }
     }
 
@@ -292,6 +340,7 @@ public final class SocketPreview {
     private static void resetCaches() {
         lastScanPos = null;
         lastScanTick = 0;
+        lastWideScanTick = 0;
         lastSelectEye = null;
         lastSelectLook = null;
         lastSelectTarget = null;
@@ -300,6 +349,7 @@ public final class SocketPreview {
         lastResolvedLookPos = null;
         lastResolvedController = null;
         lastResolvedValid = false;
+        pendingPreview = null;
         lastBuildEye = null;
         lastBuildLook = null;
         lastBuildTick = 0;
@@ -319,6 +369,78 @@ public final class SocketPreview {
         }
         double dot = aLook.x * bLook.x + aLook.y * bLook.y + aLook.z * bLook.z;
         return dot > 0.9995D;
+    }
+
+    /**
+     * HUD overlay that keeps the player informed while a mega structure is being indexed. The
+     * layout of a hundred-thousand-cell pattern takes seconds of sliced work, and without this
+     * line the preview just appears out of nowhere; structures below
+     * {@link PatternSockets#HUGE_LAYOUT_CELLS} stay silent because they finish almost instantly.
+     *
+     * <p>
+     * The line is only drawn while the player actually previews that structure (a part in hand and
+     * a controller under the crosshair). Once the part is put away or the crosshair leaves the
+     * structure, the compilation keeps running silently in the background and the HUD steps aside.
+     */
+    public static void renderProgressOverlay(ForgeGui gui, GuiGraphics graphics, float partialTick,
+                                             int width, int height) {
+        try {
+            if (!isEnabled()) {
+                return;
+            }
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || minecraft.player == null || minecraft.options.hideGui) {
+                return;
+            }
+            LocalPlayer player = minecraft.player;
+            boolean holdingPart = PartItems.partMachine(player.getMainHandItem()) != null ||
+                    PartItems.partMachine(player.getOffhandItem()) != null;
+            if (!holdingPart) {
+                return;
+            }
+            MultiblockControllerMachine current = target;
+            if (current == null || current.isInValid()) {
+                current = pendingPreview;
+            }
+            if (current == null || current.isInValid()) {
+                return;
+            }
+            BlockPattern pattern = PatternSockets.patternFor(current);
+            if (pattern == null) {
+                return;
+            }
+            PatternSockets.Progress progress = PatternSockets.progress(pattern);
+            if (progress == null || progress.total() < PatternSockets.HUGE_LAYOUT_CELLS) {
+                return;
+            }
+            long done = Math.min(progress.done(), progress.total());
+            int percent = progress.total() <= 0L ? 100 : (int) Math.min(100L, done * 100L / progress.total());
+            Component line = Component.translatable(
+                    progress.walking() ? "message.gtlcore.socket_preview.indexing" :
+                            "message.gtlcore.socket_preview.indexing_layout",
+                    formatCount(done), formatCount(progress.total()), percent);
+            Font font = minecraft.font;
+            int centerX = width / 2;
+            // Sit above the hotbar instead of the middle of the screen, so the structure the player
+            // is looking at stays visible.
+            int textY = height - 74;
+            int textWidth = font.width(line);
+            graphics.fill(centerX - textWidth / 2 - 8, textY - 5, centerX + textWidth / 2 + 8,
+                    textY + font.lineHeight + 5, 0x88000000);
+            graphics.drawCenteredString(font, line, centerX, textY, 0xFFFFFFFF);
+            int barWidth = Math.max(160, textWidth);
+            int barLeft = centerX - barWidth / 2;
+            int barTop = textY + font.lineHeight + 6;
+            graphics.fill(barLeft - 1, barTop - 1, barLeft + barWidth + 1, barTop + 3, 0xCC101010);
+            graphics.fill(barLeft, barTop, barLeft + (int) ((long) barWidth * percent / 100L), barTop + 2,
+                    0xFF3AD2FF);
+        } catch (Throwable ignored) {
+            // A broken font or a missing translation must never take the HUD down.
+        }
+    }
+
+    private static String formatCount(long value) {
+        return String.format(Locale.ROOT, "%,d", value);
     }
 
     public static void render(RenderLevelStageEvent event) {
@@ -428,15 +550,17 @@ public final class SocketPreview {
                 ConfigHolder.INSTANCE.graphics.socketPreview.socketPreviewRenderRange));
     }
 
-    private static void refreshControllers(ClientLevel level, LocalPlayer player) {
+    private static void refreshControllers(ClientLevel level, LocalPlayer player, boolean wide) {
         CONTROLLERS.clear();
         Set<Long> seen = new HashSet<>();
         BlockPos playerPos = player.blockPosition();
         int chunkX = playerPos.getX() >> 4;
         int chunkZ = playerPos.getZ() >> 4;
+        int radius = wide ? WIDE_SCAN_RADIUS_CHUNKS : SCAN_RADIUS_CHUNKS;
+        double rangeSq = CONTROLLER_RANGE_SQ;
 
-        for (int dx = -SCAN_RADIUS_CHUNKS; dx <= SCAN_RADIUS_CHUNKS; dx++) {
-            for (int dz = -SCAN_RADIUS_CHUNKS; dz <= SCAN_RADIUS_CHUNKS; dz++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
                 ChunkAccess chunkAccess = level.getChunk(chunkX + dx, chunkZ + dz);
                 if (!(chunkAccess instanceof LevelChunk chunk)) {
                     continue;
@@ -454,8 +578,11 @@ public final class SocketPreview {
                             continue;
                         }
                         BlockPos pos = controller.getPos();
-                        if (player.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                                pos.getZ() + 0.5D) > CONTROLLER_RANGE_SQ) {
+                        // A narrow scan only keeps nearby controllers. The wide scan keeps every
+                        // formed controller in its chunk area; the transformed bounding box of
+                        // each pattern then decides whether it can own the looked-at block.
+                        if (!wide && player.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D,
+                                pos.getZ() + 0.5D) > rangeSq) {
                             continue;
                         }
                         if (seen.add(pos.asLong())) {
@@ -466,6 +593,14 @@ public final class SocketPreview {
                     }
                 }
             }
+        }
+
+        // Keep the active target even when a narrow scan no longer reaches its controller, so a
+        // casing of the structure the player is standing in always resolves.
+        MultiblockControllerMachine active = target;
+        if (active != null && active.getLevel() == level && !active.isInValid() &&
+                seen.add(active.getPos().asLong())) {
+            CONTROLLERS.add(active);
         }
 
         CONTROLLERS.sort(Comparator.comparingDouble(controller -> {
@@ -507,6 +642,9 @@ public final class SocketPreview {
                 eye.x + look.x * RAY_RANGE,
                 eye.y + look.y * RAY_RANGE,
                 eye.z + look.z * RAY_RANGE);
+        // The HUD only reports the structure the crosshair is on; this is refreshed by
+        // controllerForCell below when it has to wait for a layout.
+        pendingPreview = null;
         BlockHitResult hit = level.clip(new ClipContext(
                 eye, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
         MultiblockControllerMachine result = null;
@@ -563,6 +701,7 @@ public final class SocketPreview {
             lastResolvedValid = false;
         }
 
+        boolean pending = false;
         for (MultiblockControllerMachine controller : CONTROLLERS) {
             if (controller.isInValid()) {
                 continue;
@@ -579,15 +718,26 @@ public final class SocketPreview {
             if (up == null) {
                 up = Direction.NORTH;
             }
+            BlockPos controllerPos = controller.getPos();
+            int dx = lookPos.getX() - controllerPos.getX();
+            int dy = lookPos.getY() - controllerPos.getY();
+            int dz = lookPos.getZ() - controllerPos.getZ();
+            if (!PatternSockets.isPackable(dx) || !PatternSockets.isPackable(dy) ||
+                    !PatternSockets.isPackable(dz)) {
+                continue;
+            }
+            // Reject every structure whose transformed bounding box cannot contain this block
+            // before compiling its full cell layout: in a base full of multiblocks this is the
+            // difference between one layout build and dozens.
+            if (!PatternSockets.mayContain(pattern, front, up, dx, dy, dz)) {
+                continue;
+            }
             try {
                 PatternSockets.Cells cells = PatternSockets.cellsFor(pattern, front, up,
                         isMirroredPlacement(controller, pattern, front, up));
-                BlockPos controllerPos = controller.getPos();
-                int dx = lookPos.getX() - controllerPos.getX();
-                int dy = lookPos.getY() - controllerPos.getY();
-                int dz = lookPos.getZ() - controllerPos.getZ();
-                if (!PatternSockets.isPackable(dx) || !PatternSockets.isPackable(dy) ||
-                        !PatternSockets.isPackable(dz)) {
+                if (cells == null) {
+                    pending = true;
+                    pendingPreview = controller;
                     continue;
                 }
                 if (cells.contains(PatternSockets.pack(dx, dy, dz))) {
@@ -602,36 +752,43 @@ public final class SocketPreview {
             }
         }
 
+        if (pending) {
+            // A layout is still compiling; retry shortly instead of remembering a false answer.
+            return null;
+        }
         lastResolvedLookPos = lookPos;
         lastResolvedController = null;
         lastResolvedValid = true;
         return null;
     }
 
-    private static void rebuildBoxes(ClientLevel level, LocalPlayer player, MetaMachineItem part,
-                                     MultiblockControllerMachine controller, Vec3 eye, Vec3 look,
-                                     int renderRange) {
-        BOXES.clear();
+    /** @return {@code false} when the structure layout is still compiling and nothing was drawn. */
+    private static boolean rebuildBoxes(ClientLevel level, LocalPlayer player, MetaMachineItem part,
+                                        MultiblockControllerMachine controller, Vec3 eye, Vec3 look,
+                                        int renderRange) {
         if (controller == null || controller.isInValid()) {
-            return;
+            BOXES.clear();
+            return true;
         }
         long started = System.nanoTime();
         try {
-            rebuildBoxesUnsafe(level, player, part, controller, eye, look, renderRange);
+            return rebuildBoxesUnsafe(level, player, part, controller, eye, look, renderRange);
         } catch (Throwable ignored) {
             // A broken addon pattern must not take the whole overlay down.
             BOXES.clear();
+            return true;
         } finally {
             lastBuildNanos = System.nanoTime() - started;
         }
     }
 
-    private static void rebuildBoxesUnsafe(ClientLevel level, LocalPlayer player, MetaMachineItem part,
-                                           MultiblockControllerMachine controller, Vec3 eye, Vec3 look,
-                                           int renderRange) {
+    private static boolean rebuildBoxesUnsafe(ClientLevel level, LocalPlayer player, MetaMachineItem part,
+                                              MultiblockControllerMachine controller, Vec3 eye, Vec3 look,
+                                              int renderRange) {
         BlockPattern pattern = PatternSockets.patternFor(controller);
         if (pattern == null) {
-            return;
+            BOXES.clear();
+            return true;
         }
         Direction front = controller.getFrontFacing();
         if (front == null) {
@@ -643,15 +800,25 @@ public final class SocketPreview {
         }
         PatternSockets.Cells cells = PatternSockets.cellsFor(pattern, front, up,
                 isMirroredPlacement(controller, pattern, front, up));
-        if (cells.count() == 0) {
-            return;
+        if (cells == null) {
+            // The layout is still being compiled; keep the previous overlay instead of flashing
+            // an empty one.
+            return false;
+        }
+        BOXES.clear();
+        // Only cells that accept the held part are candidates. On a hundred-thousand-cell
+        // structure the raw cell walk would exhaust its visit cap long before it reaches the
+        // nearby sections that contain sockets, which is why the filtered index is used here.
+        PatternSockets.Accepted acceptedCells = cells.accepted(part);
+        if (acceptedCells.count() == 0) {
+            return true;
         }
 
         BlockPos controllerPos = controller.getPos();
         BlockPos playerPos = player.blockPosition();
         Scan scan = SCAN;
         scan.cells = cells;
-        scan.heldItem = part;
+        scan.acceptedCells = acceptedCells;
         scan.heldBlock = PartItems.blockOf(part);
         scan.eye = eye;
         scan.look = look;
@@ -662,9 +829,14 @@ public final class SocketPreview {
         scan.budget = MAX_CELL_VISITS;
         STATES.begin(level);
 
-        int baseX = (playerPos.getX() >> 4) - (controllerPos.getX() >> 4);
-        int baseY = (playerPos.getY() >> 4) - (controllerPos.getY() >> 4);
-        int baseZ = (playerPos.getZ() >> 4) - (controllerPos.getZ() >> 4);
+        // Layout sections are indexed by the controller-relative offset shifted by four, so the
+        // ring origin must be the same kind of section index. Using the difference of world chunk
+        // coordinates instead shifts the origin by up to 15 blocks whenever the controller is not
+        // aligned to a section border, which silently skipped exactly the sections around the
+        // player - the "I am standing right next to it and nothing highlights" report.
+        int baseX = (playerPos.getX() - controllerPos.getX()) >> 4;
+        int baseY = (playerPos.getY() - controllerPos.getY()) >> 4;
+        int baseZ = (playerPos.getZ() - controllerPos.getZ()) >> 4;
         int sectionRadius = Math.max(1, (renderRange + 15) >> 4);
 
         // Walk the sections around the player from the inside out. A ring is 16 blocks farther
@@ -679,6 +851,7 @@ public final class SocketPreview {
             }
             scanRing(scan, ring, baseX, baseY, baseZ);
         }
+        return true;
     }
 
     private static void scanRing(Scan scan, int ring, int baseX, int baseY, int baseZ) {
@@ -713,7 +886,7 @@ public final class SocketPreview {
             return;
         }
         long key = PatternSockets.sectionKey(sectionX, sectionY, sectionZ);
-        int start = scan.cells.sectionStart(key);
+        int start = scan.acceptedCells.sectionStart(key);
         if (start < 0) {
             return;
         }
@@ -723,12 +896,12 @@ public final class SocketPreview {
         if (sectionDistanceSq(scan.eye, cornerX, cornerY, cornerZ) > scan.rangeSq) {
             return;
         }
-        int end = scan.cells.sectionEnd(key);
+        int end = scan.acceptedCells.sectionEnd(key);
         for (int index = start; index < end; index++) {
             if (--scan.budget < 0) {
                 return;
             }
-            long offset = scan.cells.offset(index);
+            long offset = scan.acceptedCells.offset(index);
             int x = scan.originX + PatternSockets.unpackX(offset);
             int y = scan.originY + PatternSockets.unpackY(offset);
             int z = scan.originZ + PatternSockets.unpackZ(offset);
@@ -738,10 +911,7 @@ public final class SocketPreview {
             if (!isInFront(scan.eye, scan.look, x + 0.5D, y + 0.5D, z + 0.5D, scan.rangeSq)) {
                 continue;
             }
-            TraceabilityPredicate predicate = scan.cells.predicate(index);
-            if (!PatternSockets.accepts(predicate, scan.heldItem)) {
-                continue;
-            }
+            int predicateId = scan.acceptedCells.predicateId(index);
             BlockState state = STATES.state(x, y, z);
             if (state.isAir()) {
                 // An empty socket is shown only when it is a hole in an otherwise built
@@ -758,7 +928,7 @@ public final class SocketPreview {
             Block current = state.getBlock();
             boolean samePart = current == scan.heldBlock;
             boolean otherMachine = current instanceof IMachineBlock;
-            boolean accepted = PatternSockets.acceptsBlock(predicate, current);
+            boolean accepted = PatternSockets.acceptsBlock(scan.cells.predicate(predicateId), current);
             // The held part itself or another machine in the socket means "occupied". A plain
             // casing accepted by the cell is free to be replaced.
             boolean available = accepted && !samePart && !otherMachine;
@@ -822,6 +992,11 @@ public final class SocketPreview {
             return false;
         }
         PatternSockets.Cells normal = PatternSockets.cellsFor(pattern, front, up, false);
+        if (normal == null) {
+            // The normal layout is still compiling; keep the synced flag for this pass and let a
+            // later rebuild decide again.
+            return controller.isFlipped();
+        }
         if (normal.count() == 0) {
             return false;
         }
@@ -847,6 +1022,9 @@ public final class SocketPreview {
         }
 
         PatternSockets.Cells mirrored = PatternSockets.cellsFor(pattern, front, up, true);
+        if (mirrored == null) {
+            return false;
+        }
         int mirroredMatches = 0;
         for (BlockPos partPos : partPositions) {
             if (partPos == null || partPos.equals(controllerPos)) {
@@ -901,7 +1079,7 @@ public final class SocketPreview {
     private static final class Scan {
 
         private PatternSockets.Cells cells;
-        private Item heldItem;
+        private PatternSockets.Accepted acceptedCells;
         private Block heldBlock;
         private Vec3 eye;
         private Vec3 look;
@@ -1023,8 +1201,8 @@ public final class SocketPreview {
      */
     private static final class BlockStates {
 
-        private static final int SIZE = 1 << 13;
-        private static final int SHIFT = 64 - 13;
+        private static final int SIZE = 1 << 15;
+        private static final int SHIFT = 64 - 15;
 
         private final long[] keys = new long[SIZE];
         private final BlockState[] states = new BlockState[SIZE];

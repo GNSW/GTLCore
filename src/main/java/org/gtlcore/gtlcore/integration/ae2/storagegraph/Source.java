@@ -12,6 +12,12 @@ public record Source(SourceId id, SourceKind kind, MEStorage physical, List<Sour
     }
 
     public MEStorage routeTarget() {
-        return routes.isEmpty() ? physical : routes.get(0).target();
+        for (SourceRoute route : routes) {
+            MEStorage target = route.target();
+            if (target != null) {
+                return target;
+            }
+        }
+        return physical;
     }
 }

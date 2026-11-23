@@ -2,9 +2,20 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
 import appeng.api.storage.MEStorage;
 
+import java.util.List;
+
 /**
- * One legal access path to a physical source. {@code target} is the closest wrapper on the path
- * (a StorageBus inventory) so its filter / direction / access checks still apply; when no wrapper
- * exists the target is the physical leaf itself.
+ * One legal access path to a physical source. {@code path} contains every StorageBus wrapper from
+ * the outermost one to the innermost one; callers must invoke the outermost wrapper so all filters
+ * on the way are applied. An empty path means the physical leaf is accessed directly.
  */
-public record SourceRoute(MEStorage target, int priority, int nativeOrder) {}
+public record SourceRoute(List<MEStorage> path, int priority, int nativeOrder) {
+
+    public SourceRoute {
+        path = List.copyOf(path);
+    }
+
+    public MEStorage target() {
+        return path.isEmpty() ? null : path.get(0);
+    }
+}

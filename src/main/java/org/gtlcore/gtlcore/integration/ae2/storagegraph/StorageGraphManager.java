@@ -144,79 +144,11 @@ public final class StorageGraphManager {
     }
 
     public static long simulateUniqueIfExact(MEStorage root, AEKey what, long amount, IActionSource source) {
-        if (root == null || what == null || mode() != StorageGraphMode.ON) {
-            return -1L;
-        }
-        StorageGraphSnapshot snapshot = collect(root);
-        if (!snapshot.complete()) {
-            StorageGraphDiagnostics.logIncomplete(snapshot);
-            return -1L;
-        }
-        KeyCounter opaque = new KeyCounter();
-        long remaining = amount;
-        long unique = 0L;
-        for (Source graphSource : snapshot.sources()) {
-            if (graphSource.physical() == null) {
-                continue;
-            }
-            if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE) {
-                if (remaining <= 0L) {
-                    continue;
-                }
-                long got = graphSource.physical().extract(what, remaining, Actionable.SIMULATE, source);
-                if (got > 0L) {
-                    unique = saturatingAdd(unique, got);
-                    remaining -= got;
-                }
-            } else {
-                graphSource.physical().getAvailableStacks(opaque);
-            }
-        }
-        if (keyCounterTotal(opaque) > 0L) {
-            StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
-            if (compatFallback()) {
-                return -1L;
-            }
-        }
-        return unique;
+        return RouteExecutor.extract(root, what, amount, Actionable.SIMULATE, source);
     }
 
     public static long insertUniqueIfExact(MEStorage root, AEKey what, long amount, IActionSource source) {
-        if (root == null || what == null || mode() != StorageGraphMode.ON) {
-            return -1L;
-        }
-        StorageGraphSnapshot snapshot = collect(root);
-        if (!snapshot.complete()) {
-            StorageGraphDiagnostics.logIncomplete(snapshot);
-            return -1L;
-        }
-        long remaining = amount;
-        long unique = 0L;
-        boolean opaqueMayAccept = false;
-        for (Source graphSource : snapshot.sources()) {
-            if (graphSource.physical() == null) {
-                continue;
-            }
-            if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE) {
-                if (remaining <= 0L) {
-                    continue;
-                }
-                long got = graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source);
-                if (got > 0L) {
-                    unique = saturatingAdd(unique, got);
-                    remaining -= got;
-                }
-            } else if (!opaqueMayAccept && remaining > 0L && graphSource.physical().insert(what, remaining, Actionable.SIMULATE, source) > 0L) {
-                opaqueMayAccept = true;
-            }
-        }
-        if (opaqueMayAccept) {
-            StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
-            if (compatFallback()) {
-                return -1L;
-            }
-        }
-        return unique;
+        return RouteExecutor.insert(root, what, amount, Actionable.SIMULATE, source);
     }
 
     public static long routeExtract(MEStorage root, AEKey what, long amount, Actionable mode, IActionSource source) {
@@ -483,11 +415,11 @@ public final class StorageGraphManager {
     }
 
     private static List<SourceRoute> dedupeRoutes(List<SourceRoute> routes) {
-        IdentityHashMap<MEStorage, SourceRoute> unique = new IdentityHashMap<>();
+        Map<List<MEStorage>, SourceRoute> unique = new java.util.LinkedHashMap<>();
         for (SourceRoute route : routes) {
-            SourceRoute existing = unique.get(route.target());
+            SourceRoute existing = unique.get(route.path());
             if (existing == null || route.priority() > existing.priority()) {
-                unique.put(route.target(), route);
+                unique.put(route.path(), route);
             }
         }
         return new ArrayList<>(unique.values());
@@ -527,14 +459,21 @@ public final class StorageGraphManager {
                         edgePriority = priorities.getOrDefault(node, 0);
                     }
                     priorities.merge(child.child(), edgePriority, Math::max);
+                    List<SourceRoute> nodeRoutes = routes.get(node);
                     if (recognition == StorageGraphAdapter.Recognition.FILTER_WRAPPER) {
-                        routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
-                                .add(new SourceRoute(node, edgePriority, child.nativeOrder()));
-                    } else {
-                        List<SourceRoute> inheritedRoutes = routes.get(node);
-                        if (inheritedRoutes != null && !inheritedRoutes.isEmpty()) {
-                            routes.computeIfAbsent(child.child(), key -> new ArrayList<>()).addAll(inheritedRoutes);
+                        if (nodeRoutes == null || nodeRoutes.isEmpty()) {
+                            routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
+                                    .add(new SourceRoute(List.of(node), edgePriority, child.nativeOrder()));
+                        } else {
+                            for (SourceRoute parentRoute : nodeRoutes) {
+                                List<MEStorage> path = new ArrayList<>(parentRoute.path());
+                                path.add(node);
+                                routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
+                                        .add(new SourceRoute(path, edgePriority, child.nativeOrder()));
+                            }
                         }
+                    } else if (nodeRoutes != null && !nodeRoutes.isEmpty()) {
+                        routes.computeIfAbsent(child.child(), key -> new ArrayList<>()).addAll(nodeRoutes);
                     }
                     parentCount.merge(child.child(), 1, Integer::sum);
                     if (child.externalKey() != 0L) {
@@ -577,7 +516,7 @@ public final class StorageGraphManager {
             SourceId id = SourceRegistry.idFor(node, externalKey);
             List<SourceRoute> sourceRoutes = routes.get(node);
             if (sourceRoutes == null || sourceRoutes.isEmpty()) {
-                sourceRoutes = List.of(new SourceRoute(node, priorities.getOrDefault(node, 0), 0));
+                sourceRoutes = List.of(new SourceRoute(List.of(), priorities.getOrDefault(node, 0), 0));
             } else {
                 sourceRoutes = dedupeRoutes(sourceRoutes);
             }

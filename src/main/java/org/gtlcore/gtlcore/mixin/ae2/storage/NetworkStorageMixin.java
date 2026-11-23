@@ -149,7 +149,8 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             return legacy;
         }
         if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
-            long routed = StorageGraphManager.routeExtract((MEStorage) (Object) this, what, amount, mode, source);
+            long limitedAmount = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount, source);
+            long routed = StorageGraphManager.routeExtract((MEStorage) (Object) this, what, limitedAmount, mode, source);
             if (routed >= 0L) {
                 if (routed > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
                     ThroughputMonitorStorageTracker.beginExtraction((MEStorage) (Object) this, source);

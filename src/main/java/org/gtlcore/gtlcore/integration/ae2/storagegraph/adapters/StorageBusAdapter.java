@@ -1,6 +1,5 @@
 package org.gtlcore.gtlcore.integration.ae2.storagegraph.adapters;
 
-import org.gtlcore.gtlcore.integration.ae2.storagegraph.EdgeKind;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceKind;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphAdapter;
 
@@ -21,7 +20,7 @@ public final class StorageBusAdapter implements StorageGraphAdapter {
 
     @Override
     public List<ChildEdge> children(MEStorage storage) {
-        return AdapterChildren.of(storage, EdgeKind.DELEGATE);
+        return List.of();
     }
 
     @Override

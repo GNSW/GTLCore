@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.common.command;
 
+import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 
 import net.minecraft.commands.CommandSourceStack;
@@ -51,7 +52,15 @@ public final class StorageGraphTestCommand {
                                 .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                         .executes(context -> insert(context.getSource(),
                                                 StringArgumentType.getString(context, "item"),
-                                                IntegerArgumentType.getInteger(context, "amount")))))));
+                                                IntegerArgumentType.getInteger(context, "amount"))))))
+                .then(Commands.literal("reserve")
+                        .then(Commands.argument("item", StringArgumentType.string())
+                                .then(Commands.argument("lock", IntegerArgumentType.integer(1))
+                                        .then(Commands.argument("request", IntegerArgumentType.integer(1))
+                                                .executes(context -> reserve(context.getSource(),
+                                                        StringArgumentType.getString(context, "item"),
+                                                        IntegerArgumentType.getInteger(context, "lock"),
+                                                        IntegerArgumentType.getInteger(context, "request"))))))));
     }
 
     private static MEStorage storage(CommandSourceStack source) throws CommandSyntaxException {
@@ -152,5 +161,53 @@ public final class StorageGraphTestCommand {
         long inserted = storage.insert(key, amount, Actionable.SIMULATE, action);
         source.sendSuccess(() -> Component.literal("key=" + key + " insert(" + amount + ")=" + inserted), false);
         return 1;
+    }
+
+    private static int reserve(CommandSourceStack source, String item, int lock, int request) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        AEKey key = keyOf(source, item);
+        if (key == null) {
+            return 0;
+        }
+        MEStorage storage = storage(source);
+        if (storage == null) {
+            source.sendFailure(Component.literal("no AE2 grid at the targeted block"));
+            return 0;
+        }
+        IActionSource action = IActionSource.ofPlayer(player);
+        KeyCounter requested = new KeyCounter();
+        requested.add(key, lock);
+        ManualCraftingInventoryLock.Reservation reservation = ManualCraftingInventoryLock.tryAcquire(storage,
+                requested, action);
+        try {
+            long available = storage.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, action);
+            long allowed = ManualCraftingInventoryLock.limitExtraction(storage, key, request, action);
+            long extracted = storage.extract(key, request, Actionable.MODULATE, action);
+            source.sendSuccess(() -> Component.literal("available=" + available + " lock=" + lock + " allowed=" + allowed + " extracted=" + extracted), false);
+        } finally {
+            if (reservation != null) {
+                reservation.close();
+            }
+        }
+        return 1;
+    }
+
+    private static AEKey keyOf(CommandSourceStack source, String item) {
+        ResourceLocation id = ResourceLocation.tryParse(item);
+        if (id == null) {
+            source.sendFailure(Component.literal("bad id " + item));
+            return null;
+        }
+        if (BuiltInRegistries.ITEM.containsKey(id)) {
+            return AEItemKey.of(new ItemStack(BuiltInRegistries.ITEM.get(id)));
+        }
+        if (BuiltInRegistries.BLOCK.containsKey(id) && !BuiltInRegistries.BLOCK.get(id).asItem().equals(net.minecraft.world.item.Items.AIR)) {
+            return AEItemKey.of(new ItemStack(BuiltInRegistries.BLOCK.get(id).asItem()));
+        }
+        if (ForgeRegistries.FLUIDS.containsKey(id)) {
+            return AEFluidKey.of(new FluidStack(ForgeRegistries.FLUIDS.getValue(id), 1));
+        }
+        source.sendFailure(Component.literal("unknown item/block/fluid " + item));
+        return null;
     }
 }

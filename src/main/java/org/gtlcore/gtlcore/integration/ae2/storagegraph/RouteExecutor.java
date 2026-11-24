@@ -54,6 +54,7 @@ public final class RouteExecutor {
                     }
                 }
             } else {
+                IdentityHashMap<MEStorage, Boolean> simulatedTargets = new IdentityHashMap<>();
                 for (Source graphSource : ordered) {
                     if (remaining <= 0L) {
                         break;
@@ -67,6 +68,9 @@ public final class RouteExecutor {
                     for (SourceRoute route : orderedRoutes(graphSource, true)) {
                         MEStorage target = routeTarget(graphSource, route);
                         if (target == null || !allowsExtract(target, what)) {
+                            continue;
+                        }
+                        if (simulatedTargets.put(target, Boolean.TRUE) != null) {
                             continue;
                         }
                         boolean direct = target == graphSource.physical();
@@ -128,6 +132,7 @@ public final class RouteExecutor {
                     }
                 }
             } else {
+                IdentityHashMap<MEStorage, Boolean> simulatedTargets = new IdentityHashMap<>();
                 for (Source graphSource : ordered) {
                     if (remaining <= 0L) {
                         break;
@@ -141,6 +146,9 @@ public final class RouteExecutor {
                     for (SourceRoute route : orderedRoutes(graphSource, false)) {
                         MEStorage target = routeTarget(graphSource, route);
                         if (target == null || !allowsInsert(target, what)) {
+                            continue;
+                        }
+                        if (simulatedTargets.put(target, Boolean.TRUE) != null) {
                             continue;
                         }
                         boolean direct = target == graphSource.physical();

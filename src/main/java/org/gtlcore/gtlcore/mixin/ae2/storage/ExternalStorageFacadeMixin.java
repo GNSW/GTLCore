@@ -6,6 +6,7 @@ import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.wrapper.InvWrapper;
+import net.minecraftforge.items.wrapper.SidedInvWrapper;
 
 import appeng.api.stacks.AEKeyType;
 import appeng.me.storage.ExternalStorageFacade;
@@ -24,10 +25,17 @@ public abstract class ExternalStorageFacadeMixin {
     private static void gtlcore$registerItemIdentity(IItemHandler handler,
                                                      CallbackInfoReturnable<ExternalStorageFacade> cir) {
         ExternalStorageFacade facade = cir.getReturnValue();
-        if (facade == null || !(handler instanceof InvWrapper wrapper)) {
+        if (facade == null) {
             return;
         }
-        Container container = wrapper.getInv();
+        Container container;
+        if (handler instanceof InvWrapper wrapper) {
+            container = wrapper.getInv();
+        } else if (handler instanceof SidedInvWrapper sided) {
+            container = gtlcore$sidedContainer(sided);
+        } else {
+            return;
+        }
         long identity;
         if (container instanceof CompoundContainer compound) {
             CompoundContainerAccessor accessor = (CompoundContainerAccessor) compound;
@@ -44,5 +52,16 @@ public abstract class ExternalStorageFacadeMixin {
     private static long gtlcore$combine(long first, long second, AEKeyType type) {
         long key = first * 31L + second;
         return key * 31L + type.getId().hashCode();
+    }
+
+    @Unique
+    private static Container gtlcore$sidedContainer(SidedInvWrapper sided) {
+        try {
+            var field = SidedInvWrapper.class.getDeclaredField("inv");
+            field.setAccessible(true);
+            return (Container) field.get(sided);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
     }
 }

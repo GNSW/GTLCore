@@ -54,7 +54,6 @@ public final class RouteExecutor {
                     }
                 }
             } else {
-                IdentityHashMap<MEStorage, Boolean> simulatedTargets = new IdentityHashMap<>();
                 for (Source graphSource : ordered) {
                     if (remaining <= 0L) {
                         break;
@@ -70,18 +69,20 @@ public final class RouteExecutor {
                         if (target == null || !allowsExtract(target, what)) {
                             continue;
                         }
-                        if (simulatedTargets.put(target, Boolean.TRUE) != null) {
+                        long budget = context.simulateExtractBudget(graphSource.id(), what, remaining);
+                        if (budget <= 0L) {
                             continue;
                         }
                         boolean direct = target == graphSource.physical();
                         if (direct && !context.touch(graphSource.id())) {
                             break;
                         }
-                        long got = target.extract(what, remaining, mode, source);
+                        long got = target.extract(what, budget, mode, source);
                         if (got > 0L) {
                             extracted = StorageGraphManager.saturatingAdd(extracted, got);
                             remaining -= got;
                             context.addConsumed(graphSource.id(), got);
+                            context.recordSimulatedExtract(graphSource.id(), what, got);
                             context.touch(graphSource.id());
                             break;
                         }
@@ -132,7 +133,6 @@ public final class RouteExecutor {
                     }
                 }
             } else {
-                IdentityHashMap<MEStorage, Boolean> simulatedTargets = new IdentityHashMap<>();
                 for (Source graphSource : ordered) {
                     if (remaining <= 0L) {
                         break;
@@ -148,18 +148,20 @@ public final class RouteExecutor {
                         if (target == null || !allowsInsert(target, what)) {
                             continue;
                         }
-                        if (simulatedTargets.put(target, Boolean.TRUE) != null) {
+                        long budget = context.simulateInsertBudget(graphSource.id(), what, remaining);
+                        if (budget <= 0L) {
                             continue;
                         }
                         boolean direct = target == graphSource.physical();
                         if (direct && !context.touch(graphSource.id())) {
                             break;
                         }
-                        long got = target.insert(what, remaining, mode, source);
+                        long got = target.insert(what, budget, mode, source);
                         if (got > 0L) {
                             inserted = StorageGraphManager.saturatingAdd(inserted, got);
                             remaining -= got;
                             context.addInserted(graphSource.id(), got);
+                            context.recordSimulatedInsert(graphSource.id(), what, got);
                             context.touch(graphSource.id());
                             break;
                         }

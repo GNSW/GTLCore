@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEKey;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +24,8 @@ public final class StorageOperationContext {
     private final Map<SourceId, Boolean> touched = new HashMap<>();
     private final Map<SourceId, Long> consumed = new HashMap<>();
     private final Map<SourceId, Long> inserted = new HashMap<>();
+    private final Map<SourceId, Map<AEKey, Long>> simulatedExtract = new HashMap<>();
+    private final Map<SourceId, Map<AEKey, Long>> simulatedInsert = new HashMap<>();
     private int depth;
 
     private StorageOperationContext(long operationId, long graphEpoch, Actionable mode, IActionSource actionSource) {
@@ -96,6 +99,38 @@ public final class StorageOperationContext {
 
     public long inserted(SourceId id) {
         return inserted.getOrDefault(id, 0L);
+    }
+
+    public long simulateExtractBudget(SourceId source, AEKey key, long requested) {
+        return simulateBudget(simulatedExtract, source, key, requested);
+    }
+
+    public void recordSimulatedExtract(SourceId source, AEKey key, long amount) {
+        recordSimulated(simulatedExtract, source, key, amount);
+    }
+
+    public long simulateInsertBudget(SourceId source, AEKey key, long requested) {
+        return simulateBudget(simulatedInsert, source, key, requested);
+    }
+
+    public void recordSimulatedInsert(SourceId source, AEKey key, long amount) {
+        recordSimulated(simulatedInsert, source, key, amount);
+    }
+
+    private static long simulateBudget(Map<SourceId, Map<AEKey, Long>> simulated,
+                                       SourceId source, AEKey key, long requested) {
+        Map<AEKey, Long> byKey = simulated.get(source);
+        if (byKey != null && byKey.getOrDefault(key, 0L) > 0L) {
+            return 0L;
+        }
+        return requested;
+    }
+
+    private static void recordSimulated(Map<SourceId, Map<AEKey, Long>> simulated,
+                                        SourceId source, AEKey key, long amount) {
+        if (amount > 0L) {
+            simulated.computeIfAbsent(source, ignored -> new HashMap<>()).merge(key, amount, Long::sum);
+        }
     }
 
     public long totalConsumed() {

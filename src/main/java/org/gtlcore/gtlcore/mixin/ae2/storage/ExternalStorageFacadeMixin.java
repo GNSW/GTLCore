@@ -2,8 +2,10 @@ package org.gtlcore.gtlcore.mixin.ae2.storage;
 
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
 
+import net.minecraft.core.Direction;
 import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
+import net.minecraft.world.WorldlyContainer;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.wrapper.InvWrapper;
 import net.minecraftforge.items.wrapper.SidedInvWrapper;
@@ -36,6 +38,9 @@ public abstract class ExternalStorageFacadeMixin {
         } else {
             return;
         }
+        if (container == null) {
+            return;
+        }
         long identity;
         if (container instanceof CompoundContainer compound) {
             CompoundContainerAccessor accessor = (CompoundContainerAccessor) compound;
@@ -57,11 +62,33 @@ public abstract class ExternalStorageFacadeMixin {
     @Unique
     private static Container gtlcore$sidedContainer(SidedInvWrapper sided) {
         try {
-            var field = SidedInvWrapper.class.getDeclaredField("inv");
-            field.setAccessible(true);
-            return (Container) field.get(sided);
+            var invField = SidedInvWrapper.class.getDeclaredField("inv");
+            invField.setAccessible(true);
+            WorldlyContainer inv = (WorldlyContainer) invField.get(sided);
+            var sideField = SidedInvWrapper.class.getDeclaredField("side");
+            sideField.setAccessible(true);
+            Direction side = (Direction) sideField.get(sided);
+            if (!gtlcore$coversAllSlots(inv.getSlotsForFace(side), inv.getContainerSize())) {
+                return null;
+            }
+            return inv;
         } catch (ReflectiveOperationException e) {
             return null;
         }
+    }
+
+    @Unique
+    private static boolean gtlcore$coversAllSlots(int[] slots, int size) {
+        if (slots.length != size) {
+            return false;
+        }
+        boolean[] seen = new boolean[size];
+        for (int slot : slots) {
+            if (slot < 0 || slot >= size || seen[slot]) {
+                return false;
+            }
+            seen[slot] = true;
+        }
+        return true;
     }
 }

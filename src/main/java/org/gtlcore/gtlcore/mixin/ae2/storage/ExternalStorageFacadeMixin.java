@@ -6,6 +6,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
 import net.minecraft.world.WorldlyContainer;
+import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.wrapper.InvWrapper;
 import net.minecraftforge.items.wrapper.SidedInvWrapper;
@@ -68,6 +69,9 @@ public abstract class ExternalStorageFacadeMixin {
             var sideField = SidedInvWrapper.class.getDeclaredField("side");
             sideField.setAccessible(true);
             Direction side = (Direction) sideField.get(sided);
+            if (!(inv instanceof ShulkerBoxBlockEntity)) {
+                return null;
+            }
             if (!gtlcore$coversAllSlots(inv.getSlotsForFace(side), inv.getContainerSize())) {
                 return null;
             }

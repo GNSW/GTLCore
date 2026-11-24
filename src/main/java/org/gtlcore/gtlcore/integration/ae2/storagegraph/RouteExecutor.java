@@ -69,11 +69,11 @@ public final class RouteExecutor {
                         if (target == null || !allowsExtract(target, what)) {
                             continue;
                         }
-                        long budget = context.simulateExtractBudget(graphSource.id(), what, remaining);
+                        boolean direct = target == graphSource.physical();
+                        long budget = direct ? context.simulateExtractBudget(graphSource.id(), what, remaining) : context.simulateTargetExtractBudget(target, what, remaining);
                         if (budget <= 0L) {
                             continue;
                         }
-                        boolean direct = target == graphSource.physical();
                         if (direct && !context.touch(graphSource.id())) {
                             break;
                         }
@@ -82,7 +82,11 @@ public final class RouteExecutor {
                             extracted = StorageGraphManager.saturatingAdd(extracted, got);
                             remaining -= got;
                             context.addConsumed(graphSource.id(), got);
-                            context.recordSimulatedExtract(graphSource.id(), what, got);
+                            if (direct) {
+                                context.recordSimulatedExtract(graphSource.id(), what, got);
+                            } else {
+                                context.recordSimulatedTargetExtract(target, what, got);
+                            }
                             context.touch(graphSource.id());
                             break;
                         }
@@ -148,11 +152,11 @@ public final class RouteExecutor {
                         if (target == null || !allowsInsert(target, what)) {
                             continue;
                         }
-                        long budget = context.simulateInsertBudget(graphSource.id(), what, remaining);
+                        boolean direct = target == graphSource.physical();
+                        long budget = direct ? context.simulateInsertBudget(graphSource.id(), what, remaining) : context.simulateTargetInsertBudget(target, what, remaining);
                         if (budget <= 0L) {
                             continue;
                         }
-                        boolean direct = target == graphSource.physical();
                         if (direct && !context.touch(graphSource.id())) {
                             break;
                         }
@@ -161,7 +165,11 @@ public final class RouteExecutor {
                             inserted = StorageGraphManager.saturatingAdd(inserted, got);
                             remaining -= got;
                             context.addInserted(graphSource.id(), got);
-                            context.recordSimulatedInsert(graphSource.id(), what, got);
+                            if (direct) {
+                                context.recordSimulatedInsert(graphSource.id(), what, got);
+                            } else {
+                                context.recordSimulatedTargetInsert(target, what, got);
+                            }
                             context.touch(graphSource.id());
                             break;
                         }

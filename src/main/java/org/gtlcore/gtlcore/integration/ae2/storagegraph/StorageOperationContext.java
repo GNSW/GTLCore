@@ -3,8 +3,10 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
+import appeng.api.storage.MEStorage;
 
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
@@ -26,6 +28,8 @@ public final class StorageOperationContext {
     private final Map<SourceId, Long> inserted = new HashMap<>();
     private final Map<SourceId, Map<AEKey, Long>> simulatedExtract = new HashMap<>();
     private final Map<SourceId, Map<AEKey, Long>> simulatedInsert = new HashMap<>();
+    private final Map<MEStorage, Map<AEKey, Long>> simulatedTargetExtract = new IdentityHashMap<>();
+    private final Map<MEStorage, Map<AEKey, Long>> simulatedTargetInsert = new IdentityHashMap<>();
     private int depth;
 
     private StorageOperationContext(long operationId, long graphEpoch, Actionable mode, IActionSource actionSource) {
@@ -117,8 +121,24 @@ public final class StorageOperationContext {
         recordSimulated(simulatedInsert, source, key, amount);
     }
 
-    private static long simulateBudget(Map<SourceId, Map<AEKey, Long>> simulated,
-                                       SourceId source, AEKey key, long requested) {
+    public long simulateTargetExtractBudget(MEStorage target, AEKey key, long requested) {
+        return simulateBudget(simulatedTargetExtract, target, key, requested);
+    }
+
+    public void recordSimulatedTargetExtract(MEStorage target, AEKey key, long amount) {
+        recordSimulated(simulatedTargetExtract, target, key, amount);
+    }
+
+    public long simulateTargetInsertBudget(MEStorage target, AEKey key, long requested) {
+        return simulateBudget(simulatedTargetInsert, target, key, requested);
+    }
+
+    public void recordSimulatedTargetInsert(MEStorage target, AEKey key, long amount) {
+        recordSimulated(simulatedTargetInsert, target, key, amount);
+    }
+
+    private static <K> long simulateBudget(Map<K, Map<AEKey, Long>> simulated,
+                                           K source, AEKey key, long requested) {
         Map<AEKey, Long> byKey = simulated.get(source);
         if (byKey != null && byKey.getOrDefault(key, 0L) > 0L) {
             return 0L;
@@ -126,8 +146,8 @@ public final class StorageOperationContext {
         return requested;
     }
 
-    private static void recordSimulated(Map<SourceId, Map<AEKey, Long>> simulated,
-                                        SourceId source, AEKey key, long amount) {
+    private static <K> void recordSimulated(Map<K, Map<AEKey, Long>> simulated,
+                                            K source, AEKey key, long amount) {
         if (amount > 0L) {
             simulated.computeIfAbsent(source, ignored -> new HashMap<>()).merge(key, amount, Long::sum);
         }

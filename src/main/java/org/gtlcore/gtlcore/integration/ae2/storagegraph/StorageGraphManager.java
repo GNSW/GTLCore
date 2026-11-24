@@ -127,10 +127,16 @@ public final class StorageGraphManager {
             if (source.physical() == null) {
                 continue;
             }
+            KeyCounter sourceKeys = new KeyCounter();
+            source.physical().getAvailableStacks(sourceKeys);
             if (source.kind() == SourceKind.FINITE || source.kind() == SourceKind.INFINITE) {
-                source.physical().getAvailableStacks(unique);
-            } else {
-                source.physical().getAvailableStacks(opaque);
+                for (var entry : sourceKeys) {
+                    if (isVisibleOnAnyRoute(source, entry.getKey())) {
+                        unique.add(entry.getKey(), entry.getLongValue());
+                    }
+                }
+            } else if (source.kind() != SourceKind.VIRTUAL) {
+                opaque.addAll(sourceKeys);
             }
         }
         if (keyCounterTotal(opaque) > 0L) {
@@ -312,6 +318,22 @@ public final class StorageGraphManager {
     static long saturatingAdd(long a, long b) {
         long sum = a + b;
         return sum < 0 ? Long.MAX_VALUE : sum;
+    }
+
+    private static boolean isVisibleOnAnyRoute(Source source, AEKey key) {
+        if (source.routes().isEmpty()) {
+            return true;
+        }
+        for (SourceRoute route : source.routes()) {
+            MEStorage target = route.target() == null ? source.physical() : route.target();
+            if (!(target instanceof MEInventoryPolicyView view)) {
+                return true;
+            }
+            if (view.gtlcore$isAvailable(key)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void logMounts(Map<Integer, List<MEStorage>> priorityInventory) {

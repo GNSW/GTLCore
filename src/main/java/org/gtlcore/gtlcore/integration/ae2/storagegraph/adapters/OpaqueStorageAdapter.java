@@ -21,6 +21,9 @@ public final class OpaqueStorageAdapter implements StorageGraphAdapter {
 
     @Override
     public SourceKind sourceKind(MEStorage storage) {
+        if (storage.getClass().getName().contains("CraftingServiceStorage")) {
+            return SourceKind.VIRTUAL;
+        }
         return SourceKind.OPAQUE;
     }
 }

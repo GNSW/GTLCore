@@ -182,8 +182,8 @@ public final class StorageGraphTestCommand {
         try {
             long available = storage.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, action);
             long allowed = ManualCraftingInventoryLock.limitExtraction(storage, key, request, action);
-            long extracted = storage.extract(key, request, Actionable.MODULATE, action);
-            source.sendSuccess(() -> Component.literal("available=" + available + " lock=" + lock + " allowed=" + allowed + " extracted=" + extracted), false);
+            long simulated = storage.extract(key, request, Actionable.SIMULATE, action);
+            source.sendSuccess(() -> Component.literal("available=" + available + " lock=" + lock + " allowed=" + allowed + " simulated=" + simulated), false);
         } finally {
             if (reservation != null) {
                 reservation.close();

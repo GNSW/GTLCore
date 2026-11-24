@@ -26,6 +26,8 @@ public final class StorageOperationContext {
     private final Map<SourceId, Long> inserted = new HashMap<>();
     private final Map<Long, Map<AEKey, Long>> simulatedCanonicalExtract = new HashMap<>();
     private final Map<Long, Map<AEKey, Long>> simulatedCanonicalInsert = new HashMap<>();
+    private final Map<Long, Map<AEKey, Long>> networkExtract = new HashMap<>();
+    private final Map<Long, Map<AEKey, Long>> networkInsert = new HashMap<>();
     private int depth;
 
     private StorageOperationContext(long operationId, long graphEpoch, Actionable mode, IActionSource actionSource) {
@@ -37,6 +39,20 @@ public final class StorageOperationContext {
 
     public static StorageOperationContext current() {
         return CURRENT.get();
+    }
+
+    public static long isolated(java.util.function.LongSupplier probe) {
+        StorageOperationContext previous = CURRENT.get();
+        CURRENT.remove();
+        try {
+            return probe.getAsLong();
+        } finally {
+            if (previous == null) {
+                CURRENT.remove();
+            } else {
+                CURRENT.set(previous);
+            }
+        }
     }
 
     public static StorageOperationContext begin(Actionable mode, IActionSource actionSource, long graphEpoch) {
@@ -115,6 +131,22 @@ public final class StorageOperationContext {
 
     public void recordUsedCanonicalInsert(long canonical, AEKey key, long amount) {
         recordSimulated(simulatedCanonicalInsert, canonical, key, amount);
+    }
+
+    public long usedNetworkExtract(long network, AEKey key) {
+        return used(networkExtract, network, key);
+    }
+
+    public void recordNetworkExtract(long network, AEKey key, long amount) {
+        recordSimulated(networkExtract, network, key, amount);
+    }
+
+    public long usedNetworkInsert(long network, AEKey key) {
+        return used(networkInsert, network, key);
+    }
+
+    public void recordNetworkInsert(long network, AEKey key, long amount) {
+        recordSimulated(networkInsert, network, key, amount);
     }
 
     private static <K> long used(Map<K, Map<AEKey, Long>> used, K source, AEKey key) {

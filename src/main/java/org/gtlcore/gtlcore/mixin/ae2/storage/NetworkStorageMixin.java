@@ -6,6 +6,7 @@ import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
 
@@ -132,9 +133,19 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
                                          Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
             if (StorageGraphManager.mode() == StorageGraphMode.ON) {
-                long unique = StorageGraphManager.simulateUniqueIfExact((MEStorage) (Object) this, what, amount,
+                long limited = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount,
+                        source);
+                if (limited <= 0L) {
+                    return 0L;
+                }
+                long unique = StorageGraphManager.simulateUniqueIfExact((MEStorage) (Object) this, what, limited,
                         source);
                 if (unique >= 0L) {
+                    StorageOperationContext context = StorageOperationContext.current();
+                    if (context != null && unique > 0L) {
+                        context.recordNetworkExtract(SourceRegistry.idFor((MEStorage) (Object) this).runtimeId(), what,
+                                unique);
+                    }
                     return unique;
                 }
             }

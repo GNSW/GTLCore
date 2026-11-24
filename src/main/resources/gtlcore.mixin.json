@@ -451,6 +451,7 @@
     "ae2.storage.MEInventoryHandlerMixin",
     "ae2.storage.ExternalStorageFacadeMixin",
     "ae2.storage.CompoundContainerAccessor",
+    "ae2.storage.DriveWatcherMixin",
     "ae2.service.TerminalCraftingProvidersMixin",
     "travelanchors.EventListenerMixin"
   ],

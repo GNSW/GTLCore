@@ -2,7 +2,9 @@ package org.gtlcore.gtlcore.integration.ae2.crafting;
 
 import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
@@ -198,6 +200,11 @@ public final class ManualCraftingInventoryLock {
 
         long available = getPhysicalAvailableAmount(storage, what, source);
         long extractable = subtractClamped(available, reservedForOthers);
+        StorageOperationContext context = StorageOperationContext.current();
+        if (context != null) {
+            extractable = subtractClamped(extractable,
+                    context.usedNetworkExtract(SourceRegistry.idFor(storage).runtimeId(), what));
+        }
         // A second bus may revisit this network within the same simulation.
         // Physical availability probes are isolated, so also subtract what that
         // simulation has already taken through this network's reservation limit.
@@ -240,7 +247,8 @@ public final class ManualCraftingInventoryLock {
         Integer previousDepth = PROBE_DEPTH.get();
         PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
-            return storage.extract(what, amount, Actionable.SIMULATE, source);
+            return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
+                    () -> storage.extract(what, amount, Actionable.SIMULATE, source)));
         } finally {
             if (previous == null) queries.remove(storage);
             else queries.put(storage, previous);
@@ -261,15 +269,18 @@ public final class ManualCraftingInventoryLock {
         PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
             if (StorageGraphManager.mode() == StorageGraphMode.ON) {
-                long unique = StorageGraphManager.simulateUniqueIfExact(storage, what, Long.MAX_VALUE, source);
+                long unique = StorageOperationContext.isolated(() -> StorageGraphManager.simulateUniqueIfExact(
+                        storage, what, Long.MAX_VALUE, source));
                 if (unique >= 0L) {
                     return unique;
                 }
             }
             if (storage instanceof AvailabilityView view) {
-                return view.gtlcore$getAvailableAmount(what, source);
+                return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
+                        () -> view.gtlcore$getAvailableAmount(what, source)));
             }
-            return storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source);
+            return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
+                    () -> storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source)));
         } finally {
             availabilityQueries.remove(storage);
             if (availabilityQueries.isEmpty()) {

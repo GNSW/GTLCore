@@ -476,6 +476,8 @@
   "message.gtlcore.socket_preview.enabled": "Held part socket visualization: on",
   "message.gtlcore.socket_preview.disabled": "Held part socket visualization: off",
   "message.gtlcore.socket_preview.config_disabled": "Held part socket visualization is disabled in the config options",
+  "message.gtlcore.socket_preview.indexing": "Mega structure: building the socket preview index, checked %1$s/%2$s positions (%3$s%%)",
+  "message.gtlcore.socket_preview.indexing_layout": "Mega structure: sorting the socket preview index (%1$s/%2$s positions, %3$s%%)",
   "gui.gtlcore.pattern_provider.auto_expand": "Pattern Auto-Expand Mode",
   "gui.gtlcore.pattern_provider.auto_expand.off": "Dispatch patterns at original amount",
   "gui.gtlcore.pattern_provider.auto_expand.on": "Multiply processing patterns by requested amount",

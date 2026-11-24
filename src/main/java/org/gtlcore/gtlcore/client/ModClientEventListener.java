@@ -9,6 +9,7 @@ import org.gtlcore.gtlcore.common.data.source_tooltip.register.*;
 
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -22,6 +23,13 @@ public class ModClientEventListener {
         NoClipClient.registerKeyMapping(event);
         AefFavoriteKeyCompat.registerKeyMapping(event);
         SocketPreview.registerKeyMapping(event);
+    }
+
+    @SubscribeEvent
+    public static void onRegisterGuiOverlays(RegisterGuiOverlaysEvent event) {
+        // Drawing on top of everything keeps the indexing progress readable while the player is
+        // looking around a mega structure.
+        event.registerAboveAll("gtlcore_socket_preview_progress", SocketPreview::renderProgressOverlay);
     }
 
     @SubscribeEvent

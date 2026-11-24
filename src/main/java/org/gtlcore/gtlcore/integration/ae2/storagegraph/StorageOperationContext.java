@@ -3,10 +3,8 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
-import appeng.api.storage.MEStorage;
 
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
@@ -26,10 +24,8 @@ public final class StorageOperationContext {
     private final Map<SourceId, Boolean> touched = new HashMap<>();
     private final Map<SourceId, Long> consumed = new HashMap<>();
     private final Map<SourceId, Long> inserted = new HashMap<>();
-    private final Map<SourceId, Map<AEKey, Long>> simulatedExtract = new HashMap<>();
-    private final Map<SourceId, Map<AEKey, Long>> simulatedInsert = new HashMap<>();
-    private final Map<MEStorage, Map<AEKey, Long>> simulatedTargetExtract = new IdentityHashMap<>();
-    private final Map<MEStorage, Map<AEKey, Long>> simulatedTargetInsert = new IdentityHashMap<>();
+    private final Map<Long, Map<AEKey, Long>> simulatedCanonicalExtract = new HashMap<>();
+    private final Map<Long, Map<AEKey, Long>> simulatedCanonicalInsert = new HashMap<>();
     private int depth;
 
     private StorageOperationContext(long operationId, long graphEpoch, Actionable mode, IActionSource actionSource) {
@@ -105,45 +101,25 @@ public final class StorageOperationContext {
         return inserted.getOrDefault(id, 0L);
     }
 
-    public long simulateExtractBudget(SourceId source, AEKey key, long requested) {
-        return simulateBudget(simulatedExtract, source, key, requested);
+    public long usedCanonicalExtract(long canonical, AEKey key) {
+        return used(simulatedCanonicalExtract, canonical, key);
     }
 
-    public void recordSimulatedExtract(SourceId source, AEKey key, long amount) {
-        recordSimulated(simulatedExtract, source, key, amount);
+    public void recordUsedCanonicalExtract(long canonical, AEKey key, long amount) {
+        recordSimulated(simulatedCanonicalExtract, canonical, key, amount);
     }
 
-    public long simulateInsertBudget(SourceId source, AEKey key, long requested) {
-        return simulateBudget(simulatedInsert, source, key, requested);
+    public long usedCanonicalInsert(long canonical, AEKey key) {
+        return used(simulatedCanonicalInsert, canonical, key);
     }
 
-    public void recordSimulatedInsert(SourceId source, AEKey key, long amount) {
-        recordSimulated(simulatedInsert, source, key, amount);
+    public void recordUsedCanonicalInsert(long canonical, AEKey key, long amount) {
+        recordSimulated(simulatedCanonicalInsert, canonical, key, amount);
     }
 
-    public long simulateTargetExtractBudget(MEStorage target, AEKey key, long requested) {
-        return simulateBudget(simulatedTargetExtract, target, key, requested);
-    }
-
-    public void recordSimulatedTargetExtract(MEStorage target, AEKey key, long amount) {
-        recordSimulated(simulatedTargetExtract, target, key, amount);
-    }
-
-    public long simulateTargetInsertBudget(MEStorage target, AEKey key, long requested) {
-        return simulateBudget(simulatedTargetInsert, target, key, requested);
-    }
-
-    public void recordSimulatedTargetInsert(MEStorage target, AEKey key, long amount) {
-        recordSimulated(simulatedTargetInsert, target, key, amount);
-    }
-
-    private static <K> long simulateBudget(Map<K, Map<AEKey, Long>> simulated,
-                                           K source, AEKey key, long requested) {
-        Map<AEKey, Long> byKey = simulated.get(source);
-        if (byKey != null && byKey.getOrDefault(key, 0L) > 0L) {
-            return 0L;
-        }
-        return requested;
+    private static <K> long used(Map<K, Map<AEKey, Long>> used, K source, AEKey key) {
+        Map<AEKey, Long> byKey = used.get(source);
+        return byKey == null ? 0L : byKey.getOrDefault(key, 0L);
     }
 
     private static <K> void recordSimulated(Map<K, Map<AEKey, Long>> simulated,

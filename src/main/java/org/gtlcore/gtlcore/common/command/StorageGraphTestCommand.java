@@ -2,6 +2,7 @@ package org.gtlcore.gtlcore.common.command;
 
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -47,6 +48,14 @@ public final class StorageGraphTestCommand {
                                         .executes(context -> simulate(context.getSource(),
                                                 StringArgumentType.getString(context, "item"),
                                                 IntegerArgumentType.getInteger(context, "amount"))))))
+                .then(Commands.literal("simulate2")
+                        .then(Commands.argument("item", StringArgumentType.string())
+                                .then(Commands.argument("first", IntegerArgumentType.integer(1))
+                                        .then(Commands.argument("second", IntegerArgumentType.integer(1))
+                                                .executes(context -> simulateTwice(context.getSource(),
+                                                        StringArgumentType.getString(context, "item"),
+                                                        IntegerArgumentType.getInteger(context, "first"),
+                                                        IntegerArgumentType.getInteger(context, "second")))))))
                 .then(Commands.literal("insert")
                         .then(Commands.argument("item", StringArgumentType.string())
                                 .then(Commands.argument("amount", IntegerArgumentType.integer(1))
@@ -134,6 +143,43 @@ public final class StorageGraphTestCommand {
         return 1;
     }
 
+    private static int simulateTwice(CommandSourceStack source, String item, long first, long second) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        ResourceLocation id = ResourceLocation.tryParse(item);
+        if (id == null) {
+            source.sendFailure(Component.literal("bad id " + item));
+            return 0;
+        }
+        AEKey key;
+        if (BuiltInRegistries.ITEM.containsKey(id)) {
+            key = AEItemKey.of(new ItemStack(BuiltInRegistries.ITEM.get(id)));
+        } else if (BuiltInRegistries.BLOCK.containsKey(id) && !BuiltInRegistries.BLOCK.get(id).asItem().equals(net.minecraft.world.item.Items.AIR)) {
+            key = AEItemKey.of(new ItemStack(BuiltInRegistries.BLOCK.get(id).asItem()));
+        } else if (ForgeRegistries.FLUIDS.containsKey(id)) {
+            key = AEFluidKey.of(new FluidStack(ForgeRegistries.FLUIDS.getValue(id), 1));
+        } else {
+            source.sendFailure(Component.literal("unknown item/block/fluid " + item));
+            return 0;
+        }
+        MEStorage storage = storage(source);
+        if (storage == null) {
+            source.sendFailure(Component.literal("no AE2 grid at the targeted block"));
+            return 0;
+        }
+        IActionSource action = IActionSource.ofPlayer(player);
+        StorageOperationContext context = StorageOperationContext.begin(Actionable.SIMULATE, action, 0L);
+        long firstResult;
+        long secondResult;
+        try {
+            firstResult = storage.extract(key, first, Actionable.SIMULATE, action);
+            secondResult = storage.extract(key, second, Actionable.SIMULATE, action);
+        } finally {
+            StorageOperationContext.end(context);
+        }
+        source.sendSuccess(() -> Component.literal("key=" + key + " first(" + first + ")=" + firstResult + " then(" + second + ")=" + secondResult), false);
+        return 1;
+    }
+
     private static int insert(CommandSourceStack source, String item, long amount) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         ResourceLocation id = ResourceLocation.tryParse(item);
@@ -180,10 +226,11 @@ public final class StorageGraphTestCommand {
         ManualCraftingInventoryLock.Reservation reservation = ManualCraftingInventoryLock.tryAcquire(storage,
                 requested, action);
         try {
-            long available = storage.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, action);
+            long others = ManualCraftingInventoryLock.reservedForOthers(storage, key);
             long allowed = ManualCraftingInventoryLock.limitExtraction(storage, key, request, action);
+            long available = storage.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, action);
             long simulated = storage.extract(key, request, Actionable.SIMULATE, action);
-            source.sendSuccess(() -> Component.literal("available=" + available + " lock=" + lock + " allowed=" + allowed + " simulated=" + simulated), false);
+            source.sendSuccess(() -> Component.literal("available=" + available + " lock=" + lock + " reserved=" + (reservation != null) + " others=" + others + " allowed=" + allowed + " simulated=" + simulated), false);
         } finally {
             if (reservation != null) {
                 reservation.close();

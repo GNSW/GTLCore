@@ -3,6 +3,7 @@ package org.gtlcore.gtlcore.mixin.ae2.storage;
 import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
@@ -180,6 +181,9 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$simulateMountedExtraction(MEStorage storage, AEKey what, long amount, Actionable mode,
                                                    IActionSource source, Operation<Long> original) {
         if (mode != Actionable.SIMULATE) {
+            return original.call(storage, what, amount, mode, source);
+        }
+        if (ExternalInventoryIdentity.get(storage) != 0L) {
             return original.call(storage, what, amount, mode, source);
         }
         return NetworkExtractionSimulation.mounted(storage, what, amount,

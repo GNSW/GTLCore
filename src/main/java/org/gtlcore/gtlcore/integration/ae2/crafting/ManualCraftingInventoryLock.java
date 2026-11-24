@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.integration.ae2.crafting;
 
+import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
@@ -23,6 +25,7 @@ public final class ManualCraftingInventoryLock {
     private static final ThreadLocal<Reservation> ACTIVE_SUBMISSION = new ThreadLocal<>();
     // Availability simulation can re-enter the same network through a mounted inventory.
     private static final ThreadLocal<IdentityHashMap<MEStorage, Boolean>> AVAILABILITY_QUERIES = new ThreadLocal<>();
+    private static final ThreadLocal<Integer> PROBE_DEPTH = new ThreadLocal<>();
     private static final AtomicLong NEXT_RESERVATION_ID = new AtomicLong();
 
     private ManualCraftingInventoryLock() {}
@@ -183,8 +186,8 @@ public final class ManualCraftingInventoryLock {
         if (requested <= 0) {
             return requested;
         }
-        var availabilityQueries = AVAILABILITY_QUERIES.get();
-        if (availabilityQueries != null && availabilityQueries.containsKey(storage)) {
+        Integer probeDepth = PROBE_DEPTH.get();
+        if (probeDepth != null && probeDepth > 0) {
             return requested;
         }
 
@@ -234,12 +237,16 @@ public final class ManualCraftingInventoryLock {
             AVAILABILITY_QUERIES.set(queries);
         }
         Boolean previous = queries.put(storage, Boolean.TRUE);
+        Integer previousDepth = PROBE_DEPTH.get();
+        PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
             return storage.extract(what, amount, Actionable.SIMULATE, source);
         } finally {
             if (previous == null) queries.remove(storage);
             else queries.put(storage, previous);
             if (queries.isEmpty()) AVAILABILITY_QUERIES.remove();
+            if (previousDepth == null) PROBE_DEPTH.remove();
+            else PROBE_DEPTH.set(previousDepth);
         }
     }
 
@@ -250,7 +257,15 @@ public final class ManualCraftingInventoryLock {
             AVAILABILITY_QUERIES.set(availabilityQueries);
         }
         availabilityQueries.put(storage, Boolean.TRUE);
+        Integer previousDepth = PROBE_DEPTH.get();
+        PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
+            if (StorageGraphManager.mode() == StorageGraphMode.ON) {
+                long unique = StorageGraphManager.simulateUniqueIfExact(storage, what, Long.MAX_VALUE, source);
+                if (unique >= 0L) {
+                    return unique;
+                }
+            }
             if (storage instanceof AvailabilityView view) {
                 return view.gtlcore$getAvailableAmount(what, source);
             }
@@ -260,6 +275,8 @@ public final class ManualCraftingInventoryLock {
             if (availabilityQueries.isEmpty()) {
                 AVAILABILITY_QUERIES.remove();
             }
+            if (previousDepth == null) PROBE_DEPTH.remove();
+            else PROBE_DEPTH.set(previousDepth);
         }
     }
 

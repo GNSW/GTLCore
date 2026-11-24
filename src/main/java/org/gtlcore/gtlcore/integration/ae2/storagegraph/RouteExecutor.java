@@ -65,30 +65,18 @@ public final class RouteExecutor {
                         continue;
                     }
                     for (SourceRoute route : orderedRoutes(graphSource, true)) {
+                        if (remaining <= 0L) {
+                            break;
+                        }
                         MEStorage target = routeTarget(graphSource, route);
                         if (target == null || !allowsExtract(target, what)) {
                             continue;
                         }
-                        boolean direct = target == graphSource.physical();
-                        long budget = direct ? context.simulateExtractBudget(graphSource.id(), what, remaining) : context.simulateTargetExtractBudget(target, what, remaining);
-                        if (budget <= 0L) {
-                            continue;
-                        }
-                        if (direct && !context.touch(graphSource.id())) {
-                            break;
-                        }
-                        long got = target.extract(what, budget, mode, source);
+                        long got = target.extract(what, remaining, mode, source);
                         if (got > 0L) {
                             extracted = StorageGraphManager.saturatingAdd(extracted, got);
                             remaining -= got;
                             context.addConsumed(graphSource.id(), got);
-                            if (direct) {
-                                context.recordSimulatedExtract(graphSource.id(), what, got);
-                            } else {
-                                context.recordSimulatedTargetExtract(target, what, got);
-                            }
-                            context.touch(graphSource.id());
-                            break;
                         }
                     }
                 }
@@ -148,30 +136,18 @@ public final class RouteExecutor {
                         continue;
                     }
                     for (SourceRoute route : orderedRoutes(graphSource, false)) {
+                        if (remaining <= 0L) {
+                            break;
+                        }
                         MEStorage target = routeTarget(graphSource, route);
                         if (target == null || !allowsInsert(target, what)) {
                             continue;
                         }
-                        boolean direct = target == graphSource.physical();
-                        long budget = direct ? context.simulateInsertBudget(graphSource.id(), what, remaining) : context.simulateTargetInsertBudget(target, what, remaining);
-                        if (budget <= 0L) {
-                            continue;
-                        }
-                        if (direct && !context.touch(graphSource.id())) {
-                            break;
-                        }
-                        long got = target.insert(what, budget, mode, source);
+                        long got = target.insert(what, remaining, mode, source);
                         if (got > 0L) {
                             inserted = StorageGraphManager.saturatingAdd(inserted, got);
                             remaining -= got;
                             context.addInserted(graphSource.id(), got);
-                            if (direct) {
-                                context.recordSimulatedInsert(graphSource.id(), what, got);
-                            } else {
-                                context.recordSimulatedTargetInsert(target, what, got);
-                            }
-                            context.touch(graphSource.id());
-                            break;
                         }
                     }
                 }

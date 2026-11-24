@@ -28,7 +28,7 @@ public abstract class MEInventoryHandlerMixin implements MEInventoryPolicyView {
 
     @Override
     public boolean gtlcore$allowsExtract(AEKey key) {
-        return allowExtraction && (!filterOnExtraction || gtlcore$passesFilter(key));
+        return !filterOnExtraction || (allowExtraction && gtlcore$passesFilter(key));
     }
 
     @Override
@@ -38,7 +38,7 @@ public abstract class MEInventoryHandlerMixin implements MEInventoryPolicyView {
 
     @Override
     public boolean gtlcore$isAvailable(AEKey key) {
-        return !filterAvailableContents || gtlcore$passesFilter(key);
+        return !filterAvailableContents || (allowExtraction && gtlcore$passesFilter(key));
     }
 
     @Unique

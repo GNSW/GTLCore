@@ -325,11 +325,14 @@ public final class StorageGraphManager {
             return true;
         }
         for (SourceRoute route : source.routes()) {
-            MEStorage target = route.target() == null ? source.physical() : route.target();
-            if (!(target instanceof MEInventoryPolicyView view)) {
-                return true;
+            boolean visible = true;
+            for (MEStorage wrapper : route.path()) {
+                if (wrapper instanceof MEInventoryPolicyView view && !view.gtlcore$isAvailable(key)) {
+                    visible = false;
+                    break;
+                }
             }
-            if (view.gtlcore$isAvailable(key)) {
+            if (visible) {
                 return true;
             }
         }
@@ -534,6 +537,9 @@ public final class StorageGraphManager {
                 continue;
             }
             long externalKey = externalKeys.getOrDefault(node, 0L);
+            if (externalKey == 0L) {
+                externalKey = ExternalInventoryIdentity.get(node);
+            }
             SourceKind kind = adapter.sourceKind(node);
             SourceId id = SourceRegistry.idFor(node, externalKey);
             List<SourceRoute> sourceRoutes = routes.get(node);
@@ -542,11 +548,18 @@ public final class StorageGraphManager {
             } else {
                 sourceRoutes = dedupeRoutes(sourceRoutes);
             }
+            Source existing = sourceMap.get(id);
+            if (existing != null) {
+                List<SourceRoute> merged = new ArrayList<>(existing.routes());
+                merged.addAll(sourceRoutes);
+                sourceRoutes = dedupeRoutes(merged);
+                node = existing.physical();
+            }
             int priority = 0;
             for (SourceRoute route : sourceRoutes) {
                 priority = Math.max(priority, route.priority());
             }
-            sourceMap.putIfAbsent(id, new Source(id, kind, node, sourceRoutes,
+            sourceMap.put(id, new Source(id, kind, node, sourceRoutes,
                     System.identityHashCode(node), epoch, priority));
         }
         List<Source> sources = new ArrayList<>(sourceMap.values());

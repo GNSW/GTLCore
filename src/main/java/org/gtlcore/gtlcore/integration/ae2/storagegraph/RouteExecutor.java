@@ -61,7 +61,7 @@ public final class RouteExecutor {
                     if (graphSource.kind() != SourceKind.FINITE && graphSource.kind() != SourceKind.INFINITE) {
                         continue;
                     }
-                    if (graphSource.physical() == null || !context.touch(graphSource.id())) {
+                    if (graphSource.physical() == null) {
                         continue;
                     }
                     for (SourceRoute route : orderedRoutes(graphSource, true)) {
@@ -69,11 +69,16 @@ public final class RouteExecutor {
                         if (target == null || !allowsExtract(target, what)) {
                             continue;
                         }
+                        boolean direct = target == graphSource.physical();
+                        if (direct && !context.touch(graphSource.id())) {
+                            break;
+                        }
                         long got = target.extract(what, remaining, mode, source);
                         if (got > 0L) {
                             extracted = StorageGraphManager.saturatingAdd(extracted, got);
                             remaining -= got;
                             context.addConsumed(graphSource.id(), got);
+                            context.touch(graphSource.id());
                             break;
                         }
                     }
@@ -127,10 +132,10 @@ public final class RouteExecutor {
                     if (remaining <= 0L) {
                         break;
                     }
-                    if (graphSource.kind() != SourceKind.FINITE && graphSource.kind() != SourceKind.INFINITE) {
+                    if (graphSource.kind() != SourceKind.FINITE && graphSource.kind() != SourceKind.INFINITE && graphSource.kind() != SourceKind.VIRTUAL) {
                         continue;
                     }
-                    if (graphSource.physical() == null || !context.touch(graphSource.id())) {
+                    if (graphSource.physical() == null) {
                         continue;
                     }
                     for (SourceRoute route : orderedRoutes(graphSource, false)) {
@@ -138,11 +143,16 @@ public final class RouteExecutor {
                         if (target == null || !allowsInsert(target, what)) {
                             continue;
                         }
+                        boolean direct = target == graphSource.physical();
+                        if (direct && !context.touch(graphSource.id())) {
+                            break;
+                        }
                         long got = target.insert(what, remaining, mode, source);
                         if (got > 0L) {
                             inserted = StorageGraphManager.saturatingAdd(inserted, got);
                             remaining -= got;
                             context.addInserted(graphSource.id(), got);
+                            context.touch(graphSource.id());
                             break;
                         }
                     }
@@ -177,7 +187,7 @@ public final class RouteExecutor {
     private static List<MEStorage> orderedInsertPaths(List<Source> ordered, AEKey what) {
         IdentityHashMap<MEStorage, Integer> priorities = new IdentityHashMap<>();
         for (Source source : ordered) {
-            if (source.kind() != SourceKind.FINITE && source.kind() != SourceKind.INFINITE) {
+            if (source.kind() != SourceKind.FINITE && source.kind() != SourceKind.INFINITE && source.kind() != SourceKind.VIRTUAL) {
                 continue;
             }
             if (source.physical() == null) {

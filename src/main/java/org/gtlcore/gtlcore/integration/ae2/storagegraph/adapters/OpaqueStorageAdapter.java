@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.storagegraph.adapters;
 
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceKind;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphAdapter;
 
@@ -21,6 +22,9 @@ public final class OpaqueStorageAdapter implements StorageGraphAdapter {
 
     @Override
     public SourceKind sourceKind(MEStorage storage) {
+        if (ExternalInventoryIdentity.get(storage) != 0L) {
+            return SourceKind.FINITE;
+        }
         if (storage.getClass().getName().contains("CraftingServiceStorage")) {
             return SourceKind.VIRTUAL;
         }

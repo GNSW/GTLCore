@@ -17,6 +17,7 @@ import com.lowdragmc.lowdraglib.gui.widget.LabelWidget;
 import com.lowdragmc.lowdraglib.gui.widget.SlotWidget;
 import com.lowdragmc.lowdraglib.gui.widget.TabButton;
 import com.lowdragmc.lowdraglib.gui.widget.TabContainer;
+import com.lowdragmc.lowdraglib.gui.widget.TextFieldWidget;
 import com.lowdragmc.lowdraglib.gui.widget.WidgetGroup;
 
 import net.minecraft.client.Minecraft;
@@ -155,7 +156,7 @@ public final class StructurePlacerUI {
         panel.addWidget(pickButton(be, browser));
         panel.addWidget(sectionTitleWidget(6, 47, "ui.quantum_chromodynamic_charge.structure.summary"));
 
-        panel.addWidget(dynamicLabel(6, 58, 168, be::blueprintCurrentLine));
+        panel.addWidget(dynamicSingleLineLabel(6, 58, 168, be::blueprintCurrentLine));
         panel.addWidget(dynamicLabel(6, 78, 168, be::blueprintSourceLine));
         panel.addWidget(dynamicLabel(6, 98, 168, be::blueprintSizeLine));
         panel.addWidget(dynamicLabel(6, 118, 168, be::blueprintCostLine));
@@ -342,29 +343,38 @@ public final class StructurePlacerUI {
 
         panel.addWidget(sectionTitleWidget(6, 3,
                 "ui.quantum_chromodynamic_charge.structure.export_section"));
-        panel.addWidget(dynamicLabel(6, 16, 316, () -> Component.translatable(
+        // 提示最多占两行（y=14 / 24），下面的内容从 40 开始，避免文字互相压住
+        panel.addWidget(dynamicLabel(6, 14, 316, () -> Component.translatable(
                 "ui.quantum_chromodynamic_charge.structure.export_hint")));
 
         panel.addWidget(staticLabel(6, 40,
-                "ui.quantum_chromodynamic_charge.structure.export_slots"));
-        for (int i = 0; i < StructurePlacerBlockEntity.COORD_SLOTS; i++) {
-            SlotWidget slot = new SlotWidget(be.getCoordinateInventory(), i, 40 + i * 22, 36, true, true)
-                    .setBackgroundTexture(GuiTextures.SLOT);
-            // 导出页只接受坐标定位卡（坐标背包自身也有过滤器，这里再限制为仅该页可放入）
-            workspace.addCardSlot(slot);
-            panel.addWidget(slot);
-        }
-        panel.addWidget(dynamicLabel(86, 38, 234, () -> be.exportCardText(0)));
-        panel.addWidget(dynamicLabel(86, 52, 234, () -> be.exportCardText(1)));
+                "ui.quantum_chromodynamic_charge.structure.export_card_slot"));
+        SlotWidget slot = new SlotWidget(be.getCoordinateInventory(), 0, 56, 38, true, true)
+                .setBackgroundTexture(GuiTextures.SLOT);
+        // 导出页只接受坐标定位卡（坐标背包自身也有过滤器，这里再限制为仅该页可放入）
+        workspace.addCardSlot(slot);
+        panel.addWidget(slot);
+        panel.addWidget(dynamicLabel(80, 40, 240, () -> be.exportCardText(0)));
+        panel.addWidget(dynamicLabel(80, 54, 240, () -> be.exportCardText(1)));
 
-        panel.addWidget(dynamicLabel(6, 72, 316, be::exportRegionText));
-        panel.addWidget(dynamicLabel(6, 88, 316, be::exportStatusText));
-        panel.addWidget(fixedLabel(6, 104, 316,
+        panel.addWidget(dynamicLabel(6, 70, 150, be::exportRegionText));
+        panel.addWidget(dynamicLabel(164, 70, 164, be::exportStatusText));
+
+        panel.addWidget(staticLabel(6, 84, "ui.quantum_chromodynamic_charge.structure.export_name"));
+        panel.addWidget(new TextFieldWidget(44, 82, 272, 16, be::exportName, text -> {
+            if (!be.isRemote()) be.setExportName(text);
+        }).setMaxStringLength(48).setHoverTooltips(Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.export_name_hint")));
+        panel.addWidget(staticLabel(6, 104, "ui.quantum_chromodynamic_charge.structure.export_author"));
+        panel.addWidget(new TextFieldWidget(44, 102, 272, 16, be::exportAuthor, text -> {
+            if (!be.isRemote()) be.setExportAuthor(text);
+        }).setMaxStringLength(48).setHoverTooltips(Component.translatable(
+                "ui.quantum_chromodynamic_charge.structure.export_author_hint")));
+
+        panel.addWidget(fixedLabel(6, 122, 228,
                 "ui.quantum_chromodynamic_charge.structure.export_dir"));
-
-        panel.addWidget(button(6, 118, 110, 18,
-                "ui.quantum_chromodynamic_charge.structure.export",
-                be::exportRegion));
+        panel.addWidget(button(240, 120, 82, 18,
+                "ui.quantum_chromodynamic_charge.structure.export", be::exportRegion));
         return panel;
     }
 
@@ -377,7 +387,7 @@ public final class StructurePlacerUI {
         panel.setBackground(GuiTextures.BACKGROUND_INVERSE);
 
         panel.addWidget(dynamicLabel(6, 6, DEPLOY_W - 12, be::statusText));
-        panel.addWidget(dynamicLabel(6, 24, DEPLOY_W - 12, be::blueprintCurrentLine));
+        panel.addWidget(dynamicSingleLineLabel(6, 24, DEPLOY_W - 12, be::blueprintCurrentLine));
         panel.addWidget(button(8, DEPLOY_H - 26, DEPLOY_W - 16, 18,
                 "ui.quantum_chromodynamic_charge.structure.place",
                 be::startPlacement));
@@ -421,6 +431,13 @@ public final class StructurePlacerUI {
 
     private static LabelWidget fixedLabel(int x, int y, int width, String langKey) {
         LabelWidget label = new LabelWidget(x, y, () -> shorten(Component.translatable(langKey).getString(), width));
+        label.setClientSideWidget();
+        return label;
+    }
+
+    /** 单行动态标签：超出宽度用省略号截断，不会换行压到下一行。 */
+    private static LabelWidget dynamicSingleLineLabel(int x, int y, int width, Supplier<Component> supplier) {
+        LabelWidget label = new LabelWidget(x, y, () -> shorten(supplier.get().getString(), width));
         label.setClientSideWidget();
         return label;
     }

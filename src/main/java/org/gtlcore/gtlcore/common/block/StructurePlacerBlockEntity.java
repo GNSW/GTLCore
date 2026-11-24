@@ -61,7 +61,7 @@ import java.util.Map;
  */
 public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder {
 
-    public static final int COORD_SLOTS = 2;
+    public static final int COORD_SLOTS = 1;
     public static final int MATERIAL_ROWS = 3;
     public static final int MATERIAL_COLS = 12;
     public static final int MATERIAL_SLOTS = MATERIAL_ROWS * MATERIAL_COLS;
@@ -125,6 +125,10 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     private StructureExporter.ExportTask activeExport;
     private int syncCountdown;
 
+    /** 导出用的自定义名称与作者（空串表示用默认的时间戳命名）。 */
+    private String exportName = "";
+    private String exportAuthor = "";
+
     /** 导出状态：0=就绪，1=导出中，2=完成，3=失败。 */
     private int exportState;
     private int exportProgress;
@@ -134,8 +138,12 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
 
     /** 本地蓝图文件列表（只有路径/名称/体积，内容不解析）。 */
     private List<LocalBlueprintLibrary.Entry> localBlueprints = List.of();
-    /** 已读取过的蓝图元数据：相对路径 -> {sizeX, sizeY, sizeZ, blocks}。 */
-    private Map<String, int[]> localMeta = Map.of();
+
+    /** 蓝图读取后缓存的元数据（尺寸、方块数、作者）。 */
+    public record LocalMeta(int sizeX, int sizeY, int sizeZ, int blocks, String author) {}
+
+    /** 已读取过的蓝图元数据：相对路径 -> 元数据。 */
+    private Map<String, LocalMeta> localMeta = Map.of();
     /** 本地蓝图目录树（含空文件夹），用于选择界面展示。 */
     private List<String> localDirectories = List.of();
     /** 选中的本地蓝图相对路径；空串表示使用内置结构。 */
@@ -349,6 +357,8 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         tag.putInt("speed", speed);
         tag.putBoolean("taskCompleted", taskCompleted);
         tag.putInt("progress", progress);
+        tag.putString("exportName", exportName);
+        tag.putString("exportAuthor", exportAuthor);
         tag.putInt("exportState", exportState);
         tag.putInt("exportProgress", exportProgress);
         tag.putString("exportFile", exportFile);
@@ -364,14 +374,15 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         }
         tag.put("blueprints", blueprints);
         ListTag meta = new ListTag();
-        for (Map.Entry<String, int[]> entry : localMeta.entrySet()) {
-            int[] value = entry.getValue();
+        for (Map.Entry<String, LocalMeta> entry : localMeta.entrySet()) {
+            LocalMeta value = entry.getValue();
             CompoundTag item = new CompoundTag();
             item.putString("path", entry.getKey());
-            item.putInt("x", value[0]);
-            item.putInt("y", value[1]);
-            item.putInt("z", value[2]);
-            item.putInt("b", value[3]);
+            item.putInt("x", value.sizeX());
+            item.putInt("y", value.sizeY());
+            item.putInt("z", value.sizeZ());
+            item.putInt("b", value.blocks());
+            item.putString("a", value.author());
             meta.add(item);
         }
         tag.put("blueprintMeta", meta);
@@ -403,6 +414,8 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         speed = tag.contains("speed") ? tag.getInt("speed") : 10;
         taskCompleted = !tag.contains("taskCompleted") || tag.getBoolean("taskCompleted");
         progress = tag.getInt("progress");
+        exportName = tag.getString("exportName");
+        exportAuthor = tag.getString("exportAuthor");
         exportState = tag.getInt("exportState");
         exportProgress = tag.getInt("exportProgress");
         exportFile = tag.getString("exportFile");
@@ -420,7 +433,7 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         }
         localBlueprints = List.copyOf(files);
 
-        Map<String, int[]> meta = new java.util.LinkedHashMap<>();
+        Map<String, LocalMeta> meta = new java.util.LinkedHashMap<>();
         ListTag metaTag = tag.getList("blueprintMeta", 10);
         for (int i = 0; i < metaTag.size(); i++) {
             CompoundTag entry = metaTag.getCompound(i);
@@ -429,7 +442,7 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
             int sizeY = entry.getInt("y");
             int sizeZ = entry.getInt("z");
             if (path.isEmpty() || sizeX <= 0 || sizeY <= 0 || sizeZ <= 0) continue;
-            meta.put(path, new int[] { sizeX, sizeY, sizeZ, entry.getInt("b") });
+            meta.put(path, new LocalMeta(sizeX, sizeY, sizeZ, entry.getInt("b"), entry.getString("a")));
         }
         localMeta = Map.copyOf(meta);
         List<String> dirs = new java.util.ArrayList<>();
@@ -447,9 +460,10 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
 
     public @Nullable StructureDefinition.Structure currentStructure() {
         if (!localBlueprintPath.isEmpty()) {
-            int[] meta = localMeta.get(localBlueprintPath);
+            LocalMeta meta = localMeta.get(localBlueprintPath);
             if (meta != null) {
-                return LocalBlueprintLibrary.structure(localBlueprintPath, meta[0], meta[1], meta[2], meta[3]);
+                return LocalBlueprintLibrary.structure(localBlueprintPath, meta.sizeX(), meta.sizeY(), meta.sizeZ(),
+                        meta.blocks());
             }
         }
         clampIndices();
@@ -493,8 +507,8 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         return localBlueprints;
     }
 
-    /** 已读取的蓝图元数据（相对路径 -> {x, y, z, blocks}）。 */
-    public Map<String, int[]> localMeta() {
+    /** 已读取的蓝图元数据（相对路径 -> 元数据）。 */
+    public Map<String, LocalMeta> localMeta() {
         return localMeta;
     }
 
@@ -554,9 +568,10 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
      *
      * @param sizeX 等 <= 0 表示客户端没读到，需要服务端解析
      */
-    public void applyLocal(String path, int sizeX, int sizeY, int sizeZ, int blocks) {
+    public void applyLocal(String path, int sizeX, int sizeY, int sizeZ, int blocks, String author) {
         if (level == null || level.isClientSide || path.isEmpty()) return;
-        int[] meta = sizeX > 0 && sizeY > 0 && sizeZ > 0 ? new int[] { sizeX, sizeY, sizeZ, Math.max(0, blocks) } :
+        LocalMeta meta = sizeX > 0 && sizeY > 0 && sizeZ > 0 ?
+                new LocalMeta(sizeX, sizeY, sizeZ, Math.max(0, blocks), author == null ? "" : author) :
                 parseLocalMeta(path, false);
         if (meta == null) return;
         selectLocal(path, meta);
@@ -565,13 +580,13 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     /** 玩家确认风险后强制读取一个超大蓝图。 */
     public void applyLocalForced(String path) {
         if (level == null || level.isClientSide || path.isEmpty()) return;
-        int[] meta = parseLocalMeta(path, true);
+        LocalMeta meta = parseLocalMeta(path, true);
         if (meta == null) return;
         selectLocal(path, meta);
     }
 
-    private void selectLocal(String path, int[] meta) {
-        Map<String, int[]> map = new LinkedHashMap<>(localMeta);
+    private void selectLocal(String path, LocalMeta meta) {
+        Map<String, LocalMeta> map = new LinkedHashMap<>(localMeta);
         map.put(path, meta);
         localMeta = Map.copyOf(map);
         localBlueprintPath = path;
@@ -581,12 +596,13 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     }
 
     @Nullable
-    private int[] parseLocalMeta(String path, boolean forced) {
+    private LocalMeta parseLocalMeta(String path, boolean forced) {
         Path file = LocalBlueprintLibrary.resolve(path);
         if (file == null || !java.nio.file.Files.isRegularFile(file)) return null;
         try {
             BlueprintBundle.Bundle bundle = forced ? BlueprintIO.loadForced(file) : BlueprintIO.load(file);
-            return new int[] { bundle.sizeX(), bundle.sizeY(), bundle.sizeZ(), bundle.blocks() };
+            return new LocalMeta(bundle.sizeX(), bundle.sizeY(), bundle.sizeZ(), bundle.blocks(),
+                    bundle.author() == null ? "" : bundle.author());
         } catch (Exception | OutOfMemoryError failure) {
             GTLCore.LOGGER.warn("Blueprint {} could not be read: {}", path, failure.toString());
             return null;
@@ -650,26 +666,14 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
                 startPos(), s.sizeX(), s.sizeY(), s.sizeZ(), rotation, xMirror, zMirror);
     }
 
-    @Nullable
-    private BlockPos readCoord(ItemStack stack) {
-        if (stack.isEmpty() || !(stack.getItem() instanceof CoordinatePositioningCardItem)) {
-            return null;
-        }
-        return CoordinatePositioningCardItem.getCoordinate(stack);
-    }
-
+    /** 导出区域的起止点：单张定位卡上保存的「起点 / 终点」。 */
     private BlockPos[] coords() {
-        BlockPos a = null, b = null;
-        for (int i = 0; i < coordinateInventory.getSlots(); i++) {
-            BlockPos p = readCoord(coordinateInventory.getStackInSlot(i));
-            if (p == null) continue;
-            if (a == null) a = p;
-            else {
-                b = p;
-                break;
-            }
+        ItemStack stack = coordinateInventory.getStackInSlot(0);
+        if (stack.isEmpty() || !(stack.getItem() instanceof CoordinatePositioningCardItem)) {
+            return new BlockPos[] { null, null };
         }
-        return new BlockPos[] { a, b };
+        return new BlockPos[] { CoordinatePositioningCardItem.getStart(stack),
+                CoordinatePositioningCardItem.getEnd(stack) };
     }
 
     public boolean canExport() {
@@ -807,7 +811,8 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         exportFile = "";
         exportError = "";
         exportSyncCountdown = SYNC_INTERVAL;
-        activeExport = new StructureExporter.ExportTask(serverLevel, c[0], c[1], xMirror, zMirror, rotation);
+        activeExport = new StructureExporter.ExportTask(serverLevel, c[0], c[1], xMirror, zMirror, rotation,
+                exportName, exportAuthor);
         GTLCore.LOGGER.info("Structure export started: {} -> {} ({}x{}x{})",
                 c[0], c[1], activeExport.outSizeX(), activeExport.outSizeY(), activeExport.outSizeZ());
         markChanged();
@@ -815,6 +820,34 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
 
     public boolean isExporting() {
         return activeExport != null;
+    }
+
+    public String exportName() {
+        return exportName;
+    }
+
+    public String exportAuthor() {
+        return exportAuthor;
+    }
+
+    public void setExportName(String name) {
+        String next = cleanLabel(name);
+        if (next.equals(exportName)) return;
+        exportName = next;
+        markChanged();
+    }
+
+    public void setExportAuthor(String author) {
+        String next = cleanLabel(author);
+        if (next.equals(exportAuthor)) return;
+        exportAuthor = next;
+        markChanged();
+    }
+
+    private static String cleanLabel(@Nullable String value) {
+        if (value == null) return "";
+        String trimmed = value.trim();
+        return trimmed.length() > 48 ? trimmed.substring(0, 48) : trimmed;
     }
 
     public int exportState() {
@@ -849,18 +882,21 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         };
     }
 
-    /** 单个坐标卡槽的坐标文本。 */
-    public Component exportCardText(int slot) {
-        BlockPos pos = slot >= 0 && slot < coordinateInventory.getSlots() ?
-                readCoord(coordinateInventory.getStackInSlot(slot)) : null;
+    /** 定位卡上的点文本：index 0 = 起点，1 = 终点。 */
+    public Component exportCardText(int index) {
+        boolean start = index <= 0;
+        BlockPos pos = coords()[start ? 0 : 1];
+        Component label = Component.translatable(start ?
+                "ui.quantum_chromodynamic_charge.structure.export_start" :
+                "ui.quantum_chromodynamic_charge.structure.export_end");
         if (pos == null) {
             return Component.translatable(
-                    "ui.quantum_chromodynamic_charge.structure.export_card_empty", slot + 1)
+                    "ui.quantum_chromodynamic_charge.structure.export_point_empty", label)
                     .withStyle(ChatFormatting.GRAY);
         }
         return Component.translatable(
-                "ui.quantum_chromodynamic_charge.structure.export_card",
-                slot + 1, pos.getX(), pos.getY(), pos.getZ());
+                "ui.quantum_chromodynamic_charge.structure.export_point",
+                label, pos.getX(), pos.getY(), pos.getZ());
     }
 
     /** 两张卡围成的区域尺寸文本。 */
@@ -1115,15 +1151,32 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         return (blocks + CHUNK_EDGE_BLOCKS - 1) / CHUNK_EDGE_BLOCKS;
     }
 
-    /** 蓝图页第一行：当前蓝图名称。 */
+    /** 蓝图页第一行：当前蓝图名称 + 作者（同一行）。 */
     public Component blueprintCurrentLine() {
         StructureDefinition.Structure s = currentStructure();
         if (s == null) {
             return Component.translatable("ui.quantum_chromodynamic_charge.structure.blueprint.none");
         }
-        return Component.translatable(
+        Component line = Component.translatable(
                 "ui.quantum_chromodynamic_charge.structure.blueprint.current",
                 s.title());
+        String author = currentAuthor();
+        if (author.isEmpty()) return line;
+        return Component.empty()
+                .append(line)
+                .append(Component.literal("  "))
+                .append(Component.translatable(
+                        "ui.quantum_chromodynamic_charge.structure.blueprint.author", author));
+    }
+
+    /** 当前蓝图的作者：本地蓝图取文件里的 author，内置结构取注册的来源。 */
+    private String currentAuthor() {
+        if (isLocalBlueprintSelected()) {
+            LocalMeta meta = localMeta.get(localBlueprintPath);
+            return meta == null || meta.author() == null ? "" : meta.author();
+        }
+        StructureDefinition.Structure s = currentStructure();
+        return s == null || s.source() == null ? "" : s.source().getString();
     }
 
     /** 蓝图页第二行：来源（内置预设第几个 / 本地相对路径）。 */

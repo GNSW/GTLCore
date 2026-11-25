@@ -157,6 +157,10 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             } finally {
                 StorageGraphManager.exitNested();
             }
+            StorageOperationContext context = StorageOperationContext.current();
+            if (context != null && legacy > 0L) {
+                context.recordNetworkExtract(SourceRegistry.idFor((MEStorage) (Object) this).runtimeId(), what, legacy);
+            }
             StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
             return legacy;
         }

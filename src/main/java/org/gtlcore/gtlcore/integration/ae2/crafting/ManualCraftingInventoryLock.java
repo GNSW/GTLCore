@@ -1,9 +1,7 @@
 package org.gtlcore.gtlcore.integration.ae2.crafting;
 
-import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
-import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 
 import appeng.api.config.Actionable;
@@ -268,13 +266,6 @@ public final class ManualCraftingInventoryLock {
         Integer previousDepth = PROBE_DEPTH.get();
         PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
-            if (StorageGraphManager.mode() == StorageGraphMode.ON) {
-                KeyCounter counter = new KeyCounter();
-                if (StorageOperationContext.isolated(
-                        () -> StorageGraphManager.fillUniqueIfExact(storage, counter) ? 1L : 0L) > 0L) {
-                    return counter.get(what);
-                }
-            }
             if (storage instanceof AvailabilityView view) {
                 return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
                         () -> view.gtlcore$getAvailableAmount(what, source)));

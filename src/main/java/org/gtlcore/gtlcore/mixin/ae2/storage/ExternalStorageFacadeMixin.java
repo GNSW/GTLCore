@@ -50,15 +50,10 @@ public abstract class ExternalStorageFacadeMixin {
         if (container == null) {
             return;
         }
-        long identity;
-        if (container instanceof CompoundContainer compound) {
-            CompoundContainerAccessor accessor = (CompoundContainerAccessor) compound;
-            long first = System.identityHashCode(accessor.gtlcore$container1());
-            long second = System.identityHashCode(accessor.gtlcore$container2());
-            identity = gtlcore$combine(Math.min(first, second), Math.max(first, second), facade.getKeyType());
-        } else {
-            identity = gtlcore$combine(System.identityHashCode(container), 0L, facade.getKeyType());
+        if (container instanceof CompoundContainer) {
+            return;
         }
+        long identity = gtlcore$combine(System.identityHashCode(container), 0L, facade.getKeyType());
         ExternalInventoryIdentity.put(facade, identity);
     }
 

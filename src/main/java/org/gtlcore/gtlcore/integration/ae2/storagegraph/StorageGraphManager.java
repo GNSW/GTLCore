@@ -19,8 +19,10 @@ public final class StorageGraphManager {
 
     public static final int MAX_NODES = 4096;
     public static final int MAX_DEPTH = 32;
+    private static final int MAX_CACHE_ENTRIES = 64;
 
     private static final IdentityHashMap<MEStorage, StorageGraphSnapshot> CACHE = new IdentityHashMap<>();
+    private static final IdentityHashMap<MEStorage, java.util.Set<MEStorage>> DEPENDENTS = new IdentityHashMap<>();
     private static final ThreadLocal<Integer> SHADOW_DEPTH = ThreadLocal.withInitial(() -> 0);
     private static final ThreadLocal<IdentityHashMap<MEStorage, StorageGraphSnapshot>> ACCESS_SNAPSHOTS = ThreadLocal
             .withInitial(IdentityHashMap::new);
@@ -41,6 +43,27 @@ public final class StorageGraphManager {
         synchronized (StorageGraphManager.class) {
             topologyEpoch++;
             CACHE.clear();
+            DEPENDENTS.clear();
+            epoch = topologyEpoch;
+        }
+        StorageGraphDiagnostics.logTopologyChange(epoch);
+    }
+
+    public static void onTopologyChanged(MEStorage changed) {
+        if (changed == null) {
+            onTopologyChanged();
+            return;
+        }
+        long epoch;
+        synchronized (StorageGraphManager.class) {
+            topologyEpoch++;
+            CACHE.remove(changed);
+            java.util.Set<MEStorage> roots = DEPENDENTS.remove(changed);
+            if (roots != null) {
+                for (MEStorage root : roots) {
+                    CACHE.remove(root);
+                }
+            }
             epoch = topologyEpoch;
         }
         StorageGraphDiagnostics.logTopologyChange(epoch);
@@ -90,8 +113,19 @@ public final class StorageGraphManager {
             if (cached != null) {
                 return cached;
             }
+            if (CACHE.size() >= MAX_CACHE_ENTRIES) {
+                CACHE.clear();
+                DEPENDENTS.clear();
+            }
             StorageGraphSnapshot snapshot = collect(root);
             CACHE.put(root, snapshot);
+            for (java.util.Set<MEStorage> set : DEPENDENTS.values()) {
+                set.remove(root);
+            }
+            for (MEStorage node : snapshot.nodes()) {
+                DEPENDENTS.computeIfAbsent(node,
+                        ignored -> java.util.Collections.newSetFromMap(new IdentityHashMap<>())).add(root);
+            }
             return snapshot;
         }
     }
@@ -116,7 +150,10 @@ public final class StorageGraphManager {
         if (root == null || out == null || mode() != StorageGraphMode.ON) {
             return false;
         }
-        StorageGraphSnapshot snapshot = collect(root);
+        StorageGraphSnapshot snapshot = snapshot(root);
+        if (snapshot == null) {
+            return false;
+        }
         if (!snapshot.complete()) {
             StorageGraphDiagnostics.logIncomplete(snapshot);
             return false;
@@ -141,9 +178,7 @@ public final class StorageGraphManager {
         }
         if (keyCounterTotal(opaque) > 0L) {
             StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
-            if (compatFallback()) {
-                return false;
-            }
+            out.addAll(opaque);
         }
         out.addAll(unique);
         return true;
@@ -579,7 +614,8 @@ public final class StorageGraphManager {
         }
         int uniqueSources = sources.size() - opaqueSources;
         StorageGraphSnapshot snapshot = new StorageGraphSnapshot(epoch, policyEpoch, edges.size(), uniqueSources,
-                aliasGroups, opaqueSources, unverifiedAliases, edges, sources, status);
+                aliasGroups, opaqueSources, unverifiedAliases, edges, sources,
+                new ArrayList<>(visited.keySet()), status);
         StorageGraphDiagnostics.logSnapshot(snapshot);
         StorageGraphDiagnostics.logSources(sources);
         return snapshot;

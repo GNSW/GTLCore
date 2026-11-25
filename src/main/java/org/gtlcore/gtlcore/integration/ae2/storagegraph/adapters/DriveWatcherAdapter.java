@@ -4,14 +4,11 @@ import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceKind;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphAdapter;
 
 import appeng.api.storage.MEStorage;
-import appeng.api.storage.cells.StorageCell;
 import appeng.me.storage.DriveWatcher;
 
 import java.util.List;
 
 public final class DriveWatcherAdapter implements StorageGraphAdapter {
-
-    private static final String INFINITY_CELL = "InfinityCellInventory";
 
     @Override
     public Recognition recognize(MEStorage storage) {
@@ -25,12 +22,6 @@ public final class DriveWatcherAdapter implements StorageGraphAdapter {
 
     @Override
     public SourceKind sourceKind(MEStorage storage) {
-        if (storage instanceof DriveWatcher watcher) {
-            StorageCell cell = watcher.getCell();
-            if (cell != null && cell.getClass().getName().contains(INFINITY_CELL)) {
-                return SourceKind.INFINITE;
-            }
-        }
         return SourceKind.FINITE;
     }
 }

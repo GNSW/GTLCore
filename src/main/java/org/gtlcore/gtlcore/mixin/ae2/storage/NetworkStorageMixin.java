@@ -47,14 +47,14 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private void gtlcore$bumpThroughputTopologyOnMount(int priority, MEStorage storage, CallbackInfo ci) {
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
-        StorageGraphManager.onTopologyChanged();
+        StorageGraphManager.onTopologyChanged((MEStorage) (Object) this);
     }
 
     @Inject(method = "unmount", at = @At("RETURN"), remap = false)
     private void gtlcore$bumpThroughputTopologyOnUnmount(MEStorage storage, CallbackInfo ci) {
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
-        StorageGraphManager.onTopologyChanged();
+        StorageGraphManager.onTopologyChanged((MEStorage) (Object) this);
         SourceRegistry.onRemoved(storage);
     }
 
@@ -89,7 +89,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackInsert(AEKey what, long amount, Actionable mode, IActionSource source,
                                      Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            if (StorageGraphManager.mode() == StorageGraphMode.ON) {
+            if (StorageGraphManager.mode() == StorageGraphMode.ON && !NetworkExtractionSimulation.isActive() && StorageOperationContext.current() == null) {
                 long unique = StorageGraphManager.insertUniqueIfExact((MEStorage) (Object) this, what, amount,
                         source);
                 if (unique >= 0L) {
@@ -100,7 +100,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             StorageGraphManager.shadowInsert((MEStorage) (Object) this, what, amount, mode, source, legacy);
             return legacy;
         }
-        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
+        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
             long routed = StorageGraphManager.routeInsert((MEStorage) (Object) this, what, amount, mode, source);
             if (routed >= 0L) {
                 if (routed > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
@@ -132,7 +132,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackExtraction(AEKey what, long amount, Actionable mode, IActionSource source,
                                          Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            if (StorageGraphManager.mode() == StorageGraphMode.ON && !NetworkExtractionSimulation.isActive()) {
+            if (StorageGraphManager.mode() == StorageGraphMode.ON && !NetworkExtractionSimulation.isActive() && StorageOperationContext.current() == null) {
                 long limited = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount,
                         source);
                 if (limited <= 0L) {
@@ -160,7 +160,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
             return legacy;
         }
-        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON) {
+        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
             long limitedAmount = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount, source);
             long routed = StorageGraphManager.routeExtract((MEStorage) (Object) this, what, limitedAmount, mode, source);
             if (routed >= 0L) {

@@ -132,7 +132,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackExtraction(AEKey what, long amount, Actionable mode, IActionSource source,
                                          Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            if (StorageGraphManager.mode() == StorageGraphMode.ON) {
+            if (StorageGraphManager.mode() == StorageGraphMode.ON && !NetworkExtractionSimulation.isActive()) {
                 long limited = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount,
                         source);
                 if (limited <= 0L) {

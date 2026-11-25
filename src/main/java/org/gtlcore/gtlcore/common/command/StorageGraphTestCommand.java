@@ -31,8 +31,13 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** Temporary server-side probes for AE2 storage graph work. */
 public final class StorageGraphTestCommand {
+
+    private static final List<ManualCraftingInventoryLock.Reservation> HELD = new ArrayList<>();
 
     private StorageGraphTestCommand() {}
 
@@ -69,7 +74,15 @@ public final class StorageGraphTestCommand {
                                                 .executes(context -> reserve(context.getSource(),
                                                         StringArgumentType.getString(context, "item"),
                                                         IntegerArgumentType.getInteger(context, "lock"),
-                                                        IntegerArgumentType.getInteger(context, "request"))))))));
+                                                        IntegerArgumentType.getInteger(context, "request")))))))
+                .then(Commands.literal("reservehold")
+                        .then(Commands.argument("item", StringArgumentType.string())
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                        .executes(context -> reserveHold(context.getSource(),
+                                                StringArgumentType.getString(context, "item"),
+                                                IntegerArgumentType.getInteger(context, "amount"))))))
+                .then(Commands.literal("release")
+                        .executes(context -> release(context.getSource()))));
     }
 
     private static MEStorage storage(CommandSourceStack source) throws CommandSyntaxException {
@@ -236,6 +249,41 @@ public final class StorageGraphTestCommand {
                 reservation.close();
             }
         }
+        return 1;
+    }
+
+    private static int reserveHold(CommandSourceStack source, String item, int amount) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        AEKey key = keyOf(source, item);
+        if (key == null) {
+            return 0;
+        }
+        MEStorage storage = storage(source);
+        if (storage == null) {
+            source.sendFailure(Component.literal("no AE2 grid at the targeted block"));
+            return 0;
+        }
+        IActionSource action = IActionSource.ofPlayer(player);
+        KeyCounter requested = new KeyCounter();
+        requested.add(key, amount);
+        ManualCraftingInventoryLock.Reservation reservation = ManualCraftingInventoryLock.tryAcquire(storage,
+                requested, action);
+        if (reservation == null) {
+            source.sendFailure(Component.literal("reserve failed"));
+            return 0;
+        }
+        HELD.add(reservation);
+        source.sendSuccess(() -> Component.literal("held=" + amount + " total=" + HELD.size()), false);
+        return 1;
+    }
+
+    private static int release(CommandSourceStack source) {
+        int count = HELD.size();
+        for (ManualCraftingInventoryLock.Reservation reservation : HELD) {
+            reservation.close();
+        }
+        HELD.clear();
+        source.sendSuccess(() -> Component.literal("released=" + count), false);
         return 1;
     }
 

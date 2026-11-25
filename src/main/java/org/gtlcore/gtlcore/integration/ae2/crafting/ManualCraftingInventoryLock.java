@@ -269,8 +269,8 @@ public final class ManualCraftingInventoryLock {
         PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
             if (StorageGraphManager.mode() == StorageGraphMode.ON) {
-                long unique = StorageOperationContext.isolated(() -> StorageGraphManager.simulateUniqueIfExact(
-                        storage, what, Long.MAX_VALUE, source));
+                long unique = StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
+                        () -> StorageGraphManager.simulateUniqueIfExact(storage, what, Long.MAX_VALUE, source)));
                 if (unique >= 0L) {
                     return unique;
                 }

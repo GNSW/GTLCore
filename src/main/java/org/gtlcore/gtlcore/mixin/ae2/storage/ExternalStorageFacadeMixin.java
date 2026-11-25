@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 
 import net.minecraft.core.Direction;
@@ -69,12 +70,13 @@ public abstract class ExternalStorageFacadeMixin {
         if (mode != Actionable.SIMULATE || canonical == 0L || context == null) {
             return original.call(what, amount, mode, source);
         }
-        long used = context.usedCanonicalExtract(canonical, what);
+        long ledger = SourceRegistry.idFor((MEStorage) (Object) this, canonical).runtimeId();
+        long used = context.usedCanonicalExtract(ledger, what);
         long probe = amount > Long.MAX_VALUE - used ? Long.MAX_VALUE : amount + used;
         long available = original.call(what, probe, mode, source);
         long got = available <= used ? 0L : Math.min(amount, available - used);
         if (got > 0L) {
-            context.recordUsedCanonicalExtract(canonical, what, got);
+            context.recordUsedCanonicalExtract(ledger, what, got);
         }
         return got;
     }
@@ -87,12 +89,13 @@ public abstract class ExternalStorageFacadeMixin {
         if (mode != Actionable.SIMULATE || canonical == 0L || context == null) {
             return original.call(what, amount, mode, source);
         }
-        long used = context.usedCanonicalInsert(canonical, what);
+        long ledger = SourceRegistry.idFor((MEStorage) (Object) this, canonical).runtimeId();
+        long used = context.usedCanonicalInsert(ledger, what);
         long probe = amount > Long.MAX_VALUE - used ? Long.MAX_VALUE : amount + used;
         long available = original.call(what, probe, mode, source);
         long got = available <= used ? 0L : Math.min(amount, available - used);
         if (got > 0L) {
-            context.recordUsedCanonicalInsert(canonical, what, got);
+            context.recordUsedCanonicalInsert(ledger, what, got);
         }
         return got;
     }

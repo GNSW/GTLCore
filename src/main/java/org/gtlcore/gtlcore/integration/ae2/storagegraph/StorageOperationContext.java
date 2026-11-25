@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Per-operation state shared by one routed storage graph operation. The context is scoped to the
- * calling thread with a stack-like reuse rule: a nested operation (a sub-network calling back into
+ * calling thread with a stack-like reuse rule: a nested operation (a subnetwork calling back into
  * the same graph) reuses the outer context instead of planning again, and the context is always
  * cleared in a finally block.
  */

@@ -173,7 +173,11 @@ public final class StorageGraphManager {
                     }
                 }
             } else if (source.kind() != SourceKind.VIRTUAL) {
-                opaque.addAll(sourceKeys);
+                for (var entry : sourceKeys) {
+                    if (isVisibleOnAnyRoute(source, entry.getKey())) {
+                        opaque.add(entry.getKey(), entry.getLongValue());
+                    }
+                }
             }
         }
         if (keyCounterTotal(opaque) > 0L) {

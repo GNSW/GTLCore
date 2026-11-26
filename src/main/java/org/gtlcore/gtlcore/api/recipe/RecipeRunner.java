@@ -105,15 +105,26 @@ public final class RecipeRunner {
         }
 
         if (capIO == IO.IN) {
-            // Use different handling based on cache strategy
-            if (strategy == RecipeCacheStrategy.NO_CACHE) {
-                return machine.isDistinct() ?
-                        handleInputDistinctNocache(machine, recipe, recipeContent, simulated) :
-                        handleInputNotDistinctNocache(machine, recipe, recipeContent, simulated);
-            } else {
-                return machine.isDistinct() ?
-                        handleInputDistinct(machine, recipe, recipeContent, simulated, strategy) :
-                        handleInputNotDistinct(machine, recipe, recipeContent, simulated, strategy);
+            RecipeExtractionScope scope = simulated ? null : RecipeExtractionScope.beginShared();
+            try {
+                boolean ok;
+                if (strategy == RecipeCacheStrategy.NO_CACHE) {
+                    ok = machine.isDistinct() ?
+                            handleInputDistinctNocache(machine, recipe, recipeContent, simulated) :
+                            handleInputNotDistinctNocache(machine, recipe, recipeContent, simulated);
+                } else {
+                    ok = machine.isDistinct() ?
+                            handleInputDistinct(machine, recipe, recipeContent, simulated, strategy) :
+                            handleInputNotDistinct(machine, recipe, recipeContent, simulated, strategy);
+                }
+                if (scope != null && ok) {
+                    scope.commit();
+                }
+                return ok;
+            } finally {
+                if (scope != null) {
+                    scope.close();
+                }
             }
         } else {
             recipeContent = handleMEOutput(machine.getMEOutputRecipeHandleParts(), recipeContent, simulated);

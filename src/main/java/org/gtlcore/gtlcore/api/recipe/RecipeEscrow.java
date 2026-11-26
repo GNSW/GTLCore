@@ -45,7 +45,7 @@ public final class RecipeEscrow {
         synchronized (PENDING) {
             for (int i = 0; i < PENDING.size(); i++) {
                 Entry existing = PENDING.get(i);
-                if (existing.network == network && existing.key.equals(key)) {
+                if (existing.network == network && existing.key.equals(key) && existing.uncertain == uncertain) {
                     PENDING.set(i, new Entry(network, source, key, existing.amount + amount,
                             existing.uncertain || uncertain));
                     return;
@@ -79,9 +79,9 @@ public final class RecipeEscrow {
                                 false));
                     }
                 } catch (RuntimeException | Error failure) {
-                    GTLCore.LOGGER.error("[RecipeEscrow] retry failed for {} x {}, dropping entry", entry.amount,
-                            entry.key);
-                    PENDING.remove(i);
+                    GTLCore.LOGGER.error("[RecipeEscrow] retry failed for {} x {}, keeping as uncertain",
+                            entry.amount, entry.key);
+                    PENDING.set(i, new Entry(entry.network, entry.source, entry.key, entry.amount, true));
                 }
             }
         }

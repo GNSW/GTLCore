@@ -253,6 +253,10 @@ public final class RecipeRunner {
                     return true;
                 }
                 gtlcore$rollback(checkpoint);
+                if (!simulated) {
+                    hasFluidTry = false;
+                    fluidHandleResult = false;
+                }
             }
         }
 
@@ -418,17 +422,21 @@ public final class RecipeRunner {
                                                       Reference2ObjectOpenHashMap<RecipeCapability<?>, List<Object>> recipeContent,
                                                       boolean simulated) {
         for (var part : machine.getNormalRecipeHandlePart(IO.IN)) {
+            int checkpoint = gtlcore$checkpoint();
             var result = part.handleRecipe(IO.IN, recipe, recipeContent, simulated);
             if (result.isEmpty()) {
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         for (var part : machine.getMEPatternRecipeHandleParts()) {
+            int checkpoint = gtlcore$checkpoint();
             var slot = part.handleRecipe(recipe, recipeContent, simulated, false);
             if (slot >= 0) {
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         return false;
@@ -441,6 +449,7 @@ public final class RecipeRunner {
         RecipeHandlePart sharedPart = machine.getSharedRecipeHandlePart();
         boolean fluidHandled = true;
 
+        int fluidCheckpoint = gtlcore$checkpoint();
         List<?> fluidContent = recipeContent.getOrDefault(FluidRecipeCapability.CAP, Collections.emptyList());
         if (!fluidContent.isEmpty()) {
             if (sharedPart == null) fluidHandled = false;
@@ -448,6 +457,9 @@ public final class RecipeRunner {
                 fluidContent = sharedPart.handleRecipe(IO.IN, recipe, FluidRecipeCapability.CAP, fluidContent, simulated);
                 if (fluidContent != null && !fluidContent.isEmpty()) fluidHandled = false;
             }
+        }
+        if (!fluidHandled) {
+            gtlcore$rollback(fluidCheckpoint);
         }
 
         if (fluidHandled) {
@@ -457,25 +469,31 @@ public final class RecipeRunner {
             }
 
             for (var part : machine.getNormalRecipeHandlePart(IO.IN)) {
+                int checkpoint = gtlcore$checkpoint();
                 var result = part.handleRecipe(IO.IN, recipe, ItemRecipeCapability.CAP, itemContent, simulated);
                 if (result == null || result.isEmpty()) {
                     return true;
                 }
+                gtlcore$rollback(checkpoint);
             }
 
             if (sharedPart != null) {
+                int checkpoint = gtlcore$checkpoint();
                 var result = sharedPart.handleRecipe(IO.IN, recipe, ItemRecipeCapability.CAP, itemContent, simulated);
                 if (result == null || result.isEmpty()) {
                     return true;
                 }
+                gtlcore$rollback(checkpoint);
             }
         }
 
         for (var part : machine.getMEPatternRecipeHandleParts()) {
+            int checkpoint = gtlcore$checkpoint();
             var slot = part.handleRecipe(recipe, recipeContent, simulated, false);
             if (slot >= 0) {
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         return false;

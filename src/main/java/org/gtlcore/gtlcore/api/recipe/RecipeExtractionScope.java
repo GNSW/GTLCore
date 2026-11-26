@@ -80,7 +80,9 @@ public final class RecipeExtractionScope implements AutoCloseable {
     }
 
     public void commit() {
-        committed = true;
+        if (depth <= 1) {
+            committed = true;
+        }
     }
 
     @Override
@@ -114,7 +116,9 @@ public final class RecipeExtractionScope implements AutoCloseable {
                 RecipeEscrow.add(entry.network, entry.source, entry.key, entry.amount - returned);
             }
         } catch (RuntimeException | Error failure) {
-            RecipeEscrow.add(entry.network, entry.source, entry.key, entry.amount);
+            org.gtlcore.gtlcore.GTLCore.LOGGER.error(
+                    "[RecipeEscrow] refund failed with unknown state for {} x {}, not retrying", entry.amount,
+                    entry.key);
         }
     }
 

@@ -3,9 +3,9 @@
 	loot_size: 1
 	order_index: 16
 	rewards: [
-		{ count: 3, item: "gtlcore:structure_component_frame_basic" }
-		{ count: 3, item: "gtlcore:structure_component_plate_basic" }
-		{ count: 3, item: "gtlcore:structure_component_finish_basic" }
+		{ count: 25, item: "gtlcore:structure_component_frame_basic" }
+		{ count: 5, item: "gtlcore:structure_component_frame_advanced" }
+		{ item: "gtlcore:structure_component_frame_elite" }
 	]
 	title: "{gtlcore.quest.gtl.reward_table.1faad550cf20ef4a.title}"
 }

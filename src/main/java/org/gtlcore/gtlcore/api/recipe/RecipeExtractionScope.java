@@ -22,6 +22,7 @@ public final class RecipeExtractionScope implements AutoCloseable {
     private final IActionSource defaultSource;
     private final List<Staged> staged = new ArrayList<>();
     private boolean committed;
+    private boolean closed;
     private int depth;
 
     private RecipeExtractionScope(@Nullable MEStorage defaultNetwork, @Nullable IActionSource defaultSource) {
@@ -50,6 +51,17 @@ public final class RecipeExtractionScope implements AutoCloseable {
 
     public static @Nullable RecipeExtractionScope current() {
         return CURRENT.get();
+    }
+
+    public int checkpoint() {
+        return staged.size();
+    }
+
+    public void rollbackTo(int checkpoint) {
+        for (int i = staged.size() - 1; i >= checkpoint; i--) {
+            Staged entry = staged.remove(i);
+            returnOne(entry);
+        }
     }
 
     public long extract(AEKey key, long amount) {
@@ -81,17 +93,29 @@ public final class RecipeExtractionScope implements AutoCloseable {
         if (CURRENT.get() == this) {
             CURRENT.remove();
         }
+        if (closed) {
+            return;
+        }
+        closed = true;
         if (committed) {
             staged.clear();
             return;
         }
-        for (Staged entry : staged) {
+        for (int i = staged.size() - 1; i >= 0; i--) {
+            Staged entry = staged.remove(i);
+            returnOne(entry);
+        }
+    }
+
+    private static void returnOne(Staged entry) {
+        try {
             long returned = entry.network.insert(entry.key, entry.amount, Actionable.MODULATE, entry.source);
             if (returned < entry.amount) {
                 RecipeEscrow.add(entry.network, entry.source, entry.key, entry.amount - returned);
             }
+        } catch (RuntimeException | Error failure) {
+            RecipeEscrow.add(entry.network, entry.source, entry.key, entry.amount);
         }
-        staged.clear();
     }
 
     private record Staged(MEStorage network, IActionSource source, AEKey key, long amount) {}

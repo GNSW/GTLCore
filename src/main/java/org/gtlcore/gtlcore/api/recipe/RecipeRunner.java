@@ -105,6 +105,9 @@ public final class RecipeRunner {
         }
 
         if (capIO == IO.IN) {
+            if (!simulated && RecipeEscrow.isFull()) {
+                return false;
+            }
             RecipeExtractionScope scope = simulated ? null : RecipeExtractionScope.beginShared();
             try {
                 boolean ok;
@@ -147,6 +150,7 @@ public final class RecipeRunner {
             var handler = it.next();
 
             if (handler instanceof MEPatternRecipeHandlePart cachedMEPart) {
+                int checkpoint = gtlcore$checkpoint();
                 var slot = cachedMEPart.handleRecipe(recipe, recipeContent, simulated, strategy.cacheToMEInternal);
                 if (slot != -1) {
                     if (simulated && strategy.cacheToHandlePartMap) {
@@ -155,7 +159,9 @@ public final class RecipeRunner {
                     }
                     return true;
                 }
+                gtlcore$rollback(checkpoint);
             } else if (handler instanceof RecipeHandlePart cachedNormalPart) {
+                int checkpoint = gtlcore$checkpoint();
                 var result = cachedNormalPart.handleRecipe(IO.IN, recipe, recipeContent, simulated);
                 if (result.isEmpty()) {
                     if (simulated && strategy.cacheToHandlePartMap) {
@@ -163,6 +169,7 @@ public final class RecipeRunner {
                     }
                     return true;
                 }
+                gtlcore$rollback(checkpoint);
             }
         }
 
@@ -171,6 +178,7 @@ public final class RecipeRunner {
         // Priority 2: Try uncached ME Pattern parts
         for (var part : machine.getMEPatternRecipeHandleParts()) {
             if (cachedHandlers.contains(part)) continue;
+            int checkpoint = gtlcore$checkpoint();
             var slot = part.handleRecipe(recipe, recipeContent, simulated, strategy.cacheToMEInternal);
             if (slot >= 0) {
                 if (simulated && strategy.cacheToHandlePartMap) {
@@ -178,11 +186,13 @@ public final class RecipeRunner {
                 }
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         // Priority 3: Try uncached normal parts
         for (var part : machine.getNormalRecipeHandlePart(IO.IN)) {
             if (cachedHandlers.contains(part)) continue;
+            int checkpoint = gtlcore$checkpoint();
             var result = part.handleRecipe(IO.IN, recipe, recipeContent, simulated);
             if (result.isEmpty()) {
                 if (simulated && strategy.cacheToHandlePartMap) {
@@ -190,9 +200,22 @@ public final class RecipeRunner {
                 }
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         return false;
+    }
+
+    private static int gtlcore$checkpoint() {
+        RecipeExtractionScope scope = RecipeExtractionScope.current();
+        return scope == null ? 0 : scope.checkpoint();
+    }
+
+    private static void gtlcore$rollback(int checkpoint) {
+        RecipeExtractionScope scope = RecipeExtractionScope.current();
+        if (scope != null) {
+            scope.rollbackTo(checkpoint);
+        }
     }
 
     @SuppressWarnings("DuplicatedCode")
@@ -207,6 +230,7 @@ public final class RecipeRunner {
             var handler = it.next();
 
             if (handler instanceof MEPatternRecipeHandlePart cachedMEPart) {
+                int checkpoint = gtlcore$checkpoint();
                 var slot = cachedMEPart.handleRecipe(recipe, recipeContent, simulated, strategy.cacheToMEInternal);
                 if (slot != -1) {
                     if (simulated && strategy.cacheToHandlePartMap) {
@@ -215,7 +239,9 @@ public final class RecipeRunner {
                     }
                     return true;
                 }
+                gtlcore$rollback(checkpoint);
             } else if (handler instanceof RecipeHandlePart cachedNormalPart) {
+                int checkpoint = gtlcore$checkpoint();
                 if (!hasFluidTry) {
                     fluidHandleResult = tryNotDistinctFluid(machine.getSharedRecipeHandlePart(), recipe, recipeContent, simulated);
                     hasFluidTry = true;
@@ -226,6 +252,7 @@ public final class RecipeRunner {
                     }
                     return true;
                 }
+                gtlcore$rollback(checkpoint);
             }
         }
 
@@ -234,6 +261,7 @@ public final class RecipeRunner {
         // Priority 2: Try uncached ME Pattern parts
         for (var part : machine.getMEPatternRecipeHandleParts()) {
             if (cachedHandlers.contains(part)) continue;
+            int checkpoint = gtlcore$checkpoint();
             var slot = part.handleRecipe(recipe, recipeContent, simulated, strategy.cacheToMEInternal);
             if (slot >= 0) {
                 if (simulated && strategy.cacheToHandlePartMap) {
@@ -241,6 +269,7 @@ public final class RecipeRunner {
                 }
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         // Priority 3: Try uncached normal parts
@@ -249,8 +278,12 @@ public final class RecipeRunner {
         List<?> fluidContent = recipeContent.getOrDefault(FluidRecipeCapability.CAP, Collections.emptyList());
         if (!fluidContent.isEmpty()) {
             if (sharedPart == null) return false;
+            int checkpoint = gtlcore$checkpoint();
             fluidContent = sharedPart.handleRecipe(IO.IN, recipe, FluidRecipeCapability.CAP, fluidContent, simulated);
-            if (fluidContent != null && !fluidContent.isEmpty()) return false;
+            if (fluidContent != null && !fluidContent.isEmpty()) {
+                gtlcore$rollback(checkpoint);
+                return false;
+            }
         }
 
         List<?> itemContent = recipeContent.getOrDefault(ItemRecipeCapability.CAP, Collections.emptyList());
@@ -263,6 +296,7 @@ public final class RecipeRunner {
 
         for (var part : machine.getNormalRecipeHandlePart(IO.IN)) {
             if (cachedHandlers.contains(part)) continue;
+            int checkpoint = gtlcore$checkpoint();
             var result = part.handleRecipe(IO.IN, recipe, ItemRecipeCapability.CAP, itemContent, simulated);
             if (result == null || result.isEmpty()) {
                 if (simulated && strategy.cacheToHandlePartMap) {
@@ -270,9 +304,11 @@ public final class RecipeRunner {
                 }
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         if (sharedPart != null && !cachedHandlers.contains(sharedPart)) {
+            int checkpoint = gtlcore$checkpoint();
             var result = sharedPart.handleRecipe(IO.IN, recipe, ItemRecipeCapability.CAP, itemContent, simulated);
             if (result == null || result.isEmpty()) {
                 if (simulated && strategy.cacheToHandlePartMap) {
@@ -280,6 +316,7 @@ public final class RecipeRunner {
                 }
                 return true;
             }
+            gtlcore$rollback(checkpoint);
         }
 
         return false;

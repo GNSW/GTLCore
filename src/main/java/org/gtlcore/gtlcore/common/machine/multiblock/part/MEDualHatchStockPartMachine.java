@@ -12,7 +12,6 @@ import org.gtlcore.gtlcore.api.recipe.ingredient.LongIngredient;
 import org.gtlcore.gtlcore.client.gui.widget.AEDualConfigWidget;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
-import org.gtlcore.gtlcore.integration.ae2.crafting.RecipeExtractionScope;
 import org.gtlcore.gtlcore.utils.MachineUtil;
 
 import com.gregtechceu.gtceu.api.capability.recipe.IO;

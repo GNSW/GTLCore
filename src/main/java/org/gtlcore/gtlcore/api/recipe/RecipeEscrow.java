@@ -12,8 +12,9 @@ import java.util.List;
 
 /**
  * Holds recipe materials that could not be returned to their network, and
- * retries on every server tick. Entries are capped so a broken network cannot
- * grow the buffer forever.
+ * retries on every server tick. Entries are merged per network/key and are
+ * never dropped: {@link #isFull()} lets new recipe transactions back off
+ * before extracting anything.
  */
 public final class RecipeEscrow {
 
@@ -22,14 +23,26 @@ public final class RecipeEscrow {
 
     private RecipeEscrow() {}
 
+    public static boolean isFull() {
+        synchronized (PENDING) {
+            return PENDING.size() >= MAX_PENDING;
+        }
+    }
+
     public static void add(MEStorage network, IActionSource source, AEKey key, long amount) {
         if (network == null || key == null || amount <= 0L) {
             return;
         }
         synchronized (PENDING) {
+            for (int i = 0; i < PENDING.size(); i++) {
+                Entry existing = PENDING.get(i);
+                if (existing.network == network && existing.key.equals(key)) {
+                    PENDING.set(i, new Entry(network, source, key, existing.amount + amount));
+                    return;
+                }
+            }
             if (PENDING.size() >= MAX_PENDING) {
-                GTLCore.LOGGER.error("[RecipeEscrow] buffer full, dropping {} x {}", amount, key);
-                return;
+                GTLCore.LOGGER.warn("[RecipeEscrow] buffer full, {} x {} stays pending until retry", amount, key);
             }
             PENDING.add(new Entry(network, source, key, amount));
         }
@@ -38,16 +51,17 @@ public final class RecipeEscrow {
 
     public static void retryAll() {
         synchronized (PENDING) {
-            if (PENDING.isEmpty()) {
-                return;
-            }
             for (int i = PENDING.size() - 1; i >= 0; i--) {
                 Entry entry = PENDING.get(i);
-                long returned = entry.network.insert(entry.key, entry.amount, Actionable.MODULATE, entry.source);
-                if (returned >= entry.amount) {
-                    PENDING.remove(i);
-                } else if (returned > 0L) {
-                    PENDING.set(i, new Entry(entry.network, entry.source, entry.key, entry.amount - returned));
+                try {
+                    long returned = entry.network.insert(entry.key, entry.amount, Actionable.MODULATE, entry.source);
+                    if (returned >= entry.amount) {
+                        PENDING.remove(i);
+                    } else if (returned > 0L) {
+                        PENDING.set(i, new Entry(entry.network, entry.source, entry.key, entry.amount - returned));
+                    }
+                } catch (RuntimeException | Error failure) {
+                    GTLCore.LOGGER.warn("[RecipeEscrow] retry failed for {} x {}", entry.amount, entry.key);
                 }
             }
         }

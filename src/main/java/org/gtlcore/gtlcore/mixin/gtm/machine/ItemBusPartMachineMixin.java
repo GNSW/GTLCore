@@ -42,7 +42,7 @@ public abstract class ItemBusPartMachineMixin extends TieredIOPartMachine {
 
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     private void gtlcore$initializeFilterHandler(IMachineBlockEntity holder, int tier, IO io, Object[] args,
-                                                  CallbackInfo ci) {
+                                                 CallbackInfo ci) {
         gtlcore$filterHandler = FilterHandlers.item(this);
     }
 
@@ -60,8 +60,7 @@ public abstract class ItemBusPartMachineMixin extends TieredIOPartMachine {
     protected void createInventory(Object[] args, CallbackInfoReturnable<NotifiableItemStackHandler> cir) {
         if (io == IO.IN) {
             cir.setReturnValue(new NotifiableItemStackHandler(this, getInventorySize(), IO.IN)
-                    .setFilter(itemStack -> !IntCircuitBehaviour.isIntegratedCircuit(itemStack)
-                            && gtlcore$matchesFilter(itemStack)));
+                    .setFilter(itemStack -> !IntCircuitBehaviour.isIntegratedCircuit(itemStack) && gtlcore$matchesFilter(itemStack)));
         } else {
             cir.setReturnValue(new NotifiableItemStackHandler(this, getInventorySize(), io)
                     .setFilter(this::gtlcore$matchesFilter));
@@ -70,8 +69,7 @@ public abstract class ItemBusPartMachineMixin extends TieredIOPartMachine {
 
     @Unique
     private boolean gtlcore$matchesFilter(ItemStack stack) {
-        return gtlcore$filterHandler == null || !gtlcore$filterHandler.isFilterPresent()
-                || gtlcore$filterHandler.getFilter().test(stack);
+        return gtlcore$filterHandler == null || !gtlcore$filterHandler.isFilterPresent() || gtlcore$filterHandler.getFilter().test(stack);
     }
 
     @Inject(method = "createUIWidget", at = @At("RETURN"), remap = false)

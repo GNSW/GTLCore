@@ -487,6 +487,8 @@ public final class RecipeRunner {
             }
         }
 
+        gtlcore$rollback(fluidCheckpoint);
+
         for (var part : machine.getMEPatternRecipeHandleParts()) {
             int checkpoint = gtlcore$checkpoint();
             var slot = part.handleRecipe(recipe, recipeContent, simulated, false);

@@ -116,9 +116,7 @@ public final class RecipeExtractionScope implements AutoCloseable {
                 RecipeEscrow.add(entry.network, entry.source, entry.key, entry.amount - returned);
             }
         } catch (RuntimeException | Error failure) {
-            org.gtlcore.gtlcore.GTLCore.LOGGER.error(
-                    "[RecipeEscrow] refund failed with unknown state for {} x {}, not retrying", entry.amount,
-                    entry.key);
+            RecipeEscrow.addUncertain(entry.network, entry.source, entry.key, entry.amount);
         }
     }
 

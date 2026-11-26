@@ -75,8 +75,9 @@ public abstract class ItemBusPartMachineMixin extends TieredIOPartMachine {
     @Inject(method = "createUIWidget", at = @At("RETURN"), remap = false)
     private void gtlcore$addFilterSlot(CallbackInfoReturnable<Widget> cir) {
         if (cir.getReturnValue() instanceof WidgetGroup group && gtlcore$filterHandler != null) {
-            int rowSize = 1 + getTier();
-            group.addWidget(gtlcore$filterHandler.createFilterSlotUI(-115 + (18 * rowSize) / 2, 35 + 11 * rowSize));
+            var size = group.getSize();
+            group.setSize(size.width + 18, size.height);
+            group.addWidget(gtlcore$filterHandler.createFilterSlotUI(size.width, 4));
         }
     }
 

@@ -78,15 +78,16 @@ public abstract class ItemBusPartMachineMixin extends TieredIOPartMachine {
             var size = group.getSize();
             int x = (size.width - 18) / 2;
             group.setSize(size.width, size.height + 18);
-            group.addWidget(new PhantomSlotWidget(gtlcore$outputFilterSlot, 0, x, size.height)
-                    .setBackground(GuiTextures.SLOT)
-                    .setChangeListener(this::gtlcore$onOutputFilterChanged));
+            PhantomSlotWidget filterSlot = new PhantomSlotWidget(gtlcore$outputFilterSlot, 0, x, size.height);
+            filterSlot.setBackground(GuiTextures.SLOT);
+            filterSlot.setChangeListener(this::gtlcore$onOutputFilterChanged);
+            group.addWidget(filterSlot);
         }
     }
 
     @Unique
     private void gtlcore$onOutputFilterChanged() {
-        getInventory().onContentsChanged();
+        ((ItemBusPartMachine) (Object) this).getInventory().onContentsChanged();
         markDirty();
     }
 

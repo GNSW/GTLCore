@@ -1893,6 +1893,7 @@
   "ui.quantum_chromodynamic_charge.structure.exporting": "导出中…",
   "ui.quantum_chromodynamic_charge.structure.idle": "就绪",
   "ui.quantum_chromodynamic_charge.structure.material.adequate": "§a材料充足",
+  "ui.quantum_chromodynamic_charge.structure.material.creative": "创造模式不会产生素材消耗",
   "ui.quantum_chromodynamic_charge.structure.material.extra_line": "%s %s/%s",
   "ui.quantum_chromodynamic_charge.structure.material.insufficient": "§c材料不足",
   "ui.quantum_chromodynamic_charge.structure.material.line": "%s %s/%s",

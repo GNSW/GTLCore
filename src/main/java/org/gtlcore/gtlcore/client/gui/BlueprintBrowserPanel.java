@@ -92,12 +92,17 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
     private int renderedRevision = Integer.MIN_VALUE;
     /** 三维预览是否全屏。 */
     private boolean fullscreen;
+    /** 非全屏时的覆盖页尺寸（主界面大小）；全屏时改用屏幕实际缩放尺寸。 */
+    private final int baseWidth;
+    private final int baseHeight;
 
     public BlueprintBrowserPanel(StructurePlacerBlockEntity be, BlueprintActionWidget action,
                                  int width, int height) {
         super(0, 0, width, height);
         this.be = be;
         this.action = action;
+        this.baseWidth = width;
+        this.baseHeight = height;
         setBackground(GuiTextures.BACKGROUND);
         // 构造期间不能走 setVisible 重写（字段尚未初始化），直接隐藏
         super.setVisible(false);
@@ -262,8 +267,6 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
 
     /** 按全屏状态摆放场景与按钮。 */
     private void applyLayout() {
-        int width = getSize().width;
-        int height = getSize().height;
         boolean listVisible = !fullscreen;
         titleLabel.setVisible(listVisible);
         pathLabel.setVisible(listVisible);
@@ -272,15 +275,36 @@ public final class BlueprintBrowserPanel extends WidgetGroup {
             button.setVisible(listVisible);
         }
         if (fullscreen) {
+            // 真正的全屏：尺寸取当前屏幕缩放后的实际大小，位置抵消主界面（344x258）的居中偏移，
+            // 这样换显示器/改 GUI 缩放后点全屏都能铺满整个界面，而不是固定 344x258
+            Minecraft minecraft = Minecraft.getInstance();
+            int screenWidth = minecraft.getWindow().getGuiScaledWidth();
+            int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+            WidgetGroup parent = getParent();
+            int offsetX = parent == null ? 0 : parent.getPositionX();
+            int offsetY = parent == null ? 0 : parent.getPositionY();
+            setSize(screenWidth, screenHeight);
+            setSelfPosition(-offsetX, -offsetY);
             scene.setSelfPosition(0, 0);
-            scene.setSize(new Size(width, height));
-            fullscreenButton.setSelfPosition(width - 20, 2);
-            closeButton.setSelfPosition(width - 54, height - 20);
+            scene.setSize(new Size(screenWidth, screenHeight));
+            fullscreenButton.setSelfPosition(screenWidth - 20, 2);
+            closeButton.setSelfPosition(screenWidth - 54, screenHeight - 20);
         } else {
+            setSize(baseWidth, baseHeight);
+            setSelfPosition(0, 0);
             scene.setSelfPosition(LIST_W + 14, 32);
-            scene.setSize(new Size(width - LIST_W - 20, height - 74));
-            fullscreenButton.setSelfPosition(width - 20, 34);
-            closeButton.setSelfPosition(width - 54, height - 34);
+            scene.setSize(new Size(baseWidth - LIST_W - 20, baseHeight - 74));
+            fullscreenButton.setSelfPosition(baseWidth - 20, 34);
+            closeButton.setSelfPosition(baseWidth - 54, baseHeight - 34);
+        }
+    }
+
+    /** 窗口/分辨率变化（含换显示器、改 GUI 缩放）时重排，保证全屏始终贴合当前屏幕。 */
+    @Override
+    public void onScreenSizeUpdate(int screenWidth, int screenHeight) {
+        super.onScreenSizeUpdate(screenWidth, screenHeight);
+        if (fullscreen) {
+            applyLayout();
         }
     }
 

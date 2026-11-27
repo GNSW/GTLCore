@@ -1,7 +1,9 @@
 package org.gtlcore.gtlcore.mixin.gtm.ae.slot;
 
+import org.gtlcore.gtlcore.api.machine.trait.MEPart.IModifiableSyncOffset;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IMESlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
+import org.gtlcore.gtlcore.api.recipe.RecipeExtractionScope;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
 import org.gtlcore.gtlcore.mixin.gtm.ae.machine.MEHatchPartMachineAccessor;
@@ -20,7 +22,6 @@ import com.lowdragmc.lowdraglib.side.fluid.FluidStack;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
-import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
@@ -109,7 +110,13 @@ public abstract class ExportOnlyAEStockingFluidListMixin extends ExportOnlyAEFlu
                     for (int i = 0, configListSize = gTLCore$configList.size(); i < configListSize; i++) {
                         AEFluidKey aeFluidKey = gTLCore$configList.get(i);
                         if (AEUtils.testFluidIngredient(ingredient, aeFluidKey)) {
-                            long extracted = aeNetwork.extract(aeFluidKey, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE, ((MEHatchPartMachineAccessor) this$0).getActionSource());
+                            long extracted;
+                            if (simulate) {
+                                extracted = aeNetwork.extract(aeFluidKey, amount, Actionable.SIMULATE, ((MEHatchPartMachineAccessor) this$0).getActionSource());
+                            } else {
+                                var scope = RecipeExtractionScope.current();
+                                extracted = scope != null ? scope.extract(aeNetwork, ((MEHatchPartMachineAccessor) this$0).getActionSource(), aeFluidKey, amount) : aeNetwork.extract(aeFluidKey, amount, Actionable.MODULATE, ((MEHatchPartMachineAccessor) this$0).getActionSource());
+                            }
                             if (extracted > 0) {
                                 changed = true;
                                 amount -= extracted;
@@ -153,23 +160,31 @@ public abstract class ExportOnlyAEStockingFluidListMixin extends ExportOnlyAEFlu
         }
     }
 
+    @Unique
+    private long gtlcore$lastRefreshTick = Long.MIN_VALUE;
+
     @SuppressWarnings("AddedMixinMembersNamePattern")
     @Override
     public @NotNull List<FluidStack> getMEFluidList() {
         final var fluidList = getFluidList();
-        if (ENABLE_ULTIMATE_ME_STOCKING || getChanged()) {
-            setChanged(false);
-            fluidList.clear();
-            IGrid grid = this$0.getMainNode().getGrid();
-            final MEStorage aeNetwork;
-            if (grid != null) {
-                aeNetwork = grid.getStorageService().getInventory();
-                final IActionSource actionSource = ((MEHatchPartMachineAccessor) this$0).getActionSource();
-                for (var key : gTLCore$configList) {
-                    long extracted = aeNetwork.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, actionSource);
-                    if (extracted > 0) {
-                        fluidList.add(FluidStack.create(key.getFluid(), extracted));
-                    }
+        long interval = ((IModifiableSyncOffset) this$0).getOffset();
+        if (interval == 0) {
+            interval = 100;
+        }
+        long tick = this$0.getOffsetTimer();
+        if (gtlcore$lastRefreshTick != Long.MIN_VALUE && tick - gtlcore$lastRefreshTick < interval) {
+            return fluidList;
+        }
+        gtlcore$lastRefreshTick = tick;
+        setChanged(false);
+        fluidList.clear();
+        IGrid grid = this$0.getMainNode().getGrid();
+        if (grid != null) {
+            final var cached = grid.getStorageService().getCachedInventory();
+            for (var key : gTLCore$configList) {
+                long cachedAmount = cached.get(key);
+                if (cachedAmount > 0) {
+                    fluidList.add(FluidStack.create(key.getFluid(), cachedAmount));
                 }
             }
         }

@@ -14,6 +14,7 @@ import java.util.WeakHashMap;
 public final class ExternalInventoryIdentity {
 
     private static final Map<MEStorage, Long> IDENTITIES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<MEStorage, Boolean> INFINITE = Collections.synchronizedMap(new WeakHashMap<>());
 
     private ExternalInventoryIdentity() {}
 
@@ -21,6 +22,17 @@ public final class ExternalInventoryIdentity {
         if (storage != null && identity != 0L) {
             IDENTITIES.put(storage, identity);
         }
+    }
+
+    public static void putInfinite(MEStorage storage, long identity) {
+        put(storage, identity);
+        if (storage != null) {
+            INFINITE.put(storage, Boolean.TRUE);
+        }
+    }
+
+    public static boolean isInfinite(MEStorage storage) {
+        return storage != null && INFINITE.containsKey(storage);
     }
 
     public static long get(MEStorage storage) {

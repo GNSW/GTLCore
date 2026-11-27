@@ -150,7 +150,7 @@ public final class StorageGraphManager {
             physical.getAvailableStacks(sourceKeys);
             for (var entry : sourceKeys) {
                 if (isVisibleOnAnyRoute(source, entry.getKey())) {
-                    out.add(entry.getKey(), entry.getLongValue());
+                    out.add(entry.getKey(), source.kind() == SourceKind.INFINITE ? Integer.MAX_VALUE : entry.getLongValue());
                 }
             }
         }
@@ -176,7 +176,13 @@ public final class StorageGraphManager {
             }
             KeyCounter sourceKeys = new KeyCounter();
             source.physical().getAvailableStacks(sourceKeys);
-            if (source.kind() == SourceKind.FINITE || source.kind() == SourceKind.INFINITE) {
+            if (source.kind() == SourceKind.INFINITE) {
+                for (var entry : sourceKeys) {
+                    if (isVisibleOnAnyRoute(source, entry.getKey())) {
+                        unique.add(entry.getKey(), Integer.MAX_VALUE);
+                    }
+                }
+            } else if (source.kind() == SourceKind.FINITE) {
                 for (var entry : sourceKeys) {
                     if (isVisibleOnAnyRoute(source, entry.getKey())) {
                         unique.add(entry.getKey(), entry.getLongValue());

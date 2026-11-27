@@ -623,6 +623,7 @@ public class GTLMachines {
                     Component.translatable("gtceu.machine.me.copy_paste.tooltip"),
                     Component.translatable("gtceu.universal.enabled"))
             .compassNode("item_bus")
+            .tooltipBuilder(GTL_ADD)
             .register();
 
     public static final MachineDefinition TAG_FILTER_ME_STOCK_HATCH_PART_MACHINE = REGISTRATE
@@ -637,6 +638,7 @@ public class GTLMachines {
                     Component.translatable("gtceu.machine.me.copy_paste.tooltip"),
                     Component.translatable("gtceu.universal.enabled"))
             .compassNode("fluid_hatch")
+            .tooltipBuilder(GTL_ADD)
             .register();
 
     public static final MachineDefinition ME_INPUT_ASSEMBLY = REGISTRATE
@@ -666,6 +668,7 @@ public class GTLMachines {
                     Component.translatable("gtceu.machine.me.copy_paste.tooltip"),
                     Component.translatable("gtceu.universal.enabled"))
             .compassNode("dual_hatch")
+            .tooltipBuilder(GTL_ADD)
             .register();
 
     public static class GTAEMachines {

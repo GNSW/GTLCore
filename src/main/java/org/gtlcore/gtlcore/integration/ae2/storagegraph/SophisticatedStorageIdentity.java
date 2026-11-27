@@ -1,5 +1,11 @@
 package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
+import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
+import com.gregtechceu.gtceu.api.transfer.fluid.InfiniteFluidTransferProxy;
+import com.gregtechceu.gtceu.api.transfer.item.InfiniteItemTransferProxy;
+import com.gregtechceu.gtceu.common.machine.storage.CreativeChestMachine;
+import com.gregtechceu.gtceu.common.machine.storage.CreativeTankMachine;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -32,7 +38,8 @@ public final class SophisticatedStorageIdentity {
             return;
         }
         Object blockEntity = level.getBlockEntity(pos);
-        if (!(blockEntity instanceof StorageBlockEntity) && !(blockEntity instanceof BackpackBlockEntity)) {
+        if (!(blockEntity instanceof StorageBlockEntity) && !(blockEntity instanceof BackpackBlockEntity) &&
+                !(blockEntity instanceof MetaMachineBlockEntity)) {
             return;
         }
         long identity = gtlcore$chestIdentity(level, pos, blockEntity);
@@ -40,7 +47,17 @@ public final class SophisticatedStorageIdentity {
             UUID contents = gtlcore$contentsUuid(blockEntity);
             identity = contents == null ? pos.asLong() : contents.getMostSignificantBits() * 31L + contents.getLeastSignificantBits();
         }
-        ExternalInventoryIdentity.put(facade, identity * 31L * 31L + facade.getKeyType().getId().hashCode());
+        boolean infinite = handler instanceof InfiniteItemTransferProxy || handler instanceof InfiniteFluidTransferProxy;
+        if (blockEntity instanceof MetaMachineBlockEntity machineBlockEntity) {
+            var machine = machineBlockEntity.getMetaMachine();
+            infinite = infinite || machine instanceof CreativeChestMachine || machine instanceof CreativeTankMachine;
+        }
+        long key = identity * 31L * 31L + facade.getKeyType().getId().hashCode();
+        if (infinite) {
+            ExternalInventoryIdentity.putInfinite(facade, key);
+        } else {
+            ExternalInventoryIdentity.put(facade, key);
+        }
     }
 
     private static long gtlcore$chestIdentity(ServerLevel level, BlockPos pos, Object blockEntity) {

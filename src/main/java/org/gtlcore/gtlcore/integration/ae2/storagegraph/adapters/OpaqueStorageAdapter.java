@@ -22,6 +22,9 @@ public final class OpaqueStorageAdapter implements StorageGraphAdapter {
 
     @Override
     public SourceKind sourceKind(MEStorage storage) {
+        if (ExternalInventoryIdentity.isInfinite(storage)) {
+            return SourceKind.INFINITE;
+        }
         if (ExternalInventoryIdentity.get(storage) != 0L) {
             return SourceKind.FINITE;
         }

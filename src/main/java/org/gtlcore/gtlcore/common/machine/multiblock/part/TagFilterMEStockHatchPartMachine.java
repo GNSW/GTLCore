@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.machine.trait.MEPart.IModifiableSyncOffset;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.ExportOnlyAEConfigureFluidSlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IMESlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
+import org.gtlcore.gtlcore.api.recipe.RecipeExtractionScope;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.integration.ae2.AEUtils;
 import org.gtlcore.gtlcore.utils.MachineUtil;
@@ -318,7 +319,13 @@ public class TagFilterMEStockHatchPartMachine extends MEInputHatchPartMachine im
                         for (int i = 0, configListSize = configList.size(); i < configListSize; i++) {
                             AEFluidKey aeFluidKey = configList.get(i);
                             if (AEUtils.testFluidIngredient(ingredient, aeFluidKey)) {
-                                long extracted = aeNetwork.extract(aeFluidKey, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE, TagFilterMEStockHatchPartMachine.this.actionSource);
+                                long extracted;
+                                if (simulate) {
+                                    extracted = aeNetwork.extract(aeFluidKey, amount, Actionable.SIMULATE, TagFilterMEStockHatchPartMachine.this.actionSource);
+                                } else {
+                                    var scope = RecipeExtractionScope.current();
+                                    extracted = scope != null ? scope.extract(aeNetwork, TagFilterMEStockHatchPartMachine.this.actionSource, aeFluidKey, amount) : aeNetwork.extract(aeFluidKey, amount, Actionable.MODULATE, TagFilterMEStockHatchPartMachine.this.actionSource);
+                                }
                                 if (extracted > 0) {
                                     changed = true;
                                     amount -= extracted;
@@ -351,16 +358,20 @@ public class TagFilterMEStockHatchPartMachine extends MEInputHatchPartMachine im
         @Override
         public List<FluidStack> getMEFluidList() {
             long currentTick = getOffsetTimer();
-            if (getChanged() || ENABLE_ULTIMATE_ME_STOCKING && lastSnapshotTick != currentTick) {
+            long interval = getOffset();
+            if (interval == 0) {
+                interval = 100;
+            }
+            if (lastSnapshotTick == Long.MIN_VALUE || currentTick - lastSnapshotTick >= interval) {
                 setChanged(false);
                 lastSnapshotTick = currentTick;
                 final var fluidList = getFluidList();
                 fluidList.clear();
-                final MEStorage aeNetwork = Objects.requireNonNull(getMainNode().getGrid()).getStorageService().getInventory();
+                final var cached = Objects.requireNonNull(getMainNode().getGrid()).getStorageService().getCachedInventory();
                 for (var key : configList) {
-                    long extracted = aeNetwork.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, TagFilterMEStockHatchPartMachine.this.actionSource);
-                    if (extracted > 0) {
-                        fluidList.add(FluidStack.create(key.getFluid(), extracted));
+                    long cachedAmount = cached.get(key);
+                    if (cachedAmount > 0) {
+                        fluidList.add(FluidStack.create(key.getFluid(), cachedAmount));
                     }
                 }
             }

@@ -1,6 +1,6 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
-import org.gtlcore.gtlcore.integration.ae2.storagegraph.SophisticatedStorageIdentity;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalContainerIdentityResolver;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.VanillaDoubleChestIdentity;
 
 import net.minecraft.core.BlockPos;
@@ -26,6 +26,8 @@ public abstract class ForgeExternalStorageStrategyMixin {
     private ServerLevel gtlcore$targetLevel;
     @Unique
     private BlockPos gtlcore$targetPos;
+    @Unique
+    private Direction gtlcore$targetSide;
 
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     private void gtlcore$captureTarget(Capability<?> capability, HandlerStrategy<?, ?> conversion,
@@ -33,6 +35,7 @@ public abstract class ForgeExternalStorageStrategyMixin {
                                        CallbackInfo ci) {
         this.gtlcore$targetLevel = level;
         this.gtlcore$targetPos = fromPos.immutable();
+        this.gtlcore$targetSide = fromSide;
     }
 
     @WrapOperation(method = "createWrapper",
@@ -43,11 +46,7 @@ public abstract class ForgeExternalStorageStrategyMixin {
                                                               Operation<ExternalStorageFacade> original) {
         ExternalStorageFacade facade = original.call(conversion, handler);
         VanillaDoubleChestIdentity.register(gtlcore$targetLevel, gtlcore$targetPos, handler, facade);
-        try {
-            SophisticatedStorageIdentity.register(gtlcore$targetLevel, gtlcore$targetPos, handler, facade);
-        } catch (LinkageError ignored) {
-            // Sophisticated Storage is optional; skip when absent.
-        }
+        ExternalContainerIdentityResolver.resolve(gtlcore$targetLevel, gtlcore$targetPos, gtlcore$targetSide, handler, facade);
         return facade;
     }
 }

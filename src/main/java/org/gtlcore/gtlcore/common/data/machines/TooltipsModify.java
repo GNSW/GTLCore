@@ -84,6 +84,10 @@ public class TooltipsModify {
             components.add(4, Component.translatable("gtceu.machine.research_station.tooltip.3"));
         }));
 
+        for (MachineDefinition definition : GTLMachines.FRAGMENT_WORLD_COLLECTION_MACHINE) {
+            gtlcore$applyDefinition(definition);
+        }
+
         gtlcore$applyEnergyTooltips();
     }
 

@@ -206,7 +206,10 @@ public class GTLMachines {
                     .rotationState(RotationState.NON_Y_AXIS)
                     .recipeType(GTLRecipeTypes.FRAGMENT_WORLD_COLLECTION)
                     .workableTieredHullRenderer(GTCEu.id("block/machines/fragment_world_collection_machine"))
-                    .tooltips(Component.translatable("gtlcore.machine.fragment_world_collection.tooltip"))
+                    .tooltips(
+                            Component.translatable("gtceu.universal.tooltip.voltage_in", FormattingUtil.formatNumbers(GTValues.V[tier]), GTValues.VNF[tier]),
+                            Component.translatable("gtceu.universal.tooltip.energy_storage_capacity", FormattingUtil.formatNumbers(GTValues.V[tier] * 64L)),
+                            Component.translatable("gtlcore.machine.fragment_world_collection.tooltip"))
                     .compassNode("fragment_world_collection")
                     .register(),
             ULV);

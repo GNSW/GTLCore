@@ -1,11 +1,5 @@
 package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
-import com.gregtechceu.gtceu.api.blockentity.MetaMachineBlockEntity;
-import com.gregtechceu.gtceu.api.transfer.fluid.InfiniteFluidTransferProxy;
-import com.gregtechceu.gtceu.api.transfer.item.InfiniteItemTransferProxy;
-import com.gregtechceu.gtceu.common.machine.storage.CreativeChestMachine;
-import com.gregtechceu.gtceu.common.machine.storage.CreativeTankMachine;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -38,31 +32,32 @@ public final class SophisticatedStorageIdentity {
             return;
         }
         Object blockEntity = level.getBlockEntity(pos);
-        if (!(blockEntity instanceof StorageBlockEntity) && !(blockEntity instanceof BackpackBlockEntity) &&
-                !(blockEntity instanceof MetaMachineBlockEntity)) {
+        if (!(blockEntity instanceof StorageBlockEntity) && !(blockEntity instanceof BackpackBlockEntity)) {
             return;
         }
         long identity = gtlcore$chestIdentity(level, pos, blockEntity);
         if (identity == 0L) {
             UUID contents = gtlcore$contentsUuid(blockEntity);
-            identity = contents == null ? pos.asLong() : contents.getMostSignificantBits() * 31L + contents.getLeastSignificantBits();
+            identity = contents == null ? ExternalIdentityKeyRegistry.intern(blockEntity) :
+                    contents.getMostSignificantBits() * 31L + contents.getLeastSignificantBits();
         }
-        boolean infinite = handler instanceof InfiniteItemTransferProxy || handler instanceof InfiniteFluidTransferProxy;
-        if (blockEntity instanceof MetaMachineBlockEntity machineBlockEntity) {
-            var machine = machineBlockEntity.getMetaMachine();
-            infinite = infinite || machine instanceof CreativeChestMachine || machine instanceof CreativeTankMachine;
+        if (identity == 0L) {
+            return;
         }
         long key = identity * 31L * 31L + facade.getKeyType().getId().hashCode();
-        if (infinite) {
-            ExternalInventoryIdentity.putInfinite(facade, key);
-        } else {
-            ExternalInventoryIdentity.put(facade, key);
-        }
+        ExternalInventoryIdentity.put(facade, key);
     }
 
     private static long gtlcore$chestIdentity(ServerLevel level, BlockPos pos, Object blockEntity) {
-        if (!(blockEntity instanceof ChestBlockEntity)) {
+        if (!(blockEntity instanceof ChestBlockEntity chest)) {
             return 0L;
+        }
+        BlockPos mainPos = gtlcore$doubleMainPos(chest);
+        if (mainPos != null) {
+            Object main = level.getBlockEntity(mainPos);
+            if (main instanceof ChestBlockEntity) {
+                return ExternalIdentityKeyRegistry.intern(main);
+            }
         }
         BlockState state = level.getBlockState(pos);
         if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
@@ -73,6 +68,20 @@ public final class SophisticatedStorageIdentity {
         long first = pos.asLong();
         long second = other.asLong();
         return Math.min(first, second) * 31L + Math.max(first, second);
+    }
+
+    private static BlockPos gtlcore$doubleMainPos(ChestBlockEntity chest) {
+        Class<?> type = chest.getClass();
+        while (type != null && type != Object.class) {
+            try {
+                Field field = type.getDeclaredField("doubleMainPos");
+                field.setAccessible(true);
+                return field.get(chest) instanceof BlockPos mainPos ? mainPos : null;
+            } catch (ReflectiveOperationException e) {
+                type = type.getSuperclass();
+            }
+        }
+        return null;
     }
 
     private static UUID gtlcore$contentsUuid(Object blockEntity) {
@@ -90,17 +99,10 @@ public final class SophisticatedStorageIdentity {
     }
 
     private static IStorageWrapper gtlcore$backpackWrapper(BackpackBlockEntity backpack) {
-        Class<?> type = backpack.getClass();
-        while (type != null && type != Object.class) {
-            try {
-                Field field = type.getDeclaredField("backpackWrapper");
-                field.setAccessible(true);
-                Object value = field.get(backpack);
-                return value instanceof IStorageWrapper wrapper ? wrapper : null;
-            } catch (ReflectiveOperationException e) {
-                type = type.getSuperclass();
-            }
+        try {
+            return backpack.getBackpackWrapper();
+        } catch (RuntimeException ignored) {
+            return null;
         }
-        return null;
     }
 }

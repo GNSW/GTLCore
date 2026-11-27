@@ -14,5 +14,6 @@ public final class StorageGraphLifecycle {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         StorageGraphManager.reset();
+        ExternalIdentityKeyRegistry.clear();
     }
 }

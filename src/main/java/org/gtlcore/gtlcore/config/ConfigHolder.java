@@ -314,7 +314,7 @@ public class ConfigHolder {
 
         @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2StorageGraphEnabled.comment")
-        public boolean ae2StorageGraphEnabled = false;
+        public boolean ae2StorageGraphEnabled = true;
 
         @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2StorageGraphCompatFallback.comment")

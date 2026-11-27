@@ -83,7 +83,7 @@ public final class HatchPowerTooltip {
                 .withStyle(ChatFormatting.RED)
                 .append(Component.literal(NUMBER.format(capacity) + " EU").withStyle(ChatFormatting.WHITE))
                 .append(Component.literal(gtlcore$openBracket()).withStyle(ChatFormatting.WHITE))
-                .append(Component.literal(NUMBER.format(capacity.divide(voltage)) + " A·s ")
+                .append(Component.literal(NUMBER.format(capacity.divide(voltage.multiply(BigInteger.valueOf(20)))) + " A·s ")
                         .withStyle(ChatFormatting.WHITE))
                 .append(gtlcore$tierName(tier))
                 .append(Component.literal(gtlcore$closeBracket()).withStyle(ChatFormatting.WHITE)));

@@ -149,7 +149,6 @@ final class StructureBuiltinPresets {
                         .source("神官")
                         .resource(id("gray_floor_with_lights_1"))
                         .symbolMap(id("gray_floor_with_lights_1.json"))
-                        .materials(FINISH, 100)
                         .build())
                 .addStructure(structure("gray_floor_with_lights_2")
                         .type(TYPE_PLATFORM)
@@ -157,7 +156,6 @@ final class StructureBuiltinPresets {
                         .source("神官")
                         .resource(id("gray_floor_with_lights_2"))
                         .symbolMap(id("gray_floor_with_lights_2.json"))
-                        .materials(FINISH, 20)
                         .build())
                 .addStructure(structure("gray_floor_with_lights_3")
                         .type(TYPE_PLATFORM)
@@ -165,7 +163,6 @@ final class StructureBuiltinPresets {
                         .source("神官")
                         .resource(id("gray_floor_with_lights_3"))
                         .symbolMap(id("gray_floor_with_lights_3.json"))
-                        .materials(FINISH, 676)
                         .build())
                 .addStructure(structure("gray_floor_with_lights_4")
                         .type(TYPE_PLATFORM)
@@ -173,7 +170,6 @@ final class StructureBuiltinPresets {
                         .source("神官")
                         .resource(id("gray_floor_with_lights_4"))
                         .symbolMap(id("gray_floor_with_lights_4.json"))
-                        .materials(FINISH, 676)
                         .build())
                 .build());
 
@@ -187,7 +183,6 @@ final class StructureBuiltinPresets {
                         .resource(id("standard_factory_building"))
                         .symbolMap(id("standard_factory_building.json"))
                         .materials(FRAME, 400)
-                        .materials(PLATE, 100)
                         .build())
                 .addStructure(structure("long_corridor_factory_building")
                         .type(TYPE_FACTORY)
@@ -196,7 +191,6 @@ final class StructureBuiltinPresets {
                         .resource(id("long_corridor_factory_building"))
                         .symbolMap(id("long_corridor_factory_building.json"))
                         .materials(FRAME, 800)
-                        .materials(PLATE, 800)
                         .build())
                 .build());
     }

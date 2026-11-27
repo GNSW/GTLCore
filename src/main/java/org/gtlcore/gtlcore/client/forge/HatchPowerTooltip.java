@@ -6,6 +6,7 @@ import com.gregtechceu.gtceu.api.GTValues;
 import com.gregtechceu.gtceu.api.block.IMachineBlock;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
@@ -74,10 +75,18 @@ public final class HatchPowerTooltip {
         BigInteger capacity = laser || energyOutput ? power.multiply(BigInteger.valueOf(64)) : power.multiply(BigInteger.valueOf(16));
         boolean input = laser ? path.contains("laser_target_hatch") : energyInput;
 
-        event.getToolTip().add(Component.translatable(input ? "tooltip.gtlcore.hatch_input_power" :
-                "tooltip.gtlcore.hatch_output_power", NUMBER.format(power)).withStyle(ChatFormatting.GREEN));
-        event.getToolTip().add(Component.translatable("tooltip.gtlcore.hatch_capacity", NUMBER.format(capacity))
-                .withStyle(ChatFormatting.RED));
+        event.getToolTip().add(Component
+                .translatable(input ? "tooltip.gtlcore.hatch_input_power_label" : "tooltip.gtlcore.hatch_output_power_label")
+                .withStyle(ChatFormatting.GREEN)
+                .append(Component.literal(NUMBER.format(power) + " EU/t").withStyle(ChatFormatting.WHITE)));
+        event.getToolTip().add(Component.translatable("tooltip.gtlcore.hatch_capacity_label")
+                .withStyle(ChatFormatting.RED)
+                .append(Component.literal(NUMBER.format(capacity) + " EU").withStyle(ChatFormatting.WHITE))
+                .append(Component.literal(gtlcore$openBracket()).withStyle(ChatFormatting.WHITE))
+                .append(Component.literal(NUMBER.format(capacity.divide(voltage)) + " A·s ")
+                        .withStyle(ChatFormatting.WHITE))
+                .append(gtlcore$tierName(tier))
+                .append(Component.literal(gtlcore$closeBracket()).withStyle(ChatFormatting.WHITE)));
         moveAfterDescription(event.getToolTip());
     }
 
@@ -98,6 +107,29 @@ public final class HatchPowerTooltip {
         Component capacity = tooltip.remove(tooltip.size() - 1);
         tooltip.add(insert, capacity);
         tooltip.add(insert, power);
+    }
+
+    private static String gtlcore$openBracket() {
+        return gtlcore$usesFullwidthBracket() ? "（" : " (";
+    }
+
+    private static String gtlcore$closeBracket() {
+        return gtlcore$usesFullwidthBracket() ? "）" : ")";
+    }
+
+    private static boolean gtlcore$usesFullwidthBracket() {
+        return Language.getInstance().getOrDefault("gtceu.universal.tooltip.voltage_in").indexOf('（') >= 0;
+    }
+
+    private static Component gtlcore$tierName(int tier) {
+        String formatted = GTValues.VNF[tier];
+        if (formatted.length() > 1 && formatted.charAt(0) == '§') {
+            ChatFormatting formatting = ChatFormatting.getByCode(formatted.charAt(1));
+            if (formatting != null) {
+                return Component.literal(GTValues.VN[tier]).withStyle(formatting);
+            }
+        }
+        return Component.literal(GTValues.VN[tier]);
     }
 
     private static int tier(String path) {

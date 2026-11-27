@@ -18,7 +18,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * GTO 兼容的 {@code .mbs} 结构图案 IO。
+ * 
  * <p>
  * 文件布局（与 {@code MultiBlockFileReader} 一致）：
  *
@@ -37,7 +37,7 @@ import java.util.zip.GZIPOutputStream;
  * </pre>
  *
  * 语义：{@code pattern[z][y]} 为沿 X 的字符串。放置侧不依赖相对方向枚举，
- * 仅原样读写 ordinal 以保持与 GTO 资源互通。
+ * 仅原样读写 ordinal
  */
 public final class StructureFileIO {
 
@@ -117,6 +117,13 @@ public final class StructureFileIO {
         }
     }
 
+    /** 从本地文件读取（本地蓝图）。 */
+    public static PatternData load(Path path) throws IOException {
+        try (InputStream in = Files.newInputStream(path)) {
+            return load(in);
+        }
+    }
+
     public static PatternData loadResource(String classpathPath) throws IOException {
         InputStream in = StructureFileIO.class.getClassLoader().getResourceAsStream(classpathPath);
         if (in == null) {
@@ -193,7 +200,7 @@ public final class StructureFileIO {
         return dir >> 1; // UP/DOWN→0, LEFT/RIGHT→1, FRONT/BACK→2
     }
 
-    /** Minecraft / Java 协议 VarInt（与 GTO DataIOStream 相同）。 */
+    /** Minecraft / Java 协议 VarInt */
     static void writeVarInt(DataOutputStream out, int input) throws IOException {
         while ((input & -128) != 0) {
             out.writeByte(input & 127 | 128);

@@ -2,6 +2,9 @@ package org.gtlcore.gtlcore.common.structure.place;
 
 import org.gtlcore.gtlcore.common.structure.io.StructureFileIO;
 import org.gtlcore.gtlcore.common.structure.io.StructureMappingIO;
+import org.gtlcore.gtlcore.common.structure.local.BlueprintBundle;
+import org.gtlcore.gtlcore.common.structure.local.BlueprintIO;
+import org.gtlcore.gtlcore.common.structure.local.LocalBlueprintLibrary;
 import org.gtlcore.gtlcore.common.structure.model.StructureDefinition.Structure;
 import org.gtlcore.gtlcore.common.structure.transform.StructureLocalPos;
 import org.gtlcore.gtlcore.common.structure.transform.StructureTransform;
@@ -21,6 +24,8 @@ import net.minecraft.world.level.lighting.LightEngine;
 import it.unimi.dsi.fastutil.chars.Char2ReferenceOpenHashMap;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -32,7 +37,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 分 tick 结构放置：批量写 section，保留原版（GTO）的批量语义。
+ * 分 tick 结构放置：批量写 section
  * <p>
  * 无 BlockEntity 的方块直接写 {@link LevelChunkSection}，并按开关更新光照/高度图；
  * 带 BlockEntity 的位置回退到 {@link net.minecraft.world.level.Level#setBlock}。
@@ -69,6 +74,19 @@ public final class StructurePlacer {
      */
     public static LoadedStructure load(Structure structure) throws IOException {
         Objects.requireNonNull(structure, "structure");
+        if (LocalBlueprintLibrary.isLocal(structure.resource())) {
+            Path file = LocalBlueprintLibrary.resolve(structure.name());
+            if (file == null || !Files.isRegularFile(file)) {
+                throw new IOException("blueprint not found: " + structure.name());
+            }
+            BlueprintBundle.Bundle bundle = BlueprintIO.load(file);
+            if (bundle.sizeX() <= 0 || bundle.sizeY() <= 0 || bundle.sizeZ() <= 0) {
+                throw new IOException("invalid blueprint size: " + structure.name());
+            }
+            return new LoadedStructure(
+                    new StructureFileIO.PatternData(bundle.pattern(), bundle.sizeX(), bundle.sizeY(), bundle.sizeZ()),
+                    new Char2ReferenceOpenHashMap<>(bundle.palette()));
+        }
         StructureFileIO.PatternData data = StructureFileIO.loadResource(structure.resource());
         if (data.sizeX() <= 0 || data.sizeY() <= 0 || data.sizeZ() <= 0) {
             throw new IOException("invalid pattern size for " + structure.resource());

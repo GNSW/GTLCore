@@ -85,6 +85,7 @@ public class AdvancedMultiBlockMachineA {
             .recipeType(GTLRecipeTypes.GREENHOUSE_RECIPES)
             .tooltips(Component.translatable("gtceu.machine.greenhouse.tooltip.0"))
             .tooltips(Component.translatable("gtceu.machine.greenhouse.tooltip.1"))
+            .tooltips(Component.translatable("tooltip.gtlcore.structure.source", "GCPM"))
             .tooltips(Component.translatable("gtceu.machine.available_recipe_map_1.tooltip",
                     Component.translatable("gtceu.greenhouse")))
             .tooltipBuilder(GTLMachines.GTL_ADD)

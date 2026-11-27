@@ -1,8 +1,9 @@
 package org.gtlcore.gtlcore.common.structure.export;
 
 import org.gtlcore.gtlcore.GTLCore;
-import org.gtlcore.gtlcore.common.structure.io.StructureFileIO;
 import org.gtlcore.gtlcore.common.structure.io.StructureMappingIO;
+import org.gtlcore.gtlcore.common.structure.local.BlueprintBundle;
+import org.gtlcore.gtlcore.common.structure.local.LocalBlueprintLibrary;
 import org.gtlcore.gtlcore.common.structure.transform.StructureLocalPos;
 import org.gtlcore.gtlcore.common.structure.transform.StructureTransform;
 
@@ -18,7 +19,6 @@ import it.unimi.dsi.fastutil.objects.Reference2CharLinkedOpenHashMap;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -28,7 +28,7 @@ import java.util.Map;
 
 /**
  * 将世界区域导出为结构图案 + 方块映射（分 tick 采样，避免卡死服务端）。
- * 输出目录：{@code logs/platform/<timestamp>.{mbs,json}}。
+ * 输出：游戏根目录 {@code gtlcore/platforms/default/<timestamp>.gtcpf}（单文件蓝图，导出后直接出现在本地蓝图库）。
  */
 public final class StructureExporter {
 
@@ -60,6 +60,8 @@ public final class StructureExporter {
         private final int rotation;
         private final boolean xMirror;
         private final boolean zMirror;
+        private final String blueprintName;
+        private final String blueprintAuthor;
 
         private final Reference2CharLinkedOpenHashMap<BlockState> stateToChar = new Reference2CharLinkedOpenHashMap<>();
         private char nextChar = nextValid('A');
@@ -79,8 +81,11 @@ public final class StructureExporter {
         private String failureMessage = "";
 
         public ExportTask(ServerLevel level, BlockPos pos1, BlockPos pos2,
-                          boolean xMirror, boolean zMirror, int rotation) {
+                          boolean xMirror, boolean zMirror, int rotation,
+                          String blueprintName, String blueprintAuthor) {
             this.level = level;
+            this.blueprintName = blueprintName == null ? "" : blueprintName.trim();
+            this.blueprintAuthor = blueprintAuthor == null ? "" : blueprintAuthor.trim();
             this.rotation = StructureTransform.normalizeRotation(rotation);
             this.xMirror = xMirror;
             this.zMirror = zMirror;
@@ -137,7 +142,7 @@ public final class StructureExporter {
             return stateToChar.size();
         }
 
-        /** 成功写盘后的文件名（如 {@code 20261115-015055-643.mbs}）；未完成时为空串。 */
+        /** 成功写盘后的文件名（如 {@code 20261115-015055-643.gtcpf}）；未完成时为空串。 */
         public String savedFileName() {
             return savedFileName;
         }
@@ -200,18 +205,28 @@ public final class StructureExporter {
         }
 
         private void save() throws Exception {
-            Path outDir = Paths.get("logs", "platform");
-            Files.createDirectories(outDir);
+            Path outDir = LocalBlueprintLibrary.defaultFolder();
             String stamp = LocalDateTime.now().format(TIMESTAMP);
-            Path structurePath = outDir.resolve(stamp + ".mbs");
-            Path mappingPath = outDir.resolve(stamp + ".json");
+            boolean custom = !blueprintName.isEmpty();
+            // 自定义名称时用名称做文件名；未设置则沿用时间戳（默认保存方式）
+            String fileBase = custom ? sanitizeFileName(blueprintName) : stamp;
+            Path blueprint = outDir.resolve(fileBase + BlueprintBundle.EXTENSION);
+            if (Files.exists(blueprint)) {
+                blueprint = outDir.resolve(fileBase + "-" + stamp + BlueprintBundle.EXTENSION);
+            }
+            String displayName = custom ? blueprintName : stamp;
+            BlueprintBundle.save(blueprint, displayName, blueprintAuthor, zSlices.toArray(new String[0][]),
+                    StructureMappingIO.invert(stateToChar));
+            savedFileName = blueprint.getFileName().toString();
+            GTLCore.LOGGER.info("Exported blueprint: {} ({}x{}x{}, {} states)",
+                    blueprint.toAbsolutePath(), outDx, dy, outDz, stateToChar.size());
+        }
 
-            StructureFileIO.save(structurePath, zSlices.toArray(new String[0][]));
-            StructureMappingIO.save(StructureMappingIO.invert(stateToChar), mappingPath);
-            savedFileName = structurePath.getFileName().toString();
-            GTLCore.LOGGER.info("Exported structure: {} ({}x{}x{}, {} states)",
-                    structurePath.toAbsolutePath(), outDx, dy, outDz, stateToChar.size());
-            GTLCore.LOGGER.info("Exported mapping: {}", mappingPath.toAbsolutePath());
+        /** 去掉文件名里不允许的字符，避免自定义名称写出非法路径。 */
+        private static String sanitizeFileName(String name) {
+            String cleaned = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
+            if (cleaned.isEmpty()) return "blueprint";
+            return cleaned.length() > 48 ? cleaned.substring(0, 48) : cleaned;
         }
 
         private BlockState getCached(BlockPos pos) {

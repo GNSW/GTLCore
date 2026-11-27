@@ -4252,7 +4252,7 @@ ServerEvents.recipes((event) => {
 
     gtr.chemical_reactor("gtceu:silver_tetrafluoroborate")
         .itemInputs("6x gtceu:silver_dust")
-        .inputFluids("gtceu:boron_fluoride 2000", "gtceu:oxygen 3000")
+        .inputFluids("gtceu:boron_fluoride 8000", "gtceu:oxygen 3000")
         .outputFluids("gtceu:silver_tetrafluoroborate 6000")
         .itemOutputs("5x gtceu:boron_trioxide_dust")
         .EUt(GTValues.VA[GTValues.ZPM])

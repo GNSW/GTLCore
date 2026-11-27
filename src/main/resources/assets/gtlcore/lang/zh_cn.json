@@ -447,6 +447,8 @@
   "config.gtlcore.option.ae2GraphDiagnosticLogging": "图合成计时日志",
   "config.gtlcore.option.ae2GraphDiagnosticLogging.comment": "记录图合成的规划耗时和任务下发汇总耗时，用于比较性能与排查卡顿；不会为每个物品单独记录日志。",
   "config.gtlcore.option.ae2StorageGraphMode": "存储图编译模式",
+  "config.gtlcore.option.ae2StorageGraphEnabled": "存储图编译器",
+  "config.gtlcore.option.ae2StorageGraphShadow": "存储图影子模式",
   "config.gtlcore.option.ae2StorageGraphEnabled.comment": "开启存储图编译器，用于对 AE2 多路径访问的存储别名去重。关闭后使用原版 AE2 库存逻辑。",
   "config.gtlcore.option.ae2StorageGraphLogging": "存储图日志",
   "config.gtlcore.option.ae2StorageGraphLogging.comment": "按频率限制输出编译后的存储图快照（epoch、原始挂载数、唯一来源数、别名组数）。",

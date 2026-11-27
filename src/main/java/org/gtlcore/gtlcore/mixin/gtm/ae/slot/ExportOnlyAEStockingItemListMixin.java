@@ -176,7 +176,7 @@ public abstract class ExportOnlyAEStockingItemListMixin extends ExportOnlyAEItem
             interval = 100;
         }
         long tick = this$0.getOffsetTimer();
-        if (gtlcore$lastRefreshTick != Long.MIN_VALUE && tick - gtlcore$lastRefreshTick < interval) {
+        if (!getChanged() && gtlcore$lastRefreshTick != Long.MIN_VALUE && tick - gtlcore$lastRefreshTick < interval) {
             return itemMap.isEmpty() ? null : itemMap;
         }
         gtlcore$lastRefreshTick = tick;

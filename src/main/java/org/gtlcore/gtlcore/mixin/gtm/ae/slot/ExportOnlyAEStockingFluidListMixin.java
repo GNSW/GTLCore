@@ -172,7 +172,7 @@ public abstract class ExportOnlyAEStockingFluidListMixin extends ExportOnlyAEFlu
             interval = 100;
         }
         long tick = this$0.getOffsetTimer();
-        if (gtlcore$lastRefreshTick != Long.MIN_VALUE && tick - gtlcore$lastRefreshTick < interval) {
+        if (!getChanged() && gtlcore$lastRefreshTick != Long.MIN_VALUE && tick - gtlcore$lastRefreshTick < interval) {
             return fluidList;
         }
         gtlcore$lastRefreshTick = tick;

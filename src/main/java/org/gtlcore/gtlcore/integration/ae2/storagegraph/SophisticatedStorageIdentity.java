@@ -1,7 +1,6 @@
 package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
@@ -15,7 +14,6 @@ import net.p3pp3rf1y.sophisticatedstorage.block.StorageBlockEntity;
 
 import appeng.me.storage.ExternalStorageFacade;
 
-import java.lang.reflect.Field;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,36 +50,18 @@ public final class SophisticatedStorageIdentity {
         if (!(blockEntity instanceof ChestBlockEntity chest)) {
             return 0L;
         }
-        BlockPos mainPos = gtlcore$doubleMainPos(chest);
-        if (mainPos != null) {
-            Object main = level.getBlockEntity(mainPos);
-            if (main instanceof ChestBlockEntity) {
-                return ExternalIdentityKeyRegistry.intern(main);
-            }
+        ChestBlockEntity main = chest.getMainChestBlockEntity();
+        if (main != null) {
+            return ExternalIdentityKeyRegistry.intern(main);
         }
         BlockState state = level.getBlockState(pos);
         if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
             return 0L;
         }
-        Direction connected = ChestBlock.getConnectedDirection(state);
-        BlockPos other = pos.relative(connected);
-        long first = pos.asLong();
-        long second = other.asLong();
-        return Math.min(first, second) * 31L + Math.max(first, second);
-    }
-
-    private static BlockPos gtlcore$doubleMainPos(ChestBlockEntity chest) {
-        Class<?> type = chest.getClass();
-        while (type != null && type != Object.class) {
-            try {
-                Field field = type.getDeclaredField("doubleMainPos");
-                field.setAccessible(true);
-                return field.get(chest) instanceof BlockPos mainPos ? mainPos : null;
-            } catch (ReflectiveOperationException e) {
-                type = type.getSuperclass();
-            }
-        }
-        return null;
+        BlockPos other = pos.relative(ChestBlock.getConnectedDirection(state));
+        long first = Math.min(pos.asLong(), other.asLong());
+        long second = Math.max(pos.asLong(), other.asLong());
+        return (first * 31L + second) * 31L + level.dimension().location().hashCode();
     }
 
     private static UUID gtlcore$contentsUuid(Object blockEntity) {

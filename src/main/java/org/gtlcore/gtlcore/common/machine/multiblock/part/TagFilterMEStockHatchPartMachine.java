@@ -362,7 +362,7 @@ public class TagFilterMEStockHatchPartMachine extends MEInputHatchPartMachine im
             if (interval == 0) {
                 interval = 100;
             }
-            if (lastSnapshotTick == Long.MIN_VALUE || currentTick - lastSnapshotTick >= interval) {
+            if (getChanged() || lastSnapshotTick == Long.MIN_VALUE || currentTick - lastSnapshotTick >= interval) {
                 setChanged(false);
                 lastSnapshotTick = currentTick;
                 final var fluidList = getFluidList();

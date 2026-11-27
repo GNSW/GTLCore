@@ -44,11 +44,15 @@ public final class GtmStorageIdentity {
         boolean infinite = machine instanceof CreativeChestMachine || machine instanceof CreativeTankMachine;
         boolean dedicated = machine instanceof QuantumChestMachine || machine instanceof QuantumTankMachine ||
                 machine instanceof CrateMachine || machine instanceof DrumMachine || machine instanceof BufferMachine;
+        long ownerId = ExternalIdentityKeyRegistry.intern(machine);
+        if (ownerId == 0L) {
+            return false;
+        }
         long identity;
         if (dedicated) {
-            identity = ExternalIdentityKeyRegistry.intern(List.of(machine, keyType));
+            identity = ExternalIdentityKeyRegistry.internView(ownerId, keyType, List.of());
         } else {
-            identity = gtlcore$fullTraitViewIdentity(machine, side, keyType);
+            identity = gtlcore$fullTraitViewIdentity(machine, side, keyType, ownerId);
         }
         if (identity == 0L) {
             return false;
@@ -62,7 +66,11 @@ public final class GtmStorageIdentity {
         return true;
     }
 
-    private static long gtlcore$fullTraitViewIdentity(MetaMachine machine, Direction side, AEKeyType keyType) {
+    private static long gtlcore$fullTraitViewIdentity(MetaMachine machine, Direction side, AEKeyType keyType,
+                                                      long ownerId) {
+        if (machine.getCoverAtSide(side) != null) {
+            return 0L;
+        }
         Class<?> traitClass;
         if (keyType == AEKeyType.items()) {
             traitClass = IItemTransfer.class;
@@ -85,6 +93,6 @@ public final class GtmStorageIdentity {
                 return 0L;
             }
         }
-        return ExternalIdentityKeyRegistry.intern(List.of(machine, all, keyType));
+        return ExternalIdentityKeyRegistry.internView(ownerId, keyType, all);
     }
 }

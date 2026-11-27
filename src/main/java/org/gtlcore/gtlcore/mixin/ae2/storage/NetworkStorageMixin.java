@@ -70,7 +70,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             if (StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
                 return;
             }
-            StorageGraphManager.uniqueAvailableStacks((MEStorage) (Object) this, out);
+            original.call(out);
             return;
         }
         if (mode == StorageGraphMode.OFF) {

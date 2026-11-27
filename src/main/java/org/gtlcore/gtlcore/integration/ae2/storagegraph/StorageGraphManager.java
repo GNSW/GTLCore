@@ -143,8 +143,15 @@ public final class StorageGraphManager {
         }
         for (Source source : snapshot.sources()) {
             MEStorage physical = source.physical();
-            if (physical != null) {
-                physical.getAvailableStacks(out);
+            if (physical == null) {
+                continue;
+            }
+            KeyCounter sourceKeys = new KeyCounter();
+            physical.getAvailableStacks(sourceKeys);
+            for (var entry : sourceKeys) {
+                if (isVisibleOnAnyRoute(source, entry.getKey())) {
+                    out.add(entry.getKey(), entry.getLongValue());
+                }
             }
         }
     }

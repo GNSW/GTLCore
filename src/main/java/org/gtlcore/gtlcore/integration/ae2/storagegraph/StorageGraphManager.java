@@ -142,18 +142,34 @@ public final class StorageGraphManager {
             return;
         }
         for (Source source : snapshot.sources()) {
-            MEStorage physical = source.physical();
-            if (physical == null) {
+            if (source.physical() == null) {
                 continue;
             }
-            KeyCounter sourceKeys = new KeyCounter();
-            physical.getAvailableStacks(sourceKeys);
-            for (var entry : sourceKeys) {
-                if (isVisibleOnAnyRoute(source, entry.getKey())) {
-                    out.add(entry.getKey(), source.kind() == SourceKind.INFINITE ? Integer.MAX_VALUE : entry.getLongValue());
-                }
+            for (var entry : gtlcore$bestViewAmounts(source).entrySet()) {
+                out.add(entry.getKey(), entry.getValue());
             }
         }
+    }
+
+    private static Map<AEKey, Long> gtlcore$bestViewAmounts(Source source) {
+        Map<AEKey, Long> best = new java.util.HashMap<>();
+        List<SourceRoute> routes = source.routes();
+        if (routes.isEmpty()) {
+            routes = List.of(new SourceRoute(List.of(), source.priority(), 0));
+        }
+        for (SourceRoute route : routes) {
+            MEStorage view = route.path().isEmpty() ? source.physical() : route.path().get(0);
+            if (view == null) {
+                continue;
+            }
+            KeyCounter viewKeys = new KeyCounter();
+            view.getAvailableStacks(viewKeys);
+            for (var entry : viewKeys) {
+                long value = source.kind() == SourceKind.INFINITE ? Integer.MAX_VALUE : entry.getLongValue();
+                best.merge(entry.getKey(), value, Math::max);
+            }
+        }
+        return best;
     }
 
     public static boolean fillUniqueIfExact(MEStorage root, KeyCounter out) {
@@ -174,25 +190,11 @@ public final class StorageGraphManager {
             if (source.physical() == null) {
                 continue;
             }
-            KeyCounter sourceKeys = new KeyCounter();
-            source.physical().getAvailableStacks(sourceKeys);
-            if (source.kind() == SourceKind.INFINITE) {
-                for (var entry : sourceKeys) {
-                    if (isVisibleOnAnyRoute(source, entry.getKey())) {
-                        unique.add(entry.getKey(), Integer.MAX_VALUE);
-                    }
-                }
-            } else if (source.kind() == SourceKind.FINITE) {
-                for (var entry : sourceKeys) {
-                    if (isVisibleOnAnyRoute(source, entry.getKey())) {
-                        unique.add(entry.getKey(), entry.getLongValue());
-                    }
-                }
-            } else if (source.kind() != SourceKind.VIRTUAL) {
-                for (var entry : sourceKeys) {
-                    if (isVisibleOnAnyRoute(source, entry.getKey())) {
-                        opaque.add(entry.getKey(), entry.getLongValue());
-                    }
+            for (var entry : gtlcore$bestViewAmounts(source).entrySet()) {
+                if (source.kind() == SourceKind.INFINITE || source.kind() == SourceKind.FINITE) {
+                    unique.add(entry.getKey(), entry.getValue());
+                } else if (source.kind() != SourceKind.VIRTUAL) {
+                    opaque.add(entry.getKey(), entry.getValue());
                 }
             }
         }
@@ -553,7 +555,15 @@ public final class StorageGraphManager {
                             }
                         }
                     } else if (nodeRoutes != null && !nodeRoutes.isEmpty()) {
-                        routes.computeIfAbsent(child.child(), key -> new ArrayList<>()).addAll(nodeRoutes);
+                        for (SourceRoute parentRoute : nodeRoutes) {
+                            List<MEStorage> path = new ArrayList<>(parentRoute.path());
+                            path.add(node);
+                            routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
+                                    .add(new SourceRoute(path, edgePriority, child.nativeOrder()));
+                        }
+                    } else {
+                        routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
+                                .add(new SourceRoute(List.of(), edgePriority, child.nativeOrder()));
                     }
                     parentCount.merge(child.child(), 1, Integer::sum);
                     if (child.externalKey() != 0L) {

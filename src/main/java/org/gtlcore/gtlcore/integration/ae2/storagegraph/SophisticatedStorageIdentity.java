@@ -2,13 +2,10 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.p3pp3rf1y.sophisticatedbackpacks.backpack.BackpackBlockEntity;
 import net.p3pp3rf1y.sophisticatedcore.api.IStorageWrapper;
-import net.p3pp3rf1y.sophisticatedstorage.block.ChestBlock;
 import net.p3pp3rf1y.sophisticatedstorage.block.ChestBlockEntity;
 import net.p3pp3rf1y.sophisticatedstorage.block.StorageBlockEntity;
 
@@ -37,7 +34,7 @@ public final class SophisticatedStorageIdentity {
         if (identity == 0L) {
             UUID contents = gtlcore$contentsUuid(blockEntity);
             identity = contents == null ? ExternalIdentityKeyRegistry.intern(blockEntity) :
-                    contents.getMostSignificantBits() * 31L + contents.getLeastSignificantBits();
+                    ExternalIdentityKeyRegistry.internValue(contents);
         }
         if (identity == 0L) {
             return;
@@ -51,17 +48,7 @@ public final class SophisticatedStorageIdentity {
             return 0L;
         }
         ChestBlockEntity main = chest.getMainChestBlockEntity();
-        if (main != null) {
-            return ExternalIdentityKeyRegistry.intern(main);
-        }
-        BlockState state = level.getBlockState(pos);
-        if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
-            return 0L;
-        }
-        BlockPos other = pos.relative(ChestBlock.getConnectedDirection(state));
-        long first = Math.min(pos.asLong(), other.asLong());
-        long second = Math.max(pos.asLong(), other.asLong());
-        return (first * 31L + second) * 31L + level.dimension().location().hashCode();
+        return main == null ? 0L : ExternalIdentityKeyRegistry.intern(main);
     }
 
     private static UUID gtlcore$contentsUuid(Object blockEntity) {

@@ -48,6 +48,9 @@ public final class GtmStorageIdentity {
         if (ownerId == 0L) {
             return false;
         }
+        if (machine.getCoverContainer().getCoverAtSide(side) != null) {
+            return false;
+        }
         long identity;
         if (dedicated) {
             identity = ExternalIdentityKeyRegistry.internView(ownerId, keyType, List.of());
@@ -68,9 +71,6 @@ public final class GtmStorageIdentity {
 
     private static long gtlcore$fullTraitViewIdentity(MetaMachine machine, Direction side, AEKeyType keyType,
                                                       long ownerId) {
-        if (machine.getCoverAtSide(side) != null) {
-            return 0L;
-        }
         Class<?> traitClass;
         if (keyType == AEKeyType.items()) {
             traitClass = IItemTransfer.class;

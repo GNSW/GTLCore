@@ -66,11 +66,15 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     @WrapMethod(method = "getAvailableStacks", remap = false)
     private void gtlcore$shadowAvailableStacks(KeyCounter out, Operation<Void> original) {
         StorageGraphMode mode = StorageGraphManager.mode();
-        if (mode == StorageGraphMode.OFF) {
-            original.call(out);
+        if (mode == StorageGraphMode.ON) {
+            if (StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
+                return;
+            }
+            StorageGraphManager.uniqueAvailableStacks((MEStorage) (Object) this, out);
             return;
         }
-        if (mode == StorageGraphMode.ON && StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
+        if (mode == StorageGraphMode.OFF) {
+            original.call(out);
             return;
         }
         long legacyBefore = StorageGraphManager.keyCounterTotal(out);

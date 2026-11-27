@@ -35,7 +35,10 @@ public final class StorageGraphManager {
 
     public static StorageGraphMode mode() {
         ConfigHolder config = ConfigHolder.INSTANCE;
-        return config == null ? StorageGraphMode.OFF : config.ae.ae2StorageGraphMode;
+        if (config == null || !config.ae.ae2StorageGraphEnabled) {
+            return StorageGraphMode.OFF;
+        }
+        return config.diagnostics.ae2StorageGraphShadow ? StorageGraphMode.SHADOW : StorageGraphMode.ON;
     }
 
     public static void onTopologyChanged() {

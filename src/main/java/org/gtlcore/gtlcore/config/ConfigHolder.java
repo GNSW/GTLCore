@@ -313,12 +313,8 @@ public class ConfigHolder {
         public AEGraphSeedPolicy ae2GraphSeedPolicy = AEGraphSeedPolicy.PRESERVE;
 
         @Configurable
-        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphMode.comment")
-        public StorageGraphMode ae2StorageGraphMode = StorageGraphMode.OFF;
-
-        @Configurable
-        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphLogging.comment")
-        public boolean ae2StorageGraphLogging = false;
+        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphEnabled.comment")
+        public boolean ae2StorageGraphEnabled = false;
 
         @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2StorageGraphCompatFallback.comment")
@@ -511,6 +507,14 @@ public class ConfigHolder {
         @Configurable
         @Configurable.Comment("config.gtlcore.option.ae2GraphDiagnosticLogging.comment")
         public boolean ae2GraphDiagnosticLogging = false;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphShadow.comment")
+        public boolean ae2StorageGraphShadow = false;
+
+        @Configurable
+        @Configurable.Comment("config.gtlcore.option.ae2StorageGraphLogging.comment")
+        public boolean ae2StorageGraphLogging = false;
     }
 
     public static class InteractionOptions {

@@ -2,7 +2,6 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 
 import org.gtlcore.gtlcore.GTLCore;
 import org.gtlcore.gtlcore.config.ConfigHolder;
-import org.gtlcore.gtlcore.config.StorageGraphMode;
 
 import java.util.List;
 
@@ -180,12 +179,11 @@ public final class StorageGraphDiagnostics {
 
     private static boolean isLoggingEnabled() {
         ConfigHolder config = ConfigHolder.INSTANCE;
-        return config != null && config.ae.ae2StorageGraphMode != StorageGraphMode.OFF &&
-                config.ae.ae2StorageGraphLogging;
+        return config != null && config.ae.ae2StorageGraphEnabled && config.diagnostics.ae2StorageGraphLogging;
     }
 
     private static boolean isShadowMode() {
         ConfigHolder config = ConfigHolder.INSTANCE;
-        return config != null && config.ae.ae2StorageGraphMode == StorageGraphMode.SHADOW;
+        return config != null && config.diagnostics.ae2StorageGraphShadow;
     }
 }

@@ -1,5 +1,6 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SophisticatedStorageIdentity;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.VanillaDoubleChestIdentity;
 
 import net.minecraft.core.BlockPos;
@@ -42,6 +43,11 @@ public abstract class ForgeExternalStorageStrategyMixin {
                                                               Operation<ExternalStorageFacade> original) {
         ExternalStorageFacade facade = original.call(conversion, handler);
         VanillaDoubleChestIdentity.register(gtlcore$targetLevel, gtlcore$targetPos, handler, facade);
+        try {
+            SophisticatedStorageIdentity.register(gtlcore$targetLevel, gtlcore$targetPos, handler, facade);
+        } catch (LinkageError ignored) {
+            // Sophisticated Storage is optional; skip when absent.
+        }
         return facade;
     }
 }

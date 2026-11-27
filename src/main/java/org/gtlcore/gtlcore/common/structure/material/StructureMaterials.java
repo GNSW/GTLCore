@@ -2,7 +2,10 @@ package org.gtlcore.gtlcore.common.structure.material;
 
 import org.gtlcore.gtlcore.GTLCore;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
+import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -59,6 +62,17 @@ public final class StructureMaterials {
     public static MaterialsEntry lookup(Item item) {
         if (item == null) return null;
         return ensureLookup().get(item);
+    }
+
+    public static void onItemTooltip(ItemTooltipEvent event) {
+        MaterialsEntry entry = lookup(event.getItemStack().getItem());
+        if (entry == null) return;
+        event.getToolTip().add(Component.translatable("item.gtlcore.structure_component.tooltip.type",
+                entry.type().displayName()).withStyle(ChatFormatting.GRAY));
+        event.getToolTip().add(Component.translatable("item.gtlcore.structure_component.tooltip.points",
+                entry.points()).withStyle(ChatFormatting.GRAY));
+        event.getToolTip().add(Component.translatable("item.gtlcore.structure_component.tooltip.usage")
+                .withStyle(ChatFormatting.DARK_GRAY));
     }
 
     public static List<MaterialsEntry> unloadEntries(StructureMaterialType type) {

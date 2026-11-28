@@ -157,13 +157,17 @@ public final class StorageGraphManager {
 
     private static Map<AEKey, Long> gtlcore$viewAmounts(Source source) {
         Map<AEKey, Long> best = new java.util.HashMap<>();
+        IdentityHashMap<MEStorage, KeyCounter> cache = new IdentityHashMap<>();
         for (SourceRoute route : source.routes()) {
             MEStorage leaf = route.leafView() != null ? route.leafView() : source.physical();
             if (leaf == null) {
                 continue;
             }
-            KeyCounter viewKeys = new KeyCounter();
-            leaf.getAvailableStacks(viewKeys);
+            KeyCounter viewKeys = cache.computeIfAbsent(leaf, storage -> {
+                KeyCounter counter = new KeyCounter();
+                storage.getAvailableStacks(counter);
+                return counter;
+            });
             for (var entry : viewKeys) {
                 if (!isVisibleOnRoute(route, entry.getKey())) {
                     continue;
@@ -509,14 +513,22 @@ public final class StorageGraphManager {
     }
 
     private static List<SourceRoute> dedupeRoutes(List<SourceRoute> routes) {
-        Map<List<MEStorage>, SourceRoute> unique = new java.util.LinkedHashMap<>();
+        Map<RouteKey, SourceRoute> unique = new java.util.LinkedHashMap<>();
         for (SourceRoute route : routes) {
-            SourceRoute existing = unique.get(route.path());
+            RouteKey key = new RouteKey(route.leafView(), route.path());
+            SourceRoute existing = unique.get(key);
             if (existing == null || route.priority() > existing.priority()) {
-                unique.put(route.path(), route);
+                unique.put(key, route);
             }
         }
         return new ArrayList<>(unique.values());
+    }
+
+    private record RouteKey(MEStorage leafView, List<MEStorage> path) {
+
+        RouteKey {
+            path = List.copyOf(path);
+        }
     }
 
     private static IdentityHashMap<MEStorage, List<SourceRoute>> resolveRoutes(MEStorage root,

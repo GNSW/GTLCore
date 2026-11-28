@@ -157,14 +157,15 @@ public final class StorageGraphManager {
 
     private static Map<AEKey, Long> gtlcore$viewAmounts(Source source) {
         Map<AEKey, Long> best = new java.util.HashMap<>();
-        for (MEStorage view : source.views()) {
-            if (view == null) {
+        for (SourceRoute route : source.routes()) {
+            MEStorage leaf = route.leafView() != null ? route.leafView() : source.physical();
+            if (leaf == null) {
                 continue;
             }
             KeyCounter viewKeys = new KeyCounter();
-            view.getAvailableStacks(viewKeys);
+            leaf.getAvailableStacks(viewKeys);
             for (var entry : viewKeys) {
-                if (!isVisibleOnAnyRoute(source, entry.getKey())) {
+                if (!isVisibleOnRoute(route, entry.getKey())) {
                     continue;
                 }
                 long value = source.kind() == SourceKind.INFINITE ? Integer.MAX_VALUE : entry.getLongValue();
@@ -172,6 +173,15 @@ public final class StorageGraphManager {
             }
         }
         return best;
+    }
+
+    private static boolean isVisibleOnRoute(SourceRoute route, AEKey key) {
+        for (MEStorage wrapper : route.path()) {
+            if (wrapper instanceof MEInventoryPolicyView view && !view.gtlcore$isAvailable(key)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static boolean fillUniqueIfExact(MEStorage root, KeyCounter out) {
@@ -514,16 +524,20 @@ public final class StorageGraphManager {
                                                                                boolean[] limited) {
         IdentityHashMap<MEStorage, List<SourceRoute>> routes = new IdentityHashMap<>();
         java.util.Set<MEStorage> onPath = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-        gtlcore$walkRoutes(root, List.of(), childrenMap, routes, onPath, 0, 0, new int[] { 0 }, limited);
+        gtlcore$walkRoutes(root, List.of(), childrenMap, routes, onPath, 0, List.of(), new int[] { 0 }, limited);
         return routes;
     }
 
     private static void gtlcore$walkRoutes(MEStorage node, List<MEStorage> path,
                                            IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap,
                                            IdentityHashMap<MEStorage, List<SourceRoute>> routes,
-                                           java.util.Set<MEStorage> onPath, int depth, int parentPriority,
+                                           java.util.Set<MEStorage> onPath, int depth, List<Integer> parentPriorities,
                                            int[] routeCount, boolean[] limited) {
-        if (depth > MAX_DEPTH || !onPath.add(node)) {
+        if (depth > MAX_DEPTH) {
+            limited[0] = true;
+            return;
+        }
+        if (!onPath.add(node)) {
             return;
         }
         try {
@@ -544,11 +558,12 @@ public final class StorageGraphManager {
                     childPath.add(node);
                 }
                 int edgePriority = child.policy() == null ? 0 : child.policy().priority();
-                int routePriority = Math.max(parentPriority, edgePriority);
+                List<Integer> childPriorities = new ArrayList<>(parentPriorities);
+                childPriorities.add(edgePriority);
                 routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
-                        .add(new SourceRoute(childPath, routePriority, child.nativeOrder()));
+                        .add(new SourceRoute(child.child(), childPath, childPriorities, child.nativeOrder()));
                 routeCount[0]++;
-                gtlcore$walkRoutes(child.child(), childPath, childrenMap, routes, onPath, depth + 1, routePriority,
+                gtlcore$walkRoutes(child.child(), childPath, childrenMap, routes, onPath, depth + 1, childPriorities,
                         routeCount, limited);
             }
         } finally {

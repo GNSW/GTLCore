@@ -213,7 +213,11 @@ public final class RouteExecutor {
     }
 
     private static MEStorage routeTarget(Source source, SourceRoute route) {
-        return route.target() == null ? source.physical() : route.target();
+        MEStorage target = route.target();
+        if (target != null) {
+            return target;
+        }
+        return route.leafView() != null ? route.leafView() : source.physical();
     }
 
     private static boolean allowsExtract(MEStorage target, AEKey what) {
@@ -227,10 +231,22 @@ public final class RouteExecutor {
     private static List<SourceRoute> orderedRoutes(Source source, boolean ascending) {
         List<SourceRoute> routes = new ArrayList<>(source.routes());
         Comparator<SourceRoute> byWrapper = Comparator.comparingInt(route -> route.path().isEmpty() ? 1 : 0);
+        Comparator<SourceRoute> byPriorities = (first, second) -> {
+            List<Integer> a = first.priorities();
+            List<Integer> b = second.priorities();
+            int shared = Math.min(a.size(), b.size());
+            for (int i = 0; i < shared; i++) {
+                int cmp = Integer.compare(a.get(i), b.get(i));
+                if (cmp != 0) {
+                    return cmp;
+                }
+            }
+            return Integer.compare(a.size(), b.size());
+        };
         if (ascending) {
-            routes.sort(byWrapper.thenComparingInt(SourceRoute::priority));
+            routes.sort(byWrapper.thenComparing(byPriorities));
         } else {
-            routes.sort(byWrapper.thenComparing(Comparator.comparingInt(SourceRoute::priority).reversed()));
+            routes.sort(byWrapper.thenComparing(byPriorities.reversed()));
         }
         return routes;
     }

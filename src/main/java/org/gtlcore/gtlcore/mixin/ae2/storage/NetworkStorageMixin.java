@@ -94,16 +94,23 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackInsert(AEKey what, long amount, Actionable mode, IActionSource source,
                                      Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            if (StorageGraphManager.mode() == StorageGraphMode.ON && !NetworkExtractionSimulation.isActive() && StorageOperationContext.current() == null) {
-                long unique = StorageGraphManager.insertUniqueIfExact((MEStorage) (Object) this, what, amount,
-                        source);
-                if (unique >= 0L) {
-                    return unique;
+            StorageOperationContext context = StorageOperationContext.current();
+            boolean ownContext = false;
+            if (context == null && StorageGraphManager.mode() == StorageGraphMode.ON) {
+                StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+                context = StorageOperationContext.begin(mode, source,
+                        snapshot == null ? 0L : snapshot.topologyEpoch());
+                ownContext = true;
+            }
+            try {
+                long legacy = original.call(what, amount, mode, source);
+                StorageGraphManager.shadowInsert((MEStorage) (Object) this, what, amount, mode, source, legacy);
+                return legacy;
+            } finally {
+                if (ownContext) {
+                    StorageOperationContext.end(context);
                 }
             }
-            long legacy = original.call(what, amount, mode, source);
-            StorageGraphManager.shadowInsert((MEStorage) (Object) this, what, amount, mode, source, legacy);
-            return legacy;
         }
         if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
             StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);

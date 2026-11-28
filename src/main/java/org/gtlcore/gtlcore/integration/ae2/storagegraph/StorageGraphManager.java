@@ -164,6 +164,9 @@ public final class StorageGraphManager {
             KeyCounter viewKeys = new KeyCounter();
             view.getAvailableStacks(viewKeys);
             for (var entry : viewKeys) {
+                if (!isVisibleOnAnyRoute(source, entry.getKey())) {
+                    continue;
+                }
                 long value = source.kind() == SourceKind.INFINITE ? Integer.MAX_VALUE : entry.getLongValue();
                 best.merge(entry.getKey(), value, Math::max);
             }
@@ -507,18 +510,20 @@ public final class StorageGraphManager {
     }
 
     private static IdentityHashMap<MEStorage, List<SourceRoute>> resolveRoutes(MEStorage root,
-                                                                               IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap) {
+                                                                               IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap,
+                                                                               boolean[] limited) {
         IdentityHashMap<MEStorage, List<SourceRoute>> routes = new IdentityHashMap<>();
         java.util.Set<MEStorage> onPath = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-        gtlcore$walkRoutes(root, List.of(), childrenMap, routes, onPath, 0, new int[] { 0 });
+        gtlcore$walkRoutes(root, List.of(), childrenMap, routes, onPath, 0, 0, new int[] { 0 }, limited);
         return routes;
     }
 
     private static void gtlcore$walkRoutes(MEStorage node, List<MEStorage> path,
                                            IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap,
                                            IdentityHashMap<MEStorage, List<SourceRoute>> routes,
-                                           java.util.Set<MEStorage> onPath, int depth, int[] routeCount) {
-        if (depth > MAX_DEPTH || routeCount[0] >= MAX_ROUTES || !onPath.add(node)) {
+                                           java.util.Set<MEStorage> onPath, int depth, int parentPriority,
+                                           int[] routeCount, boolean[] limited) {
+        if (depth > MAX_DEPTH || !onPath.add(node)) {
             return;
         }
         try {
@@ -530,6 +535,7 @@ public final class StorageGraphManager {
                     StorageGraphAdapter.Recognition.FILTER_WRAPPER;
             for (StorageGraphAdapter.ChildEdge child : children) {
                 if (routeCount[0] >= MAX_ROUTES) {
+                    limited[0] = true;
                     return;
                 }
                 List<MEStorage> childPath = path;
@@ -537,11 +543,13 @@ public final class StorageGraphManager {
                     childPath = new ArrayList<>(path);
                     childPath.add(node);
                 }
-                int childPriority = child.policy() == null ? 0 : child.policy().priority();
+                int edgePriority = child.policy() == null ? 0 : child.policy().priority();
+                int routePriority = Math.max(parentPriority, edgePriority);
                 routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
-                        .add(new SourceRoute(childPath, childPriority, child.nativeOrder()));
+                        .add(new SourceRoute(childPath, routePriority, child.nativeOrder()));
                 routeCount[0]++;
-                gtlcore$walkRoutes(child.child(), childPath, childrenMap, routes, onPath, depth + 1, routeCount);
+                gtlcore$walkRoutes(child.child(), childPath, childrenMap, routes, onPath, depth + 1, routePriority,
+                        routeCount, limited);
             }
         } finally {
             onPath.remove(node);
@@ -612,9 +620,9 @@ public final class StorageGraphManager {
                 depthLimitReached = true;
             }
         }
-        GraphStatus status = nodeLimitReached ? GraphStatus.INCOMPLETE_NODE_LIMIT : depthLimitReached ? GraphStatus.INCOMPLETE_DEPTH_LIMIT : GraphStatus.COMPLETE;
-
-        routes.putAll(resolveRoutes(root, childrenMap));
+        boolean[] routeLimitReached = new boolean[1];
+        routes.putAll(resolveRoutes(root, childrenMap, routeLimitReached));
+        GraphStatus status = nodeLimitReached ? GraphStatus.INCOMPLETE_NODE_LIMIT : depthLimitReached ? GraphStatus.INCOMPLETE_DEPTH_LIMIT : routeLimitReached[0] ? GraphStatus.INCOMPLETE_ROUTE_LIMIT : GraphStatus.COMPLETE;
 
         Map<SourceId, Source> sourceMap = new java.util.LinkedHashMap<>();
         for (MEStorage node : visited.keySet()) {
@@ -630,12 +638,12 @@ public final class StorageGraphManager {
             SourceId id = SourceRegistry.idFor(node, externalKey);
             List<SourceRoute> sourceRoutes = routes.get(node);
             if (sourceRoutes == null || sourceRoutes.isEmpty()) {
-                sourceRoutes = List.of(new SourceRoute(List.of(), priorities.getOrDefault(node, 0), 0));
-            } else {
-                sourceRoutes = dedupeRoutes(sourceRoutes);
+                continue;
             }
+            sourceRoutes = dedupeRoutes(sourceRoutes);
             Source existing = sourceMap.get(id);
             List<MEStorage> views = new ArrayList<>();
+            views.add(node);
             if (existing != null) {
                 List<SourceRoute> merged = new ArrayList<>(existing.routes());
                 merged.addAll(sourceRoutes);
@@ -643,14 +651,18 @@ public final class StorageGraphManager {
                 views.addAll(existing.views());
                 node = existing.physical();
             }
-            if (!views.contains(node)) {
-                views.add(node);
+            List<MEStorage> uniqueViews = new ArrayList<>();
+            java.util.Set<MEStorage> seenViews = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+            for (MEStorage view : views) {
+                if (seenViews.add(view)) {
+                    uniqueViews.add(view);
+                }
             }
             int priority = 0;
             for (SourceRoute route : sourceRoutes) {
                 priority = Math.max(priority, route.priority());
             }
-            sourceMap.put(id, new Source(id, kind, node, views, sourceRoutes,
+            sourceMap.put(id, new Source(id, kind, node, uniqueViews, sourceRoutes,
                     System.identityHashCode(node), epoch, priority));
         }
         List<Source> sources = new ArrayList<>(sourceMap.values());

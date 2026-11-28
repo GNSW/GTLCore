@@ -72,10 +72,10 @@ public final class ExternalIdentityKeyRegistry {
     public static long internPair(Object first, Object second, AEKeyType keyType) {
         long a = intern(first);
         long b = intern(second);
-        if (a == 0L || b == 0L) {
+        if (a == 0L || b == 0L || keyType == null) {
             return 0L;
         }
-        return internView(0L, keyType, List.of(a, b));
+        return internValue(new PairKey(Math.min(a, b), Math.max(a, b), keyType));
     }
 
     public static void cleanup() {
@@ -83,6 +83,10 @@ public final class ExternalIdentityKeyRegistry {
             java.util.Set<Long> live = new java.util.HashSet<>(OWNERS.values());
             synchronized (VIEWS) {
                 VIEWS.keySet().removeIf(key -> key.ownerId() != 0L && !live.contains(key.ownerId()));
+            }
+            synchronized (VALUES) {
+                VALUES.keySet().removeIf(value -> value instanceof PairKey pair &&
+                        (!live.contains(pair.first()) || !live.contains(pair.second())));
             }
         }
     }
@@ -100,4 +104,6 @@ public final class ExternalIdentityKeyRegistry {
     }
 
     public record ViewKey(long ownerId, AEKeyType keyType, List<Integer> signature) {}
+
+    public record PairKey(long first, long second, AEKeyType keyType) {}
 }

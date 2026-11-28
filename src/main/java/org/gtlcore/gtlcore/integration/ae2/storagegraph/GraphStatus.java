@@ -7,5 +7,6 @@ package org.gtlcore.gtlcore.integration.ae2.storagegraph;
 public enum GraphStatus {
     COMPLETE,
     INCOMPLETE_NODE_LIMIT,
-    INCOMPLETE_DEPTH_LIMIT
+    INCOMPLETE_DEPTH_LIMIT,
+    INCOMPLETE_ROUTE_LIMIT
 }

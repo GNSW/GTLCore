@@ -74,7 +74,7 @@ public final class StructurePlacerUI {
                 new BlueprintBrowserPanel(be, action, WIDTH, HEIGHT) : null;
 
         WidgetGroup tabs = buildTabs(be, action, browser, workspace);
-        WidgetGroup deploy = buildDeployPanel(be);
+        WidgetGroup deploy = buildDeployPanel(be, player);
         WidgetGroup inventory = buildPlayerInventory(player);
         ui.widget(tabs);
         ui.widget(deploy);
@@ -382,15 +382,16 @@ public final class StructurePlacerUI {
     // 底栏：状态 + 放置
     // -------------------------------------------------------------------------
 
-    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be) {
+    private static WidgetGroup buildDeployPanel(StructurePlacerBlockEntity be, Player player) {
         WidgetGroup panel = new WidgetGroup(CONTENT_X, BOTTOM_Y, DEPLOY_W, DEPLOY_H);
         panel.setBackground(GuiTextures.BACKGROUND_INVERSE);
 
         panel.addWidget(dynamicLabel(6, 6, DEPLOY_W - 12, be::statusText));
         panel.addWidget(dynamicSingleLineLabel(6, 24, DEPLOY_W - 12, be::blueprintCurrentLine));
+        // 服务端按钮回调里的 player 是打开界面的玩家，用它识别创造模式（不扣材料）
         panel.addWidget(button(8, DEPLOY_H - 26, DEPLOY_W - 16, 18,
                 "ui.quantum_chromodynamic_charge.structure.place",
-                be::startPlacement));
+                () -> be.startPlacement(player)));
         return panel;
     }
 

@@ -168,8 +168,8 @@ public class TooltipsModify {
             if (capacity <= 0L) {
                 continue;
             }
-            long amps = capacity / (voltage * 20L);
-            MutableComponent rating = Component.literal(gtlcore$openBracket() + amps + " A·s ");
+            double amps = capacity / (voltage * 20.0);
+            MutableComponent rating = Component.literal(gtlcore$openBracket() + String.format(java.util.Locale.ROOT, "%.1f", amps) + " A·s ");
             rating.append(gtlcore$tierName(ratingTier));
             rating.append(Component.literal(gtlcore$closeBracket()));
             components.set(i, line.copy().append(rating));

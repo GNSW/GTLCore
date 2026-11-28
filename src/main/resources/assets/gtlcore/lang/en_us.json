@@ -1025,6 +1025,8 @@
   "gui.gtlcore.pattern_buffer_proxy_positions.highlight": " [Locate]",
   "message.gtlcore.pattern_buffer_proxy_teleport_offer": "Mirror location %s: %s",
   "message.gtlcore.pattern_buffer_proxy_teleport_button": "[Teleport to Mirror]",
+  "message.gtlcore.page_highlight": "%s located at %s, %s, %s",
+  "gui.gtlcore.page_highlight.right_click": "Right-click to highlight the part",
   "tooltip.gtlcore.pattern_buffer_proxy_teleport_button": "Run /tp to teleport above this mirror",
   "gui.gtlcore.pattern_buffer_gui_1": "Actual number of recipes",
   "gui.gtlcore.pattern_buffer_gui_2": "Item Catalyst Tank",

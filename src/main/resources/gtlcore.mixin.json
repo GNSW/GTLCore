@@ -6,6 +6,7 @@
   "refmap": "gtlcore-refmap.json",
   "plugin": "org.gtlcore.gtlcore.client.bloom.BridgeMixinPlugin",
   "client": [
+    "gtm.gui.PageSwitcherMixin",
     "mc.client.KeyMappingLookupMixin",
     "toolbelt.BeltScreenMixin",
     "toolbelt.RadialMenuScreenMixin",
@@ -136,6 +137,7 @@
     "gtm.MultiblockInfoCategoryMixin"
   ],
   "mixins": [
+    "fastutil.ObjectHeapPriorityQueueMixin",
     "gtm.api.machine.MetaMachineRenderDisabledMixin",
     "ftbquests.QuestTranslationReloadMixin",
     "toolbelt.ToolBeltInventoryMixin",

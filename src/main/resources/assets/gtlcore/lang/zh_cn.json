@@ -1025,6 +1025,8 @@
   "gui.gtlcore.pattern_buffer_proxy_positions.highlight": " [定位]",
   "message.gtlcore.pattern_buffer_proxy_teleport_offer": "镜像位于 %s：%s",
   "message.gtlcore.pattern_buffer_proxy_teleport_button": "[传送至镜像]",
+  "message.gtlcore.page_highlight": "%s 位于 %s, %s, %s",
+  "gui.gtlcore.page_highlight.right_click": "右键高亮仓室位置",
   "tooltip.gtlcore.pattern_buffer_proxy_teleport_button": "执行 /tp 传送至该镜像上方",
   "gui.gtlcore.pattern_buffer_gui_1": "实际配方数量",
   "gui.gtlcore.pattern_buffer_gui_2": "物品催化剂槽",

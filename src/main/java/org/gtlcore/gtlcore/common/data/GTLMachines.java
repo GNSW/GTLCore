@@ -206,7 +206,10 @@ public class GTLMachines {
                     .rotationState(RotationState.NON_Y_AXIS)
                     .recipeType(GTLRecipeTypes.FRAGMENT_WORLD_COLLECTION)
                     .workableTieredHullRenderer(GTCEu.id("block/machines/fragment_world_collection_machine"))
-                    .tooltips(Component.translatable("gtlcore.machine.fragment_world_collection.tooltip"))
+                    .tooltips(
+                            Component.translatable("gtceu.universal.tooltip.voltage_in", FormattingUtil.formatNumbers(GTValues.V[tier]), GTValues.VNF[tier]),
+                            Component.translatable("gtceu.universal.tooltip.energy_storage_capacity", FormattingUtil.formatNumbers(GTValues.V[tier] * 64L)),
+                            Component.translatable("gtlcore.machine.fragment_world_collection.tooltip"))
                     .compassNode("fragment_world_collection")
                     .register(),
             ULV);
@@ -623,6 +626,7 @@ public class GTLMachines {
                     Component.translatable("gtceu.machine.me.copy_paste.tooltip"),
                     Component.translatable("gtceu.universal.enabled"))
             .compassNode("item_bus")
+            .tooltipBuilder(GTL_ADD)
             .register();
 
     public static final MachineDefinition TAG_FILTER_ME_STOCK_HATCH_PART_MACHINE = REGISTRATE
@@ -637,6 +641,7 @@ public class GTLMachines {
                     Component.translatable("gtceu.machine.me.copy_paste.tooltip"),
                     Component.translatable("gtceu.universal.enabled"))
             .compassNode("fluid_hatch")
+            .tooltipBuilder(GTL_ADD)
             .register();
 
     public static final MachineDefinition ME_INPUT_ASSEMBLY = REGISTRATE
@@ -666,6 +671,7 @@ public class GTLMachines {
                     Component.translatable("gtceu.machine.me.copy_paste.tooltip"),
                     Component.translatable("gtceu.universal.enabled"))
             .compassNode("dual_hatch")
+            .tooltipBuilder(GTL_ADD)
             .register();
 
     public static class GTAEMachines {

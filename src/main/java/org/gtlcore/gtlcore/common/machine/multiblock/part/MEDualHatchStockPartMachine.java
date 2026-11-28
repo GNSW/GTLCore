@@ -7,6 +7,7 @@ import org.gtlcore.gtlcore.api.machine.trait.MEStock.ExportOnlyAEConfigureFluidS
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.ExportOnlyAEConfigureItemSlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IMESlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
+import org.gtlcore.gtlcore.api.recipe.RecipeExtractionScope;
 import org.gtlcore.gtlcore.api.recipe.ingredient.LongIngredient;
 import org.gtlcore.gtlcore.client.gui.widget.AEDualConfigWidget;
 import org.gtlcore.gtlcore.config.ConfigHolder;
@@ -491,43 +492,59 @@ public class MEDualHatchStockPartMachine extends MEBusPartMachine implements IDa
             }
 
             MEStorage aeNetwork = grid.getStorageService().getInventory();
+            RecipeExtractionScope shared = simulate ? null : RecipeExtractionScope.current();
+            RecipeExtractionScope scope = shared;
+            boolean ownScope = false;
+            if (!simulate && scope == null) {
+                scope = RecipeExtractionScope.begin(aeNetwork, getActionSource());
+                ownScope = true;
+            }
             boolean changed = false;
             var listIterator = left.listIterator();
 
-            while (listIterator.hasNext()) {
-                Ingredient ingredient = listIterator.next();
-                if (ingredient.isEmpty()) {
-                    listIterator.remove();
-                } else {
-                    long amount;
-                    if (ingredient instanceof LongIngredient li) amount = li.getActualAmount();
-                    else if (ingredient instanceof SizedIngredient si) amount = si.getAmount();
-                    else amount = 1;
-                    if (amount < 1) listIterator.remove();
-                    else {
-                        for (int i = 0, configListSize = configList.size(); i < configListSize; i++) {
-                            AEItemKey aeItemKey = configList.get(i);
-                            if (aeItemKey.matches(ingredient)) {
-                                long extracted = aeNetwork.extract(aeItemKey, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE, getActionSource());
-                                if (extracted > 0) {
-                                    changed = true;
-                                    amount -= extracted;
-                                    if (!simulate) {
-                                        var slot = this.inventory[configIndexList.getInt(i)];
-                                        if (slot.getStock() != null) {
-                                            long amt = slot.getStock().amount() - extracted;
-                                            if (amt == 0) slot.setStock(null);
-                                            else slot.setStock(new GenericStack(aeItemKey, amt));
+            try {
+                while (listIterator.hasNext()) {
+                    Ingredient ingredient = listIterator.next();
+                    if (ingredient.isEmpty()) {
+                        listIterator.remove();
+                    } else {
+                        long amount;
+                        if (ingredient instanceof LongIngredient li) amount = li.getActualAmount();
+                        else if (ingredient instanceof SizedIngredient si) amount = si.getAmount();
+                        else amount = 1;
+                        if (amount < 1) listIterator.remove();
+                        else {
+                            for (int i = 0, configListSize = configList.size(); i < configListSize; i++) {
+                                AEItemKey aeItemKey = configList.get(i);
+                                if (aeItemKey.matches(ingredient)) {
+                                    long extracted = simulate ? aeNetwork.extract(aeItemKey, amount, Actionable.SIMULATE, getActionSource()) : scope == null ? 0L : scope.extract(aeNetwork, getActionSource(), aeItemKey, amount);
+                                    if (extracted > 0) {
+                                        changed = true;
+                                        amount -= extracted;
+                                        if (!simulate) {
+                                            var slot = this.inventory[configIndexList.getInt(i)];
+                                            if (slot.getStock() != null) {
+                                                long amt = slot.getStock().amount() - extracted;
+                                                if (amt == 0) slot.setStock(null);
+                                                else slot.setStock(new GenericStack(aeItemKey, amt));
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            if (amount <= 0L) {
-                                listIterator.remove();
-                                break;
+                                if (amount <= 0L) {
+                                    listIterator.remove();
+                                    break;
+                                }
                             }
                         }
                     }
+                }
+                if (!simulate && ownScope && scope != null && left.isEmpty()) {
+                    scope.commit();
+                }
+            } finally {
+                if (ownScope && scope != null) {
+                    scope.close();
                 }
             }
             if (!simulate && changed) {
@@ -670,40 +687,56 @@ public class MEDualHatchStockPartMachine extends MEBusPartMachine implements IDa
             }
 
             MEStorage aeNetwork = grid.getStorageService().getInventory();
+            RecipeExtractionScope shared = simulate ? null : RecipeExtractionScope.current();
+            RecipeExtractionScope scope = shared;
+            boolean ownScope = false;
+            if (!simulate && scope == null) {
+                scope = RecipeExtractionScope.begin(aeNetwork, getActionSource());
+                ownScope = true;
+            }
             boolean changed = false;
             var listIterator = left.listIterator();
 
-            while (listIterator.hasNext()) {
-                FluidIngredient ingredient = listIterator.next();
-                if (ingredient.isEmpty()) {
-                    listIterator.remove();
-                } else {
-                    long amount = ingredient.getAmount();
-                    if (amount < 1) listIterator.remove();
-                    else {
-                        for (int i = 0, configListSize = configList.size(); i < configListSize; i++) {
-                            AEFluidKey aeFluidKey = configList.get(i);
-                            if (AEUtils.testFluidIngredient(ingredient, aeFluidKey)) {
-                                long extracted = aeNetwork.extract(aeFluidKey, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE, getActionSource());
-                                if (extracted > 0) {
-                                    changed = true;
-                                    amount -= extracted;
-                                    if (!simulate) {
-                                        var slot = this.inventory[configIndexList.getInt(i)];
-                                        if (slot.getStock() != null) {
-                                            long amt = slot.getStock().amount() - extracted;
-                                            if (amt == 0) slot.setStock(null);
-                                            else slot.setStock(new GenericStack(aeFluidKey, amt));
+            try {
+                while (listIterator.hasNext()) {
+                    FluidIngredient ingredient = listIterator.next();
+                    if (ingredient.isEmpty()) {
+                        listIterator.remove();
+                    } else {
+                        long amount = ingredient.getAmount();
+                        if (amount < 1) listIterator.remove();
+                        else {
+                            for (int i = 0, configListSize = configList.size(); i < configListSize; i++) {
+                                AEFluidKey aeFluidKey = configList.get(i);
+                                if (AEUtils.testFluidIngredient(ingredient, aeFluidKey)) {
+                                    long extracted = simulate ? aeNetwork.extract(aeFluidKey, amount, Actionable.SIMULATE, getActionSource()) : scope == null ? 0L : scope.extract(aeNetwork, getActionSource(), aeFluidKey, amount);
+                                    if (extracted > 0) {
+                                        changed = true;
+                                        amount -= extracted;
+                                        if (!simulate) {
+                                            var slot = this.inventory[configIndexList.getInt(i)];
+                                            if (slot.getStock() != null) {
+                                                long amt = slot.getStock().amount() - extracted;
+                                                if (amt == 0) slot.setStock(null);
+                                                else slot.setStock(new GenericStack(aeFluidKey, amt));
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            if (amount <= 0L) {
-                                listIterator.remove();
-                                break;
+                                if (amount <= 0L) {
+                                    listIterator.remove();
+                                    break;
+                                }
                             }
                         }
                     }
+                }
+                if (!simulate && ownScope && scope != null && left.isEmpty()) {
+                    scope.commit();
+                }
+            } finally {
+                if (ownScope && scope != null) {
+                    scope.close();
                 }
             }
             if (!simulate && changed) {

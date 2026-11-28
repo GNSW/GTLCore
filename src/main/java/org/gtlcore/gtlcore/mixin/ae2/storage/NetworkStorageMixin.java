@@ -1,13 +1,20 @@
 package org.gtlcore.gtlcore.mixin.ae2.storage;
 
+import org.gtlcore.gtlcore.config.StorageGraphMode;
 import org.gtlcore.gtlcore.integration.ae2.crafting.ManualCraftingInventoryLock;
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphSnapshot;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.me.storage.NetworkStorage;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -41,20 +48,90 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private void gtlcore$bumpThroughputTopologyOnMount(int priority, MEStorage storage, CallbackInfo ci) {
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
+        StorageGraphManager.onTopologyChanged((MEStorage) (Object) this);
     }
 
     @Inject(method = "unmount", at = @At("RETURN"), remap = false)
     private void gtlcore$bumpThroughputTopologyOnUnmount(MEStorage storage, CallbackInfo ci) {
         gtlcore$throughputTopologyVersion++;
         ThroughputMonitorStorageTracker.onTopologyChanged((MEStorage) (Object) this);
+        StorageGraphManager.onTopologyChanged((MEStorage) (Object) this);
+        SourceRegistry.onRemoved(storage);
+    }
+
+    @Inject(method = "getAvailableStacks", at = @At("HEAD"), remap = false)
+    private void gtlcore$observeStorageGraph(KeyCounter out, CallbackInfo ci) {
+        StorageGraphManager.onAccess((MEStorage) (Object) this);
+    }
+
+    @WrapMethod(method = "getAvailableStacks", remap = false)
+    private void gtlcore$shadowAvailableStacks(KeyCounter out, Operation<Void> original) {
+        StorageGraphMode mode = StorageGraphManager.mode();
+        if (mode == StorageGraphMode.ON) {
+            if (StorageGraphManager.fillUniqueIfExact((MEStorage) (Object) this, out)) {
+                return;
+            }
+            original.call(out);
+            return;
+        }
+        if (mode == StorageGraphMode.OFF) {
+            original.call(out);
+            return;
+        }
+        long legacyBefore = StorageGraphManager.keyCounterTotal(out);
+        StorageGraphManager.logMounts(priorityInventory);
+        StorageGraphManager.enterNested();
+        try {
+            original.call(out);
+        } finally {
+            StorageGraphManager.exitNested();
+        }
+        long legacyAfter = StorageGraphManager.keyCounterTotal(out);
+        StorageGraphManager.shadowAvailableStacks((MEStorage) (Object) this, out, legacyBefore, legacyAfter);
     }
 
     @WrapMethod(method = "insert", remap = false)
     private long gtlcore$trackInsert(AEKey what, long amount, Actionable mode, IActionSource source,
                                      Operation<Long> original) {
+        if (mode == Actionable.SIMULATE) {
+            StorageOperationContext context = StorageOperationContext.current();
+            boolean ownContext = false;
+            if (context == null && StorageGraphManager.mode() == StorageGraphMode.ON) {
+                StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+                context = StorageOperationContext.begin(mode, source,
+                        snapshot == null ? 0L : snapshot.topologyEpoch());
+                ownContext = true;
+            }
+            try {
+                long legacy = original.call(what, amount, mode, source);
+                StorageGraphManager.shadowInsert((MEStorage) (Object) this, what, amount, mode, source, legacy);
+                return legacy;
+            } finally {
+                if (ownContext) {
+                    StorageOperationContext.end(context);
+                }
+            }
+        }
+        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
+            StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+            StorageOperationContext context = StorageOperationContext.begin(mode, source,
+                    snapshot == null ? 0L : snapshot.topologyEpoch());
+            try {
+                long inserted = original.call(what, amount, mode, source);
+                if (inserted > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
+                    ThroughputMonitorStorageTracker.beginInsert((MEStorage) (Object) this, source);
+                    ThroughputMonitorStorageTracker.endInsert((MEStorage) (Object) this, what, inserted, source);
+                }
+                return inserted;
+            } finally {
+                StorageOperationContext.end(context);
+            }
+        }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);
         }
+        StorageGraphManager.InsertProbe insertProbe = StorageGraphManager.probeInsertUnique(
+                (MEStorage) (Object) this, what, amount, source);
         ThroughputMonitorStorageTracker.beginInsert((MEStorage) (Object) this, source);
         long inserted;
         try {
@@ -64,6 +141,7 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             ThroughputMonitorStorageTracker.abortOperation();
             throw failure;
         }
+        StorageGraphManager.logInsert(inserted, insertProbe, what, amount);
         return inserted;
     }
 
@@ -71,7 +149,49 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackExtraction(AEKey what, long amount, Actionable mode, IActionSource source,
                                          Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            return NetworkExtractionSimulation.network(this, what, () -> original.call(what, amount, mode, source));
+            StorageOperationContext context = StorageOperationContext.current();
+            boolean ownContext = false;
+            if (context == null && StorageGraphManager.mode() == StorageGraphMode.ON) {
+                StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+                context = StorageOperationContext.begin(mode, source,
+                        snapshot == null ? 0L : snapshot.topologyEpoch());
+                ownContext = true;
+            }
+            try {
+                StorageGraphManager.enterNested();
+                long legacy;
+                try {
+                    legacy = NetworkExtractionSimulation.network(this, what,
+                            () -> original.call(what, amount, mode, source));
+                } finally {
+                    StorageGraphManager.exitNested();
+                }
+                if (context != null && legacy > 0L) {
+                    context.recordNetworkExtract(SourceRegistry.idFor((MEStorage) (Object) this).runtimeId(), what, legacy);
+                }
+                StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
+                return legacy;
+            } finally {
+                if (ownContext) {
+                    StorageOperationContext.end(context);
+                }
+            }
+        }
+        if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
+            StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+            StorageOperationContext context = StorageOperationContext.begin(mode, source,
+                    snapshot == null ? 0L : snapshot.topologyEpoch());
+            try {
+                long limitedAmount = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount, source);
+                long extracted = original.call(what, limitedAmount, mode, source);
+                if (extracted > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
+                    ThroughputMonitorStorageTracker.beginExtraction((MEStorage) (Object) this, source);
+                    ThroughputMonitorStorageTracker.endExtraction((MEStorage) (Object) this, what, extracted, source);
+                }
+                return extracted;
+            } finally {
+                StorageOperationContext.end(context);
+            }
         }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
             return original.call(what, amount, mode, source);
@@ -96,6 +216,9 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
         if (mode != Actionable.SIMULATE) {
             return original.call(storage, what, amount, mode, source);
         }
+        if (ExternalInventoryIdentity.get(storage) != 0L) {
+            return original.call(storage, what, amount, mode, source);
+        }
         return NetworkExtractionSimulation.mounted(storage, what, amount,
                 requested -> original.call(storage, what, requested, mode, source));
     }
@@ -113,6 +236,11 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             storages.addAll(priorityStorages);
         }
         return storages;
+    }
+
+    @Override
+    public NavigableMap<Integer, List<MEStorage>> gtlcore$getPriorityStorages() {
+        return priorityInventory;
     }
 
     @Override

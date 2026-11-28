@@ -35,6 +35,10 @@ public final class NetworkExtractionSimulation {
         return amounts == null ? 0 : amounts.getOrDefault(key, 0L);
     }
 
+    public static boolean isActive() {
+        return ACTIVE.get() != null;
+    }
+
     public static long network(LongSupplier extraction) {
         Context context = ACTIVE.get();
         boolean root = context == null;

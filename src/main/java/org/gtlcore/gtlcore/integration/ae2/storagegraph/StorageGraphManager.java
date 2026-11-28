@@ -1,0 +1,710 @@
+package org.gtlcore.gtlcore.integration.ae2.storagegraph;
+
+import org.gtlcore.gtlcore.config.ConfigHolder;
+import org.gtlcore.gtlcore.config.StorageGraphMode;
+
+import appeng.api.config.Actionable;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEKey;
+import appeng.api.stacks.KeyCounter;
+import appeng.api.storage.MEStorage;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+
+public final class StorageGraphManager {
+
+    public static final int MAX_NODES = 4096;
+    public static final int MAX_DEPTH = 32;
+    public static final int MAX_ROUTES = 1024;
+    private static final int MAX_CACHE_ENTRIES = 64;
+
+    private static final IdentityHashMap<MEStorage, StorageGraphSnapshot> CACHE = new IdentityHashMap<>();
+    private static final IdentityHashMap<MEStorage, java.util.Set<MEStorage>> DEPENDENTS = new IdentityHashMap<>();
+    private static final ThreadLocal<Integer> SHADOW_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<IdentityHashMap<MEStorage, StorageGraphSnapshot>> ACCESS_SNAPSHOTS = ThreadLocal
+            .withInitial(IdentityHashMap::new);
+    private static final long SHADOW_COMPARE_INTERVAL_NANOS = 1_000_000_000L;
+    private static long lastShadowCompareNanos;
+    private static long topologyEpoch;
+    private static long policyEpoch;
+
+    private StorageGraphManager() {}
+
+    public static StorageGraphMode mode() {
+        ConfigHolder config = ConfigHolder.INSTANCE;
+        if (config == null || !config.ae.ae2StorageGraphEnabled) {
+            return StorageGraphMode.OFF;
+        }
+        return config.diagnostics.ae2StorageGraphShadow ? StorageGraphMode.SHADOW : StorageGraphMode.ON;
+    }
+
+    public static void onTopologyChanged() {
+        long epoch;
+        synchronized (StorageGraphManager.class) {
+            topologyEpoch++;
+            CACHE.clear();
+            DEPENDENTS.clear();
+            epoch = topologyEpoch;
+        }
+        StorageGraphDiagnostics.logTopologyChange(epoch);
+    }
+
+    public static void onTopologyChanged(MEStorage changed) {
+        if (changed == null) {
+            onTopologyChanged();
+            return;
+        }
+        long epoch;
+        synchronized (StorageGraphManager.class) {
+            topologyEpoch++;
+            CACHE.remove(changed);
+            java.util.Set<MEStorage> roots = DEPENDENTS.remove(changed);
+            if (roots != null) {
+                for (MEStorage root : roots) {
+                    CACHE.remove(root);
+                }
+            }
+            DEPENDENTS.values().removeIf(set -> {
+                set.remove(changed);
+                return set.isEmpty();
+            });
+            epoch = topologyEpoch;
+        }
+        StorageGraphDiagnostics.logTopologyChange(epoch);
+    }
+
+    public static void onPolicyChanged() {
+        long epoch;
+        synchronized (StorageGraphManager.class) {
+            policyEpoch++;
+            CACHE.clear();
+            epoch = policyEpoch;
+        }
+        StorageGraphDiagnostics.logPolicyChange(epoch);
+    }
+
+    public static void reset() {
+        synchronized (StorageGraphManager.class) {
+            topologyEpoch++;
+            policyEpoch++;
+            CACHE.clear();
+            DEPENDENTS.clear();
+        }
+        SourceRegistry.reset();
+        StorageGraphDiagnostics.resetThrottle();
+    }
+
+    public static void enterNested() {
+        SHADOW_DEPTH.set(SHADOW_DEPTH.get() + 1);
+    }
+
+    public static void exitNested() {
+        SHADOW_DEPTH.set(SHADOW_DEPTH.get() - 1);
+    }
+
+    public static void onAccess(MEStorage root) {
+        if (root == null || mode() != StorageGraphMode.SHADOW) {
+            return;
+        }
+        ACCESS_SNAPSHOTS.get().put(root, collect(root));
+    }
+
+    public static StorageGraphSnapshot snapshot(MEStorage root) {
+        if (root == null || mode() == StorageGraphMode.OFF) {
+            return null;
+        }
+        synchronized (StorageGraphManager.class) {
+            StorageGraphSnapshot cached = CACHE.get(root);
+            if (cached != null) {
+                return cached;
+            }
+            if (CACHE.size() >= MAX_CACHE_ENTRIES) {
+                CACHE.clear();
+                DEPENDENTS.clear();
+            }
+            StorageGraphSnapshot snapshot = collect(root);
+            if ((topologyEpoch & 63L) == 0L) {
+                ExternalIdentityKeyRegistry.cleanup();
+                SourceRegistry.cleanup();
+            }
+            CACHE.put(root, snapshot);
+            DEPENDENTS.values().removeIf(set -> {
+                set.remove(root);
+                return set.isEmpty();
+            });
+            for (MEStorage node : snapshot.nodes()) {
+                DEPENDENTS.computeIfAbsent(node,
+                        ignored -> java.util.Collections.newSetFromMap(new IdentityHashMap<>())).add(root);
+            }
+            return snapshot;
+        }
+    }
+
+    public static void uniqueAvailableStacks(MEStorage root, KeyCounter out) {
+        if (root == null || out == null) {
+            return;
+        }
+        StorageGraphSnapshot snapshot = snapshot(root);
+        if (snapshot == null) {
+            return;
+        }
+        for (Source source : snapshot.sources()) {
+            if (source.physical() == null) {
+                continue;
+            }
+            for (var entry : gtlcore$viewAmounts(source).entrySet()) {
+                out.add(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    private static Map<AEKey, Long> gtlcore$viewAmounts(Source source) {
+        Map<AEKey, Long> best = new java.util.HashMap<>();
+        IdentityHashMap<MEStorage, KeyCounter> cache = new IdentityHashMap<>();
+        for (SourceRoute route : source.routes()) {
+            MEStorage leaf = route.leafView() != null ? route.leafView() : source.physical();
+            if (leaf == null) {
+                continue;
+            }
+            KeyCounter viewKeys = cache.computeIfAbsent(leaf, storage -> {
+                KeyCounter counter = new KeyCounter();
+                storage.getAvailableStacks(counter);
+                return counter;
+            });
+            for (var entry : viewKeys) {
+                if (!isVisibleOnRoute(route, entry.getKey())) {
+                    continue;
+                }
+                long value = source.kind() == SourceKind.INFINITE ? Integer.MAX_VALUE : entry.getLongValue();
+                best.merge(entry.getKey(), value, Math::max);
+            }
+        }
+        return best;
+    }
+
+    private static boolean isVisibleOnRoute(SourceRoute route, AEKey key) {
+        for (MEStorage wrapper : route.path()) {
+            if (wrapper instanceof MEInventoryPolicyView view && !view.gtlcore$isAvailable(key)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean fillUniqueIfExact(MEStorage root, KeyCounter out) {
+        if (root == null || out == null || mode() != StorageGraphMode.ON) {
+            return false;
+        }
+        StorageGraphSnapshot snapshot = snapshot(root);
+        if (snapshot == null) {
+            return false;
+        }
+        if (!snapshot.complete()) {
+            StorageGraphDiagnostics.logIncomplete(snapshot);
+            return false;
+        }
+        KeyCounter unique = new KeyCounter();
+        KeyCounter opaque = new KeyCounter();
+        for (Source source : snapshot.sources()) {
+            if (source.physical() == null) {
+                continue;
+            }
+            for (var entry : gtlcore$viewAmounts(source).entrySet()) {
+                if (source.kind() == SourceKind.INFINITE || source.kind() == SourceKind.FINITE) {
+                    unique.add(entry.getKey(), entry.getValue());
+                } else if (source.kind() != SourceKind.VIRTUAL) {
+                    opaque.add(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        if (keyCounterTotal(opaque) > 0L) {
+            StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
+            out.addAll(opaque);
+        }
+        out.addAll(unique);
+        return true;
+    }
+
+    private static boolean compatFallback() {
+        ConfigHolder config = ConfigHolder.INSTANCE;
+        return config == null || config.ae.ae2StorageGraphCompatFallback;
+    }
+
+    public record InsertProbe(long unique, int finite, int sources) {}
+
+    public static InsertProbe probeInsertUnique(MEStorage root, AEKey what, long amount, IActionSource source) {
+        if (root == null || what == null || mode() != StorageGraphMode.SHADOW) {
+            return null;
+        }
+        StorageGraphSnapshot snapshot = collect(root);
+        long unique = 0L;
+        int finite = 0;
+        for (Source graphSource : snapshot.sources()) {
+            if (graphSource.kind() != SourceKind.FINITE || graphSource.physical() == null) {
+                continue;
+            }
+            long got = graphSource.physical().insert(what, amount, Actionable.SIMULATE, source);
+            if (got > 0) {
+                unique = saturatingAdd(unique, got);
+                finite++;
+            }
+        }
+        return new InsertProbe(unique, finite, snapshot.sources().size());
+    }
+
+    public static void logInsert(long legacy, InsertProbe probe, AEKey what, long amount) {
+        if (probe == null) {
+            return;
+        }
+        StorageGraphDiagnostics.logSimulateInsert(legacy, probe.unique(), probe.sources(), probe.finite(),
+                String.valueOf(what), amount);
+    }
+
+    public static void shadowInsert(MEStorage root, AEKey what, long amount, Actionable mode,
+                                    IActionSource source, long legacy) {
+        if (mode != Actionable.SIMULATE) {
+            return;
+        }
+        logInsert(legacy, probeInsertUnique(root, what, amount, source), what, amount);
+    }
+
+    public static void shadowAvailableStacks(MEStorage root, KeyCounter legacyOut, long legacyBefore, long legacyAfter) {
+        if (root == null || legacyOut == null || mode() != StorageGraphMode.SHADOW || SHADOW_DEPTH.get() != 0) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (now - lastShadowCompareNanos < SHADOW_COMPARE_INTERVAL_NANOS) {
+            return;
+        }
+        lastShadowCompareNanos = now;
+        SHADOW_DEPTH.set(1);
+        try {
+            IdentityHashMap<MEStorage, StorageGraphSnapshot> snapshots = ACCESS_SNAPSHOTS.get();
+            StorageGraphSnapshot snapshot = snapshots.remove(root);
+            if (snapshot == null) {
+                snapshot = collect(root);
+            }
+            if (snapshots.isEmpty()) {
+                ACCESS_SNAPSHOTS.remove();
+            }
+            KeyCounter unique = new KeyCounter();
+            StringBuilder perSource = new StringBuilder();
+            int shown = 0;
+            if (snapshot != null) {
+                perSource.append("snap=").append(snapshot.topologyEpoch()).append('/')
+                        .append(snapshot.sources().size()).append("; ");
+                for (Source source : snapshot.sources()) {
+                    MEStorage physical = source.physical();
+                    if (physical == null) {
+                        continue;
+                    }
+                    KeyCounter one = new KeyCounter();
+                    physical.getAvailableStacks(one);
+                    long oneTotal = 0L;
+                    for (var entry : one) {
+                        oneTotal += entry.getLongValue();
+                    }
+                    unique.addAll(one);
+                    if (shown < 8) {
+                        perSource.append(source.kind()).append(':')
+                                .append(physical.getClass().getName()).append('@')
+                                .append(Integer.toHexString((int) source.identityHash()))
+                                .append('=').append(one.size()).append('/').append(oneTotal).append("; ");
+                        shown++;
+                    }
+                }
+            }
+            long legacyTotal = 0L;
+            long uniqueTotal = 0L;
+            for (var entry : legacyOut) {
+                legacyTotal += entry.getLongValue();
+            }
+            for (var entry : unique) {
+                uniqueTotal += entry.getLongValue();
+            }
+            int mismatched = 0;
+            for (AEKey key : unique.keySet()) {
+                if (legacyOut.get(key) != unique.get(key)) {
+                    mismatched++;
+                }
+            }
+            for (AEKey key : legacyOut.keySet()) {
+                if (unique.get(key) == 0L) {
+                    mismatched++;
+                }
+            }
+            StorageGraphDiagnostics.logAvailableStacks(legacyOut.size(), unique.size(), legacyTotal, uniqueTotal,
+                    mismatched, legacyBefore, legacyAfter, perSource.toString());
+        } finally {
+            SHADOW_DEPTH.set(0);
+        }
+    }
+
+    public static void shadowSimulate(MEStorage root, AEKey what, long amount, IActionSource source, long legacy) {
+        if (root == null || what == null || mode() != StorageGraphMode.SHADOW || SHADOW_DEPTH.get() != 0) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (now - lastShadowCompareNanos < SHADOW_COMPARE_INTERVAL_NANOS) {
+            return;
+        }
+        lastShadowCompareNanos = now;
+        SHADOW_DEPTH.set(1);
+        try {
+            StorageGraphSnapshot snapshot = collect(root);
+            long unique = 0L;
+            int finite = 0;
+            for (Source graphSource : snapshot.sources()) {
+                if (graphSource.kind() != SourceKind.FINITE) {
+                    continue;
+                }
+                MEStorage physical = graphSource.physical();
+                if (physical == null) {
+                    continue;
+                }
+                long got = physical.extract(what, amount, Actionable.SIMULATE, source);
+                if (got > 0) {
+                    unique = saturatingAdd(unique, got);
+                    finite++;
+                }
+            }
+            StorageGraphDiagnostics.logSimulate(legacy, unique, snapshot.sources().size(), finite,
+                    String.valueOf(what), amount);
+        } finally {
+            SHADOW_DEPTH.set(0);
+        }
+    }
+
+    static long saturatingAdd(long a, long b) {
+        long sum = a + b;
+        return sum < 0 ? Long.MAX_VALUE : sum;
+    }
+
+    private static boolean isVisibleOnAnyRoute(Source source, AEKey key) {
+        if (source.routes().isEmpty()) {
+            return true;
+        }
+        for (SourceRoute route : source.routes()) {
+            boolean visible = true;
+            for (MEStorage wrapper : route.path()) {
+                if (wrapper instanceof MEInventoryPolicyView view && !view.gtlcore$isAvailable(key)) {
+                    visible = false;
+                    break;
+                }
+            }
+            if (visible) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void logMounts(Map<Integer, List<MEStorage>> priorityInventory) {
+        if (priorityInventory == null || mode() != StorageGraphMode.SHADOW) {
+            return;
+        }
+        StringBuilder mounts = new StringBuilder();
+        int shown = 0;
+        for (var entry : priorityInventory.entrySet()) {
+            for (MEStorage mount : entry.getValue()) {
+                if (shown >= 12) {
+                    break;
+                }
+                mounts.append(entry.getKey()).append(':').append(mount.getClass().getName())
+                        .append('@').append(Integer.toHexString(System.identityHashCode(mount))).append("; ");
+                shown++;
+            }
+        }
+        StorageGraphDiagnostics.logMounts(mounts.toString());
+    }
+
+    public static long keyCounterTotal(KeyCounter counter) {
+        long total = 0L;
+        for (var entry : counter) {
+            total += entry.getLongValue();
+        }
+        return total;
+    }
+
+    static int countAliasGroups(Iterable<Integer> parentCounts) {
+        int aliasGroups = 0;
+        for (Integer count : parentCounts) {
+            if (count != null && count > 1) {
+                aliasGroups++;
+            }
+        }
+        return aliasGroups;
+    }
+
+    public static String dump(MEStorage root) {
+        if (root == null) {
+            return "root=null";
+        }
+        StorageGraphSnapshot snapshot = collect(root);
+        StringBuilder out = new StringBuilder();
+        out.append("epoch=").append(snapshot.topologyEpoch())
+                .append(" raw=").append(snapshot.rawMountCount())
+                .append(" unique=").append(snapshot.uniqueSourceCount())
+                .append(" alias=").append(snapshot.aliasGroupCount())
+                .append(" opaque=").append(snapshot.opaqueSourceCount())
+                .append(" unverified=").append(snapshot.unverifiedAliasCount())
+                .append(" nodes=").append(snapshot.sources().size())
+                .append(" edges=").append(snapshot.edges().size())
+                .append(" cycles=").append(cycleCount(snapshot))
+                .append(" status=").append(snapshot.status())
+                .append('\n');
+        for (Source source : snapshot.sources()) {
+            out.append("source ").append(Long.toHexString(source.identityHash()))
+                    .append(" id=").append(source.id().runtimeId())
+                    .append(' ').append(source.kind())
+                    .append(' ').append(source.physical() == null ? "null" : source.physical().getClass().getName())
+                    .append('\n');
+        }
+        for (Edge edge : snapshot.edges()) {
+            out.append("edge ").append(Long.toHexString(edge.fromNode()))
+                    .append(" -> ").append(Long.toHexString(edge.toNode()))
+                    .append(' ').append(edge.kind())
+                    .append('\n');
+        }
+        return out.toString();
+    }
+
+    private static int cycleCount(StorageGraphSnapshot snapshot) {
+        Map<Long, List<Long>> outgoing = new java.util.HashMap<>();
+        for (Edge edge : snapshot.edges()) {
+            outgoing.computeIfAbsent(edge.fromNode(), ignored -> new ArrayList<>()).add(edge.toNode());
+        }
+        java.util.Set<Long> visiting = new java.util.HashSet<>();
+        java.util.Set<Long> done = new java.util.HashSet<>();
+        int[] cycles = { 0 };
+        for (Long node : outgoing.keySet()) {
+            countCyclesFrom(node, outgoing, visiting, done, cycles);
+        }
+        return cycles[0];
+    }
+
+    private static void countCyclesFrom(Long node, Map<Long, List<Long>> outgoing,
+                                        java.util.Set<Long> visiting, java.util.Set<Long> done, int[] cycles) {
+        if (done.contains(node)) {
+            return;
+        }
+        if (!visiting.add(node)) {
+            cycles[0]++;
+            return;
+        }
+        for (Long next : outgoing.getOrDefault(node, List.of())) {
+            countCyclesFrom(next, outgoing, visiting, done, cycles);
+        }
+        visiting.remove(node);
+        done.add(node);
+    }
+
+    private static List<SourceRoute> dedupeRoutes(List<SourceRoute> routes) {
+        Map<RouteKey, SourceRoute> unique = new java.util.LinkedHashMap<>();
+        for (SourceRoute route : routes) {
+            RouteKey key = new RouteKey(route.leafView(), route.path(), route.priorities());
+            SourceRoute existing = unique.get(key);
+            if (existing == null || route.priority() > existing.priority()) {
+                unique.put(key, route);
+            }
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private record RouteKey(MEStorage leafView, List<MEStorage> path, List<Integer> priorities) {
+
+        RouteKey {
+            path = List.copyOf(path);
+            priorities = List.copyOf(priorities);
+        }
+    }
+
+    private static IdentityHashMap<MEStorage, List<SourceRoute>> resolveRoutes(MEStorage root,
+                                                                               IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap,
+                                                                               boolean[] limited) {
+        IdentityHashMap<MEStorage, List<SourceRoute>> routes = new IdentityHashMap<>();
+        java.util.Set<MEStorage> onPath = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        gtlcore$walkRoutes(root, List.of(), childrenMap, routes, onPath, 0, List.of(), new int[] { 0 }, limited);
+        return routes;
+    }
+
+    private static void gtlcore$walkRoutes(MEStorage node, List<MEStorage> path,
+                                           IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap,
+                                           IdentityHashMap<MEStorage, List<SourceRoute>> routes,
+                                           java.util.Set<MEStorage> onPath, int depth, List<Integer> parentPriorities,
+                                           int[] routeCount, boolean[] limited) {
+        if (depth > MAX_DEPTH) {
+            limited[0] = true;
+            return;
+        }
+        if (!onPath.add(node)) {
+            return;
+        }
+        try {
+            List<StorageGraphAdapter.ChildEdge> children = childrenMap.get(node);
+            if (children == null || children.isEmpty()) {
+                return;
+            }
+            boolean wrapper = StorageGraphAdapterRegistry.find(node).recognize(node) ==
+                    StorageGraphAdapter.Recognition.FILTER_WRAPPER;
+            for (StorageGraphAdapter.ChildEdge child : children) {
+                if (routeCount[0] >= MAX_ROUTES) {
+                    limited[0] = true;
+                    return;
+                }
+                List<MEStorage> childPath = path;
+                if (wrapper) {
+                    childPath = new ArrayList<>(path);
+                    childPath.add(node);
+                }
+                int edgePriority = child.policy() == null ? 0 : child.policy().priority();
+                List<Integer> childPriorities = new ArrayList<>(parentPriorities);
+                childPriorities.add(edgePriority);
+                routes.computeIfAbsent(child.child(), key -> new ArrayList<>())
+                        .add(new SourceRoute(child.child(), childPath, childPriorities, child.nativeOrder()));
+                routeCount[0]++;
+                gtlcore$walkRoutes(child.child(), childPath, childrenMap, routes, onPath, depth + 1, childPriorities,
+                        routeCount, limited);
+            }
+        } finally {
+            onPath.remove(node);
+        }
+    }
+
+    private static StorageGraphSnapshot collect(MEStorage root) {
+        long epoch = topologyEpoch;
+        IdentityHashMap<MEStorage, Boolean> visited = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, Integer> parentCount = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, Long> externalKeys = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, List<SourceRoute>> routes = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, Integer> priorities = new IdentityHashMap<>();
+        IdentityHashMap<MEStorage, List<StorageGraphAdapter.ChildEdge>> childrenMap = new IdentityHashMap<>();
+        ArrayDeque<MEStorage> queue = new ArrayDeque<>();
+        List<Edge> edges = new ArrayList<>();
+        long edgeId = 0L;
+        int depth = 0;
+        visited.put(root, Boolean.TRUE);
+        queue.add(root);
+        boolean nodeLimitReached = false;
+        boolean depthLimitReached = false;
+        while (!queue.isEmpty() && visited.size() <= MAX_NODES && depth <= MAX_DEPTH) {
+            int levelSize = queue.size();
+            depth++;
+            for (int i = 0; i < levelSize; i++) {
+                MEStorage node = queue.poll();
+                StorageGraphAdapter adapter = StorageGraphAdapterRegistry.find(node);
+                List<StorageGraphAdapter.ChildEdge> nodeChildren = adapter.children(node);
+                childrenMap.put(node, nodeChildren);
+                for (StorageGraphAdapter.ChildEdge child : nodeChildren) {
+                    if (visited.size() >= MAX_NODES && !visited.containsKey(child.child())) {
+                        nodeLimitReached = true;
+                        break;
+                    }
+                    edges.add(new Edge(edgeId++, System.identityHashCode(node), System.identityHashCode(child.child()),
+                            child.kind(), child.policy(), child.nativeOrder()));
+                    int edgePriority = child.policy() == null ? 0 : child.policy().priority();
+                    if (edgePriority == 0) {
+                        edgePriority = priorities.getOrDefault(node, 0);
+                    }
+                    priorities.merge(child.child(), edgePriority, Math::max);
+                    parentCount.merge(child.child(), 1, Integer::sum);
+                    if (child.externalKey() != 0L) {
+                        externalKeys.put(child.child(), child.externalKey());
+                    } else {
+                        Long inherited = externalKeys.get(node);
+                        if (inherited != null) {
+                            externalKeys.put(child.child(), inherited);
+                        }
+                    }
+                    if (visited.putIfAbsent(child.child(), Boolean.TRUE) == null) {
+                        queue.add(child.child());
+                    }
+                }
+                if (nodeLimitReached) {
+                    break;
+                }
+            }
+            if (nodeLimitReached) {
+                break;
+            }
+        }
+        if (!queue.isEmpty()) {
+            if (nodeLimitReached || visited.size() > MAX_NODES) {
+                nodeLimitReached = true;
+            } else {
+                depthLimitReached = true;
+            }
+        }
+        boolean[] routeLimitReached = new boolean[1];
+        routes.putAll(resolveRoutes(root, childrenMap, routeLimitReached));
+        GraphStatus status = nodeLimitReached ? GraphStatus.INCOMPLETE_NODE_LIMIT : depthLimitReached ? GraphStatus.INCOMPLETE_DEPTH_LIMIT : routeLimitReached[0] ? GraphStatus.INCOMPLETE_ROUTE_LIMIT : GraphStatus.COMPLETE;
+
+        Map<SourceId, Source> sourceMap = new java.util.LinkedHashMap<>();
+        for (MEStorage node : visited.keySet()) {
+            StorageGraphAdapter adapter = StorageGraphAdapterRegistry.find(node);
+            if (!adapter.isPhysicalSource(node) || !childrenMap.getOrDefault(node, List.of()).isEmpty()) {
+                continue;
+            }
+            long externalKey = externalKeys.getOrDefault(node, 0L);
+            if (externalKey == 0L) {
+                externalKey = ExternalInventoryIdentity.get(node);
+            }
+            SourceKind kind = adapter.sourceKind(node);
+            SourceId id = SourceRegistry.idFor(node, externalKey);
+            List<SourceRoute> sourceRoutes = routes.get(node);
+            if (sourceRoutes == null || sourceRoutes.isEmpty()) {
+                continue;
+            }
+            sourceRoutes = dedupeRoutes(sourceRoutes);
+            Source existing = sourceMap.get(id);
+            List<MEStorage> views = new ArrayList<>();
+            views.add(node);
+            if (existing != null) {
+                List<SourceRoute> merged = new ArrayList<>(existing.routes());
+                merged.addAll(sourceRoutes);
+                sourceRoutes = dedupeRoutes(merged);
+                views.addAll(existing.views());
+                node = existing.physical();
+            }
+            List<MEStorage> uniqueViews = new ArrayList<>();
+            java.util.Set<MEStorage> seenViews = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+            for (MEStorage view : views) {
+                if (seenViews.add(view)) {
+                    uniqueViews.add(view);
+                }
+            }
+            int priority = 0;
+            for (SourceRoute route : sourceRoutes) {
+                priority = Math.max(priority, route.priority());
+            }
+            sourceMap.put(id, new Source(id, kind, node, uniqueViews, sourceRoutes,
+                    System.identityHashCode(node), epoch, priority));
+        }
+        List<Source> sources = new ArrayList<>(sourceMap.values());
+        int opaqueSources = 0;
+        for (Source source : sources) {
+            if (source.kind() == SourceKind.OPAQUE) {
+                opaqueSources++;
+            }
+        }
+
+        int aliasGroups = countAliasGroups(parentCount.values());
+        int unverifiedAliases = 0;
+        for (var entry : parentCount.entrySet()) {
+            if (entry.getValue() > 1 && !externalKeys.containsKey(entry.getKey())) {
+                unverifiedAliases++;
+            }
+        }
+        int uniqueSources = sources.size() - opaqueSources;
+        StorageGraphSnapshot snapshot = new StorageGraphSnapshot(epoch, policyEpoch, edges.size(), uniqueSources,
+                aliasGroups, opaqueSources, unverifiedAliases, edges, sources,
+                new ArrayList<>(visited.keySet()), status);
+        StorageGraphDiagnostics.logSnapshot(snapshot);
+        StorageGraphDiagnostics.logSources(sources);
+        return snapshot;
+    }
+}

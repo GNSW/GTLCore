@@ -55,6 +55,7 @@ public class CommonProxy {
         InfiniteSprayCanPackets.register();
         org.gtlcore.gtlcore.network.PlushieHeadPackets.register();
         MinecraftForge.EVENT_BUS.addListener(org.gtlcore.gtlcore.common.command.WineJumpCommand::register);
+        MinecraftForge.EVENT_BUS.addListener(org.gtlcore.gtlcore.common.command.StorageGraphTestCommand::register);
         MinecraftForge.EVENT_BUS.addListener(org.gtlcore.gtlcore.common.structure.material.StructureMaterials::onItemTooltip);
         org.gtlcore.gtlcore.integration.ftbquests.QuestTranslationNetwork.register();
         CuriosTerminalLocator.register();

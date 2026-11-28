@@ -1,0 +1,6 @@
+{
+  "text.configuration.value.back": "返回",
+  "text.configuration.value.revert.default": "恢复默认配置",
+  "text.configuration.value.revert.default.dialog": "确定要将配置恢复为默认值吗？",
+  "text.configuration.value.revert.changes": "撤销更改"
+}

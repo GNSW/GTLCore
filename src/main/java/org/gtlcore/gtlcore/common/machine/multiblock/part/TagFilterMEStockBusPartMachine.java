@@ -5,6 +5,7 @@ import org.gtlcore.gtlcore.api.machine.trait.MEPart.IModifiableSyncOffset;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.ExportOnlyAEConfigureItemSlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IMESlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
+import org.gtlcore.gtlcore.api.recipe.RecipeExtractionScope;
 import org.gtlcore.gtlcore.api.recipe.ingredient.LongIngredient;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 import org.gtlcore.gtlcore.utils.MachineUtil;
@@ -326,7 +327,13 @@ public class TagFilterMEStockBusPartMachine extends MEInputBusPartMachine implem
                         for (int i = 0, configListSize = configList.size(); i < configListSize; i++) {
                             AEItemKey aeItemKey = configList.get(i);
                             if (aeItemKey.matches(ingredient)) {
-                                long extracted = aeNetwork.extract(aeItemKey, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE, getActionSource());
+                                long extracted;
+                                if (simulate) {
+                                    extracted = aeNetwork.extract(aeItemKey, amount, Actionable.SIMULATE, getActionSource());
+                                } else {
+                                    var scope = RecipeExtractionScope.current();
+                                    extracted = scope != null ? scope.extract(aeNetwork, getActionSource(), aeItemKey, amount) : aeNetwork.extract(aeItemKey, amount, Actionable.MODULATE, getActionSource());
+                                }
                                 if (extracted > 0) {
                                     changed = true;
                                     amount -= extracted;
@@ -359,16 +366,20 @@ public class TagFilterMEStockBusPartMachine extends MEInputBusPartMachine implem
         @Override
         public @Nullable Object2LongMap<ItemStack> getMEItemMap() {
             long currentTick = getOffsetTimer();
-            if (getChanged() || ENABLE_ULTIMATE_ME_STOCKING && lastSnapshotTick != currentTick) {
+            long interval = getOffset();
+            if (interval == 0) {
+                interval = 100;
+            }
+            if (getChanged() || lastSnapshotTick == Long.MIN_VALUE || currentTick - lastSnapshotTick >= interval) {
                 setChanged(false);
                 lastSnapshotTick = currentTick;
                 final var itemMap = getItemMap();
                 itemMap.clear();
-                final MEStorage aeNetwork = Objects.requireNonNull(getMainNode().getGrid()).getStorageService().getInventory();
+                final var cached = Objects.requireNonNull(getMainNode().getGrid()).getStorageService().getCachedInventory();
                 for (var key : configList) {
-                    long extracted = aeNetwork.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, getActionSource());
-                    if (extracted > 0) {
-                        itemMap.addTo(key.toStack(), extracted);
+                    long cachedAmount = cached.get(key);
+                    if (cachedAmount > 0) {
+                        itemMap.addTo(key.toStack(), cachedAmount);
                     }
                 }
             }

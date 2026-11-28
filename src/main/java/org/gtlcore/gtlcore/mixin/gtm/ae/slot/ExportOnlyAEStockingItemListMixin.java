@@ -1,7 +1,9 @@
 package org.gtlcore.gtlcore.mixin.gtm.ae.slot;
 
+import org.gtlcore.gtlcore.api.machine.trait.MEPart.IModifiableSyncOffset;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IMESlot;
 import org.gtlcore.gtlcore.api.machine.trait.MEStock.IOptimizedMEList;
+import org.gtlcore.gtlcore.api.recipe.RecipeExtractionScope;
 import org.gtlcore.gtlcore.api.recipe.ingredient.LongIngredient;
 import org.gtlcore.gtlcore.config.ConfigHolder;
 
@@ -111,7 +113,13 @@ public abstract class ExportOnlyAEStockingItemListMixin extends ExportOnlyAEItem
                     for (int i = 0, configListSize = gTLCore$configList.size(); i < configListSize; i++) {
                         AEItemKey aeItemKey = gTLCore$configList.get(i);
                         if (aeItemKey.matches(ingredient)) {
-                            long extracted = aeNetwork.extract(aeItemKey, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE, this$0.getActionSource());
+                            long extracted;
+                            if (simulate) {
+                                extracted = aeNetwork.extract(aeItemKey, amount, Actionable.SIMULATE, this$0.getActionSource());
+                            } else {
+                                var scope = RecipeExtractionScope.current();
+                                extracted = scope != null ? scope.extract(aeNetwork, this$0.getActionSource(), aeItemKey, amount) : aeNetwork.extract(aeItemKey, amount, Actionable.MODULATE, this$0.getActionSource());
+                            }
                             if (extracted > 0) {
                                 changed = true;
                                 amount -= extracted;
@@ -156,19 +164,29 @@ public abstract class ExportOnlyAEStockingItemListMixin extends ExportOnlyAEItem
         }
     }
 
+    @Unique
+    private long gtlcore$lastRefreshTick = Long.MIN_VALUE;
+
     @SuppressWarnings("AddedMixinMembersNamePattern")
     @Override
     public Object2LongMap<ItemStack> getMEItemMap() {
         final var itemMap = getItemMap();
-        if (ENABLE_ULTIMATE_ME_STOCKING || getChanged()) {
-            setChanged(false);
-            itemMap.clear();
-            final MEStorage aeNetwork = Objects.requireNonNull(this$0.getMainNode().getGrid()).getStorageService().getInventory();
-            for (var key : gTLCore$configList) {
-                long extracted = aeNetwork.extract(key, Long.MAX_VALUE, Actionable.SIMULATE, this$0.getActionSource());
-                if (extracted > 0) {
-                    itemMap.addTo(key.toStack(), extracted);
-                }
+        long interval = ((IModifiableSyncOffset) this$0).getOffset();
+        if (interval == 0) {
+            interval = 100;
+        }
+        long tick = this$0.getOffsetTimer();
+        if (!getChanged() && gtlcore$lastRefreshTick != Long.MIN_VALUE && tick - gtlcore$lastRefreshTick < interval) {
+            return itemMap.isEmpty() ? null : itemMap;
+        }
+        gtlcore$lastRefreshTick = tick;
+        setChanged(false);
+        itemMap.clear();
+        final var cached = Objects.requireNonNull(this$0.getMainNode().getGrid()).getStorageService().getCachedInventory();
+        for (var key : gTLCore$configList) {
+            long cachedAmount = cached.get(key);
+            if (cachedAmount > 0) {
+                itemMap.addTo(key.toStack(), cachedAmount);
             }
         }
         return itemMap.isEmpty() ? null : itemMap;

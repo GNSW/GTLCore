@@ -1,6 +1,7 @@
 package org.gtlcore.gtlcore.api.machine.computation;
 
 import org.gtlcore.gtlcore.GTLCore;
+import org.gtlcore.gtlcore.api.recipe.RecipeEscrow;
 
 import com.gregtechceu.gtceu.api.capability.IOpticalComputationProvider;
 import com.gregtechceu.gtceu.api.machine.feature.IRecipeLogicMachine;
@@ -141,6 +142,7 @@ public final class ComputationNetwork {
     @SubscribeEvent
     public static void tick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        RecipeEscrow.retryAll();
         Runtime runtime = runtime();
         if (runtime != null && runtime.tick % 5 == 0) runtime.wakeWaiting();
     }

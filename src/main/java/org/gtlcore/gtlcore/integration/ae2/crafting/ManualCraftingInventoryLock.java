@@ -1,6 +1,8 @@
 package org.gtlcore.gtlcore.integration.ae2.crafting;
 
 import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.crafting.ICraftingSubmitResult;
@@ -23,6 +25,7 @@ public final class ManualCraftingInventoryLock {
     private static final ThreadLocal<Reservation> ACTIVE_SUBMISSION = new ThreadLocal<>();
     // Availability simulation can re-enter the same network through a mounted inventory.
     private static final ThreadLocal<IdentityHashMap<MEStorage, Boolean>> AVAILABILITY_QUERIES = new ThreadLocal<>();
+    private static final ThreadLocal<Integer> PROBE_DEPTH = new ThreadLocal<>();
     private static final AtomicLong NEXT_RESERVATION_ID = new AtomicLong();
 
     private ManualCraftingInventoryLock() {}
@@ -183,8 +186,8 @@ public final class ManualCraftingInventoryLock {
         if (requested <= 0) {
             return requested;
         }
-        var availabilityQueries = AVAILABILITY_QUERIES.get();
-        if (availabilityQueries != null && availabilityQueries.containsKey(storage)) {
+        Integer probeDepth = PROBE_DEPTH.get();
+        if (probeDepth != null && probeDepth > 0) {
             return requested;
         }
 
@@ -195,10 +198,13 @@ public final class ManualCraftingInventoryLock {
 
         long available = getPhysicalAvailableAmount(storage, what, source);
         long extractable = subtractClamped(available, reservedForOthers);
-        // A second bus may revisit this network within the same simulation.
-        // Physical availability probes are isolated, so also subtract what that
-        // simulation has already taken through this network's reservation limit.
-        extractable = subtractClamped(extractable, NetworkExtractionSimulation.extractedFromNetwork(storage, what));
+        StorageOperationContext context = StorageOperationContext.current();
+        if (context != null) {
+            extractable = subtractClamped(extractable,
+                    context.usedNetworkExtract(SourceRegistry.idFor(storage).runtimeId(), what));
+        } else {
+            extractable = subtractClamped(extractable, NetworkExtractionSimulation.extractedFromNetwork(storage, what));
+        }
         long allowed = Math.min(requested, extractable);
         if (allowed < requested) {
             ManualCraftingInventoryLockLogger.extractionLimited(
@@ -234,12 +240,22 @@ public final class ManualCraftingInventoryLock {
             AVAILABILITY_QUERIES.set(queries);
         }
         Boolean previous = queries.put(storage, Boolean.TRUE);
+        Integer previousDepth = PROBE_DEPTH.get();
+        PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
-            return storage.extract(what, amount, Actionable.SIMULATE, source);
+            StorageOperationContext probe = StorageOperationContext.begin(Actionable.SIMULATE, source, 0L);
+            try {
+                return NetworkExtractionSimulation.isolated(
+                        () -> storage.extract(what, amount, Actionable.SIMULATE, source));
+            } finally {
+                StorageOperationContext.end(probe);
+            }
         } finally {
             if (previous == null) queries.remove(storage);
             else queries.put(storage, previous);
             if (queries.isEmpty()) AVAILABILITY_QUERIES.remove();
+            if (previousDepth == null) PROBE_DEPTH.remove();
+            else PROBE_DEPTH.set(previousDepth);
         }
     }
 
@@ -250,16 +266,27 @@ public final class ManualCraftingInventoryLock {
             AVAILABILITY_QUERIES.set(availabilityQueries);
         }
         availabilityQueries.put(storage, Boolean.TRUE);
+        Integer previousDepth = PROBE_DEPTH.get();
+        PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
-            if (storage instanceof AvailabilityView view) {
-                return view.gtlcore$getAvailableAmount(what, source);
+            StorageOperationContext probe = StorageOperationContext.begin(Actionable.SIMULATE, source, 0L);
+            try {
+                if (storage instanceof AvailabilityView view) {
+                    return NetworkExtractionSimulation.isolated(
+                            () -> view.gtlcore$getAvailableAmount(what, source));
+                }
+                return NetworkExtractionSimulation.isolated(
+                        () -> storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source));
+            } finally {
+                StorageOperationContext.end(probe);
             }
-            return storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source);
         } finally {
             availabilityQueries.remove(storage);
             if (availabilityQueries.isEmpty()) {
                 AVAILABILITY_QUERIES.remove();
             }
+            if (previousDepth == null) PROBE_DEPTH.remove();
+            else PROBE_DEPTH.set(previousDepth);
         }
     }
 

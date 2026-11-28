@@ -36,11 +36,9 @@ public final class VanillaDoubleChestIdentity {
                         if (a == b || a.isRemoved() || b.isRemoved() || !compound.contains(a) || !compound.contains(b) || compound.getContainerSize() != a.getContainerSize() + b.getContainerSize()) {
                             return null;
                         }
-                        // Preserve the previous double-chest canonical key format in this
-                        // targeted repair. This is not a collision-free identity scheme.
-                        long x = System.identityHashCode(a);
-                        long y = System.identityHashCode(b);
-                        return (Math.min(x, y) * 31L + Math.max(x, y)) * 31L + facade.getKeyType().getId().hashCode();
+                        // Both halves share one canonical id through the interner; no manual hash mixing.
+                        long id = ExternalIdentityKeyRegistry.internPair(a, b, facade.getKeyType());
+                        return id == 0L ? null : id;
                     }
 
                     @Override

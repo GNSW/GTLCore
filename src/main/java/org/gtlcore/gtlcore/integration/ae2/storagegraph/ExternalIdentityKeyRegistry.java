@@ -50,7 +50,7 @@ public final class ExternalIdentityKeyRegistry {
     }
 
     public static long internView(long ownerId, AEKeyType keyType, List<?> traits) {
-        if (ownerId == 0L || keyType == null) {
+        if (keyType == null) {
             return 0L;
         }
         List<Integer> signature = new ArrayList<>(traits.size());
@@ -66,6 +66,24 @@ public final class ExternalIdentityKeyRegistry {
             long id = NEXT.getAndIncrement();
             VIEWS.put(key, id);
             return id;
+        }
+    }
+
+    public static long internPair(Object first, Object second, AEKeyType keyType) {
+        long a = intern(first);
+        long b = intern(second);
+        if (a == 0L || b == 0L) {
+            return 0L;
+        }
+        return internView(0L, keyType, List.of(a, b));
+    }
+
+    public static void cleanup() {
+        synchronized (OWNERS) {
+            java.util.Set<Long> live = new java.util.HashSet<>(OWNERS.values());
+            synchronized (VIEWS) {
+                VIEWS.keySet().removeIf(key -> key.ownerId() != 0L && !live.contains(key.ownerId()));
+            }
         }
     }
 

@@ -4,10 +4,11 @@ import appeng.api.storage.MEStorage;
 
 import java.util.List;
 
-public record Source(SourceId id, SourceKind kind, MEStorage physical, List<SourceRoute> routes,
-                     long identityHash, long sourceEpoch, int priority) {
+public record Source(SourceId id, SourceKind kind, MEStorage physical, List<MEStorage> views,
+                     List<SourceRoute> routes, long identityHash, long sourceEpoch, int priority) {
 
     public Source {
+        views = List.copyOf(views);
         routes = List.copyOf(routes);
     }
 

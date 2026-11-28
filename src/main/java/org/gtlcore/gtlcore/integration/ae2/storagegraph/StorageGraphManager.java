@@ -515,7 +515,7 @@ public final class StorageGraphManager {
     private static List<SourceRoute> dedupeRoutes(List<SourceRoute> routes) {
         Map<RouteKey, SourceRoute> unique = new java.util.LinkedHashMap<>();
         for (SourceRoute route : routes) {
-            RouteKey key = new RouteKey(route.leafView(), route.path());
+            RouteKey key = new RouteKey(route.leafView(), route.path(), route.priorities());
             SourceRoute existing = unique.get(key);
             if (existing == null || route.priority() > existing.priority()) {
                 unique.put(key, route);
@@ -524,10 +524,11 @@ public final class StorageGraphManager {
         return new ArrayList<>(unique.values());
     }
 
-    private record RouteKey(MEStorage leafView, List<MEStorage> path) {
+    private record RouteKey(MEStorage leafView, List<MEStorage> path, List<Integer> priorities) {
 
         RouteKey {
             path = List.copyOf(path);
+            priorities = List.copyOf(priorities);
         }
     }
 

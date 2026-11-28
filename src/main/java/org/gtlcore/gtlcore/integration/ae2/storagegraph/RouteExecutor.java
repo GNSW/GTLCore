@@ -34,9 +34,13 @@ public final class RouteExecutor {
         try {
             long remaining = amount;
             long extracted = 0L;
+            java.util.Set<MEStorage> visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             for (RouteEntry entry : routes) {
                 if (remaining <= 0L) {
                     break;
+                }
+                if (!visited.add(entry.target())) {
+                    continue;
                 }
                 long got = entry.target().extract(what, remaining, mode, source);
                 if (got > 0L) {
@@ -70,9 +74,13 @@ public final class RouteExecutor {
         try {
             long remaining = amount;
             long inserted = 0L;
+            java.util.Set<MEStorage> visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             for (RouteEntry entry : routes) {
                 if (remaining <= 0L) {
                     break;
+                }
+                if (!visited.add(entry.target())) {
+                    continue;
                 }
                 long got = entry.target().insert(what, remaining, mode, source);
                 if (got > 0L) {
@@ -88,17 +96,18 @@ public final class RouteExecutor {
     }
 
     private static boolean hasCandidate(StorageGraphSnapshot snapshot, boolean insert) {
+        boolean candidate = false;
         for (Source graphSource : snapshot.sources()) {
-            if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE ||
-                    (insert && graphSource.kind() == SourceKind.VIRTUAL)) {
-                return true;
-            }
-            if (graphSource.kind() != SourceKind.VIRTUAL) {
+            if (graphSource.kind() == SourceKind.FINITE || graphSource.kind() == SourceKind.INFINITE) {
+                candidate = true;
+            } else if (graphSource.kind() == SourceKind.VIRTUAL) {
+                candidate |= insert;
+            } else {
                 StorageGraphDiagnostics.logCompatFallback(snapshot.uniqueSourceCount(), snapshot.opaqueSourceCount());
                 return false;
             }
         }
-        return false;
+        return candidate;
     }
 
     private static List<RouteEntry> collectRoutes(StorageGraphSnapshot snapshot, AEKey what, boolean insert,
@@ -128,13 +137,18 @@ public final class RouteExecutor {
             }
         }
         Comparator<RouteEntry> comparator = (first, second) -> {
-            boolean firstPreferred = isPreferred(first.target(), what, source);
-            boolean secondPreferred = isPreferred(second.target(), what, source);
-            if (firstPreferred != secondPreferred) {
-                return firstPreferred ? -1 : 1;
-            }
             int priorities = comparePriorities(first.route().priorities(), second.route().priorities());
-            return insert ? -priorities : priorities;
+            if (priorities != 0) {
+                return insert ? -priorities : priorities;
+            }
+            if (insert) {
+                boolean firstPreferred = isPreferred(first.target(), what, source);
+                boolean secondPreferred = isPreferred(second.target(), what, source);
+                if (firstPreferred != secondPreferred) {
+                    return firstPreferred ? -1 : 1;
+                }
+            }
+            return Integer.compare(first.route().nativeOrder(), second.route().nativeOrder());
         };
         result.sort(comparator);
         return result;

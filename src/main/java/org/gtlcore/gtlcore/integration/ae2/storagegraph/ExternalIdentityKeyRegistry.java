@@ -13,7 +13,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ExternalIdentityKeyRegistry {
 
     private static final Map<Object, Long> OWNERS = Collections.synchronizedMap(new WeakHashMap<>());
-    private static final Map<Object, Long> VALUES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<Object, Long> VALUES = Collections.synchronizedMap(new HashMap<>());
+    private static final Map<Object, Long> WEAK_VALUES = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<PairKey, Long> PAIRS = Collections.synchronizedMap(new HashMap<>());
     private static final Map<ViewKey, Long> VIEWS = Collections.synchronizedMap(new HashMap<>());
     private static final AtomicLong NEXT = new AtomicLong(1L);
@@ -31,6 +32,21 @@ public final class ExternalIdentityKeyRegistry {
             }
             long id = NEXT.getAndIncrement();
             OWNERS.put(owner, id);
+            return id;
+        }
+    }
+
+    public static long internWeak(Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        synchronized (WEAK_VALUES) {
+            Long existing = WEAK_VALUES.get(value);
+            if (existing != null) {
+                return existing;
+            }
+            long id = NEXT.getAndIncrement();
+            WEAK_VALUES.put(value, id);
             return id;
         }
     }
@@ -106,6 +122,9 @@ public final class ExternalIdentityKeyRegistry {
         }
         synchronized (VALUES) {
             VALUES.clear();
+        }
+        synchronized (WEAK_VALUES) {
+            WEAK_VALUES.clear();
         }
         synchronized (PAIRS) {
             PAIRS.clear();

@@ -68,6 +68,10 @@ public final class StorageGraphManager {
                     CACHE.remove(root);
                 }
             }
+            DEPENDENTS.values().removeIf(set -> {
+                set.remove(changed);
+                return set.isEmpty();
+            });
             epoch = topologyEpoch;
         }
         StorageGraphDiagnostics.logTopologyChange(epoch);
@@ -125,6 +129,7 @@ public final class StorageGraphManager {
             StorageGraphSnapshot snapshot = collect(root);
             if ((topologyEpoch & 63L) == 0L) {
                 ExternalIdentityKeyRegistry.cleanup();
+                SourceRegistry.cleanup();
             }
             CACHE.put(root, snapshot);
             DEPENDENTS.values().removeIf(set -> {

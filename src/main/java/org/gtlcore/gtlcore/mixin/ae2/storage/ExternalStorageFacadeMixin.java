@@ -53,8 +53,10 @@ public abstract class ExternalStorageFacadeMixin {
         if (container instanceof CompoundContainer) {
             return;
         }
-        long identity = gtlcore$combine(System.identityHashCode(container), 0L, facade.getKeyType());
-        ExternalInventoryIdentity.put(facade, identity);
+        long identity = ExternalIdentityKeyRegistry.internPair(container, facade.getKeyType(), facade.getKeyType());
+        if (identity != 0L) {
+            ExternalInventoryIdentity.put(facade, identity);
+        }
     }
 
     @WrapMethod(method = "extract", remap = false)

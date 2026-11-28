@@ -202,11 +202,9 @@ public final class ManualCraftingInventoryLock {
         if (context != null) {
             extractable = subtractClamped(extractable,
                     context.usedNetworkExtract(SourceRegistry.idFor(storage).runtimeId(), what));
+        } else {
+            extractable = subtractClamped(extractable, NetworkExtractionSimulation.extractedFromNetwork(storage, what));
         }
-        // A second bus may revisit this network within the same simulation.
-        // Physical availability probes are isolated, so also subtract what that
-        // simulation has already taken through this network's reservation limit.
-        extractable = subtractClamped(extractable, NetworkExtractionSimulation.extractedFromNetwork(storage, what));
         long allowed = Math.min(requested, extractable);
         if (allowed < requested) {
             ManualCraftingInventoryLockLogger.extractionLimited(
@@ -245,8 +243,13 @@ public final class ManualCraftingInventoryLock {
         Integer previousDepth = PROBE_DEPTH.get();
         PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
-            return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
-                    () -> storage.extract(what, amount, Actionable.SIMULATE, source)));
+            StorageOperationContext probe = StorageOperationContext.begin(Actionable.SIMULATE, source, 0L);
+            try {
+                return NetworkExtractionSimulation.isolated(
+                        () -> storage.extract(what, amount, Actionable.SIMULATE, source));
+            } finally {
+                StorageOperationContext.end(probe);
+            }
         } finally {
             if (previous == null) queries.remove(storage);
             else queries.put(storage, previous);
@@ -266,12 +269,17 @@ public final class ManualCraftingInventoryLock {
         Integer previousDepth = PROBE_DEPTH.get();
         PROBE_DEPTH.set(previousDepth == null ? 1 : previousDepth + 1);
         try {
-            if (storage instanceof AvailabilityView view) {
-                return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
-                        () -> view.gtlcore$getAvailableAmount(what, source)));
+            StorageOperationContext probe = StorageOperationContext.begin(Actionable.SIMULATE, source, 0L);
+            try {
+                if (storage instanceof AvailabilityView view) {
+                    return NetworkExtractionSimulation.isolated(
+                            () -> view.gtlcore$getAvailableAmount(what, source));
+                }
+                return NetworkExtractionSimulation.isolated(
+                        () -> storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source));
+            } finally {
+                StorageOperationContext.end(probe);
             }
-            return StorageOperationContext.isolated(() -> NetworkExtractionSimulation.isolated(
-                    () -> storage.extract(what, Long.MAX_VALUE, Actionable.SIMULATE, source)));
         } finally {
             availabilityQueries.remove(storage);
             if (availabilityQueries.isEmpty()) {

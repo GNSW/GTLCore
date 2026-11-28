@@ -1908,6 +1908,7 @@
   "ui.quantum_chromodynamic_charge.structure.exporting": "Exporting…",
   "ui.quantum_chromodynamic_charge.structure.idle": "Ready",
   "ui.quantum_chromodynamic_charge.structure.material.adequate": "§aMaterials OK",
+  "ui.quantum_chromodynamic_charge.structure.material.creative": "Creative mode: no materials consumed",
   "ui.quantum_chromodynamic_charge.structure.material.extra_line": "%s %s/%s",
   "ui.quantum_chromodynamic_charge.structure.material.insufficient": "§cNeed materials",
   "ui.quantum_chromodynamic_charge.structure.material.line": "%s %s/%s",

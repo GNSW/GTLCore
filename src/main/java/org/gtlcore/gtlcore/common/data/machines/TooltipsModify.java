@@ -92,7 +92,7 @@ public class TooltipsModify {
     }
 
     private static void gtlcore$applyEnergyTooltips() {
-        for (Class<?> holder : new Class<?>[] { GTMachines.class, GTResearchMachines.class }) {
+        for (Class<?> holder : new Class<?>[] { GTMachines.class, GTResearchMachines.class, GTLMachines.class }) {
             gtlcore$applyToHolder(holder);
         }
         for (String name : new String[] {
@@ -172,7 +172,7 @@ public class TooltipsModify {
             if (capacity <= 0L) {
                 continue;
             }
-            long amps = capacity / voltage;
+            long amps = capacity / (voltage * 20L);
             MutableComponent rating = Component.literal(gtlcore$openBracket() + amps + " A·s ");
             rating.append(gtlcore$tierName(ratingTier));
             rating.append(Component.literal(gtlcore$closeBracket()));

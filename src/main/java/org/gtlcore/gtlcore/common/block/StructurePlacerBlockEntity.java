@@ -98,6 +98,12 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     /** 材料是否满足当前结构需求。 */
     private boolean materialsAdequate;
 
+    /**
+     * 操作界面的玩家是否处于创造模式：创造模式下放置既不检查也不扣材料。
+     * 打开界面时按玩家为准设置，随 UI 状态同步给客户端。
+     */
+    private boolean creativeUser;
+
     private int presetIndex;
     private int structureIndex;
     private int offsetX;
@@ -342,6 +348,7 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     private CompoundTag writeUiState(CompoundTag tag) {
         tag.putIntArray("materialBank", materialBank);
         tag.putBoolean("materialsAdequate", materialsAdequate);
+        tag.putBoolean("creativeUser", creativeUser);
         tag.putInt("presetIndex", presetIndex);
         tag.putInt("structureIndex", structureIndex);
         tag.putInt("offsetX", offsetX);
@@ -399,6 +406,7 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
             materialBank = StructureMaterialOps.ensureBankSize(tag.getIntArray("materialBank"));
         }
         materialsAdequate = tag.getBoolean("materialsAdequate");
+        creativeUser = tag.getBoolean("creativeUser");
         presetIndex = tag.getInt("presetIndex");
         structureIndex = tag.getInt("structureIndex");
         offsetX = tag.getInt("offsetX");
@@ -720,7 +728,8 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
             materialsAdequate = false;
             return;
         }
-        materialsAdequate = StructureMaterialOps.isAdequate(
+        // 创造模式不消耗材料：永远视为充足，界面显示「待命」而不是「材料不足」
+        materialsAdequate = creativeUser || StructureMaterialOps.isAdequate(
                 bankTable(), structure, materialInventory);
     }
 
@@ -728,6 +737,8 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     private boolean consumeResources() {
         StructureDefinition.Structure structure = currentStructure();
         if (StructureTemplateRegistry.isEmpty() || structure == null) return false;
+        // 创造模式：不扣材料、不改动点数银行
+        if (creativeUser) return true;
         StructureMaterialTable next = StructureMaterialOps.consume(
                 bankTable(), structure, materialInventory);
         if (next == null) {
@@ -743,15 +754,25 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
     // 操作
     // -------------------------------------------------------------------------
 
-    public void startPlacement() {
+    /**
+     * 开始放置。{@code player} 为点击「放置」的玩家，用于识别创造模式：
+     * 创造模式下不检查材料是否充足，也不扣除材料。
+     */
+    public void startPlacement(net.minecraft.world.entity.player.Player player) {
         Level level = getLevel();
         if (level == null || level.isClientSide || !taskCompleted) return;
         if (StructureTemplateRegistry.isEmpty()) return;
 
         StructureDefinition.Structure structure = currentStructure();
         if (structure == null) return;
+        // 以点击的玩家为准（同一方块实体可能先后被不同玩家打开）
+        boolean creative = player != null && player.isCreative();
+        if (creative != creativeUser) {
+            creativeUser = creative;
+            markChanged();
+        }
         examineMaterials();
-        if (!materialsAdequate) return;
+        if (!creative && !materialsAdequate) return;
 
         // 先加载资源，再扣材料，避免加载失败白扣费
         StructurePlacer.LoadedStructure loaded;
@@ -1059,6 +1080,11 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         return materialsAdequate;
     }
 
+    /** 当前界面的玩家是否处于创造模式（创造模式不消耗材料）。 */
+    public boolean isCreativeUser() {
+        return creativeUser;
+    }
+
     public int bankValue(StructureMaterialType type) {
         return bankTable().get(type);
     }
@@ -1243,6 +1269,12 @@ public class StructurePlacerBlockEntity extends BlockEntity implements IUIHolder
         // 打开界面时补一次蓝图目录扫描，刚放进文件夹的蓝图立刻可见（客户端调用为空操作）
         refreshBlueprints();
         clampIndices();
+        // 创造模式识别：服务端以打开界面的玩家为准；同步给客户端用于材料预览文案
+        if (!isRemote()) {
+            creativeUser = player != null && player.isCreative();
+            examineMaterials();
+            markChanged();
+        }
         return StructurePlacerUI.create(this, player);
     }
 

@@ -13,7 +13,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ExternalIdentityKeyRegistry {
 
     private static final Map<Object, Long> OWNERS = Collections.synchronizedMap(new WeakHashMap<>());
-    private static final Map<Object, Long> VALUES = Collections.synchronizedMap(new HashMap<>());
+    private static final Map<Object, Long> VALUES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<PairKey, Long> PAIRS = Collections.synchronizedMap(new HashMap<>());
     private static final Map<ViewKey, Long> VIEWS = Collections.synchronizedMap(new HashMap<>());
     private static final AtomicLong NEXT = new AtomicLong(1L);
 
@@ -75,7 +76,16 @@ public final class ExternalIdentityKeyRegistry {
         if (a == 0L || b == 0L || keyType == null) {
             return 0L;
         }
-        return internValue(new PairKey(Math.min(a, b), Math.max(a, b), keyType));
+        PairKey key = new PairKey(Math.min(a, b), Math.max(a, b), keyType);
+        synchronized (PAIRS) {
+            Long existing = PAIRS.get(key);
+            if (existing != null) {
+                return existing;
+            }
+            long id = NEXT.getAndIncrement();
+            PAIRS.put(key, id);
+            return id;
+        }
     }
 
     public static void cleanup() {
@@ -84,9 +94,8 @@ public final class ExternalIdentityKeyRegistry {
             synchronized (VIEWS) {
                 VIEWS.keySet().removeIf(key -> key.ownerId() != 0L && !live.contains(key.ownerId()));
             }
-            synchronized (VALUES) {
-                VALUES.keySet().removeIf(value -> value instanceof PairKey pair &&
-                        (!live.contains(pair.first()) || !live.contains(pair.second())));
+            synchronized (PAIRS) {
+                PAIRS.keySet().removeIf(pair -> !live.contains(pair.first()) || !live.contains(pair.second()));
             }
         }
     }
@@ -97,6 +106,9 @@ public final class ExternalIdentityKeyRegistry {
         }
         synchronized (VALUES) {
             VALUES.clear();
+        }
+        synchronized (PAIRS) {
+            PAIRS.clear();
         }
         synchronized (VIEWS) {
             VIEWS.clear();

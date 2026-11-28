@@ -6,6 +6,7 @@ import org.gtlcore.gtlcore.integration.ae2.storage.NetworkExtractionSimulation;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.ExternalInventoryIdentity;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.SourceRegistry;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphManager;
+import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageGraphSnapshot;
 import org.gtlcore.gtlcore.integration.ae2.storagegraph.StorageOperationContext;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputMonitorStorageTracker;
 import org.gtlcore.gtlcore.integration.ae2.throughput.ThroughputStorageView;
@@ -105,13 +106,18 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
             return legacy;
         }
         if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
-            long routed = StorageGraphManager.routeInsert((MEStorage) (Object) this, what, amount, mode, source);
-            if (routed >= 0L) {
-                if (routed > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
+            StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+            StorageOperationContext context = StorageOperationContext.begin(mode, source,
+                    snapshot == null ? 0L : snapshot.topologyEpoch());
+            try {
+                long inserted = original.call(what, amount, mode, source);
+                if (inserted > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
                     ThroughputMonitorStorageTracker.beginInsert((MEStorage) (Object) this, source);
-                    ThroughputMonitorStorageTracker.endInsert((MEStorage) (Object) this, what, routed, source);
+                    ThroughputMonitorStorageTracker.endInsert((MEStorage) (Object) this, what, inserted, source);
                 }
-                return routed;
+                return inserted;
+            } finally {
+                StorageOperationContext.end(context);
             }
         }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {
@@ -136,47 +142,48 @@ public abstract class NetworkStorageMixin implements ThroughputStorageView, Manu
     private long gtlcore$trackExtraction(AEKey what, long amount, Actionable mode, IActionSource source,
                                          Operation<Long> original) {
         if (mode == Actionable.SIMULATE) {
-            if (StorageGraphManager.mode() == StorageGraphMode.ON && !NetworkExtractionSimulation.isActive() && StorageOperationContext.current() == null) {
-                long limited = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount,
-                        source);
-                if (limited <= 0L) {
-                    return 0L;
-                }
-                long unique = StorageGraphManager.simulateUniqueIfExact((MEStorage) (Object) this, what, limited,
-                        source);
-                if (unique >= 0L) {
-                    StorageOperationContext context = StorageOperationContext.current();
-                    if (context != null && unique > 0L) {
-                        context.recordNetworkExtract(SourceRegistry.idFor((MEStorage) (Object) this).runtimeId(), what,
-                                unique);
-                    }
-                    return unique;
-                }
-            }
-            StorageGraphManager.enterNested();
-            long legacy;
-            try {
-                legacy = NetworkExtractionSimulation.network(this, what,
-                        () -> original.call(what, amount, mode, source));
-            } finally {
-                StorageGraphManager.exitNested();
-            }
             StorageOperationContext context = StorageOperationContext.current();
-            if (context != null && legacy > 0L) {
-                context.recordNetworkExtract(SourceRegistry.idFor((MEStorage) (Object) this).runtimeId(), what, legacy);
+            boolean ownContext = false;
+            if (context == null && StorageGraphManager.mode() == StorageGraphMode.ON) {
+                StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+                context = StorageOperationContext.begin(mode, source,
+                        snapshot == null ? 0L : snapshot.topologyEpoch());
+                ownContext = true;
             }
-            StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
-            return legacy;
+            try {
+                StorageGraphManager.enterNested();
+                long legacy;
+                try {
+                    legacy = NetworkExtractionSimulation.network(this, what,
+                            () -> original.call(what, amount, mode, source));
+                } finally {
+                    StorageGraphManager.exitNested();
+                }
+                if (context != null && legacy > 0L) {
+                    context.recordNetworkExtract(SourceRegistry.idFor((MEStorage) (Object) this).runtimeId(), what, legacy);
+                }
+                StorageGraphManager.shadowSimulate((MEStorage) (Object) this, what, amount, source, legacy);
+                return legacy;
+            } finally {
+                if (ownContext) {
+                    StorageOperationContext.end(context);
+                }
+            }
         }
         if (mode == Actionable.MODULATE && StorageGraphManager.mode() == StorageGraphMode.ON && StorageOperationContext.current() == null) {
-            long limitedAmount = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount, source);
-            long routed = StorageGraphManager.routeExtract((MEStorage) (Object) this, what, limitedAmount, mode, source);
-            if (routed >= 0L) {
-                if (routed > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
+            StorageGraphSnapshot snapshot = StorageGraphManager.snapshot((MEStorage) (Object) this);
+            StorageOperationContext context = StorageOperationContext.begin(mode, source,
+                    snapshot == null ? 0L : snapshot.topologyEpoch());
+            try {
+                long limitedAmount = ManualCraftingInventoryLock.limitExtraction((MEStorage) (Object) this, what, amount, source);
+                long extracted = original.call(what, limitedAmount, mode, source);
+                if (extracted > 0L && ThroughputMonitorStorageTracker.isTrackingActive()) {
                     ThroughputMonitorStorageTracker.beginExtraction((MEStorage) (Object) this, source);
-                    ThroughputMonitorStorageTracker.endExtraction((MEStorage) (Object) this, what, routed, source);
+                    ThroughputMonitorStorageTracker.endExtraction((MEStorage) (Object) this, what, extracted, source);
                 }
-                return routed;
+                return extracted;
+            } finally {
+                StorageOperationContext.end(context);
             }
         }
         if (mode != Actionable.MODULATE || !ThroughputMonitorStorageTracker.isTrackingActive()) {

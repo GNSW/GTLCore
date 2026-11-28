@@ -88,6 +88,7 @@ public final class StorageGraphManager {
             topologyEpoch++;
             policyEpoch++;
             CACHE.clear();
+            DEPENDENTS.clear();
         }
         SourceRegistry.reset();
         StorageGraphDiagnostics.resetThrottle();
@@ -126,9 +127,10 @@ public final class StorageGraphManager {
                 ExternalIdentityKeyRegistry.cleanup();
             }
             CACHE.put(root, snapshot);
-            for (java.util.Set<MEStorage> set : DEPENDENTS.values()) {
+            DEPENDENTS.values().removeIf(set -> {
                 set.remove(root);
-            }
+                return set.isEmpty();
+            });
             for (MEStorage node : snapshot.nodes()) {
                 DEPENDENTS.computeIfAbsent(node,
                         ignored -> java.util.Collections.newSetFromMap(new IdentityHashMap<>())).add(root);
@@ -220,22 +222,6 @@ public final class StorageGraphManager {
         }
         out.addAll(unique);
         return true;
-    }
-
-    public static long simulateUniqueIfExact(MEStorage root, AEKey what, long amount, IActionSource source) {
-        return RouteExecutor.extract(root, what, amount, Actionable.SIMULATE, source);
-    }
-
-    public static long insertUniqueIfExact(MEStorage root, AEKey what, long amount, IActionSource source) {
-        return RouteExecutor.insert(root, what, amount, Actionable.SIMULATE, source);
-    }
-
-    public static long routeExtract(MEStorage root, AEKey what, long amount, Actionable mode, IActionSource source) {
-        return RouteExecutor.extract(root, what, amount, mode, source);
-    }
-
-    public static long routeInsert(MEStorage root, AEKey what, long amount, Actionable mode, IActionSource source) {
-        return RouteExecutor.insert(root, what, amount, mode, source);
     }
 
     private static boolean compatFallback() {

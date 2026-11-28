@@ -12,6 +12,7 @@ import java.util.IdentityHashMap;
 public final class SourceRegistry {
 
     private static final IdentityHashMap<MEStorage, Entry> ENTRIES = new IdentityHashMap<>();
+    private static final IdentityHashMap<MEStorage, Long> EXTERNAL_OWNERS = new IdentityHashMap<>();
     private static final HashMap<Long, SourceId> EXTERNAL = new HashMap<>();
     private static long nextId = 1L;
 
@@ -27,6 +28,7 @@ public final class SourceRegistry {
         }
         if (externalKey != 0L) {
             synchronized (ENTRIES) {
+                EXTERNAL_OWNERS.put(node, externalKey);
                 return EXTERNAL.computeIfAbsent(externalKey, ignored -> new SourceId(nextId++));
             }
         }
@@ -48,6 +50,7 @@ public final class SourceRegistry {
         }
         synchronized (ENTRIES) {
             ENTRIES.remove(node);
+            releaseExternal(node);
         }
     }
 
@@ -57,12 +60,21 @@ public final class SourceRegistry {
         }
         synchronized (ENTRIES) {
             ENTRIES.remove(node);
+            releaseExternal(node);
+        }
+    }
+
+    private static void releaseExternal(MEStorage node) {
+        Long externalKey = EXTERNAL_OWNERS.remove(node);
+        if (externalKey != null) {
+            EXTERNAL.remove(externalKey);
         }
     }
 
     public static void reset() {
         synchronized (ENTRIES) {
             ENTRIES.clear();
+            EXTERNAL_OWNERS.clear();
             EXTERNAL.clear();
             nextId = 1L;
         }
@@ -72,7 +84,7 @@ public final class SourceRegistry {
         if (node instanceof ThroughputStorageView view) {
             Collection<MEStorage> children = view.gtlcore$getChildStorages();
             if (children != null && !children.isEmpty()) {
-                return System.identityHashCode(children.iterator().next());
+                return ExternalIdentityKeyRegistry.internValue(children.iterator().next());
             }
         }
         return 0L;
